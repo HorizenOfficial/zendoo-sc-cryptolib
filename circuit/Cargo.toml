@@ -1,0 +1,13 @@
+[package]
+name = "circuit"
+version = "0.1.0"
+authors = ["DanieleDiBenedetto <daniele@horizenlabs.io>"]
+edition = "2018"
+include = ["Cargo.toml", "src"]
+
+[dependencies]
+algebra = {version = "0.1.0", path = "../../HL_zexe/algebra" }
+crypto-primitives = {version = "0.1.0", path = "../../HL_zexe/crypto-primitives"}
+r1cs-core = {version = "0.1.0", path = "../../HL_zexe/r1cs-core"}
+r1cs-std = {version = "0.1.0", path = "../../HL_zexe/r1cs-std"}
+groth16 = {version = "0.1.0", path = "../../HL_zexe/groth16"}

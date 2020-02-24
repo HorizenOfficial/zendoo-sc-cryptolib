@@ -1,0 +1,11 @@
+[package]
+name = "ouroboros"
+version = "0.1.0"
+authors = ["DanieleDiBenedetto <daniele@horizenlabs.io>"]
+edition = "2018"
+
+[dependencies]
+algebra = {version = "0.1.0", path = "../../HL_zexe/algebra"}
+crypto-primitives = {version = "0.1.0", path = "../../HL_zexe/crypto-primitives"}
+rand = { version = "0.7" }
+

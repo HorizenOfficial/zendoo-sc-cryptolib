@@ -1,0 +1,15 @@
+[workspace]
+
+members = [ "circuit", "ouroboros", "librustsidechains"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+incremental = true
+
+[profile.test]
+opt-level = 3
+lto = "thin"
+incremental = true
+debug-assertions = true
+debug = true
