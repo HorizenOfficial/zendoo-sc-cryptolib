@@ -5,7 +5,7 @@ authors = ["DanieleDiBenedetto <daniele@horizenlabs.io>"]
 edition = "2018"
 
 [dependencies]
-algebra = {version = "0.1.0", path = "../../HL_zexe/algebra"}
-crypto-primitives = {version = "0.1.0", path = "../../HL_zexe/crypto-primitives"}
+algebra = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp" }
+crypto-primitives = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp", features = ["r1cs"]}
 rand = { version = "0.7" }
 
