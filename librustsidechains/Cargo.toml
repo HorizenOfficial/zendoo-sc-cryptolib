@@ -9,3 +9,14 @@ edition = "2018"
 [dependencies]
 ouroboros = {path = "../ouroboros"}
 circuit = {path = "../circuit"}
+jni = "0.5.3"
+algebra = {version = "0.1.0", path = "../../HL_zexe/algebra"}
+crypto-primitives = {version = "0.1.0", path = "../../HL_zexe/crypto-primitives"}
+groth16 = {version = "0.1.0", path = "../../HL_zexe/groth16"}
+derivative = "1"
+radix_trie = "0.1"
+rand = { version = "0.7" }
+rand_xorshift = { version = "0.2" }
+
+[lib]
+crate_type = ["cdylib"]
