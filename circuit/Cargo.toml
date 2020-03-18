@@ -6,8 +6,8 @@ edition = "2018"
 include = ["Cargo.toml", "src"]
 
 [dependencies]
-algebra = {version = "0.1.0", path = "../../HL_zexe/algebra" }
-crypto-primitives = {version = "0.1.0", path = "../../HL_zexe/crypto-primitives"}
-r1cs-core = {version = "0.1.0", path = "../../HL_zexe/r1cs-core"}
-r1cs-std = {version = "0.1.0", path = "../../HL_zexe/r1cs-std"}
-groth16 = {version = "0.1.0", path = "../../HL_zexe/groth16"}
+algebra = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp" }
+crypto-primitives = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp", features = ["r1cs"]}
+r1cs-core = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp"}
+r1cs-std = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp"}
+groth16 = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp"}
