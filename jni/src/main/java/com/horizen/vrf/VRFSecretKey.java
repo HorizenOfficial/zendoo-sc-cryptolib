@@ -10,6 +10,10 @@ public class VRFSecretKey
 
     private byte[] secretKey;
 
+    static {
+        VRFLibrary.load();
+    }
+
     public VRFSecretKey(byte[] publicKeyBytes, byte[] secretKeyBytes) {
         super(publicKeyBytes);
         if (secretKeyBytes.length != SECRET_KEY_LENGTH)

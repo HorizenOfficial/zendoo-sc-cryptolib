@@ -14,7 +14,7 @@ public class VRFSecretKeyTest {
 
     @BeforeClass
     public static void before() {
-        System.loadLibrary("librustsidechains");
+        //System.loadLibrary("librustsidechains");
     }
 
 
@@ -28,7 +28,7 @@ public class VRFSecretKeyTest {
 
         try {
             ClassLoader classLoader = getClass().getClassLoader();
-            keyPath = Paths.get(classLoader.getResource("vk").toURI()).toAbsolutePath().toString() + "__";
+            keyPath = Paths.get(classLoader.getResource("vk").toURI()).toAbsolutePath().toString();
             proof = Files.readAllBytes(Paths.get(classLoader.getResource("good_proof").toURI()));
             message = Files.readAllBytes(Paths.get(classLoader.getResource("good_public_inputs").toURI()));
         }

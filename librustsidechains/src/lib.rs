@@ -125,7 +125,8 @@ fn read_points_from_slice(from: &[u8]) -> Option<Vec<G1Affine>>
 fn read_vk(vk_path: &str) -> VerifyingKey<PairingCurve>
 {
     // Load vk from file
-    let mut vk_fs = File::open(vk_path).expect("couldn't load vk file");
+    let mut vk_fs = File::open(vk_path)
+        .expect("couldn't load vk file");
 
     VerifyingKey::<PairingCurve>::read(&mut vk_fs)
         .expect("couldn't deserialize vk file")
