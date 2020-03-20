@@ -5,7 +5,7 @@ authors = ["DanieleDiBenedetto <daniele@horizenlabs.io>"]
 edition = "2018"
 
 [dependencies]
-algebra = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp" }
-crypto-primitives = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp", features = ["r1cs"]}
+algebra = {version = "0.1.0", git = "https://github.com/HorizenLabs/ginger-lib", branch = "new_structure"}
+primitives = {version = "0.1.0", features = ["vrf"], git = "https://github.com/HorizenLabs/ginger-lib", branch = "new_structure"}
 rand = { version = "0.7" }
 

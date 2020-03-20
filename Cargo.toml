@@ -1,6 +1,6 @@
 [workspace]
 
-members = [ "circuit", "ouroboros", "librustsidechains"]
+members = ["demo-circuit", "ouroboros", "zendoo-sc-crypto"]
 
 [profile.release]
 opt-level = 3
@@ -8,11 +8,7 @@ lto = "thin"
 incremental = true
 
 [profile.dev]
-opt-level = 3
-lto = "thin"
-incremental = true
-debug-assertions = true
-debug = true
+opt-level = 0
 
 [profile.test]
 opt-level = 3

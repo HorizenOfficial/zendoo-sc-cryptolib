@@ -1,7 +1,7 @@
 use algebra::curves::mnt6753::G1Projective as MNT6G1Projective;
 //use algebra::curves::mnt6753::G1Affine as MNT6G1Affine;
 use algebra::fields::mnt4753::{Fq as Fs, Fr as Fr};
-use crypto_primitives::{crh::{
+use primitives::{crh::{
     MNT4PoseidonHash,
     bowe_hopwood::{
         BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters,
