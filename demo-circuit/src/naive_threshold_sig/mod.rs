@@ -63,6 +63,20 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
     _field:                PhantomData<F>,
 }
 
+impl<F: PrimeField>NaiveTresholdSignature<F> {
+    pub fn new(
+        pks:                   Vec<Option<MNT6G1Projective>>,
+        sigs:                  Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>,
+        threshold:             Option<MNT4Fr>,
+        b:                     Vec<Option<bool>>,
+        message:               Option<MNT4Fr>,
+        hash_commitment:       Option<MNT4Fr>,
+        n:                     usize,
+    ) -> Self {
+        Self{pks, sigs, threshold, b, message, hash_commitment, n, _field: PhantomData}
+    }
+}
+
 impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> {
     fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
 
@@ -186,6 +200,35 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
     }
 }
 
+use algebra::curves::mnt4753::MNT4;
+use proof_systems::groth16::{Parameters, generator::generate_random_parameters};
+
+fn generate_parameters(n: usize) -> Result<Parameters<MNT4>, SynthesisError> {
+
+    //Istantiating rng
+    let mut rng = OsRng::default();
+
+    //Istantiating supported number of pks and sigs
+    let log_n = (n.next_power_of_two() as u64).trailing_zeros() as usize;
+
+    // Create parameters for our circuit
+    let c = NaiveTresholdSignature::<MNT4Fr> {
+        pks: vec![None; n],
+        sigs: vec![None; n],
+        threshold: None,
+        b: vec![None; log_n + 1],
+        message: None,
+        hash_commitment: None,
+        n,
+        _field: PhantomData
+    };
+
+    let start = std::time::Instant::now();
+    let params = generate_random_parameters::<MNT4, _, _>(c, &mut rng);
+    println!("Generation time: {:?}", start.elapsed());
+    params
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -197,7 +240,7 @@ mod test {
         },
     };
     use proof_systems::groth16::{
-        Parameters, generate_random_parameters,
+        Parameters,
         Proof, create_random_proof,
         prepare_verifying_key, verify_proof,
     };
@@ -206,33 +249,6 @@ mod test {
     };
 
     type SchnorrSig = FieldBasedSchnorrSignatureScheme<MNT4Fr, MNT6G1Projective, MNT4PoseidonHash>;
-
-
-    fn generate_test_parameters(n: usize) -> Result<Parameters<MNT4>, SynthesisError> {
-
-        //Istantiating rng
-        let mut rng = OsRng::default();
-
-        //Istantiating supported number of pks and sigs
-        let log_n = (n.next_power_of_two() as u64).trailing_zeros() as usize;
-
-        // Create parameters for our circuit
-        let c = NaiveTresholdSignature::<MNT4Fr> {
-            pks: vec![None; n],
-            sigs: vec![None; n],
-            threshold: None,
-            b: vec![None; log_n + 1],
-            message: None,
-            hash_commitment: None,
-            n,
-            _field: PhantomData
-        };
-
-        let start = std::time::Instant::now();
-        let params = generate_random_parameters::<MNT4, _, _>(c, &mut rng);
-        println!("Generation time: {:?}", start.elapsed());
-        params
-    }
 
     fn generate_test_proof(
         n: usize,
@@ -323,7 +339,7 @@ mod test {
     #[test]
     fn test_naive_threshold_circuit() {
         let n = 16;
-        let params = generate_test_parameters(n).unwrap();
+        let params = generate_parameters(n).unwrap();
         let pvk = prepare_verifying_key(&params.vk);
 
         //Generate proof with correct witnesses and v > t
