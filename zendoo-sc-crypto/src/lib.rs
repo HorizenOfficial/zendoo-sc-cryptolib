@@ -10,7 +10,7 @@ use algebra::{fields::{
               AffineCurve, ProjectiveCurve, UniformRand,
 };
 
-use crypto_primitives::{
+use primitives::{
     signature::{
         FieldBasedSignatureScheme,
         schnorr::field_impl::{
@@ -22,7 +22,7 @@ use crypto_primitives::{
     },
 };
 
-use groth16::{Proof, verifier::verify_proof, prepare_verifying_key, VerifyingKey};
+use proof_systems::groth16::{Proof, verifier::verify_proof, prepare_verifying_key, VerifyingKey};
 
 use rand::rngs::OsRng;
 use std::fs::File;
