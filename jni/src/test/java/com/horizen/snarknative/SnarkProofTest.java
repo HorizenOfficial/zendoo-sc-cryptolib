@@ -1,21 +1,13 @@
-package com.horizen.vrf;
+package com.horizen.snarknative;
 
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
 import static org.junit.Assert.*;
 
-public class VRFSecretKeyTest {
-
-    @BeforeClass
-    public static void before() {
-        //System.loadLibrary("librustsidechains");
-    }
+public class SnarkProofTest {
 
 
     @Test
@@ -37,7 +29,9 @@ public class VRFSecretKeyTest {
             return;
         }
 
-        assertTrue("Verification must be successful.", VRFSecretKey.nativeVerify(keyPath, message, proof));
+        SnarkProof snarkProof = new SnarkProof(proof);
+
+        assertTrue("Verification must be successful.", snarkProof.verify(keyPath, message));
 
         try {
             ClassLoader classLoader = getClass().getClassLoader();
@@ -50,6 +44,8 @@ public class VRFSecretKeyTest {
             return;
         }
 
-        assertFalse("Verification must be unsuccessful.", VRFSecretKey.nativeVerify(keyPath, message, proof));
+        SnarkProof badSnarkProof = new SnarkProof(proof);
+
+        assertFalse("Verification must be unsuccessful.", badSnarkProof.verify(keyPath, message));
     }
 }

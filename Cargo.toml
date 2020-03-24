@@ -6,6 +6,7 @@ members = [ "circuit", "ouroboros", "librustsidechains"]
 opt-level = 3
 lto = "thin"
 incremental = true
+panic = "unwind"
 
 [profile.dev]
 opt-level = 3
@@ -13,6 +14,7 @@ lto = "thin"
 incremental = true
 debug-assertions = true
 debug = true
+panic = "unwind"
 
 [profile.test]
 opt-level = 3
@@ -20,3 +22,4 @@ lto = "thin"
 incremental = true
 debug-assertions = true
 debug = true
+panic = "unwind"

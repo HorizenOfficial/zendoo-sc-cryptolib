@@ -1,9 +1,9 @@
-package com.horizen.vrf;
+package com.horizen.librustsidechains;
 
 import java.io.*;
 import java.net.URL;
 
-public class VRFLibrary {
+public class Library {
 
     private static boolean loaded = false;
 
@@ -62,7 +62,7 @@ public class VRFLibrary {
 
     public static URL getResource() {
         String resourcePath = "native/" + getOperatingSystem() + getModel() + "/" + getLibName();
-        return VRFLibrary.class.getClassLoader().getResource(resourcePath);
+        return Library.class.getClassLoader().getResource(resourcePath);
     }
 
     static void close(Closeable f) {

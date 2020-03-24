@@ -19,32 +19,18 @@ use crypto_primitives::{
     },
     crh::{
         FieldBasedHash, MNT4PoseidonHash as FrHash,
-        pedersen::PedersenWindow,
     },
 };
 
-use rand::rngs::OsRng;
-
 use groth16::{Proof, verifier::verify_proof, prepare_verifying_key, VerifyingKey};
 
-//use libc::c_uchar;
-use std::path::Path;
-use std::slice;
-//use std::ffi::OsStr;
-//use std::os::unix::ffi::OsStrExt;
+use rand::rngs::OsRng;
 use std::fs::File;
-
-//Suitable to hash one Fr
-#[derive(Clone)]
-struct TestWindow {}
-impl PedersenWindow for TestWindow {
-    const WINDOW_SIZE: usize = 128;
-    const NUM_WINDOWS: usize = 2;
-}
 
 //Sig types
 type SchnorrSig = FieldBasedSchnorrSignature<Fr>;
 type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<Fr, G1Projective, FrHash>;
+
 
 // ************CONSTANTS******************
 
@@ -76,7 +62,7 @@ fn read_fs(from: &[u8; FS_SIZE]) -> Option<Fs> {
 }
 
 /// Reads as many FrReprs as FR_SIZE-byte chunks contained in `from`
-/// NOTE: Probably there is a smarter way to pass a vector of field elements
+/// TODO: Probably there is a smarter way to pass a vector of field elements
 fn read_frs_from_slice(from: &[u8]) -> Option<Vec<Fr>> {
     let mut fes = vec![];
     for chunk in from.chunks(FR_SIZE) {
@@ -100,7 +86,7 @@ fn read_frs_from_slice(from: &[u8]) -> Option<Vec<Fr>> {
 }
 
 /// Reads as many G1 Affine points as G1_SIZE-byte chunks contained in `from`
-/// NOTE: Probably there is a smarter way to pass a vector of curve points
+/// TODO: Probably there is a smarter way to pass a vector of curve points
 fn read_points_from_slice(from: &[u8]) -> Option<Vec<G1Affine>>
 {
     let mut points = vec![];
@@ -138,23 +124,7 @@ use jni::sys::{jbyteArray, jboolean};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_vrf_VRFProof_nativeProofToVRFHash(
-    _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
-    _class: JClass,
-    _proof: jbyteArray
-) -> jbyteArray {
-
-    let mut _input = _env.convert_byte_array(_proof).unwrap();
-    _input.reverse();
-    _env.byte_array_from_slice(&_input).unwrap()
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrf_VRFSecretKey_nativeVerify(
+pub extern "system" fn Java_com_horizen_snarknative_SnarkProof_nativeVerify(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be
@@ -200,8 +170,171 @@ pub extern "system" fn Java_com_horizen_vrf_VRFSecretKey_nativeVerify(
     }
 }
 
+//S
+
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_vrf_VRFSecretKey_nativeProve(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyGenerator_nativeGenerate(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _skResult: jbyteArray,
+    _pkResult: jbyteArray,
+) -> jboolean
+{
+
+    let sk_result: &mut [u8; FS_SIZE] = &mut [0; FS_SIZE];
+    let pk_result: &mut [u8; G1_SIZE] = &mut [0; G1_SIZE];
+
+    //Generate a random (pk, sk) pair
+    let mut rng = OsRng::default();
+    let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
+
+    // Write out the pk in affine coordinates
+    if (pk.into_affine().write(&mut (unsafe { &mut *pk_result })[..]).is_err()) {
+        _env.throw(("java/lang/Exception", "Exception during public key generation."));
+        return  JNI_FALSE
+    }
+
+
+    //Write out the sk
+    if (sk.write(&mut (unsafe { &mut *sk_result })[..]).is_err()) {
+        _env.throw(("java/lang/Exception", "Exception during public key generation."));
+        return  JNI_FALSE
+    }
+
+    if (_env.set_byte_array_region(_skResult, 0, unsafe{ slice::from_raw_parts(sk_result.as_ptr() as *const i8, sk_result.len()) }).is_err()) {
+        _env.throw(("java/lang/Exception", "Exception during write secret key."));
+        return  JNI_FALSE
+    }
+
+    if (_env.set_byte_array_region(_pkResult, 0, unsafe{ slice::from_raw_parts(pk_result.as_ptr() as *const i8, pk_result.len()) }).is_err()) {
+        _env.throw(("java/lang/Exception", "Exception during write public key."));
+        return  JNI_FALSE
+    }
+
+    JNI_TRUE
+
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVerifyKey(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _pk: jbyteArray,
+) -> jboolean
+{
+
+    //Read pk
+    let pk_raw = match _env.convert_byte_array(_pk) {
+        Ok(pk_raw) => pk_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Key is invalid."));
+            return JNI_FALSE
+        },
+    };
+    let pk = match G1Affine::read(&(unsafe { &*pk_raw })[..]) {
+
+        Ok(pk) => pk.into_projective(),
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Key is invalid."));
+            return JNI_FALSE
+        },
+    };
+
+    if SchnorrSigScheme::keyverify(&pk) {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSignMessage(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _publicKey: jbyteArray,
+    _secretKey: jbyteArray,
+    _message: jbyteArray
+) -> jbyteArray {
+
+    //Read sk
+    let sk_raw = match _env.convert_byte_array(_secretKey) {
+        Ok(sk_raw) => sk_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Secret key is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+    let sk = match Fs::read(unsafe { &*sk_raw }) {
+        Ok(sk) => sk,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Secret key is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    //Read pk
+    let pk_raw = match _env.convert_byte_array(_publicKey) {
+        Ok(pk_raw) => pk_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Public key is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+    let pk = match G1Affine::read(&(unsafe { &*pk_raw })[..]) {
+        Ok(pk) => pk.into_projective(),
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Public key is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    //Read message as an array of Fr elements
+    let message = match _env.convert_byte_array(_message) {
+        Ok(message) => message,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Message is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+    let fes = match read_frs_from_slice(&message) {
+        Some(fes) => fes,
+        None => { _env.throw(("java/lang/IllegalArgumentException", "Message is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    //Sign message
+    let mut rng = OsRng::default();
+    let sig = match SchnorrSigScheme::sign(&mut rng, &pk, &sk, fes.as_slice()) {
+        Ok(sig) => sig,
+        Err(_) => { _env.throw(("java/lang/Exception", "Error during proof creation."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    // Write out signature
+    let result: &mut [u8; SIG_SIZE] = &mut [0; SIG_SIZE];
+    if (sig.write(&mut (unsafe { &mut *result })[..])).is_err() {
+        _env.throw(("java/lang/Exception", "Cannot write proof."));
+        return _env.new_byte_array(0).unwrap()
+    }
+
+    match _env.byte_array_from_slice(result.as_ref()) {
+        Ok(result) => result,
+        Err(_) => { _env.throw(("java/lang/Exception", "Cannot write proof.")) ;
+            return _env.new_byte_array(0).unwrap()
+        },
+    }
+}
+
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVerifySignature(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be
@@ -209,19 +342,361 @@ pub extern "system" fn Java_com_horizen_vrf_VRFSecretKey_nativeProve(
     // an argument slot
     _class: JClass,
     _key: jbyteArray,
-    _message: jbyteArray
-) -> jbyteArray {
+    _message: jbyteArray,
+    _signature: jbyteArray
+) -> jboolean {
 
-    //let result_class = _env.find_class("com/horizen/vrf/VRFProof").unwrap();
-    //let result = _env.new_object(result_class, "()V", &[]).unwrap();
+    //Read pk
+    let pk_raw = match _env.convert_byte_array(_key) {
+        Ok(pk_raw) => pk_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Key is invalid."));
+            return JNI_FALSE
+        },
+    };
+    let pk = match G1Affine::read(&(unsafe { &*pk_raw })[..]) {
+        Ok(pk) => pk.into_projective(),
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Key is invalid."));
+            return JNI_FALSE
+        },
+    };
 
-    let mut _input = _env.convert_byte_array(_message).unwrap();
-    _input.reverse();
-    _env.byte_array_from_slice(&_input).unwrap()
+    //Read message as an array of Fr elements
+    let message = match _env.convert_byte_array(_message) {
+        Ok(message) => message,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Message is invalid."));
+            return JNI_FALSE
+        },
+    };
+    let fes = match read_frs_from_slice(&message) {
+        Some(fes) => fes,
+        None => { _env.throw(("java/lang/IllegalArgumentException", "Message is invalid."));
+            return JNI_FALSE
+        },
+    };
+
+    //Read signature
+    let signature_raw = match _env.convert_byte_array(_signature) {
+        Ok(signature_raw) => signature_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Signature is invalid."));
+            return JNI_FALSE
+        },
+    };
+
+    //Read sig
+    let sig = match SchnorrSig::read(&(unsafe { &*signature_raw })[..]) {
+        Ok(sig) => sig,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Signature is invalid."));
+            return JNI_FALSE
+        },
+    };
+
+
+    match SchnorrSigScheme::verify(&pk, fes.as_slice(), &sig) {
+        Ok(result) => if result {
+                JNI_TRUE
+            } else {
+                JNI_FALSE
+            },
+        Err(_) => return JNI_FALSE,
+    }
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_vrf_VRFSecretKey_nativeVRFHash(
+pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeComputeHash(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _input: jbyteArray,
+) -> jbyteArray
+{
+    //Read message as an array of Fr elements
+    let input_raw = match _env.convert_byte_array(_input) {
+        Ok(input_raw) => input_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Input is invalid."));
+            return return _env.new_byte_array(0).unwrap()
+        },
+    };
+    let fes = match read_frs_from_slice(&input_raw) {
+        Some(fes) => fes,
+        None => { _env.throw(("java/lang/IllegalArgumentException", "Input is invalid."));
+            return return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    //Compute hash
+    let hash = match FrHash::evaluate(fes.as_slice()) {
+        Ok(hash) => hash,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Input is invalid."));
+            return return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    // Write out hash
+    let result: &mut [u8; HASH_SIZE] = &mut [0; HASH_SIZE];
+    if (hash.write(&mut (unsafe { &mut *result })[..])).is_err() {
+        _env.throw(("java/lang/Exception", "Cannot write hash."));
+        return _env.new_byte_array(0).unwrap()
+    }
+
+    match _env.byte_array_from_slice(result.as_ref()) {
+        Ok(result) => result,
+        Err(_) => { _env.throw(("java/lang/Exception", "Cannot write hash.")) ;
+            return _env.new_byte_array(0).unwrap()
+        },
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeComputeKeysHashCommitment(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _pks: jbyteArray,
+) -> jbyteArray
+{
+    //Read message as an array of Fr elements
+    let pks_raw = match _env.convert_byte_array(_pks) {
+        Ok(pks_raw) => pks_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Pks is invalid."));
+            return return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    let pks_x = match read_points_from_slice(&pks_raw) {
+        Some(pks) => pks.iter().map(|pk| pk.x).collect::<Vec<_>>(),
+        None => { _env.throw(("java/lang/IllegalArgumentException", "Pks is invalid."));
+            return return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    //Compute hash
+    let hash = match FrHash::evaluate(pks_x.as_slice()) {
+        Ok(hash) => hash,
+        Err(_) => return { _env.throw(("java/lang/IllegalArgumentException", "Pks is invalid."));
+            return return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    // Write out hash
+    let result: &mut [u8; HASH_SIZE] = &mut [0; HASH_SIZE];
+    if (hash.write(&mut (unsafe { &mut *result })[..])).is_err() {
+        _env.throw(("java/lang/Exception", "Cannot write hash commitment."));
+        return _env.new_byte_array(0).unwrap()
+    }
+
+    match _env.byte_array_from_slice(result.as_ref()) {
+        Ok(result) => result,
+        Err(_) => { _env.throw(("java/lang/Exception", "Cannot write hash commitment.")) ;
+            return _env.new_byte_array(0).unwrap()
+        },
+    }
+}
+
+use crypto_primitives::{
+    vrf::{
+        FieldBasedVrf,
+        ecvrf::{
+            FieldBasedEcVrf, FieldBasedEcVrfProof,
+        }
+    },
+    crh::bowe_hopwood::{BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters},
+};
+
+use circuit::constants::{
+    VRFParams, VRFWindow,
+};
+
+use lazy_static::*;
+
+use std::slice;
+use std::panic;
+
+lazy_static! {
+    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<G1Projective> = {
+        let params = VRFParams::new();
+        BoweHopwoodPedersenParameters::<G1Projective>{generators: params.group_hash_generators}
+    };
+}
+
+//Hash types
+type GroupHash = BoweHopwoodPedersenCRH<G1Projective, VRFWindow>;
+
+
+//Vrf types
+type EcVrfProof = FieldBasedEcVrfProof<Fr, G1Projective>;
+type EcVrfScheme = FieldBasedEcVrf<Fr, G1Projective, FrHash, GroupHash>;
+
+
+const VRF_PROOF_SIZE:   usize = G1_SIZE + 2 * FR_SIZE;  // 385
+const VRF_OUTPUT_SIZE:  usize = HASH_SIZE;              // 96
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyGenerator_nativeGenerate(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _skResult: jbyteArray,
+    _pkResult: jbyteArray,
+) -> jboolean
+{
+
+    let sk_result: &mut [u8; FS_SIZE] = &mut [0; FS_SIZE];
+    let pk_result: &mut [u8; G1_SIZE] = &mut [0; G1_SIZE];
+
+    //Generate a random (pk, sk) pair
+    let mut rng = OsRng::default();
+    let (pk, sk) = EcVrfScheme::keygen(&mut rng);
+
+    // Write out the pk in affine coordinates
+    if (pk.into_affine().write(&mut (unsafe { &mut *pk_result })[..]).is_err()) {
+        _env.throw(("java/lang/Exception", "Exception during public key generation."));
+        return  JNI_FALSE
+    }
+
+
+    //Write out the sk
+    if (sk.write(&mut (unsafe { &mut *sk_result })[..]).is_err()) {
+        _env.throw(("java/lang/Exception", "Exception during public key generation."));
+        return  JNI_FALSE
+    }
+
+    if (_env.set_byte_array_region(_skResult, 0, unsafe{ slice::from_raw_parts(sk_result.as_ptr() as *const i8, sk_result.len()) }).is_err()) {
+        _env.throw(("java/lang/Exception", "Exception during write secret key."));
+        return  JNI_FALSE
+    }
+
+    if (_env.set_byte_array_region(_pkResult, 0, unsafe{ slice::from_raw_parts(pk_result.as_ptr() as *const i8, pk_result.len()) }).is_err()) {
+        _env.throw(("java/lang/Exception", "Exception during write public key."));
+        return  JNI_FALSE
+    }
+
+    JNI_TRUE
+
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeVerifyKey(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _pk: jbyteArray,
+) -> jboolean
+{
+
+    //Read pk
+    let pk_raw = match _env.convert_byte_array(_pk) {
+        Ok(pk_raw) => pk_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Key is invalid."));
+            return JNI_FALSE
+        },
+    };
+    let pk = match G1Affine::read(&(unsafe { &*pk_raw })[..]) {
+
+        Ok(pk) => pk.into_projective(),
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Key is invalid."));
+            return JNI_FALSE
+        },
+    };
+
+    if EcVrfScheme::keyverify(&pk) {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeVRFHash(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _message: jbyteArray,
+    _pk: jbyteArray,
+    _proof: jbyteArray
+) -> jbyteArray
+{
+    //Read pk
+    let pk_raw = match _env.convert_byte_array(_pk) {
+        Ok(pk_raw) => pk_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Key is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+    let pk = match G1Affine::read(&(unsafe { &*pk_raw })[..]) {
+        Ok(pk) => pk.into_projective(),
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Key is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    //Read message as an array of Fr elements
+    let message = match _env.convert_byte_array(_message) {
+        Ok(message) => message,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Message is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+    let fes = match read_frs_from_slice(&message) {
+        Some(fes) => fes,
+        None => { _env.throw(("java/lang/IllegalArgumentException", "Message is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    //Read proof
+    let proof_raw = match _env.convert_byte_array(_proof) {
+        Ok(proof_raw) => proof_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Proof is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+    let proof = match EcVrfProof::read(&(unsafe { &*proof_raw })[..]) {
+        Ok(proof) => proof,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Proof is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    //Verify proof
+    let vrf_out = match EcVrfScheme::verify(&VRF_GH_PARAMS, &pk, fes.as_slice(), &proof) {
+        Ok(result) => result,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Proof verification failed."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    //Write out VRF output
+    let result: &mut [u8; VRF_PROOF_SIZE] = &mut [0; VRF_PROOF_SIZE];
+    if (vrf_out.write(&mut (unsafe { &mut *result })[..]).is_err()) {
+        _env.throw(("java/lang/Exception", "Cannot write result hash."));
+        return _env.new_byte_array(0).unwrap()
+    }
+
+    match _env.byte_array_from_slice(result.as_ref()) {
+        Ok(result) => result,
+        Err(_) => { _env.throw(("java/lang/Exception", "Cannot write result hash.")) ;
+            return _env.new_byte_array(0).unwrap()
+        },
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeVerify(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be
@@ -229,11 +704,136 @@ pub extern "system" fn Java_com_horizen_vrf_VRFSecretKey_nativeVRFHash(
     // an argument slot
     _class: JClass,
     _key: jbyteArray,
+    _message: jbyteArray,
+    _proof: jbyteArray
+) -> jboolean {
+
+    //Read pk
+    let pk_raw = match _env.convert_byte_array(_key) {
+        Ok(pk_raw) => pk_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Key is invalid."));
+            return JNI_FALSE
+        },
+    };
+    let pk = match G1Affine::read(&(unsafe { &*pk_raw })[..]) {
+        Ok(pk) => pk.into_projective(),
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Key is invalid."));
+            return JNI_FALSE
+        },
+    };
+
+    //Read message as an array of Fr elements
+    let message = match _env.convert_byte_array(_message) {
+        Ok(message) => message,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Message is invalid."));
+            return JNI_FALSE
+        },
+    };
+    let fes = match read_frs_from_slice(&message) {
+        Some(fes) => fes,
+        None => { _env.throw(("java/lang/IllegalArgumentException", "Message is invalid."));
+            return JNI_FALSE
+        },
+    };
+
+    //Read proof
+    let proof_raw = match _env.convert_byte_array(_proof) {
+        Ok(proof_raw) => proof_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Proof is invalid."));
+            return JNI_FALSE
+        },
+    };
+    let proof = match EcVrfProof::read(&(unsafe { &*proof_raw })[..]) {
+        Ok(proof) => proof,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Proof is invalid."));
+            return JNI_FALSE
+        },
+    };
+
+    //Verify proof
+    match EcVrfScheme::verify(&VRF_GH_PARAMS, &pk, fes.as_slice(), &proof) {
+        Ok(_) => JNI_TRUE,
+        Err(_) => JNI_FALSE,
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeProve(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _publicKey: jbyteArray,
+    _secretKey: jbyteArray,
     _message: jbyteArray
 ) -> jbyteArray {
 
-    let mut _input = _env.convert_byte_array(_message).unwrap();
-    _input.reverse();
-    _env.byte_array_from_slice(&_input).unwrap()
+    //Read sk
+    let sk_raw = match _env.convert_byte_array(_secretKey) {
+        Ok(sk_raw) => sk_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Secret key is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+    let sk = match Fs::read(unsafe { &*sk_raw }) {
+        Ok(sk) => sk,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Secret key is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    //Read pk
+    let pk_raw = match _env.convert_byte_array(_publicKey) {
+        Ok(pk_raw) => pk_raw,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Public key is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+    let pk = match G1Affine::read(&(unsafe { &*pk_raw })[..]) {
+        Ok(pk) => pk.into_projective(),
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Public key is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    //Read message as an array of Fr elements
+    let message = match _env.convert_byte_array(_message) {
+        Ok(message) => message,
+        Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Message is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+    let fes = match read_frs_from_slice(&message) {
+        Some(fes) => fes,
+        None => { _env.throw(("java/lang/IllegalArgumentException", "Message is invalid."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    //Create proof for message
+    let mut rng = OsRng::default();
+    let proof = match EcVrfScheme::prove(&mut rng, &VRF_GH_PARAMS, &pk, &sk, fes.as_slice()) {
+        Ok(proof) => proof,
+        Err(_) => { _env.throw(("java/lang/Exception", "Error during proof creation."));
+            return _env.new_byte_array(0).unwrap()
+        },
+    };
+
+    // Write out signature
+    let result: &mut [u8; VRF_PROOF_SIZE] = &mut [0; VRF_PROOF_SIZE];
+    if (proof.write(&mut (unsafe { &mut *result })[..])).is_err() {
+        _env.throw(("java/lang/Exception", "Cannot write proof."));
+        return _env.new_byte_array(0).unwrap()
+    }
+
+    match _env.byte_array_from_slice(result.as_ref()) {
+        Ok(result) => result,
+        Err(_) => { _env.throw(("java/lang/Exception", "Cannot write proof.")) ;
+            return _env.new_byte_array(0).unwrap()
+        },
+    }
 }
+
 

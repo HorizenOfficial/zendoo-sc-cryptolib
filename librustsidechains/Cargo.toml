@@ -7,21 +7,23 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp" }
-crypto-primitives = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp", features = ["r1cs"]}
-r1cs-core = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp"}
-r1cs-std = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp"}
-groth16 = {version = "0.1.0", git = "https://github.com/HorizenLabs/HL_zexe", branch = "circuit_temp"}
+algebra = {version = "0.1.0", git = "https://github.com/HorizenLabs/ginger-lib", branch = "circuit_temp"}
+crypto-primitives = {version = "0.1.0", git = "https://github.com/HorizenLabs/ginger-lib", branch = "circuit_temp"}
+groth16 = {version = "0.1.0", git = "https://github.com/HorizenLabs/ginger-lib", branch = "circuit_temp"}
+
 ouroboros = {path = "../ouroboros"}
 circuit = {path = "../circuit"}
+
 jni = "0.5.3"
-algebra = {version = "0.1.0", path = "../../HL_zexe/algebra"}
-crypto-primitives = {version = "0.1.0", path = "../../HL_zexe/crypto-primitives"}
-groth16 = {version = "0.1.0", path = "../../HL_zexe/groth16"}
 derivative = "1"
 radix_trie = "0.1"
 rand = { version = "0.7" }
 rand_xorshift = { version = "0.2" }
+libc = "0.2"
+simplelog = "^0.7.4"
+lazy_static = "1"
 
 [lib]
+name = "librustsidechains"
+path = "src/lib.rs"
 crate_type = ["cdylib"]
