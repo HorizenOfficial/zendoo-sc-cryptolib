@@ -16,18 +16,20 @@ public class VRFSecretKeyTest {
     @Test
     public void testProove() {
 
-        VRFSecretKey key = VRFKeyGenerator.generate();
+        byte[] secretKeyBytes = new byte[VRFSecretKey.SECRET_KEY_LENGTH];
+        byte[] publicKeyBytes = new byte[VRFPublicKey.PUBLIC_KEY_LENGTH];
 
-        assertTrue("Generated key must be valid.", key.getPublicKey().verifyKey());
+        assertTrue("Key generation must be successful.", VRFKeyGenerator.nativeGenerate(secretKeyBytes, publicKeyBytes));
+        assertTrue("Generated key must be valid.", VRFPublicKey.nativeVerifyKey(publicKeyBytes));
 
         byte[] message = new byte[VRFSecretKey.SECRET_KEY_LENGTH];
 
-        VRFProof proof = key.prove(message);
+        byte[] proof = VRFSecretKey.nativeProve(publicKeyBytes, secretKeyBytes, message);
 
-        assertTrue("Proof must be valid.", key.getPublicKey().verify(message, proof));
-        assertEquals("Proof size must be " + VRFProof.VRF_PROOF_SIZE, VRFProof.VRF_PROOF_SIZE, proof.getProof().length);
+        assertTrue("Proof must be valid.", VRFPublicKey.nativeVerify(publicKeyBytes, message, proof));
+        assertEquals("Proof size must be " + VRFProof.VRF_PROOF_SIZE, VRFProof.VRF_PROOF_SIZE, proof.length);
 
-        byte[] vrfHash = key.vrfHash(message, proof);
+        byte[] vrfHash = VRFSecretKey.nativeVRFHash(message, publicKeyBytes, proof);
 
         assertEquals("VRF hash size must be " + VRFProof.VRF_PROOF_SIZE, VRFProof.VRF_PROOF_SIZE, vrfHash.length);
     }

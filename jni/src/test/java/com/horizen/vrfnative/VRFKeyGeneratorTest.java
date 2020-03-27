@@ -16,8 +16,11 @@ public class VRFKeyGeneratorTest {
     @Test
     public void testGenerate() {
 
-        VRFSecretKey key = VRFKeyGenerator.generate();
+        byte[] secretKeyBytes = new byte[VRFSecretKey.SECRET_KEY_LENGTH];
+        byte[] publicKeyBytes = new byte[VRFPublicKey.PUBLIC_KEY_LENGTH];
 
-        assertTrue("Generated key must be valid.", key.getPublicKey().verifyKey());
+        assertTrue("Key generation must be successful.", VRFKeyGenerator.nativeGenerate(secretKeyBytes, publicKeyBytes));
+
+        assertTrue("Generated key must be valid.", VRFPublicKey.nativeVerifyKey(publicKeyBytes));
     }
 }
