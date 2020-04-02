@@ -8,7 +8,7 @@ use algebra::{
 
 use primitives::{
     crh::pedersen::PedersenWindow,
-    signature::schnorr::field_impl::FieldBasedSchnorrSignature
+    signature::schnorr::field_based_schnorr::FieldBasedSchnorrSignature
 };
 
 pub mod constants;

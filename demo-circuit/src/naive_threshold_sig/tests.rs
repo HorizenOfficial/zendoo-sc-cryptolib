@@ -7,14 +7,14 @@ use algebra::{
 
 use primitives::{
     signature::{
-        schnorr::field_impl::{FieldBasedSchnorrSignature, FieldBasedSchnorrSignatureScheme},
+        schnorr::field_based_schnorr::{FieldBasedSchnorrSignature, FieldBasedSchnorrSignatureScheme},
         FieldBasedSignatureScheme,
     },
     crh::{FieldBasedHash, MNT4PoseidonHash},
 };
 use r1cs_crypto::{
     signature::{
-        schnorr::field_impl::{FieldBasedSchnorrSigGadget, FieldBasedSchnorrSigVerificationGadget},
+        schnorr::field_based_schnorr::{FieldBasedSchnorrSigGadget, FieldBasedSchnorrSigVerificationGadget},
         FieldBasedSigGadget,
     },
     crh::{MNT4PoseidonHashGadget, FieldBasedHashGadget}
@@ -235,7 +235,7 @@ fn generate_constraints(
     //Check signatures verification verdict
     for (i, (pk_g, sig_g))
         in pks_g.iter().zip(sigs_g.iter()).enumerate() {
-        let v = SchnorrVrfySigGadget::check_gadget(
+        let v = SchnorrVrfySigGadget::enforce_signature_verdict(
             cs.ns(|| format!("check_sig_verdict_{}", i)),
             pk_g,
             sig_g,

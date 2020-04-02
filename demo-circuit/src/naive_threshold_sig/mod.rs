@@ -3,15 +3,15 @@ pub mod tests;
 
 use algebra::{fields::mnt4753::Fr as MNT4Fr, curves::mnt6753::G1Projective as MNT6G1Projective, Field, PrimeField};
 use primitives::{
-    signature::schnorr::field_impl::FieldBasedSchnorrSignature,
+    signature::schnorr::field_based_schnorr::FieldBasedSchnorrSignature,
     crh::MNT4PoseidonHash,
 };
 use r1cs_crypto::{
     signature::{
-        schnorr::field_impl::{FieldBasedSchnorrSigGadget, FieldBasedSchnorrSigVerificationGadget},
+        schnorr::field_based_schnorr::{FieldBasedSchnorrSigGadget, FieldBasedSchnorrSigVerificationGadget},
         FieldBasedSigGadget,
     },
-    crh::{MNT4PoseidonHashGadget, FieldBasedHashGadget}
+    crh::{MNT4PoseidonHashGadget, FieldBasedHashGadget},
 };
 
 use r1cs_std::{
@@ -31,6 +31,7 @@ use r1cs_core::{ConstraintSystem, ConstraintSynthesizer, SynthesisError};
 use crate::constants::NaiveThresholdSigParams;
 
 use std::marker::PhantomData;
+use rand::rngs::OsRng;
 use lazy_static::*;
 
 lazy_static! {
@@ -156,7 +157,7 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
         for (i ,(pk_g, sig_g))
             in pks_g.iter().zip(sigs_g.iter()).enumerate() {
 
-            let v = SchnorrVrfySigGadget::check_gadget(
+            let v = SchnorrVrfySigGadget::enforce_signature_verdict(
                 cs.ns(|| format!("check_sig_verdict_{}", i)),
                 pk_g,
                 sig_g,
@@ -236,7 +237,7 @@ mod test {
     use primitives::{
         crh::FieldBasedHash,
         signature::{
-            FieldBasedSignatureScheme, schnorr::field_impl::FieldBasedSchnorrSignatureScheme,
+            FieldBasedSignatureScheme, schnorr::field_based_schnorr::FieldBasedSchnorrSignatureScheme,
         },
     };
     use proof_systems::groth16::{

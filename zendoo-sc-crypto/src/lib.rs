@@ -13,7 +13,7 @@ use algebra::{fields::{
 use primitives::{
     signature::{
         FieldBasedSignatureScheme,
-        schnorr::field_impl::{
+        schnorr::field_based_schnorr::{
             FieldBasedSchnorrSignature, FieldBasedSchnorrSignatureScheme
         },
     },
@@ -498,7 +498,7 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeComput
     }
 }
 
-use crypto_primitives::{
+use primitives::{
     vrf::{
         FieldBasedVrf,
         ecvrf::{
@@ -508,7 +508,7 @@ use crypto_primitives::{
     crh::bowe_hopwood::{BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters},
 };
 
-use circuit::constants::{
+use demo_circuit::constants::{
     VRFParams, VRFWindow,
 };
 
@@ -673,7 +673,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeVRFHash(
     };
 
     //Verify proof
-    let vrf_out = match EcVrfScheme::verify(&VRF_GH_PARAMS, &pk, fes.as_slice(), &proof) {
+    let vrf_out = match EcVrfScheme::proof_to_hash(&VRF_GH_PARAMS, &pk, fes.as_slice(), &proof) {
         Ok(result) => result,
         Err(_) => { _env.throw(("java/lang/IllegalArgumentException", "Proof verification failed."));
             return _env.new_byte_array(0).unwrap()
@@ -751,7 +751,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeVerify(
     };
 
     //Verify proof
-    match EcVrfScheme::verify(&VRF_GH_PARAMS, &pk, fes.as_slice(), &proof) {
+    match EcVrfScheme::proof_to_hash(&VRF_GH_PARAMS, &pk, fes.as_slice(), &proof) {
         Ok(_) => JNI_TRUE,
         Err(_) => JNI_FALSE,
     }

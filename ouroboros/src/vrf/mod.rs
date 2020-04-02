@@ -59,8 +59,8 @@ pub fn ouroboros_check_proof
 ) -> Option<(Fr, Fr)> {
     //Example calling code
     match (
-        EcVrfScheme::verify(&pp, &forger_pk, &[epoch_randomness], &proof.0),
-        EcVrfScheme::verify(&pp, &forger_pk, &[epoch_randomness], &proof.1),
+        EcVrfScheme::proof_to_hash(&pp, &forger_pk, &[epoch_randomness], &proof.0),
+        EcVrfScheme::proof_to_hash(&pp, &forger_pk, &[epoch_randomness], &proof.1),
         )
     {
         (Ok(o1), Ok(o2)) => Some((o1, o2)),
