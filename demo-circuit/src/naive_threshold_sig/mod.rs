@@ -1,7 +1,7 @@
 #[cfg(test)]
 pub mod tests;
 
-use algebra::{fields::mnt4753::Fr as MNT4Fr, curves::mnt6753::G1Projective as MNT6G1Projective, Field, PrimeField};
+use algebra::{fields::mnt4753::Fr as MNT4Fr, curves::mnt6753::G1Projective as MNT6G1Projective, Field, PrimeField, ToBits};
 use primitives::{
     signature::schnorr::field_based_schnorr::FieldBasedSchnorrSignature,
     crh::MNT4PoseidonHash,
@@ -66,15 +66,31 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 
 impl<F: PrimeField>NaiveTresholdSignature<F> {
     pub fn new(
-        pks:                   Vec<Option<MNT6G1Projective>>,
-        sigs:                  Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>,
-        threshold:             Option<MNT4Fr>,
-        b:                     Vec<Option<bool>>,
-        message:               Option<MNT4Fr>,
-        hash_commitment:       Option<MNT4Fr>,
+        pks:                   Vec<MNT6G1Projective>,
+        sigs:                  Vec<FieldBasedSchnorrSignature<MNT4Fr>>,
+        threshold:             MNT4Fr,
+        b:                     MNT4Fr,
+        message:               MNT4Fr,
+        hash_commitment:       MNT4Fr,
         n:                     usize,
     ) -> Self {
-        Self{pks, sigs, threshold, b, message, hash_commitment, n, _field: PhantomData}
+
+        let b_bool = {
+            let b_len = (n.next_power_of_two() as u64).trailing_zeros() as usize;
+            let b_bits = b.write_bits();
+            let to_skip = MNT4Fr::size_in_bits() - (b_len + 1);
+            b_bits[to_skip..].to_vec().iter().map(|&b| Some(b)).collect::<Vec<_>>()
+        };
+        Self{
+            pks: pks.iter().map(|&pk| Some(pk)).collect::<Vec<_>>(),
+            sigs: sigs.iter().map(|&sig| Some(sig)).collect::<Vec<_>>(),
+            threshold: Some(threshold),
+            b: b_bool,
+            message: Some(message),
+            hash_commitment: Some(hash_commitment),
+            n,
+            _field: PhantomData
+        }
     }
 }
 
@@ -204,6 +220,7 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
 use algebra::curves::mnt4753::MNT4;
 use proof_systems::groth16::{Parameters, generator::generate_random_parameters};
 
+#[allow(dead_code)]
 fn generate_parameters(n: usize) -> Result<Parameters<MNT4>, SynthesisError> {
 
     //Istantiating rng
