@@ -66,8 +66,8 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 
 impl<F: PrimeField>NaiveTresholdSignature<F> {
     pub fn new(
-        pks:                   Vec<MNT6G1Projective>,
-        sigs:                  Vec<FieldBasedSchnorrSignature<MNT4Fr>>,
+        mut pks:               Vec<MNT6G1Projective>,
+        mut sigs:              Vec<FieldBasedSchnorrSignature<MNT4Fr>>,
         threshold:             MNT4Fr,
         b:                     MNT4Fr,
         message:               MNT4Fr,
@@ -75,6 +75,16 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
         n:                     usize,
     ) -> Self {
 
+        //Add null pks and null sigs as padding to reach size n, if needed
+        for _ in pks.len()..n {
+            pks.push(NULL_CONST.null_pk);
+        }
+
+        for _ in sigs.len()..n {
+            sigs.push(NULL_CONST.null_sig);
+        }
+
+        //Convert b to the needed bool vector
         let b_bool = {
             let b_len = (n.next_power_of_two() as u64).trailing_zeros() as usize;
             let b_bits = b.write_bits();
