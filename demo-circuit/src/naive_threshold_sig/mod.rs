@@ -231,7 +231,7 @@ use algebra::curves::mnt4753::MNT4;
 use proof_systems::groth16::{Parameters, generator::generate_random_parameters};
 
 #[allow(dead_code)]
-fn generate_parameters(n: usize) -> Result<Parameters<MNT4>, SynthesisError> {
+pub fn generate_parameters(n: usize) -> Result<Parameters<MNT4>, SynthesisError> {
 
     //Istantiating rng
     let mut rng = OsRng::default();
@@ -251,9 +251,7 @@ fn generate_parameters(n: usize) -> Result<Parameters<MNT4>, SynthesisError> {
         _field: PhantomData
     };
 
-    let start = std::time::Instant::now();
     let params = generate_random_parameters::<MNT4, _, _>(c, &mut rng);
-    println!("Generation time: {:?}", start.elapsed());
     params
 }
 
