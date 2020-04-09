@@ -1,6 +1,6 @@
 [workspace]
 
-members = ["demo-circuit", "ouroboros", "zendoo-sc-crypto"]
+members = ["demo-circuit", "ouroboros", "api"]
 
 [profile.release]
 opt-level = 3

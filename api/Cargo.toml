@@ -1,5 +1,5 @@
 [package]
-name = "zendoo-sc-crypto"
+name = "api"
 version = "0.1.0"
 authors = ["DanieleDiBenedetto <daniele@horizenlabs.io>"]
 edition = "2018"

@@ -54,7 +54,6 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
     sigs:                  Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>,
     threshold:             Option<MNT4Fr>,
     b:                     Vec<Option<bool>>,
-
     //Public inputs
     message:               Option<MNT4Fr>,
     hash_commitment:       Option<MNT4Fr>, //H(H(pks), threshold)
@@ -66,23 +65,14 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 
 impl<F: PrimeField>NaiveTresholdSignature<F> {
     pub fn new(
-        mut pks:               Vec<MNT6G1Projective>,
-        mut sigs:              Vec<FieldBasedSchnorrSignature<MNT4Fr>>,
-        threshold:             MNT4Fr,
-        b:                     MNT4Fr,
-        message:               MNT4Fr,
-        hash_commitment:       MNT4Fr,
-        n:                     usize,
+        pks:               Vec<MNT6G1Projective>,
+        sigs:              Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>,
+        threshold:         MNT4Fr,
+        b:                 MNT4Fr,
+        message:           MNT4Fr,
+        hash_commitment:   MNT4Fr,
+        n:                 usize,
     ) -> Self {
-
-        //Add null pks and null sigs as padding to reach size n, if needed
-        for _ in pks.len()..n {
-            pks.push(NULL_CONST.null_pk);
-        }
-
-        for _ in sigs.len()..n {
-            sigs.push(NULL_CONST.null_sig);
-        }
 
         //Convert b to the needed bool vector
         let b_bool = {
@@ -93,7 +83,7 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
         };
         Self{
             pks: pks.iter().map(|&pk| Some(pk)).collect::<Vec<_>>(),
-            sigs: sigs.iter().map(|&sig| Some(sig)).collect::<Vec<_>>(),
+            sigs,
             threshold: Some(threshold),
             b: b_bool,
             message: Some(message),

@@ -27,6 +27,9 @@ use proof_systems::groth16::{Proof, verifier::verify_proof, prepare_verifying_ke
 use rand::rngs::OsRng;
 use std::fs::File;
 
+
+mod ginger_calls;
+
 //Sig types
 type SchnorrSig = FieldBasedSchnorrSignature<Fr>;
 type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<Fr, G1Projective, FrHash>;
