@@ -8,8 +8,8 @@ use algebra::{
             G1Projective as MNT6G1Projective, G1Affine as MNT6G1Affine
         },
     },
-    ToBits, FromBytes, ToBytes, to_bytes,
-    BigInteger768, Field,
+    FromBytes, ToBytes,
+    BigInteger768,
     ProjectiveCurve, AffineCurve
 };
 use primitives::{
@@ -38,9 +38,8 @@ use demo_circuit::{
     },
     naive_threshold_sig::*
 };
-use rand::{
-    Rng, rngs::OsRng
-};
+use rand::rngs::OsRng;
+
 use std::{
     fs::File, io::Result as IoResult
 };
@@ -48,7 +47,43 @@ use lazy_static::*;
 
 pub type FieldElement = MNT4Fr;
 pub const FIELD_SIZE: usize = 96; //Field size in bytes
+pub const SCALAR_FIELD_SIZE: usize = FIELD_SIZE;// 96
+pub const G1_SIZE: usize = 193;
+pub const G2_SIZE: usize = 385;
+
+pub const SCHNORR_PK_SIZE: usize = G1_SIZE; // 193
+pub const SCHNORR_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 96
+pub const SCHNORR_SIG_SIZE: usize = 2 * FIELD_SIZE; // 192
+
+pub const VRF_PK_SIZE: usize = G1_SIZE; // 193
+pub const VRF_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 96
+pub const VRF_PROOF_SIZE: usize = G1_SIZE + 2 * FIELD_SIZE; // 192
+
+pub const ZK_PROOF_SIZE: usize = 2 * G1_SIZE + G2_SIZE;  // 771
 pub type Error = Box<dyn std::error::Error>;
+
+//*******************************Generic I/O functions**********************************************
+// Note: Should decide if panicking or handling IO errors
+
+fn deserialize_from_buffer<T: FromBytes>(buffer: &[u8]) ->  IoResult<T> {
+    T::read(buffer)
+}
+
+fn serialize_to_buffer<T: ToBytes>(to_write: &T, buffer: &mut [u8]) -> IoResult<()> {
+    to_write.write(buffer)
+}
+
+fn read_from_file<T: FromBytes>(file_path: &str) -> IoResult<T>{
+    let mut fs = File::open(file_path)?;
+    let t = T::read(&mut fs)?;
+    Ok(t)
+}
+
+fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
+    let mut fs = File::create(file_path)?;
+    to_write.write(&mut fs)?;
+    Ok(())
+}
 
 //***************************Schnorr types and functions********************************************
 
@@ -61,6 +96,14 @@ pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
     let mut rng = OsRng;
     let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
     (pk.into_affine(), sk)
+}
+
+pub fn schnorr_get_public_key(sk: &SchnorrSk) -> SchnorrPk {
+    SchnorrSigScheme::get_public_key(sk).into_affine()
+}
+
+pub fn schnorr_verify_public_key(pk: &SchnorrPk) -> bool {
+    SchnorrSigScheme::keyverify(&pk.into_projective())
 }
 
 pub fn schnorr_sign(msg: &FieldElement, sk: &SchnorrSk, pk: &SchnorrPk) -> Result<SchnorrSig, Error> {
@@ -94,16 +137,15 @@ impl BackwardTransfer {
 
     pub fn to_field_element(&self) -> IoResult<FieldElement>
     {
-        let mut buffer = vec![0u8; FIELD_SIZE];
+        let mut buffer = vec![];
         self.pk_dest.write(&mut buffer)?;
         self.amount.write(&mut buffer)?;
-        for _ in buffer.len()..FIELD_SIZE { buffer.push(0u8) } //Add padding zeros to reach field size
-        FieldElement::read(buffer.as_slice())
+        read_field_element_from_buffer_with_padding(buffer.as_slice())
     }
 }
 
 //Will return error if buffer.len > FIELD_SIZE. If buffer.len < FIELD_SIZE, padding 0s will be added
-pub fn read_field_element_from_buffer(buffer: &[u8]) -> IoResult<FieldElement>
+pub fn read_field_element_from_buffer_with_padding(buffer: &[u8]) -> IoResult<FieldElement>
 {
     let buff_len = buffer.len();
 
@@ -123,21 +165,18 @@ pub fn read_field_element_from_u64(num: u64) -> FieldElement {
 // in MC during SC creation.
 pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<FieldElement, Error> {
     let threshold_field = read_field_element_from_u64(threshold);
-    let mut pks_x = pks.iter().map(|pk| pk.x).collect::<Vec<_>>();
+    let pks_x = pks.iter().map(|pk| pk.x).collect::<Vec<_>>();
     let pks_hash = compute_poseidon_hash(pks_x.as_slice())?;
    compute_poseidon_hash(&[pks_hash, threshold_field])
 }
 
 //Compute and return (MR(bt_list), H(MR(bt_list), H(bi-1), H(bi))
 pub fn compute_msg_to_sign(
-    end_epoch_mc_b_hash:      &[u8; 32],
-    prev_end_epoch_mc_b_hash: &[u8; 32],
+    end_epoch_mc_b_hash:      &FieldElement,
+    prev_end_epoch_mc_b_hash: &FieldElement,
     bt_list:                  &[BackwardTransfer],
 ) -> Result<(FieldElement, FieldElement), Error> {
 
-    //Read end_epoch_mc_b_hash, prev_end_epoch_mc_b_hash and bt_list as field elements
-    let end_epoch_mc_b_hash = read_field_element_from_buffer(&end_epoch_mc_b_hash[..])?;
-    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer(&prev_end_epoch_mc_b_hash[..])?;
     let mut bt_field_list = vec![];
     for bt in bt_list.iter() {
         let bt_f = bt.to_field_element()?;
@@ -154,19 +193,21 @@ pub fn compute_msg_to_sign(
     drop(bt_mt);
 
     //Compute message to be verified
-    let msg = compute_poseidon_hash(&[mr_bt, prev_end_epoch_mc_b_hash, end_epoch_mc_b_hash])?;
+    let msg = compute_poseidon_hash(&[mr_bt, *prev_end_epoch_mc_b_hash, *end_epoch_mc_b_hash])?;
 
     Ok((mr_bt, msg))
 }
 
 pub fn compute_wcert_sysdata_hash(
-    msg:        &FieldElement,
-    valid_sigs: u64,
+    valid_sigs:               u64,
+    mr_bt:                    &FieldElement,
+    prev_end_epoch_mc_b_hash: &FieldElement,
+    end_epoch_mc_b_hash:      &FieldElement,
 ) -> Result<FieldElement, Error> {
 
     //Compute quality and wcert_sysdata_hash
     let quality = read_field_element_from_u64(valid_sigs);
-    let wcert_sysdata_hash = compute_poseidon_hash(&[quality, *msg])?;
+    let wcert_sysdata_hash = compute_poseidon_hash(&[quality, *mr_bt, *prev_end_epoch_mc_b_hash, *end_epoch_mc_b_hash])?;
     Ok(wcert_sysdata_hash)
 }
 
@@ -180,8 +221,10 @@ pub fn get_public_inputs_for_naive_threshold_sig_proof(
     valid_sigs:               u64,
 ) -> Result<(FieldElement, FieldElement), Error> {
 
-    let (_, msg) = compute_msg_to_sign(end_epoch_mc_b_hash, prev_end_epoch_mc_b_hash, bt_list)?;
-    let wcert_sysdata_hash = compute_wcert_sysdata_hash(&msg, valid_sigs)?;
+    let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
+    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
+    let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
+    let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
     let pks_threshold_hash = compute_pks_threshold_hash(pks, threshold)?;
 
     Ok((wcert_sysdata_hash, pks_threshold_hash))
@@ -202,9 +245,11 @@ pub fn create_naive_threshold_sig_proof(
     assert_eq!(sigs.len(), max_pks);
 
     //Read end_epoch_mc_b_hash, prev_end_epoch_mc_b_hash and bt_list as field elements
+    let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
+    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
     let (mr_bt, msg) = compute_msg_to_sign(
-        end_epoch_mc_b_hash,
-        prev_end_epoch_mc_b_hash,
+        &end_epoch_mc_b_hash,
+        &prev_end_epoch_mc_b_hash,
         bt_list,
     )?;
 
@@ -225,7 +270,7 @@ pub fn create_naive_threshold_sig_proof(
     let b = read_field_element_from_u64(valid_signatures - threshold);
 
     //Compute wcert_sysdata_hash
-    let wcert_sysdata_hash = compute_wcert_sysdata_hash(&msg, valid_signatures)?;
+    let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_signatures, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
 
     //Compute pks_threshold_hash
     let pks_threshold_hash = compute_pks_threshold_hash(pks, threshold)?;
@@ -234,8 +279,6 @@ pub fn create_naive_threshold_sig_proof(
     let pks = pks.iter().map(|&pk| pk.into_projective()).collect::<Vec<_>>();
 
     //Convert needed variables into field elements
-    let end_epoch_mc_b_hash = read_field_element_from_buffer(&end_epoch_mc_b_hash[..])?;
-    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer(&prev_end_epoch_mc_b_hash[..])?;
     let threshold = read_field_element_from_u64(threshold);
 
     let c = NaiveTresholdSignature::<FieldElement>::new(
@@ -274,6 +317,14 @@ pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
     let mut rng = OsRng;
     let (pk, sk) = VRFScheme::keygen(&mut rng);
     (pk.into_affine(), sk)
+}
+
+pub fn vrf_get_public_key(sk: &VRFSk) -> VRFPk {
+    SchnorrSigScheme::get_public_key(sk).into_affine()
+}
+
+pub fn vrf_verify_public_key(pk: &VRFPk) -> bool {
+    SchnorrSigScheme::keyverify(&pk.into_projective())
 }
 
 pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<VRFProof, Error> {
@@ -336,6 +387,8 @@ mod test {
         let mut prev_end_epoch_mc_b_hash = [0u8; 32];
         rng.fill_bytes(&mut end_epoch_mc_b_hash);
         rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
+        let end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
+        let prev_end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
 
         let bt_num = 10;
         let mut bt_list = vec![];
@@ -344,19 +397,22 @@ mod test {
         }
 
         //Compute msg to sign
-        let (_, msg) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list.as_slice()).unwrap();
+        let (_, msg) = compute_msg_to_sign(
+            &end_epoch_mc_b_hash_f,
+            &prev_end_epoch_mc_b_hash_f,
+            bt_list.as_slice()
+        ).unwrap();
 
         //Generate params and write them to file
         let params = generate_parameters(3).unwrap();
         let proving_key_path = "./sample_proving_key";
-        let mut file = File::create(proving_key_path).unwrap();
-        params.write(&mut file).unwrap();
+        write_to_file(&params, proving_key_path).unwrap();
 
         //Generate sample pks and sigs vec
         let threshold: u64 = 2;
         let mut pks = vec![];
         let mut sks = vec![];
-        for i in 0..3 {
+        for _ in 0..3 {
             let keypair = schnorr_generate_key();
             pks.push(keypair.0);
             sks.push(keypair.1);
@@ -378,8 +434,7 @@ mod test {
             proving_key_path
         ).unwrap();
         let proof_path = "./sample_proof";
-        let mut file = File::create(proof_path).unwrap();
-        proof.write(&mut file).unwrap();
+        write_to_file(&proof, proof_path).unwrap();
 
         //Verify proof
         let (wcert_sysdata_hash, pks_threshold_hash) = get_public_inputs_for_naive_threshold_sig_proof(
@@ -406,13 +461,77 @@ mod test {
     }
 
     #[test]
+    fn sample_schnorr_sig_prove_verify(){
+        let mut rng = OsRng;
+        let msg = FieldElement::rand(&mut rng);
+
+        let (pk, sk) = schnorr_generate_key(); //Keygen
+        assert_eq!(schnorr_get_public_key(&sk), pk); //Get pk
+        assert!(schnorr_verify_public_key(&pk)); //Verify pk
+
+        //Serialize/deserialize pk
+        let mut pk_serialized = vec![0u8; SCHNORR_PK_SIZE];
+        serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
+        let pk_deserialized = deserialize_from_buffer(&pk_serialized).unwrap();
+        assert_eq!(pk, pk_deserialized);
+
+        //Serialize/deserialize sk
+        let mut sk_serialized = vec![0u8; SCHNORR_SK_SIZE];
+        serialize_to_buffer(&sk, &mut sk_serialized).unwrap();
+        let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
+        assert_eq!(sk, sk_deserialized);
+
+        let sig = schnorr_sign(&msg, &sk, &pk).unwrap(); //Sign msg
+
+        //Serialize/deserialize sig
+        let mut sig_serialized = vec![0u8; SCHNORR_SIG_SIZE];
+        serialize_to_buffer(&sig, &mut sig_serialized).unwrap();
+        let sig_deserialized = deserialize_from_buffer(&sig_serialized).unwrap();
+        assert_eq!(sig, sig_deserialized);
+
+        assert!(schnorr_verify_signature(&msg, &pk, &sig).unwrap()); //Verify sig
+
+        //Negative case
+        let wrong_msg = FieldElement::rand(&mut rng);
+        assert!(!schnorr_verify_signature(&wrong_msg, &pk, &sig).unwrap());
+    }
+
+    #[test]
     fn sample_vrf_prove_verify(){
         let mut rng = OsRng;
         let msg = FieldElement::rand(&mut rng);
 
         let (pk, sk) = vrf_generate_key(); //Keygen
+        assert_eq!(vrf_get_public_key(&sk), pk); //Get pk
+        assert!(vrf_verify_public_key(&pk)); //Verify pk
+
+        //Serialize/deserialize pk
+        let mut pk_serialized = vec![0u8; VRF_PK_SIZE];
+        serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
+        let pk_deserialized = deserialize_from_buffer(&pk_serialized).unwrap();
+        assert_eq!(pk, pk_deserialized);
+
+        //Serialize/deserialize sk
+        let mut sk_serialized = vec![0u8; VRF_SK_SIZE];
+        serialize_to_buffer(&sk, &mut sk_serialized).unwrap();
+        let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
+        assert_eq!(sk, sk_deserialized);
+
         let vrf_proof = vrf_prove(&msg, &sk, &pk).unwrap(); //Create vrf proof for msg
-        let vrf_output = vrf_proof_to_hash(&msg, &pk, &vrf_proof).unwrap(); //Verify vrf proof and get vrf out for msg
+
+        //Serialize/deserialize vrf proof
+        let mut proof_serialized = vec![0u8; VRF_PROOF_SIZE];
+        serialize_to_buffer(&vrf_proof, &mut proof_serialized).unwrap();
+        let proof_deserialized = deserialize_from_buffer(&proof_serialized).unwrap();
+        assert_eq!(vrf_proof, proof_deserialized);
+
+        let vrf_out = vrf_proof_to_hash(&msg, &pk, &vrf_proof).unwrap(); //Verify vrf proof and get vrf out for msg
+
+        //Serialize/deserialize vrf out (i.e. a field element)
+        let mut vrf_out_serialized = vec![0u8; FIELD_SIZE];
+        serialize_to_buffer(&vrf_out, &mut vrf_out_serialized).unwrap();
+        let vrf_out_deserialized = deserialize_from_buffer(&vrf_out_serialized).unwrap();
+        assert_eq!(vrf_out, vrf_out_deserialized);
 
         //Negative case
         let wrong_msg = FieldElement::rand(&mut rng);

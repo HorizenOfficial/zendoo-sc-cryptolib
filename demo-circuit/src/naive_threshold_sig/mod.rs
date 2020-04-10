@@ -51,7 +51,7 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 
     //Witnesses
     pks:                      Vec<Option<MNT6G1Projective>>, //pk_n = g^sk_n
-    sigs:                     Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>, //sig_n = sign(sk_n, H(MR(BT), H(Bi-1), H(Bi)))
+    sigs:                     Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>, //sig_n = sign(sk_n, H(MR(BT), BH(Bi-1), BH(Bi)))
     threshold:                Option<MNT4Fr>,
     b:                        Vec<Option<bool>>,
     end_epoch_mc_b_hash:      Option<MNT4Fr>,
@@ -60,7 +60,7 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 
     //Public inputs
     pks_threshold_hash:       Option<MNT4Fr>, //H(H(pks), threshold)
-    wcert_sysdata_hash:       Option<MNT4Fr>, //H(valid_signatures, H(MR(BT), H(Bi-1), H(Bi)))
+    wcert_sysdata_hash:       Option<MNT4Fr>, //H(valid_signatures, MR(BT), BH(Bi-1), BH(Bi))
 
     //Other
     max_pks:                  usize,
@@ -147,7 +147,7 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
             || self.threshold.ok_or(SynthesisError::AssignmentMissing)
         )?;
 
-        //Check hash commitment
+        //Check pks_threshold_hash
         actual_pks_threshold_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "H(H(pks), threshold)"),
             &[actual_pks_threshold_hash_g, t_g.clone()],
@@ -160,29 +160,26 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
 
         //Check signatures
 
-        //Reconstruct message as H(MR(BT), H(Bi-1), H(Bi))
-        let message_g = {
+        //Reconstruct message as H(MR(BT), BH(Bi-1), BH(Bi))
+        let mr_bt_g = MNT4FrGadget::alloc(
+            cs.ns(|| "alloc mr_bt"),
+            || self.mr_bt.ok_or(SynthesisError::AssignmentMissing)
+        )?;
 
-            let mr_bt_g = MNT4FrGadget::alloc(
-                cs.ns(|| "alloc mr_bt"),
-                || self.mr_bt.ok_or(SynthesisError::AssignmentMissing)
-            )?;
+        let prev_end_epoch_mc_block_hash_g = MNT4FrGadget::alloc(
+            cs.ns(|| "alloc prev_end_epoch_mc_block_hash"),
+            || self.prev_end_epoch_mc_b_hash.ok_or(SynthesisError::AssignmentMissing)
+        )?;
 
-            let prev_end_epoch_mc_block_hash_g = MNT4FrGadget::alloc(
-                cs.ns(|| "alloc prev_end_epoch_mc_block_hash"),
-                || self.prev_end_epoch_mc_b_hash.ok_or(SynthesisError::AssignmentMissing)
-            )?;
+        let end_epoch_mc_block_hash_g = MNT4FrGadget::alloc(
+            cs.ns(|| "alloc end_epoch_mc_block_hash"),
+            || self.end_epoch_mc_b_hash.ok_or(SynthesisError::AssignmentMissing)
+        )?;
 
-            let end_epoch_mc_block_hash_g = MNT4FrGadget::alloc(
-                cs.ns(|| "alloc end_epoch_mc_block_hash"),
-                || self.end_epoch_mc_b_hash.ok_or(SynthesisError::AssignmentMissing)
-            )?;
-
-            MNT4PoseidonHashGadget::check_evaluation_gadget(
-                cs.ns(|| "H(MR(BT), H(Bi-1), H(Bi))"),
-                &[mr_bt_g, prev_end_epoch_mc_block_hash_g, end_epoch_mc_block_hash_g],
-            )?
-        };
+        let message_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
+            cs.ns(|| "H(MR(BT), BH(i-1), BH(i))"),
+            &[mr_bt_g.clone(), prev_end_epoch_mc_block_hash_g.clone(), end_epoch_mc_block_hash_g.clone()],
+        )?;
 
         let mut sigs_g = Vec::with_capacity(self.max_pks);
 
@@ -227,8 +224,8 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
         )?;
 
         let actual_wcert_sysdata_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
-            cs.ns(|| "H(valid_signatures,H(MR(BT), H(Bi-1), H(Bi)))"),
-            &[valid_signatures.clone(), message_g]
+            cs.ns(|| "H(valid_signatures, MR(BT), BH(i-1), BH(i))"),
+            &[valid_signatures.clone(), mr_bt_g, prev_end_epoch_mc_block_hash_g, end_epoch_mc_block_hash_g]
         )?;
 
         expected_wcert_sysdata_hash_g.enforce_equal(
@@ -375,7 +372,7 @@ mod test {
 
         //Compute wcert_sysdata_hash
         let wcert_sysdata_hash = if !wrong_wcert_sysdata_hash {
-            MNT4PoseidonHash::evaluate(&[valid_field, message]).unwrap()
+            MNT4PoseidonHash::evaluate(&[valid_field, mr_bt, prev_end_epoch_mc_b_hash, end_epoch_mc_b_hash]).unwrap()
         } else {
             rng.gen()
         };
