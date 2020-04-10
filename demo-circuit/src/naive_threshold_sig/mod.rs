@@ -50,35 +50,42 @@ type MNT4FrGadget = FpGadget<MNT4Fr>;
 pub struct NaiveTresholdSignature<F: PrimeField>{
 
     //Witnesses
-    pks:                   Vec<Option<MNT6G1Projective>>,
-    sigs:                  Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>,
-    threshold:             Option<MNT4Fr>,
-    b:                     Vec<Option<bool>>,
+    pks:                      Vec<Option<MNT6G1Projective>>, //pk_n = g^sk_n
+    sigs:                     Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>, //sig_n = sign(sk_n, H(MR(BT), H(Bi-1), H(Bi)))
+    threshold:                Option<MNT4Fr>,
+    b:                        Vec<Option<bool>>,
+    end_epoch_mc_b_hash:      Option<MNT4Fr>,
+    prev_end_epoch_mc_b_hash: Option<MNT4Fr>,
+    mr_bt:                    Option<MNT4Fr>,
+
     //Public inputs
-    message:               Option<MNT4Fr>,
-    hash_commitment:       Option<MNT4Fr>, //H(H(pks), threshold)
+    pks_threshold_hash:       Option<MNT4Fr>, //H(H(pks), threshold)
+    wcert_sysdata_hash:       Option<MNT4Fr>, //H(valid_signatures, H(MR(BT), H(Bi-1), H(Bi)))
 
     //Other
-    n:                     usize,
-    _field:                PhantomData<F>,
+    max_pks:                  usize,
+    _field:                   PhantomData<F>,
 }
 
 impl<F: PrimeField>NaiveTresholdSignature<F> {
     pub fn new(
-        pks:               Vec<MNT6G1Projective>,
-        sigs:              Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>,
-        threshold:         MNT4Fr,
-        b:                 MNT4Fr,
-        message:           MNT4Fr,
-        hash_commitment:   MNT4Fr,
-        n:                 usize,
+        pks:                      Vec<MNT6G1Projective>,
+        sigs:                     Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>,
+        threshold:                MNT4Fr,
+        b:                        MNT4Fr,
+        end_epoch_mc_b_hash:      MNT4Fr,
+        prev_end_epoch_mc_b_hash: MNT4Fr,
+        mr_bt:                    MNT4Fr,
+        pks_threshold_hash:       MNT4Fr,
+        wcert_sysdata_hash:       MNT4Fr,
+        max_pks:                  usize,
     ) -> Self {
 
         //Convert b to the needed bool vector
         let b_bool = {
-            let b_len = (n.next_power_of_two() as u64).trailing_zeros() as usize;
+            let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
             let b_bits = b.write_bits();
-            let to_skip = MNT4Fr::size_in_bits() - (b_len + 1);
+            let to_skip = MNT4Fr::size_in_bits() - (log_max_pks + 1);
             b_bits[to_skip..].to_vec().iter().map(|&b| Some(b)).collect::<Vec<_>>()
         };
         Self{
@@ -86,9 +93,12 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
             sigs,
             threshold: Some(threshold),
             b: b_bool,
-            message: Some(message),
-            hash_commitment: Some(hash_commitment),
-            n,
+            end_epoch_mc_b_hash:      Some(end_epoch_mc_b_hash),
+            prev_end_epoch_mc_b_hash: Some(prev_end_epoch_mc_b_hash),
+            mr_bt:                    Some(mr_bt),
+            pks_threshold_hash:       Some(pks_threshold_hash),
+            wcert_sysdata_hash:       Some(wcert_sysdata_hash),
+            max_pks,
             _field: PhantomData
         }
     }
@@ -98,21 +108,21 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
     fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
 
         //Internal checks
-        let log_n = (self.n.next_power_of_two() as u64).trailing_zeros() as usize;
-        assert_eq!(self.n, self.pks.len());
-        assert_eq!(self.n, self.sigs.len());
-        assert_eq!(log_n + 1, self.b.len());
+        let log_max_pks = (self.max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
+        assert_eq!(self.max_pks, self.pks.len());
+        assert_eq!(self.max_pks, self.sigs.len());
+        assert_eq!(log_max_pks + 1, self.b.len());
 
         //Check pks are consistent with self.hash_commitment
 
         //Allocate hash_commitment as public input
-        let expected_hash_commitment_g = MNT4FrGadget::alloc_input(
-            cs.ns(|| "alloc hash commitment"),
-            || self.hash_commitment.ok_or(SynthesisError::AssignmentMissing)
+        let expected_pks_threshold_hash_g = MNT4FrGadget::alloc_input(
+            cs.ns(|| "alloc pks_threshold_hash"),
+            || self.pks_threshold_hash.ok_or(SynthesisError::AssignmentMissing)
         )?;
 
         //Allocate public keys as witnesses
-        let mut pks_g = Vec::with_capacity(self.n);
+        let mut pks_g = Vec::with_capacity(self.max_pks);
 
         for (i, pk) in self.pks.iter().enumerate() {
             // It's safe to not perform any check when allocating the pks,
@@ -126,7 +136,7 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
         }
 
         //Check pks
-        let mut actual_hash_commitment_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
+        let mut actual_pks_threshold_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "hash public keys"),
             pks_g.iter().map(|pk| pk.x.clone()).collect::<Vec<_>>().as_slice(),
         )?;
@@ -138,25 +148,43 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
         )?;
 
         //Check hash commitment
-        actual_hash_commitment_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
+        actual_pks_threshold_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "H(H(pks), threshold)"),
-            &[actual_hash_commitment_g, t_g.clone()],
+            &[actual_pks_threshold_hash_g, t_g.clone()],
         )?;
 
-        expected_hash_commitment_g.enforce_equal(
-            cs.ns(|| "check hash commitment"),
-            &actual_hash_commitment_g,
+        expected_pks_threshold_hash_g.enforce_equal(
+            cs.ns(|| "check pks_threshold_hash"),
+            &actual_pks_threshold_hash_g,
         )?;
 
         //Check signatures
 
-        //Allocate message as public input
-        let message_g = MNT4FrGadget::alloc_input(
-            cs.ns(|| "alloc message"),
-            || self.message.ok_or(SynthesisError::AssignmentMissing)
-        )?;
+        //Reconstruct message as H(MR(BT), H(Bi-1), H(Bi))
+        let message_g = {
 
-        let mut sigs_g = Vec::with_capacity(self.n);
+            let mr_bt_g = MNT4FrGadget::alloc(
+                cs.ns(|| "alloc mr_bt"),
+                || self.mr_bt.ok_or(SynthesisError::AssignmentMissing)
+            )?;
+
+            let prev_end_epoch_mc_block_hash_g = MNT4FrGadget::alloc(
+                cs.ns(|| "alloc prev_end_epoch_mc_block_hash"),
+                || self.prev_end_epoch_mc_b_hash.ok_or(SynthesisError::AssignmentMissing)
+            )?;
+
+            let end_epoch_mc_block_hash_g = MNT4FrGadget::alloc(
+                cs.ns(|| "alloc end_epoch_mc_block_hash"),
+                || self.end_epoch_mc_b_hash.ok_or(SynthesisError::AssignmentMissing)
+            )?;
+
+            MNT4PoseidonHashGadget::check_evaluation_gadget(
+                cs.ns(|| "H(MR(BT), H(Bi-1), H(Bi))"),
+                &[mr_bt_g, prev_end_epoch_mc_block_hash_g, end_epoch_mc_block_hash_g],
+            )?
+        };
+
+        let mut sigs_g = Vec::with_capacity(self.max_pks);
 
         //Allocate signatures as witnesses
         for (i, sig) in self.sigs.iter().enumerate() {
@@ -167,9 +195,9 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
             sigs_g.push(sig_g);
         }
 
-        let mut verdicts = Vec::with_capacity(self.n);
+        let mut verdicts = Vec::with_capacity(self.max_pks);
 
-        //Check signatures verification verdict
+        //Check signatures verification verdict on message
         for (i ,(pk_g, sig_g))
             in pks_g.iter().zip(sigs_g.iter()).enumerate() {
 
@@ -192,8 +220,24 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
             )?;
         }
 
+        //Enforce correct wcert_sysdata_hash
+        let expected_wcert_sysdata_hash_g = MNT4FrGadget::alloc_input(
+            cs.ns(|| "alloc wcert_sysdata_hash_g"),
+            || self.wcert_sysdata_hash.ok_or(SynthesisError::AssignmentMissing)
+        )?;
+
+        let actual_wcert_sysdata_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
+            cs.ns(|| "H(valid_signatures,H(MR(BT), H(Bi-1), H(Bi)))"),
+            &[valid_signatures.clone(), message_g]
+        )?;
+
+        expected_wcert_sysdata_hash_g.enforce_equal(
+            cs.ns(|| "check wcert_sysdata_hash"),
+            &actual_wcert_sysdata_hash_g,
+        )?;
+
         //Alloc the b's as witnesses
-        let mut bs_g = Vec::with_capacity(log_n + 1);
+        let mut bs_g = Vec::with_capacity(log_max_pks + 1);
         for (i, b) in self.b.iter().enumerate(){
             let b_g = Boolean::alloc(
                 cs.ns(|| format!("alloc b_{}", i)),
@@ -221,24 +265,27 @@ use algebra::curves::mnt4753::MNT4;
 use proof_systems::groth16::{Parameters, generator::generate_random_parameters};
 
 #[allow(dead_code)]
-pub fn generate_parameters(n: usize) -> Result<Parameters<MNT4>, SynthesisError> {
+pub fn generate_parameters(max_pks: usize) -> Result<Parameters<MNT4>, SynthesisError> {
 
     //Istantiating rng
     let mut rng = OsRng::default();
 
     //Istantiating supported number of pks and sigs
-    let log_n = (n.next_power_of_two() as u64).trailing_zeros() as usize;
+    let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
 
     // Create parameters for our circuit
     let c = NaiveTresholdSignature::<MNT4Fr> {
-        pks: vec![None; n],
-        sigs: vec![None; n],
-        threshold: None,
-        b: vec![None; log_n + 1],
-        message: None,
-        hash_commitment: None,
-        n,
-        _field: PhantomData
+        pks:                      vec![None; max_pks],
+        sigs:                     vec![None; max_pks],
+        threshold:                None,
+        b:                        vec![None; log_max_pks + 1],
+        end_epoch_mc_b_hash:      None,
+        prev_end_epoch_mc_b_hash: None,
+        mr_bt:                    None,
+        pks_threshold_hash:       None,
+        wcert_sysdata_hash:       None,
+        max_pks,
+        _field:                   PhantomData
     };
 
     let params = generate_random_parameters::<MNT4, _, _>(c, &mut rng);
@@ -248,7 +295,7 @@ pub fn generate_parameters(n: usize) -> Result<Parameters<MNT4>, SynthesisError>
 #[cfg(test)]
 mod test {
     use super::*;
-    use algebra::{curves::mnt4753::MNT4, ToBits, BigInteger768, ProjectiveCurve};
+    use algebra::{curves::mnt4753::MNT4, BigInteger768, ProjectiveCurve};
     use primitives::{
         crh::FieldBasedHash,
         signature::{
@@ -267,21 +314,22 @@ mod test {
     type SchnorrSig = FieldBasedSchnorrSignatureScheme<MNT4Fr, MNT6G1Projective, MNT4PoseidonHash>;
 
     fn generate_test_proof(
-        n: usize,
-        v: usize,
-        t: usize,
-        bad_hash_commitment: bool,
-        params: Parameters<MNT4>,
+        max_pks:                  usize,
+        valid_sigs:               usize,
+        threshold:                usize,
+        wrong_pks_threshold_hash: bool,
+        wrong_wcert_sysdata_hash: bool,
+        params:                   Parameters<MNT4>,
     ) -> Result<(Proof<MNT4>, Vec<MNT4Fr>), SynthesisError> {
 
         //Istantiate rng
         let mut rng = OsRng::default();
 
-        //Istantiate supported number of pks and sigs
-        let log_n = (n.next_power_of_two() as u64).trailing_zeros() as usize;
-
-        //Generate random message to sign
-        let message: MNT4Fr = rng.gen();
+        //Generate message to sign
+        let mr_bt: MNT4Fr = rng.gen();
+        let prev_end_epoch_mc_b_hash: MNT4Fr = rng.gen();
+        let end_epoch_mc_b_hash: MNT4Fr = rng.gen();
+        let message = MNT4PoseidonHash::evaluate(&[mr_bt, prev_end_epoch_mc_b_hash, end_epoch_mc_b_hash]).unwrap();
 
         //Generate another random message used to simulate a non-valid signature
         let invalid_message: MNT4Fr = rng.gen();
@@ -289,14 +337,14 @@ mod test {
         let mut pks = vec![];
         let mut sigs = vec![];
 
-        for _ in 0..v {
+        for _ in 0..valid_sigs {
             let (pk, sk) = SchnorrSig::keygen(&mut rng);
             let sig = SchnorrSig::sign(&mut rng, &pk, &sk, &[message]).unwrap();
-            pks.push(Some(pk));
+            pks.push(pk);
             sigs.push(Some(sig));
         }
 
-        for _ in 0..(n-v){
+        for _ in 0..(max_pks-valid_sigs){
             //Sample a random boolean and decide if generating a non valid signature or a null one
             let generate_null: bool = rng.gen();
             let (pk, sig) = if generate_null {
@@ -307,43 +355,42 @@ mod test {
                 let sig = SchnorrSig::sign(&mut rng, &pk, &sk, &[invalid_message]).unwrap();
                 (pk, sig)
             };
-            pks.push(Some(pk));
+            pks.push(pk);
             sigs.push(Some(sig));
         }
 
-        let message = Some(message);
-
         //Generate b
-        let t_field = MNT4Fr::from_repr(BigInteger768::from(t as u64));
-        let valid_field = MNT4Fr::from_repr(BigInteger768::from(v as u64));
+        let t_field = MNT4Fr::from_repr(BigInteger768::from(threshold as u64));
+        let valid_field = MNT4Fr::from_repr(BigInteger768::from(valid_sigs as u64));
         let b_field = valid_field - &t_field;
-        let threshold = Some(t_field);
 
-        //Convert b to bits
-        let b_bits = b_field.write_bits();
-        let to_skip = MNT4Fr::size_in_bits() - (log_n + 1);
-        let b = b_bits[to_skip..].iter().map(|b| Some(*b)).collect::<Vec<_>>();
-
-        //Compute hash commitment
-        let hash_input = pks.iter().map(|pk| pk.unwrap().into_affine().x).collect::<Vec<_>>();
-        let hash_commitment = if !bad_hash_commitment {
-            let tmp = MNT4PoseidonHash::evaluate(hash_input.as_slice()).unwrap();
-            Some(MNT4PoseidonHash::evaluate(&[tmp, t_field]).unwrap())
+        //Compute pks_threshold_hash
+        let pks_hash_input = pks.iter().map(|pk| pk.into_affine().x).collect::<Vec<_>>();
+        let pks_hash = MNT4PoseidonHash::evaluate(pks_hash_input.as_slice()).unwrap();
+        let pks_threshold_hash = if !wrong_pks_threshold_hash {
+            MNT4PoseidonHash::evaluate(&[pks_hash, t_field]).unwrap()
         } else {
-            let rand_f: MNT4Fr = rng.gen();
-            Some(rand_f)
+            rng.gen()
+        };
+
+        //Compute wcert_sysdata_hash
+        let wcert_sysdata_hash = if !wrong_wcert_sysdata_hash {
+            MNT4PoseidonHash::evaluate(&[valid_field, message]).unwrap()
+        } else {
+            rng.gen()
         };
 
         //Create proof for our circuit
-        let c = NaiveTresholdSignature::<MNT4Fr> {
-            pks, sigs, threshold, b, message, hash_commitment, n, _field: PhantomData
-        };
+        let c = NaiveTresholdSignature::<MNT4Fr>::new(
+            pks, sigs, t_field, b_field, end_epoch_mc_b_hash, prev_end_epoch_mc_b_hash,
+            mr_bt, pks_threshold_hash, wcert_sysdata_hash, max_pks,
+        );
 
         //Return proof and public inputs if success
         let start = std::time::Instant::now();
         let proof = match create_random_proof(c, &params, &mut rng) {
             Ok(proof) => {
-                let public_inputs = vec![hash_commitment.unwrap(), message.unwrap()];
+                let public_inputs = vec![pks_threshold_hash, wcert_sysdata_hash];
                 Ok((proof, public_inputs))
             }
             Err(e) => Err(e)
@@ -354,23 +401,28 @@ mod test {
 
     #[test]
     fn test_naive_threshold_circuit() {
-        let n = 16;
+        let n = 6;
         let params = generate_parameters(n).unwrap();
         let pvk = prepare_verifying_key(&params.vk);
 
         //Generate proof with correct witnesses and v > t
         let (proof, public_inputs) =
-            generate_test_proof(n, 5, 4, false, params.clone()).unwrap();
+            generate_test_proof(n, 5, 4, false, false, params.clone()).unwrap();
         assert!(verify_proof(&pvk, &proof, public_inputs.as_slice()).unwrap());
-
-        //Generate proof with bad hash_commitment
-        let (proof, public_inputs) =
-            generate_test_proof(n, 5, 4, true, params.clone()).unwrap();
-        assert!(!verify_proof(&pvk, &proof, public_inputs.as_slice()).unwrap());
 
         //Generate proof with insufficient valid signatures
         let (proof, public_inputs) =
-            generate_test_proof(n, 4, 5, false, params.clone()).unwrap();
+            generate_test_proof(n, 4, 5, false, false, params.clone()).unwrap();
+        assert!(!verify_proof(&pvk, &proof, public_inputs.as_slice()).unwrap());
+
+        //Generate proof with bad pks_threshold_hash
+        let (proof, public_inputs) =
+            generate_test_proof(n, 5, 4, true, false, params.clone()).unwrap();
+        assert!(!verify_proof(&pvk, &proof, public_inputs.as_slice()).unwrap());
+
+        //Generate proof with bad wcert_sysdata_hash
+        let (proof, public_inputs) =
+            generate_test_proof(n, 5, 4, false, true, params.clone()).unwrap();
         assert!(!verify_proof(&pvk, &proof, public_inputs.as_slice()).unwrap());
     }
 }
