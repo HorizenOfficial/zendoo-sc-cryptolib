@@ -1,36 +1,35 @@
 package com.horizen.vrfnative;
 
-import org.junit.BeforeClass;
-import org.junit.Test;
+import com.horizen.librustsidechains.PublicKeyUtils;
+import com.horizen.librustsidechains.SecretKeyUtils;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import org.junit.Test;
 
 import static org.junit.Assert.*;
 
 public class VRFSecretKeyTest {
 
 
+
     @Test
-    public void testProove() {
+    public void testKey() {
 
-        byte[] secretKeyBytes = new byte[VRFSecretKey.SECRET_KEY_LENGTH];
-        byte[] publicKeyBytes = new byte[VRFPublicKey.PUBLIC_KEY_LENGTH];
+        VRFKeyPair keyPair = VRFKeyPair.generate();
 
-        assertTrue("Key generation must be successful.", VRFKeyGenerator.nativeGenerate(secretKeyBytes, publicKeyBytes));
-        assertTrue("Generated key must be valid.", VRFPublicKey.nativeVerifyKey(publicKeyBytes));
+        assertNotNull("Key pair generation was unsuccessful.", keyPair);
 
-        byte[] message = new byte[VRFSecretKey.SECRET_KEY_LENGTH];
+        byte[] publicKeyBytes = keyPair.getPublicKey().serializePublicKey();
+        byte[] secretKeyBytes = keyPair.getSecretKey().serializeSecretKey();
 
-        byte[] proof = VRFSecretKey.nativeProve(publicKeyBytes, secretKeyBytes, message);
+        assertEquals("Public key size must me - " + PublicKeyUtils.PUBLIC_KEY_LENGTH,
+                PublicKeyUtils.PUBLIC_KEY_LENGTH,
+                publicKeyBytes.length);
+        assertEquals("Secret key size must be - " + SecretKeyUtils.SECRET_KEY_LENGTH,
+                SecretKeyUtils.SECRET_KEY_LENGTH,
+                secretKeyBytes.length);
 
-        assertTrue("Proof must be valid.", VRFPublicKey.nativeVerify(publicKeyBytes, message, proof));
-        assertEquals("Proof size must be " + VRFProof.VRF_PROOF_SIZE, VRFProof.VRF_PROOF_SIZE, proof.length);
+        VRFPublicKey recreatedPublicKey = keyPair.getSecretKey().getPublicKey();
 
-        byte[] vrfHash = VRFSecretKey.nativeVRFHash(message, publicKeyBytes, proof);
-
-        assertEquals("VRF hash size must be " + VRFProof.VRF_PROOF_SIZE, VRFProof.VRF_PROOF_SIZE, vrfHash.length);
+        assertTrue("Recreated key must be valid.", recreatedPublicKey.verifyKey());
     }
 }

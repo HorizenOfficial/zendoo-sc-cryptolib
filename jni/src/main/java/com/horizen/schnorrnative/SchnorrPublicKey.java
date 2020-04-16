@@ -1,41 +1,57 @@
 package com.horizen.schnorrnative;
 
-import com.horizen.librustsidechains.Library;
+import com.horizen.librustsidechains.*;
 
 import java.util.Arrays;
 
 public class SchnorrPublicKey
 {
 
-  public static final int PUBLIC_KEY_LENGTH = 193;
-
-  private byte[] publicKey;
+  private long publicKeyPointer;
 
   static {
     Library.load();
   }
 
-  public SchnorrPublicKey(byte[] publicKeyBytes) {
-    if (publicKeyBytes.length != PUBLIC_KEY_LENGTH)
-      throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PUBLIC_KEY_LENGTH, publicKeyBytes.length));
-    this.publicKey = publicKeyBytes;
+  SchnorrPublicKey(long publicKeyPointer) {
+    if (publicKeyPointer == 0)
+      throw new IllegalArgumentException("Public key pointer must be not null.");
+    this.publicKeyPointer = publicKeyPointer;
   }
 
-  private static native boolean nativeVerifySignature(byte[] key, byte[] message, byte[] proof); // jni call to Rust impl
+  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes) {
+    if (publicKeyBytes.length != PublicKeyUtils.PUBLIC_KEY_LENGTH)
+      throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PublicKeyUtils.PUBLIC_KEY_LENGTH, publicKeyBytes.length));
 
-  private static native boolean nativeVerifyKey(byte[] key); // jni call to Rust impl
+    return new SchnorrPublicKey(PublicKeyUtils.nativeDeserializePublicKey(publicKeyBytes));
+  }
 
-  public boolean verifySignature(byte[] message, byte[] signature) {
-    return nativeVerifySignature(this.publicKey, message, signature);
+  public byte[] serializePublicKey() {
+    return PublicKeyUtils.nativeSerializePublicKey(publicKeyPointer);
+  }
+
+  public void freePublicKey() {
+    if (publicKeyPointer != 0) {
+      PublicKeyUtils.nativeFreePublicKey(publicKeyPointer);
+      publicKeyPointer = 0;
+    }
+  }
+
+  long getPublicKeyPointer() {
+    return this.publicKeyPointer;
+  }
+
+  private static native boolean nativeVerifySignature(SchnorrPublicKey publicKey, SchnorrSignature signature, byte[] message); // jni call to Rust impl
+
+  private static native boolean nativeVerifyKey(SchnorrPublicKey key); // jni call to Rust impl
+
+  //Don't yet completed.
+  public boolean verifySignature(SchnorrSignature signature, byte[] message) {
+    return nativeVerifySignature(this, signature, message);
   }
 
   public boolean verifyKey() {
-    return nativeVerifyKey(this.publicKey);
+    return nativeVerifyKey(this);
   }
-
-  public byte[] getPublicKey() {
-    return Arrays.copyOf(publicKey, PUBLIC_KEY_LENGTH);
-  }
-
 }
 

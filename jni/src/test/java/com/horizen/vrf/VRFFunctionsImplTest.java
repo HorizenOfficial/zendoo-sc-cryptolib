@@ -1,12 +1,8 @@
 package com.horizen.vrf;
 
-import com.horizen.vrfnative.VRFKeyGenerator;
 import com.horizen.vrfnative.VRFProof;
 import com.horizen.vrfnative.VRFPublicKey;
 import com.horizen.vrfnative.VRFSecretKey;
-import org.junit.Test;
-
-import java.util.EnumMap;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -14,6 +10,7 @@ import static org.junit.Assert.assertTrue;
 public class VRFFunctionsImplTest {
 
 
+    /*
     @Test
     public void testProove() {
 
@@ -41,4 +38,5 @@ public class VRFFunctionsImplTest {
 
         assertEquals("VRF hash size must be " + VRFProof.VRF_PROOF_SIZE, VRFProof.VRF_PROOF_SIZE, vrfHash.length);
     }
+    */
 }

@@ -1,43 +1,55 @@
 package com.horizen.schnorrnative;
 
-import com.horizen.librustsidechains.Library;
-import com.horizen.vrfnative.VRFPublicKey;
+import com.horizen.librustsidechains.*;
 
 import java.util.Arrays;
 
 public class SchnorrSecretKey
 {
 
-    public static final int SECRET_KEY_LENGTH = 96;
-
-    private byte[] secretKey;
-    private SchnorrPublicKey publicKey;
+    private long secretKeyPointer;
 
     static {
         Library.load();
     }
 
-    public SchnorrSecretKey(SchnorrPublicKey publicKey, byte[] secretKeyBytes) {
-        if (publicKey == null)
-            throw new IllegalArgumentException("Public key must be not null.");
-        if (secretKeyBytes.length != SECRET_KEY_LENGTH)
-            throw new IllegalArgumentException(String.format("Incorrect secret key length, %d expected, %d found", SECRET_KEY_LENGTH, secretKeyBytes.length));
-
-        this.publicKey = publicKey;
-        this.secretKey = secretKeyBytes;
+    SchnorrSecretKey(long secretKeyPointer) {
+        if (secretKeyPointer == 0)
+            throw new IllegalArgumentException("Secret key pointer must be not null.");
+        this.secretKeyPointer = secretKeyPointer;
     }
 
-    public byte[] getSecretKey() {
-        return Arrays.copyOf(secretKey, SECRET_KEY_LENGTH);
+    public static SchnorrSecretKey deserialize(byte[] secretKeyBytes) {
+        if (secretKeyBytes.length != SecretKeyUtils.SECRET_KEY_LENGTH)
+            throw new IllegalArgumentException(String.format("Incorrect secret key length, %d expected, %d found", SecretKeyUtils.SECRET_KEY_LENGTH, secretKeyBytes.length));
+
+        return new SchnorrSecretKey(SecretKeyUtils.nativeDeserializeSecretKey(secretKeyBytes));
     }
+
+    public byte[] serializeSecretKey() {
+        if (secretKeyPointer == 0)
+            throw new IllegalArgumentException("Secret key was freed.");
+
+        return SecretKeyUtils.nativeSerializeSecretKey(secretKeyPointer);
+    }
+
+    public void freeSecretKey() {
+        if (secretKeyPointer != 0) {
+            SecretKeyUtils.nativeFreeSecretKey(secretKeyPointer);
+            secretKeyPointer = 0;
+        }
+    }
+
+    long getSecretKeyPointer() {
+        return this.secretKeyPointer;
+    }
+
+    private static native long nativeGetPublicKey(SchnorrSecretKey key);
 
     public SchnorrPublicKey getPublicKey() {
-        return publicKey;
-    }
+        if (secretKeyPointer == 0)
+            throw new IllegalArgumentException("Secret key was freed.");
 
-    private static native byte[] nativeSignMessage (byte[] publicKey, byte[] secretKey, byte[] message); // jni call to Rust impl
-
-    public byte[] signMessage(byte[] message) {
-        return nativeSignMessage(this.publicKey.getPublicKey(), secretKey, message);
+        return new SchnorrPublicKey(nativeGetPublicKey(this));
     }
 }

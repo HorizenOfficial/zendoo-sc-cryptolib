@@ -1,31 +1,31 @@
 package com.horizen.schnorrnative;
 
-import com.horizen.vrfnative.VRFKeyGenerator;
-import com.horizen.vrfnative.VRFSecretKey;
+import com.horizen.librustsidechains.PublicKeyUtils;
+import com.horizen.librustsidechains.SecretKeyUtils;
 import org.junit.Test;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class SchnorrSecretKeyTest {
 
 
     @Test
-    public void testSignMessage() {
+    public void testKey() {
 
-        SchnorrSecretKey key = SchnorrKeyGenerator.generate();
+        SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
 
-        assertTrue("Generated key must be valid.", key.getPublicKey().verifyKey());
+        assertNotNull("Key pair generation was unsuccessful.", keyPair);
 
-        byte[] message = new byte[SchnorrSecretKey.SECRET_KEY_LENGTH];
+        byte[] publicKeyBytes = keyPair.getPublicKey().serializePublicKey();
+        byte[] secretKeyBytes = keyPair.getSecretKey().serializeSecretKey();
 
-        byte[] signature = key.signMessage(message);
+        assertEquals("Public key size must me - " + PublicKeyUtils.PUBLIC_KEY_LENGTH,
+                PublicKeyUtils.PUBLIC_KEY_LENGTH,
+                publicKeyBytes.length);
+        assertEquals("Secret key size must be - " + SecretKeyUtils.SECRET_KEY_LENGTH,
+                SecretKeyUtils.SECRET_KEY_LENGTH,
+                secretKeyBytes.length);
 
-        assertTrue("Proof must be valid.", key.getPublicKey().verifySignature(message, signature));
-
-        signature[0] = 0;
-
-        assertFalse("Proof must be invalid.", key.getPublicKey().verifySignature(message, signature));
-
+        SchnorrPublicKey recreatedPublicKey = keyPair.getSecretKey().getPublicKey();
     }
 }

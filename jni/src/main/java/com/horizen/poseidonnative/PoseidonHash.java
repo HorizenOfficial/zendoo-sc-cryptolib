@@ -13,6 +13,4 @@ public class PoseidonHash {
     }
 
     public static native byte[] nativeComputeHash(byte[] input); // jni call to Rust impl
-
-    public static native byte[] nativeComputeKeysHashCommitment(byte[] pks); // jni call to Rust impl
 }

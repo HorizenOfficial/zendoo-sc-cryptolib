@@ -1,11 +1,9 @@
 package com.horizen.vrf;
 
-import com.horizen.vrfnative.VRFKeyGenerator;
 import com.horizen.vrfnative.VRFPublicKey;
 import com.horizen.vrfnative.VRFSecretKey;
 
-import java.util.EnumMap;
-
+/*
 public class VrfFunctionsImpl
     implements VrfFunctions
 {
@@ -43,3 +41,4 @@ public class VrfFunctionsImpl
         return VRFSecretKey.nativeVRFHash(message, publicKey, proof);
     }
 }
+*/

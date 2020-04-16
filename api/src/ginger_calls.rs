@@ -167,7 +167,7 @@ pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<F
     let threshold_field = read_field_element_from_u64(threshold);
     let pks_x = pks.iter().map(|pk| pk.x).collect::<Vec<_>>();
     let pks_hash = compute_poseidon_hash(pks_x.as_slice())?;
-   compute_poseidon_hash(&[pks_hash, threshold_field])
+    compute_poseidon_hash(&[pks_hash, threshold_field])
 }
 
 //Compute and return (MR(bt_list), H(MR(bt_list), H(bi-1), H(bi))

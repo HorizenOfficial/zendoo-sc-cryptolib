@@ -1,6 +1,5 @@
 package com.horizen.librustsidechains;
 
-import com.horizen.librustsidechains.Library;
 import org.junit.Test;
 
 public class LibraryTest {
