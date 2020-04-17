@@ -65,21 +65,21 @@ pub type Error = Box<dyn std::error::Error>;
 //*******************************Generic I/O functions**********************************************
 // Note: Should decide if panicking or handling IO errors
 
-fn deserialize_from_buffer<T: FromBytes>(buffer: &[u8]) ->  IoResult<T> {
+pub fn deserialize_from_buffer<T: FromBytes>(buffer: &[u8]) ->  IoResult<T> {
     T::read(buffer)
 }
 
-fn serialize_to_buffer<T: ToBytes>(to_write: &T, buffer: &mut [u8]) -> IoResult<()> {
+pub fn serialize_to_buffer<T: ToBytes>(to_write: &T, buffer: &mut [u8]) -> IoResult<()> {
     to_write.write(buffer)
 }
 
-fn read_from_file<T: FromBytes>(file_path: &str) -> IoResult<T>{
+pub fn read_from_file<T: FromBytes>(file_path: &str) -> IoResult<T>{
     let mut fs = File::open(file_path)?;
     let t = T::read(&mut fs)?;
     Ok(t)
 }
 
-fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
+pub fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
     let mut fs = File::create(file_path)?;
     to_write.write(&mut fs)?;
     Ok(())
