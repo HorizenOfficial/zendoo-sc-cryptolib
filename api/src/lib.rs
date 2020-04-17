@@ -396,12 +396,12 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignM
     // static method. Not going to be
     // used, but still needs to have
     // an argument slot
-    _shcnorr_key_pair: JObject,
+    _schnorr_key_pair: JObject,
     _message: jbyteArray
 ) -> jobject {
 
     //Read sk
-    let sk_object = match _env.get_field(_shcnorr_key_pair, "secretKey",
+    let sk_object = match _env.get_field(_schnorr_key_pair, "secretKey",
                                            "Lcom/horizen/schnorrnative/SchnorrSecretKey;") {
         Ok(sk) => sk.l().unwrap(),
         Err(e) => return std::ptr::null::<jobject>() as jobject
@@ -416,7 +416,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignM
     };
 
     //Read pk
-    let pk_object = match _env.get_field(_shcnorr_key_pair, "publicKey",
+    let pk_object = match _env.get_field(_schnorr_key_pair, "publicKey",
                                            "Lcom/horizen/schnorrnative/SchnorrPublicKey;") {
         Ok(pk) => pk.l().unwrap(),
         Err(_) => return std::ptr::null::<jobject>() as jobject
@@ -964,7 +964,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _bt_list: jobjectArray,
     _end_epoch_block_hash: jbyteArray,
     _prev_end_epoch_block_hash: jbyteArray,
-    _shcnorr_key_pair_list: jobjectArray,
+    _schnorr_key_pair_list: jobjectArray,
     _threshold: jlong,
     _verification_key_path: jstring
 ) -> jbyteArray
@@ -1017,7 +1017,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     let mut sk_list: Vec<Option<SchnorrSk>> = vec![];
     let mut pk_list: Vec<SchnorrPk> = vec![];
 
-    let k_list_size = match _env.get_array_length(_shcnorr_key_pair_list) {
+    let k_list_size = match _env.get_array_length(_schnorr_key_pair_list) {
         Ok(s) => s,
         Err(_) => return std::ptr::null::<jobject>() as jobject
     };
@@ -1025,7 +1025,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     println!("Key pair list size = {}", k_list_size);
 
     for i in 0..k_list_size {
-        let o = match _env.get_object_array_element(_shcnorr_key_pair_list, i) {
+        let o = match _env.get_object_array_element(_schnorr_key_pair_list, i) {
             Ok(o) => o,
             Err(_) => return std::ptr::null::<jobject>() as jobject
         };
