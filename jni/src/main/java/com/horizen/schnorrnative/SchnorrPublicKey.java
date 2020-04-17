@@ -2,8 +2,6 @@ package com.horizen.schnorrnative;
 
 import com.horizen.librustsidechains.*;
 
-import java.util.Arrays;
-
 public class SchnorrPublicKey
 {
 
@@ -13,7 +11,7 @@ public class SchnorrPublicKey
     Library.load();
   }
 
-  SchnorrPublicKey(long publicKeyPointer) {
+  private SchnorrPublicKey(long publicKeyPointer) {
     if (publicKeyPointer == 0)
       throw new IllegalArgumentException("Public key pointer must be not null.");
     this.publicKeyPointer = publicKeyPointer;
@@ -37,21 +35,16 @@ public class SchnorrPublicKey
     }
   }
 
-  long getPublicKeyPointer() {
-    return this.publicKeyPointer;
-  }
+  private native boolean nativeVerifySignature(SchnorrSignature signature, byte[] message); // jni call to Rust impl
 
-  private static native boolean nativeVerifySignature(SchnorrPublicKey publicKey, SchnorrSignature signature, byte[] message); // jni call to Rust impl
+  private native boolean nativeVerifyKey(); // jni call to Rust impl
 
-  private static native boolean nativeVerifyKey(SchnorrPublicKey key); // jni call to Rust impl
-
-  //Don't yet completed.
   public boolean verifySignature(SchnorrSignature signature, byte[] message) {
-    return nativeVerifySignature(this, signature, message);
+    return nativeVerifySignature(signature, message);
   }
 
   public boolean verifyKey() {
-    return nativeVerifyKey(this);
+    return nativeVerifyKey();
   }
 }
 

@@ -14,7 +14,7 @@ public class VRFSecretKey
         Library.load();
     }
 
-    VRFSecretKey(long secretKeyPointer) {
+    private VRFSecretKey(long secretKeyPointer) {
         if (secretKeyPointer == 0)
             throw new IllegalArgumentException("Secret key pointer must be not null.");
         this.secretKeyPointer = secretKeyPointer;
@@ -41,16 +41,12 @@ public class VRFSecretKey
         }
     }
 
-    long getSecretKeyPointer() {
-        return this.secretKeyPointer;
-    }
-
-    private static native long nativeGetPublicKey(VRFSecretKey key);
+    private native VRFPublicKey nativeGetPublicKey();
 
     public VRFPublicKey getPublicKey() {
         if (secretKeyPointer == 0)
             throw new IllegalArgumentException("Secret key was freed.");
 
-        return new VRFPublicKey(nativeGetPublicKey(this));
+        return nativeGetPublicKey();
     }
 }

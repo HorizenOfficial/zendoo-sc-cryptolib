@@ -12,7 +12,7 @@ public class VRFPublicKey
     Library.load();
   }
 
-  VRFPublicKey(long publicKeyPointer) {
+  private VRFPublicKey(long publicKeyPointer) {
     if (publicKeyPointer == 0)
       throw new IllegalArgumentException("Public key pointer must be not null.");
     this.publicKeyPointer = publicKeyPointer;
@@ -36,20 +36,16 @@ public class VRFPublicKey
     }
   }
 
-  long getPublicKeyPointer() {
-    return this.publicKeyPointer;
-  }
-
-  private static native boolean nativeVerifyKey(VRFPublicKey key); // jni call to Rust impl
+  private native boolean nativeVerifyKey(); // jni call to Rust impl
 
   public boolean verifyKey() {
-    return nativeVerifyKey(this);
+    return nativeVerifyKey();
   }
 
-  private static native byte[] nativeProofToHash(VRFPublicKey publicKey, VRFProof proof, byte[] message);
+  private native byte[] nativeProofToHash(VRFProof proof, byte[] message);
 
   public byte[] proofToHash(VRFProof proof, byte[] message) {
-    return nativeProofToHash(this, proof, message);
+    return nativeProofToHash(proof, message);
   }
 }
 

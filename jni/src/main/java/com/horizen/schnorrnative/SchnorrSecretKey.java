@@ -13,7 +13,7 @@ public class SchnorrSecretKey
         Library.load();
     }
 
-    SchnorrSecretKey(long secretKeyPointer) {
+    private SchnorrSecretKey(long secretKeyPointer) {
         if (secretKeyPointer == 0)
             throw new IllegalArgumentException("Secret key pointer must be not null.");
         this.secretKeyPointer = secretKeyPointer;
@@ -40,16 +40,12 @@ public class SchnorrSecretKey
         }
     }
 
-    long getSecretKeyPointer() {
-        return this.secretKeyPointer;
-    }
-
-    private static native long nativeGetPublicKey(SchnorrSecretKey key);
+    private native SchnorrPublicKey nativeGetPublicKey();
 
     public SchnorrPublicKey getPublicKey() {
         if (secretKeyPointer == 0)
             throw new IllegalArgumentException("Secret key was freed.");
 
-        return new SchnorrPublicKey(nativeGetPublicKey(this));
+        return nativeGetPublicKey();
     }
 }

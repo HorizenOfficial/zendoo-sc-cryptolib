@@ -11,11 +11,6 @@ public class VRFKeyPair {
         Library.load();
     }
 
-    VRFKeyPair(long secretKeyPointer, long publicKeyPointer) {
-        this.secretKey = new VRFSecretKey(secretKeyPointer);
-        this.publicKey = new VRFPublicKey(publicKeyPointer);
-    }
-
     public VRFKeyPair(VRFSecretKey secretKey, VRFPublicKey publicKey) {
         this.secretKey = secretKey;
         this.publicKey = publicKey;
@@ -32,10 +27,10 @@ public class VRFKeyPair {
         return nativeGenerate();
     }
 
-    private static native VRFProof nativeProve(VRFSecretKey secretKey, VRFPublicKey publicKey, byte[] message);
+    private native VRFProof nativeProve(byte[] message);
 
     public VRFProof prove(byte[] message) {
-        return nativeProve(this.secretKey, this.publicKey, message);
+        return nativeProve(message);
     }
 
     public VRFSecretKey getSecretKey() {
