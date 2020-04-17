@@ -20,6 +20,7 @@ public class SchnorrKeyPairTest {
         assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
     }
 
+    /*
     @Test
     public void testSign() {
 
@@ -34,4 +35,6 @@ public class SchnorrKeyPairTest {
 
         assertNotNull("Attempt to sign message failed.", signature);
     }
+    */
+
 }

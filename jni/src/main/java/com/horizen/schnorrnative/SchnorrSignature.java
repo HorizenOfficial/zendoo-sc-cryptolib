@@ -1,7 +1,6 @@
 package com.horizen.schnorrnative;
 
 import com.horizen.librustsidechains.Library;
-import com.horizen.librustsidechains.PublicKeyUtils;
 
 public class SchnorrSignature
 {
@@ -14,7 +13,7 @@ public class SchnorrSignature
     Library.load();
   }
 
-  SchnorrSignature(long signaturePointer) {
+  private SchnorrSignature(long signaturePointer) {
     if (signaturePointer == 0)
       throw new IllegalArgumentException("Signature pointer must be not null.");
     this.signaturePointer = signaturePointer;
@@ -42,10 +41,6 @@ public class SchnorrSignature
       nativefreeSignature(this.signaturePointer);
       signaturePointer = 0;
     }
-  }
-
-  long getSignaturePointer() {
-    return this.signaturePointer;
   }
 }
 

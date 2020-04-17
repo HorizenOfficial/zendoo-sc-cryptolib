@@ -13,7 +13,7 @@ public class VRFProof
     Library.load();
   }
 
-  VRFProof(long proofPointer) {
+  private VRFProof(long proofPointer) {
     if (proofPointer == 0)
       throw new IllegalArgumentException("Proof pointer must be not null.");
     this.proofPointer = proofPointer;
@@ -41,10 +41,6 @@ public class VRFProof
       nativefreeProof(this.proofPointer);
       proofPointer = 0;
     }
-  }
-
-  long getProofPointer() {
-    return this.proofPointer;
   }
 }
 

@@ -1,13 +1,8 @@
 package com.horizen.schnorrnative;
 
-import com.horizen.librustsidechains.PublicKeyUtils;
-import com.horizen.librustsidechains.SecretKeyUtils;
-import org.junit.Test;
-
-import static org.junit.Assert.*;
-
 public class SchnorrSignatureTest {
 
+    /*
     @Test
     public void testSign() {
         SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
@@ -31,4 +26,5 @@ public class SchnorrSignatureTest {
         signature2.freeSignature();
 
     }
+    */
 }

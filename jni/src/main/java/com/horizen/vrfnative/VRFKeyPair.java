@@ -1,5 +1,6 @@
 package com.horizen.vrfnative;
 
+import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
 
@@ -9,11 +10,6 @@ public class VRFKeyPair {
 
     static {
         Library.load();
-    }
-
-    VRFKeyPair(long secretKeyPointer, long publicKeyPointer) {
-        this.secretKey = new VRFSecretKey(secretKeyPointer);
-        this.publicKey = new VRFPublicKey(publicKeyPointer);
     }
 
     public VRFKeyPair(VRFSecretKey secretKey, VRFPublicKey publicKey) {
@@ -32,10 +28,10 @@ public class VRFKeyPair {
         return nativeGenerate();
     }
 
-    private static native VRFProof nativeProve(VRFSecretKey secretKey, VRFPublicKey publicKey, byte[] message);
+    private native VRFProof nativeProve(FieldElement message);
 
-    public VRFProof prove(byte[] message) {
-        return nativeProve(this.secretKey, this.publicKey, message);
+    public VRFProof prove(FieldElement message) {
+        return nativeProve(message);
     }
 
     public VRFSecretKey getSecretKey() {
