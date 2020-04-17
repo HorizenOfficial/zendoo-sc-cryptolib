@@ -1,7 +1,6 @@
 package com.horizen.schnorrnative;
 
 import com.horizen.librustsidechains.Library;
-import com.horizen.librustsidechains.PublicKeyUtils;
 
 public class SchnorrSignature
 {

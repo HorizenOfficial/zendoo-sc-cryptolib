@@ -1,7 +1,5 @@
 package com.horizen.schnorrnative;
 
-import com.horizen.librustsidechains.PublicKeyUtils;
-import com.horizen.librustsidechains.SecretKeyUtils;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -19,13 +17,26 @@ public class SchnorrSecretKeyTest {
         byte[] publicKeyBytes = keyPair.getPublicKey().serializePublicKey();
         byte[] secretKeyBytes = keyPair.getSecretKey().serializeSecretKey();
 
-        assertEquals("Public key size must me - " + PublicKeyUtils.PUBLIC_KEY_LENGTH,
-                PublicKeyUtils.PUBLIC_KEY_LENGTH,
+        assertEquals("Public key size must me - " + SchnorrPublicKey.PUBLIC_KEY_LENGTH,
+                SchnorrPublicKey.PUBLIC_KEY_LENGTH,
                 publicKeyBytes.length);
-        assertEquals("Secret key size must be - " + SecretKeyUtils.SECRET_KEY_LENGTH,
-                SecretKeyUtils.SECRET_KEY_LENGTH,
+        assertEquals("Secret key size must be - " + SchnorrSecretKey.SECRET_KEY_LENGTH,
+                SchnorrSecretKey.SECRET_KEY_LENGTH,
                 secretKeyBytes.length);
 
         SchnorrPublicKey recreatedPublicKey = keyPair.getSecretKey().getPublicKey();
+
+        assertTrue("Recreated key must be valid.", recreatedPublicKey.verifyKey());
+
+        SchnorrPublicKey deserializedPublicKey = SchnorrPublicKey.deserializePublicKey(publicKeyBytes);
+        SchnorrSecretKey deserializedSecretKey = SchnorrSecretKey.deserializeSecretKey(secretKeyBytes);
+
+        assertTrue("Deserialized key must be valid.", deserializedPublicKey.verifyKey());
+
+        keyPair.getPublicKey().freePublicKey();
+        keyPair.getSecretKey().freeSecretKey();
+
+        deserializedPublicKey.freePublicKey();
+        deserializedSecretKey.freeSecretKey();
     }
 }

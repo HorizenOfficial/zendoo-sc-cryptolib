@@ -1,10 +1,12 @@
 package com.horizen.vrfnative;
 
+import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
-import com.horizen.librustsidechains.PublicKeyUtils;
 
 public class VRFPublicKey
 {
+
+  public static final int PUBLIC_KEY_LENGTH = 193;
 
   private long publicKeyPointer;
 
@@ -18,20 +20,31 @@ public class VRFPublicKey
     this.publicKeyPointer = publicKeyPointer;
   }
 
-  public static VRFPublicKey deserialize(byte[] publicKeyBytes) {
-    if (publicKeyBytes.length != PublicKeyUtils.PUBLIC_KEY_LENGTH)
-      throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PublicKeyUtils.PUBLIC_KEY_LENGTH, publicKeyBytes.length));
+  private static native int nativeGetPublicKeySize();
 
-    return new VRFPublicKey(PublicKeyUtils.nativeDeserializePublicKey(publicKeyBytes));
+  private static native VRFPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes);
+
+  public static VRFPublicKey deserializePublicKey(byte[] publicKeyBytes) {
+    if (publicKeyBytes.length != PUBLIC_KEY_LENGTH)
+      throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PUBLIC_KEY_LENGTH, publicKeyBytes.length));
+
+    return nativeDeserializePublicKey(publicKeyBytes);
   }
+
+  private native byte[] nativeSerializePublicKey();
 
   public byte[] serializePublicKey() {
-    return PublicKeyUtils.nativeSerializePublicKey(publicKeyPointer);
+    if (publicKeyPointer == 0)
+      throw new IllegalArgumentException("Public key was freed.");
+
+    return nativeSerializePublicKey();
   }
+
+  private native void nativeFreePublicKey();
 
   public void freePublicKey() {
     if (publicKeyPointer != 0) {
-      PublicKeyUtils.nativeFreePublicKey(publicKeyPointer);
+      nativeFreePublicKey();
       publicKeyPointer = 0;
     }
   }
@@ -39,12 +52,18 @@ public class VRFPublicKey
   private native boolean nativeVerifyKey(); // jni call to Rust impl
 
   public boolean verifyKey() {
+    if (publicKeyPointer == 0)
+      throw new IllegalArgumentException("Public key was freed.");
+
     return nativeVerifyKey();
   }
 
-  private native byte[] nativeProofToHash(VRFProof proof, byte[] message);
+  private native FieldElement nativeProofToHash(VRFProof proof, FieldElement message);
 
-  public byte[] proofToHash(VRFProof proof, byte[] message) {
+  public FieldElement proofToHash(VRFProof proof, FieldElement message) {
+    if (publicKeyPointer == 0)
+      throw new IllegalArgumentException("Public key was freed.");
+
     return nativeProofToHash(proof, message);
   }
 }

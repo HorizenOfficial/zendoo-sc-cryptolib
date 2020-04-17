@@ -19,8 +19,9 @@ public class NaiveThresholdSigProofTest {
 
     static int backwardTransferCout = 5;
 
-    List<SchnorrKeyPair> originalList = new ArrayList<>();
-    List<SchnorrKeyPair> workingList = new ArrayList<>();
+    List<SchnorrKeyPair> keyPairList = new ArrayList<>();
+    List<SchnorrPublicKey> publicKeyList = new ArrayList<>();
+    List<SchnorrSignature> signatureList = new ArrayList<>();
 
     List<BackwardTransfer> btList = new ArrayList<>();
 
@@ -33,14 +34,8 @@ public class NaiveThresholdSigProofTest {
             assertNotNull("Key pair generation was unsuccessful.", keyPair);
             assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
 
-            originalList.add(keyPair);
-            if (i < threshold)
-                workingList.add(keyPair);
-            else
-            {
-                SchnorrKeyPair kp = new SchnorrKeyPair(keyPair.getPublicKey());
-                workingList.add(kp);
-            }
+            keyPairList.add(keyPair);
+            publicKeyList.add(keyPair.getPublicKey());
         }
 
     }
@@ -59,6 +54,7 @@ public class NaiveThresholdSigProofTest {
             btList.add(new BackwardTransfer(publicKeyHash, amount));
         }
 
-        byte[] signature = NaiveThresholdSigProof.createProof(btList, endEpochBlockHash, prevEndEpochBlockHash, workingList, threshold, "");
+        byte[] signature = NaiveThresholdSigProof.createProof(btList, endEpochBlockHash, prevEndEpochBlockHash,
+                signatureList, publicKeyList, threshold, "");
     }
 }
