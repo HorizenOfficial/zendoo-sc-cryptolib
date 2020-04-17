@@ -1,5 +1,6 @@
 package com.horizen.schnorrnative;
 
+import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
 public class SchnorrKeyPair {
@@ -20,20 +21,15 @@ public class SchnorrKeyPair {
         this.publicKey = secretKey.getPublicKey();
     }
 
-    public SchnorrKeyPair(SchnorrPublicKey schnorrPublicKey) {
-        this.publicKey = schnorrPublicKey;
-        this.secretKey = null;
-    }
-
     private static native SchnorrKeyPair nativeGenerate();
 
     public static SchnorrKeyPair generate() {
         return nativeGenerate();
     }
 
-    private native SchnorrSignature nativeSignMessage(byte[] message);
+    private native SchnorrSignature nativeSignMessage(FieldElement message);
 
-    public SchnorrSignature signMessage(byte[] message) {
+    public SchnorrSignature signMessage(FieldElement message) {
         return nativeSignMessage(message);
     }
 
