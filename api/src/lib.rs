@@ -250,7 +250,6 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignM
                                    "secretKey",
                                    "Lcom/horizen/schnorrnative/SchnorrSecretKey;"
     ).expect("Should be able to get field secretKey").l().unwrap();
-
     let secret_key = {
 
         let s =_env.get_field(sk_object, "secretKeyPointer", "J")
