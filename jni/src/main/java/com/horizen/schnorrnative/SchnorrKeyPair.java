@@ -1,5 +1,6 @@
 package com.horizen.schnorrnative;
 
+import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
 public class SchnorrKeyPair {
@@ -31,9 +32,9 @@ public class SchnorrKeyPair {
         return nativeGenerate();
     }
 
-    private native SchnorrSignature nativeSignMessage(byte[] message);
+    private native SchnorrSignature nativeSignMessage(FieldElement message);
 
-    public SchnorrSignature signMessage(byte[] message) {
+    public SchnorrSignature signMessage(FieldElement message) {
         return nativeSignMessage(message);
     }
 

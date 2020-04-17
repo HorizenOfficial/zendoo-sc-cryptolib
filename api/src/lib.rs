@@ -185,105 +185,267 @@ use jni::sys::{jbyteArray, jboolean, jint, jlong, jobject, jobjectArray, jstring
 use jni::sys::{JNI_TRUE, JNI_FALSE};
 use jni::errors;
 
-use crate::ginger_calls::{compute_poseidon_hash, BackwardTransfer, SchnorrSk, SchnorrPk, schnorr_generate_key, schnorr_verify_public_key, schnorr_get_public_key, vrf_generate_key, vrf_get_public_key, vrf_verify_public_key};
+use crate::ginger_calls::{compute_poseidon_hash, BackwardTransfer, SchnorrSk, SchnorrPk, schnorr_generate_key, schnorr_verify_public_key, schnorr_get_public_key, vrf_generate_key, vrf_get_public_key, vrf_verify_public_key, VRFPk, VRFSk};
 use std::any::Any;
 
-//Public key utility functions
+//Public Schnorr key utility functions
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeGetPublicKeySize(
+pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeGetPublicKeySize(
     _env: JNIEnv,
-    _class: JClass,
+    _schnorr_public_key_class: JClass,
 ) -> jint { G1_SIZE as jint }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeSerializePublicKey(
+pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSerializePublicKey(
     _env: JNIEnv,
-    _class: JClass,
-    _pk: *const G1Affine,
+    _schnorr_public_key: JObject,
 ) -> jbyteArray
 {
+    let public_key_pointer = _env.get_field(_schnorr_public_key, "publicKeyPointer", "J")
+        .expect("Cannot get public key pointer.");
+
+    let public_key = read_raw_pointer({public_key_pointer.j().unwrap() as *const SchnorrPk}, "schnorr pk")
+        .expect("Cannot read public key.");
+
     let mut pk = &mut [0; G1_SIZE];
-    serialize_to_buffer(_pk, &mut (unsafe { &mut *pk })[..], G1_SIZE, "pk");
+    serialize_to_buffer(public_key, &mut (unsafe { &mut *pk })[..], G1_SIZE, "pk");
 
-    match _env.byte_array_from_slice(pk.as_ref()) {
-        Ok(result) => result,
-        Err(_) => return _env.new_byte_array(0).unwrap(),
-    }
+    _env.byte_array_from_slice(pk.as_ref())
+        .expect("Cannot write public key.")
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeDeserializePublicKey(
+pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeDeserializePublicKey(
     _env: JNIEnv,
-    _class: JClass,
-    _pkBytes: jbyteArray,
-) -> *mut G1Affine
+    _schnorr_public_key_class: JClass,
+    _public_key_bytes: jbyteArray,
+) -> jobject
 {
-    let pk_bytes = match _env.convert_byte_array(_pkBytes) {
-        Ok(pk_bytes) => pk_bytes,
-        Err(_) => return null_mut(),
+    let pk_bytes = _env.convert_byte_array(_public_key_bytes)
+        .expect("Cannot read public key bytes.");
 
-    };
-    deserialize_from_buffer(&(unsafe { &*pk_bytes })[..], G1_SIZE)
+    let public_key_pointer: *mut SchnorrPk = deserialize_from_buffer(&(unsafe { &*pk_bytes })[..], G1_SIZE);
+
+    let public_key: jlong = jlong::from(public_key_pointer as i64);
+
+    let public_key_class = _env.find_class("com/horizen/schnorrnative/SchnorrPublicKey")
+        .expect("Cannot find SchnorrPublicKey class.");
+
+    let public_key_object = _env.new_object(public_key_class, "(J)V",
+                                            &[JValue::Long(public_key)])
+        .expect("Cannot create public key object.");
+
+    *public_key_object
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeFreePublicKey(
+pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeFreePublicKey(
     _env: JNIEnv,
-    _class: JClass,
-    _pk: *mut G1Affine,
+    _schnorr_public_key: JObject,
 )
 {
-    if _pk.is_null()  { return }
-    drop(unsafe { Box::from_raw(_pk) });
+    let public_key_pointer = _env.get_field(_schnorr_public_key, "publicKeyPointer", "J")
+        .expect("Cannot get public key pointer.");
+
+    let public_key = public_key_pointer.j().unwrap() as *mut SchnorrPk;
+
+    if public_key.is_null()  { return }
+    drop(unsafe { Box::from_raw(public_key) });
 }
 
-//Secret key utility functions
+//Secret Schnorr key utility functions
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeGetSecretKeySize(
+pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGetSecretKeySize(
     _env: JNIEnv,
-    _class: JClass,
+    _schnorr_secret_key_class: JClass,
 ) -> jint { FS_SIZE as jint }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeSerializeSecretKey(
+pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSerializeSecretKey(
     _env: JNIEnv,
-    _class: JClass,
-    _sk: *const Fs,
+    _schnorr_secret_key: JObject,
 ) -> jbyteArray
 {
-    let sk: &mut [u8; FS_SIZE] = &mut [0; FS_SIZE];
-    serialize_to_buffer(_sk, &mut (unsafe { &mut *sk })[..], FS_SIZE, "sk");
+    let secret_key_pointer = _env.get_field(_schnorr_secret_key, "secretKeyPointer", "J")
+        .expect("Cannot get secret key pointer.");
 
-    match _env.byte_array_from_slice(sk.as_ref()) {
-        Ok(result) => result,
-        Err(_) => return _env.new_byte_array(0).unwrap(),
-    }
+    let secret_key = read_raw_pointer({secret_key_pointer.j().unwrap() as *const SchnorrSk}, "schnorr pk")
+        .expect("Cannot read secret key.");
+
+    let mut sk = &mut [0; FS_SIZE];
+    serialize_to_buffer(secret_key, &mut (unsafe { &mut *sk })[..], FS_SIZE, "sk");
+
+    _env.byte_array_from_slice(sk.as_ref())
+        .expect("Cannot write secret key.")
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeDeserializeSecretKey(
+pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeDeserializeSecretKey(
     _env: JNIEnv,
-    _class: JClass,
-    _skBytes: jbyteArray,
-) -> *mut G1Affine
+    _schnorr_public_key_class: JClass,
+    _secret_key_bytes: jbyteArray,
+) -> jobject
 {
-    let sk_bytes = match _env.convert_byte_array(_skBytes) {
-        Ok(sk_bytes) => sk_bytes,
-        Err(_) => return null_mut(),
+    let sk_bytes = _env.convert_byte_array(_secret_key_bytes)
+        .expect("Cannot read public key bytes.");
 
-    };
-    deserialize_from_buffer(&(unsafe { &*sk_bytes })[..], FS_SIZE)
+    let secret_key_pointer: *mut SchnorrSk = deserialize_from_buffer(&(unsafe { &*sk_bytes })[..], FS_SIZE);
+
+    let secret_key: jlong = jlong::from(secret_key_pointer as i64);
+
+    let secret_key_class = _env.find_class("com/horizen/schnorrnative/SchnorrSecretKey")
+        .expect("Cannot find SchnorrSecretKey class.");
+
+    let secret_key_object = _env.new_object(secret_key_class, "(J)V",
+                                            &[JValue::Long(secret_key)])
+        .expect("Cannot create secret key object.");
+
+    *secret_key_object
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeFreeSecretKey(
+pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeFreeSecretKey(
     _env: JNIEnv,
-    _class: JClass,
-    _sk: *mut G1Affine,
+    _schnorr_secret_key: JObject,
 )
 {
-    if _sk.is_null()  { return }
-    drop(unsafe { Box::from_raw(_sk) });
+    let secret_key_pointer = _env.get_field(_schnorr_secret_key, "secretKeyPointer", "J")
+        .expect("Cannot get secret key pointer.");
+
+    let secret_key = secret_key_pointer.j().unwrap() as *mut SchnorrSk;
+
+    if secret_key.is_null()  { return }
+    drop(unsafe { Box::from_raw(secret_key) });
+}
+
+//Public VRF key utility functions
+#[no_mangle]
+pub extern "C" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeGetPublicKeySize(
+    _env: JNIEnv,
+    _vrf_public_key_class: JClass,
+) -> jint { G1_SIZE as jint }
+
+#[no_mangle]
+pub extern "C" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePublicKey(
+    _env: JNIEnv,
+    _vrf_public_key: JObject,
+) -> jbyteArray
+{
+    let public_key_pointer = _env.get_field(_vrf_public_key, "publicKeyPointer", "J")
+        .expect("Cannot get public key pointer.");
+
+    let public_key = read_raw_pointer({public_key_pointer.j().unwrap() as *const VRFPk}, "ecvrf pk")
+        .expect("Cannot read public key.");
+
+    let mut pk = &mut [0; G1_SIZE];
+    serialize_to_buffer(public_key, &mut (unsafe { &mut *pk })[..], G1_SIZE, "pk");
+
+    _env.byte_array_from_slice(pk.as_ref())
+        .expect("Cannot write public key.")
+}
+
+#[no_mangle]
+pub extern "C" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeDeserializePublicKey(
+    _env: JNIEnv,
+    _vrf_public_key_class: JClass,
+    _public_key_bytes: jbyteArray,
+) -> jobject
+{
+    let pk_bytes = _env.convert_byte_array(_public_key_bytes)
+        .expect("Cannot read public key bytes.");
+
+    let public_key_pointer: *mut VRFPk = deserialize_from_buffer(&(unsafe { &*pk_bytes })[..], G1_SIZE);
+
+    let public_key: jlong = jlong::from(public_key_pointer as i64);
+
+    let public_key_class = _env.find_class("com/horizen/vrfnative/VRFPublicKey")
+        .expect("Cannot find SchnorrPublicKey class.");
+
+    let public_key_object = _env.new_object(public_key_class, "(J)V",
+                                            &[JValue::Long(public_key)])
+        .expect("Cannot create public key object.");
+
+    *public_key_object
+}
+
+#[no_mangle]
+pub extern "C" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeFreePublicKey(
+    _env: JNIEnv,
+    _vrf_public_key: JObject,
+)
+{
+    let public_key_pointer = _env.get_field(_vrf_public_key, "publicKeyPointer", "J")
+        .expect("Cannot get public key pointer.");
+
+    let public_key = public_key_pointer.j().unwrap() as *mut SchnorrPk;
+
+    if public_key.is_null()  { return }
+    drop(unsafe { Box::from_raw(public_key) });
+}
+
+//Secret VRF key utility functions
+#[no_mangle]
+pub extern "C" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetSecretKeySize(
+    _env: JNIEnv,
+    _schnorr_secret_key_class: JClass,
+) -> jint { FS_SIZE as jint }
+
+#[no_mangle]
+pub extern "C" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSecretKey(
+    _env: JNIEnv,
+    _vrf_secret_key: JObject,
+) -> jbyteArray
+{
+    let secret_key_pointer = _env.get_field(_vrf_secret_key, "secretKeyPointer", "J")
+        .expect("Cannot get secret key pointer.");
+
+    let secret_key = read_raw_pointer({secret_key_pointer.j().unwrap() as *const VRFSk}, "ecvrf pk")
+        .expect("Cannot read secret key.");
+
+    let mut sk = &mut [0; FS_SIZE];
+    serialize_to_buffer(secret_key, &mut (unsafe { &mut *sk })[..], FS_SIZE, "sk");
+
+    _env.byte_array_from_slice(sk.as_ref())
+        .expect("Cannot write secret key.")
+}
+
+#[no_mangle]
+pub extern "C" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeDeserializeSecretKey(
+    _env: JNIEnv,
+    _vrf_public_key_class: JClass,
+    _secret_key_bytes: jbyteArray,
+) -> jobject
+{
+    let sk_bytes = _env.convert_byte_array(_secret_key_bytes)
+        .expect("Cannot read public key bytes.");
+
+    let secret_key_pointer: *mut SchnorrSk = deserialize_from_buffer(&(unsafe { &*sk_bytes })[..], FS_SIZE);
+
+    let secret_key: jlong = jlong::from(secret_key_pointer as i64);
+
+    let secret_key_class = _env.find_class("com/horizen/vrfnative/VRFSecretKey")
+        .expect("Cannot find SchnorrSecretKey class.");
+
+    let secret_key_object = _env.new_object(secret_key_class, "(J)V",
+                                            &[JValue::Long(secret_key)])
+        .expect("Cannot create secret key object.");
+
+    *secret_key_object
+}
+
+#[no_mangle]
+pub extern "C" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeFreeSecretKey(
+    _env: JNIEnv,
+    _vrf_secret_key: JObject,
+)
+{
+    let secret_key_pointer = _env.get_field(_vrf_secret_key, "secretKeyPointer", "J")
+        .expect("Cannot get secret key pointer.");
+
+    let secret_key = secret_key_pointer.j().unwrap() as *mut SchnorrSk;
+
+    if secret_key.is_null()  { return }
+    drop(unsafe { Box::from_raw(secret_key) });
 }
 
 //Schnorr signature utility functions

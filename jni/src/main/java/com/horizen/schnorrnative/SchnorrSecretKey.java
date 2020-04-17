@@ -1,11 +1,12 @@
 package com.horizen.schnorrnative;
 
-import com.horizen.librustsidechains.*;
+import com.horizen.librustsidechains.Library;
 
 import java.util.Arrays;
 
 public class SchnorrSecretKey
 {
+    public static final int SECRET_KEY_LENGTH = 96;
 
     private long secretKeyPointer;
 
@@ -19,23 +20,31 @@ public class SchnorrSecretKey
         this.secretKeyPointer = secretKeyPointer;
     }
 
-    public static SchnorrSecretKey deserialize(byte[] secretKeyBytes) {
-        if (secretKeyBytes.length != SecretKeyUtils.SECRET_KEY_LENGTH)
-            throw new IllegalArgumentException(String.format("Incorrect secret key length, %d expected, %d found", SecretKeyUtils.SECRET_KEY_LENGTH, secretKeyBytes.length));
+    public static native int nativeGetSecretKeySize();
 
-        return new SchnorrSecretKey(SecretKeyUtils.nativeDeserializeSecretKey(secretKeyBytes));
+    public static native SchnorrSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
+
+    public static SchnorrSecretKey deserializeSecretKey(byte[] secretKeyBytes) {
+        if (secretKeyBytes.length != SECRET_KEY_LENGTH)
+            throw new IllegalArgumentException(String.format("Incorrect secret key length, %d expected, %d found", SECRET_KEY_LENGTH, secretKeyBytes.length));
+
+        return nativeDeserializeSecretKey(secretKeyBytes);
     }
+
+    public native byte[] nativeSerializeSecretKey();
 
     public byte[] serializeSecretKey() {
         if (secretKeyPointer == 0)
             throw new IllegalArgumentException("Secret key was freed.");
 
-        return SecretKeyUtils.nativeSerializeSecretKey(secretKeyPointer);
+        return nativeSerializeSecretKey();
     }
+
+    public native void nativeFreeSecretKey();
 
     public void freeSecretKey() {
         if (secretKeyPointer != 0) {
-            SecretKeyUtils.nativeFreeSecretKey(secretKeyPointer);
+            nativeFreeSecretKey();
             secretKeyPointer = 0;
         }
     }

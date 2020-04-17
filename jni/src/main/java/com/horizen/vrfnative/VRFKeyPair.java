@@ -1,5 +1,6 @@
 package com.horizen.vrfnative;
 
+import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
 
@@ -27,9 +28,9 @@ public class VRFKeyPair {
         return nativeGenerate();
     }
 
-    private native VRFProof nativeProve(byte[] message);
+    private native VRFProof nativeProve(FieldElement message);
 
-    public VRFProof prove(byte[] message) {
+    public VRFProof prove(FieldElement message) {
         return nativeProve(message);
     }
 

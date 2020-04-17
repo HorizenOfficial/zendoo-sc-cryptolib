@@ -5,6 +5,8 @@ import com.horizen.librustsidechains.*;
 public class SchnorrPublicKey
 {
 
+  public static final int PUBLIC_KEY_LENGTH = 193;
+
   private long publicKeyPointer;
 
   static {
@@ -17,33 +19,50 @@ public class SchnorrPublicKey
     this.publicKeyPointer = publicKeyPointer;
   }
 
-  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes) {
-    if (publicKeyBytes.length != PublicKeyUtils.PUBLIC_KEY_LENGTH)
-      throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PublicKeyUtils.PUBLIC_KEY_LENGTH, publicKeyBytes.length));
+  public static native int nativeGetPublicKeySize();
 
-    return new SchnorrPublicKey(PublicKeyUtils.nativeDeserializePublicKey(publicKeyBytes));
+  private static native SchnorrPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes);
+
+  public static SchnorrPublicKey deserializePublicKey(byte[] publicKeyBytes) {
+    if (publicKeyBytes.length != PUBLIC_KEY_LENGTH)
+      throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PUBLIC_KEY_LENGTH, publicKeyBytes.length));
+
+    return nativeDeserializePublicKey(publicKeyBytes);
   }
+
+  private native byte[] nativeSerializePublicKey();
 
   public byte[] serializePublicKey() {
-    return PublicKeyUtils.nativeSerializePublicKey(publicKeyPointer);
+    if (publicKeyPointer == 0)
+      throw new IllegalArgumentException("Public key was freed.");
+
+    return nativeSerializePublicKey();
   }
+
+  private native void nativeFreePublicKey();
 
   public void freePublicKey() {
     if (publicKeyPointer != 0) {
-      PublicKeyUtils.nativeFreePublicKey(publicKeyPointer);
+      nativeFreePublicKey();
       publicKeyPointer = 0;
     }
   }
 
-  private native boolean nativeVerifySignature(SchnorrSignature signature, byte[] message); // jni call to Rust impl
+  private native boolean nativeVerifySignature(SchnorrSignature signature, FieldElement message); // jni call to Rust impl
 
   private native boolean nativeVerifyKey(); // jni call to Rust impl
 
-  public boolean verifySignature(SchnorrSignature signature, byte[] message) {
+  public boolean verifySignature(SchnorrSignature signature, FieldElement message) {
+    if (publicKeyPointer == 0)
+      throw new IllegalArgumentException("Public key was freed.");
+
     return nativeVerifySignature(signature, message);
   }
 
   public boolean verifyKey() {
+    if (publicKeyPointer == 0)
+      throw new IllegalArgumentException("Public key was freed.");
+
     return nativeVerifyKey();
   }
 }
