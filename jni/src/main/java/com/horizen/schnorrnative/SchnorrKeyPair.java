@@ -21,11 +21,6 @@ public class SchnorrKeyPair {
         this.publicKey = secretKey.getPublicKey();
     }
 
-    public SchnorrKeyPair(SchnorrPublicKey schnorrPublicKey) {
-        this.publicKey = schnorrPublicKey;
-        this.secretKey = null;
-    }
-
     private static native SchnorrKeyPair nativeGenerate();
 
     public static SchnorrKeyPair generate() {

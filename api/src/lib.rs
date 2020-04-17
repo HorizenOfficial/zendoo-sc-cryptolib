@@ -342,6 +342,7 @@ pub extern "C" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePublicK
 
     _env.byte_array_from_slice(pk.as_ref())
         .expect("Cannot write public key.")
+
 }
 
 #[no_mangle]
@@ -1128,7 +1129,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _prev_end_epoch_block_hash: jbyteArray,
     _schnorr_key_pair_list: jobjectArray,
     _threshold: jlong,
-    _verification_key_path: jstring
+    _verification_key_path: JString
 ) -> jbyteArray
 {
 
