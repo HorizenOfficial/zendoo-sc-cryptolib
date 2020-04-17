@@ -20,18 +20,18 @@ public class VRFPublicKey
     this.publicKeyPointer = publicKeyPointer;
   }
 
-  public static native int nativeGetPublicKeySize();
+  private static native int nativeGetPublicKeySize();
 
-  public static native VRFPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes);
+  private static native VRFPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes);
 
-  public static VRFPublicKey deserialize(byte[] publicKeyBytes) {
+  public static VRFPublicKey deserializePublicKey(byte[] publicKeyBytes) {
     if (publicKeyBytes.length != PUBLIC_KEY_LENGTH)
       throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PUBLIC_KEY_LENGTH, publicKeyBytes.length));
 
     return nativeDeserializePublicKey(publicKeyBytes);
   }
 
-  public native byte[] nativeSerializePublicKey();
+  private native byte[] nativeSerializePublicKey();
 
   public byte[] serializePublicKey() {
     if (publicKeyPointer == 0)
@@ -40,7 +40,7 @@ public class VRFPublicKey
     return nativeSerializePublicKey();
   }
 
-  public native void nativeFreePublicKey();
+  private native void nativeFreePublicKey();
 
   public void freePublicKey() {
     if (publicKeyPointer != 0) {
@@ -58,9 +58,9 @@ public class VRFPublicKey
     return nativeVerifyKey();
   }
 
-  private native byte[] nativeProofToHash(VRFProof proof, FieldElement message);
+  private native FieldElement nativeProofToHash(VRFProof proof, FieldElement message);
 
-  public byte[] proofToHash(VRFProof proof, FieldElement message) {
+  public FieldElement proofToHash(VRFProof proof, FieldElement message) {
     if (publicKeyPointer == 0)
       throw new IllegalArgumentException("Public key was freed.");
 

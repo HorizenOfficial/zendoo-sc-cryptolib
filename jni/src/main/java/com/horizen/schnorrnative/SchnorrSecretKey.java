@@ -20,9 +20,9 @@ public class SchnorrSecretKey
         this.secretKeyPointer = secretKeyPointer;
     }
 
-    public static native int nativeGetSecretKeySize();
+    private static native int nativeGetSecretKeySize();
 
-    public static native SchnorrSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
+    private static native SchnorrSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
 
     public static SchnorrSecretKey deserializeSecretKey(byte[] secretKeyBytes) {
         if (secretKeyBytes.length != SECRET_KEY_LENGTH)
@@ -31,7 +31,7 @@ public class SchnorrSecretKey
         return nativeDeserializeSecretKey(secretKeyBytes);
     }
 
-    public native byte[] nativeSerializeSecretKey();
+    private native byte[] nativeSerializeSecretKey();
 
     public byte[] serializeSecretKey() {
         if (secretKeyPointer == 0)
@@ -40,7 +40,7 @@ public class SchnorrSecretKey
         return nativeSerializeSecretKey();
     }
 
-    public native void nativeFreeSecretKey();
+    private native void nativeFreeSecretKey();
 
     public void freeSecretKey() {
         if (secretKeyPointer != 0) {

@@ -19,7 +19,7 @@ public class SchnorrPublicKey
     this.publicKeyPointer = publicKeyPointer;
   }
 
-  public static native int nativeGetPublicKeySize();
+  private static native int nativeGetPublicKeySize();
 
   private static native SchnorrPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes);
 

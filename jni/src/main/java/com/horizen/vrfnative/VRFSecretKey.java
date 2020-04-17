@@ -18,9 +18,9 @@ public class VRFSecretKey
         this.secretKeyPointer = secretKeyPointer;
     }
 
-    public static native int nativeGetSecretKeySize();
+    private static native int nativeGetSecretKeySize();
 
-    public static native VRFSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
+    private static native VRFSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
 
     public static VRFSecretKey deserializeSecretKey(byte[] secretKeyBytes) {
         if (secretKeyBytes.length != SECRET_KEY_LENGTH)
@@ -29,7 +29,7 @@ public class VRFSecretKey
         return nativeDeserializeSecretKey(secretKeyBytes);
     }
 
-    public native byte[] nativeSerializeSecretKey();
+    private native byte[] nativeSerializeSecretKey();
 
     public byte[] serializeSecretKey() {
         if (secretKeyPointer == 0)
@@ -38,7 +38,7 @@ public class VRFSecretKey
         return nativeSerializeSecretKey();
     }
 
-    public native void nativeFreeSecretKey();
+    private native void nativeFreeSecretKey();
 
     public void freeSecretKey() {
         if (secretKeyPointer != 0) {
