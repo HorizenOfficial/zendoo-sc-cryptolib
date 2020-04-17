@@ -1,16 +1,6 @@
 extern crate jni;
 
-use algebra::{
-    fields::mnt4753::Fq as Fs,
-    curves::mnt6753::G1Affine,
-    bytes::{FromBytes, ToBytes},
-};
-
-use proof_systems::groth16::{
-    Proof, prover::create_random_proof,
-};
-
-use rand::rngs::OsRng;
+use algebra::bytes::{FromBytes, ToBytes};
 
 use std::{ptr::null_mut, any::type_name};
 
@@ -46,16 +36,15 @@ fn serialize_from_raw_pointer<T: ToBytes>(
 
 use jni::JNIEnv;
 use jni::objects::{JClass, JString, JObject, JValue};
-use jni::sys::{jbyteArray, jboolean, jint, jlong, jobject, jobjectArray, jstring};
+use jni::sys::{jbyteArray, jboolean, jint, jlong, jobject, jobjectArray};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
-use jni::errors;
 
 //Public Schnorr key utility functions
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeGetPublicKeySize(
     _env: JNIEnv,
     _schnorr_public_key_class: JClass,
-) -> jint { G1_SIZE as jint }
+) -> jint { SCHNORR_PK_SIZE as jint }
 
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSerializePublicKey(
@@ -66,11 +55,11 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSer
     let public_key_pointer = _env.get_field(_schnorr_public_key, "publicKeyPointer", "J")
         .expect("Cannot get public key pointer.");
 
-    let public_key = read_raw_pointer({public_key_pointer.j().unwrap() as *const SchnorrPk}, "schnorr pk")
-        .expect("Cannot read public key.");
+    let public_key = read_raw_pointer({public_key_pointer.j().unwrap() as *const SchnorrPk});
 
-    let mut pk = &mut [0; G1_SIZE];
-    serialize_from_raw_pointer(_pk, &mut (unsafe { &mut *pk })[..]);
+    let mut pk = [0u8; SCHNORR_PK_SIZE];
+    serialize_from_raw_pointer(public_key, &mut pk[..]);
+
     _env.byte_array_from_slice(pk.as_ref())
         .expect("Cannot write public key.")
 }
@@ -84,8 +73,19 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeDes
 {
     let pk_bytes = _env.convert_byte_array(_public_key_bytes)
         .expect("Cannot read public key bytes.");
-    };
-    deserialize_to_raw_pointer(&(unsafe { &*pk_bytes })[..])
+
+    let public_key_pointer: *const SchnorrPk = deserialize_to_raw_pointer(pk_bytes.as_slice());
+
+    let public_key: jlong = jlong::from(public_key_pointer as i64);
+
+    let public_key_class = _env.find_class("com/horizen/schnorrnative/SchnorrPublicKey")
+        .expect("Cannot find SchnorrPublicKey class.");
+
+    let public_key_object = _env.new_object(public_key_class, "(J)V",
+                                            &[JValue::Long(public_key)])
+        .expect("Cannot create public key object.");
+
+    *public_key_object
 }
 
 #[no_mangle]
@@ -108,7 +108,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeFre
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGetSecretKeySize(
     _env: JNIEnv,
     _schnorr_secret_key_class: JClass,
-) -> jint { FS_SIZE as jint }
+) -> jint { SCHNORR_SK_SIZE as jint }
 
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSerializeSecretKey(
@@ -119,11 +119,10 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSer
     let secret_key_pointer = _env.get_field(_schnorr_secret_key, "secretKeyPointer", "J")
         .expect("Cannot get secret key pointer.");
 
-    let secret_key = read_raw_pointer({secret_key_pointer.j().unwrap() as *const SchnorrSk}, "schnorr pk")
-        .expect("Cannot read secret key.");
+    let secret_key = read_raw_pointer({secret_key_pointer.j().unwrap() as *const SchnorrSk});
 
-    let mut sk = &mut [0; FS_SIZE];
-    serialize_to_buffer(secret_key, &mut (unsafe { &mut *sk })[..], FS_SIZE, "sk");
+    let mut sk = [0u8; SCHNORR_SK_SIZE];
+    serialize_from_raw_pointer(secret_key, &mut sk[..]);
 
     _env.byte_array_from_slice(sk.as_ref())
         .expect("Cannot write secret key.")
@@ -139,8 +138,18 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeDes
 {
     let sk_bytes = _env.convert_byte_array(_secret_key_bytes)
         .expect("Cannot read public key bytes.");
-    };
-    deserialize_to_raw_pointer(&(unsafe { &*sk_bytes })[..])
+    let secret_key_pointer: *const SchnorrSk = deserialize_to_raw_pointer(sk_bytes.as_slice());
+
+    let secret_key: jlong = jlong::from(secret_key_pointer as i64);
+
+    let secret_key_class = _env.find_class("com/horizen/schnorrnative/SchnorrSecretKey")
+        .expect("Cannot find SchnorrSecretKey class.");
+
+    let secret_key_object = _env.new_object(secret_key_class, "(J)V",
+                                            &[JValue::Long(secret_key)])
+        .expect("Cannot create secret key object.");
+
+    *secret_key_object
 }
 
 #[no_mangle]
@@ -163,7 +172,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeFre
 pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeGetPublicKeySize(
     _env: JNIEnv,
     _vrf_public_key_class: JClass,
-) -> jint { G1_SIZE as jint }
+) -> jint { VRF_PK_SIZE as jint }
 
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePublicKey(
@@ -174,11 +183,10 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePu
     let public_key_pointer = _env.get_field(_vrf_public_key, "publicKeyPointer", "J")
         .expect("Cannot get public key pointer.");
 
-    let public_key = read_raw_pointer({public_key_pointer.j().unwrap() as *const VRFPk}, "ecvrf pk")
-        .expect("Cannot read public key.");
+    let public_key = read_raw_pointer({public_key_pointer.j().unwrap() as *const VRFPk});
 
-    let mut pk = &mut [0; G1_SIZE];
-    serialize_to_buffer(public_key, &mut (unsafe { &mut *pk })[..], G1_SIZE, "pk");
+    let mut pk = [0u8; VRF_PK_SIZE];
+    serialize_from_raw_pointer(public_key, &mut pk[..]);
 
     _env.byte_array_from_slice(pk.as_ref())
         .expect("Cannot write public key.")
@@ -195,7 +203,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeDeserialize
     let pk_bytes = _env.convert_byte_array(_public_key_bytes)
         .expect("Cannot read public key bytes.");
 
-    let public_key_pointer: *mut VRFPk = deserialize_from_buffer(&(unsafe { &*pk_bytes })[..], G1_SIZE);
+    let public_key_pointer: *mut VRFPk = deserialize_to_raw_pointer(pk_bytes.as_slice());
 
     let public_key: jlong = jlong::from(public_key_pointer as i64);
 
@@ -229,7 +237,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeFreePublicK
 pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetSecretKeySize(
     _env: JNIEnv,
     _schnorr_secret_key_class: JClass,
-) -> jint { FS_SIZE as jint }
+) -> jint { VRF_SK_SIZE as jint }
 
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSecretKey(
@@ -238,13 +246,12 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSe
 ) -> jbyteArray
 {
     let secret_key_pointer = _env.get_field(_vrf_secret_key, "secretKeyPointer", "J")
-        .expect("Cannot get secret key pointer.");
+        .expect("Should be able to read field secretKeyPointer");
 
-    let secret_key = read_raw_pointer({secret_key_pointer.j().unwrap() as *const VRFSk}, "ecvrf pk")
-        .expect("Cannot read secret key.");
+    let secret_key = read_raw_pointer({secret_key_pointer.j().unwrap() as *const VRFSk});
 
-    let mut sk = &mut [0; FS_SIZE];
-    serialize_to_buffer(secret_key, &mut (unsafe { &mut *sk })[..], FS_SIZE, "sk");
+    let mut sk = [0u8; VRF_SK_SIZE];
+    serialize_from_raw_pointer(secret_key, &mut sk[..]);
 
     _env.byte_array_from_slice(sk.as_ref())
         .expect("Cannot write secret key.")
@@ -260,7 +267,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeDeserialize
     let sk_bytes = _env.convert_byte_array(_secret_key_bytes)
         .expect("Cannot read public key bytes.");
 
-    let secret_key_pointer: *mut SchnorrSk = deserialize_from_buffer(&(unsafe { &*sk_bytes })[..], FS_SIZE);
+    let secret_key_pointer: *mut SchnorrSk = deserialize_to_raw_pointer(sk_bytes.as_slice());
 
     let secret_key: jlong = jlong::from(secret_key_pointer as i64);
 
@@ -314,12 +321,12 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSer
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDeserializeSignature(
     _env: JNIEnv,
     _class: JClass,
-    _sigBytes: jbyteArray,
+    _sig_bytes: jbyteArray,
 ) -> *mut SchnorrSig
 {
-    let sig_bytes = _env.convert_byte_array(_sigBytes)
+    let sig_bytes = _env.convert_byte_array(_sig_bytes)
         .expect("Should be able to convert to Rust byte array");
-    deserialize_to_raw_pointer(&(unsafe { &*sig_bytes })[..])
+    deserialize_to_raw_pointer(sig_bytes.as_slice())
 }
 
 #[no_mangle]
@@ -423,7 +430,6 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignM
     };
 
     //Sign message and return opaque pointer to sig
-    let mut rng = OsRng;
     let signature = match schnorr_sign(message, secret_key, public_key) {
         Ok(sig) => Box::into_raw(Box::new(sig)),
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
@@ -618,12 +624,12 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
 pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProof(
     _env: JNIEnv,
     _class: JClass,
-    _proofBytes: jbyteArray,
+    _proof_bytes: jbyteArray,
 ) -> *mut VRFProof
 {
-    let proof_bytes = _env.convert_byte_array(_proofBytes)
+    let proof_bytes = _env.convert_byte_array(_proof_bytes)
         .expect("Should be able to convert to Rust byte array");
-    deserialize_to_raw_pointer(&(unsafe { &*proof_bytes })[..])
+    deserialize_to_raw_pointer(proof_bytes.as_slice())
 }
 
 #[no_mangle]
@@ -730,7 +736,6 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
     };
 
     //Sign message and return opaque pointer to sig
-    let mut rng = OsRng;
     let proof = match vrf_prove(message, secret_key, public_key) {
         Ok(p) => Box::into_raw(Box::new(p)),
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
@@ -977,8 +982,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //Extract params_path str
     let proving_key_path = _env.get_string(_proving_key_path)
-        .expect("Should be able to read jstring as Rust String")
-        .to_str().unwrap();
+        .expect("Should be able to read jstring as Rust String");
+
 
     //create proof
     let proof = match create_naive_threshold_sig_proof(
@@ -988,7 +993,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         &prev_end_epoch_block_hash,
         bt_list.as_slice(),
         threshold,
-        proving_key_path
+        proving_key_path.to_str().unwrap()
     ) {
         Ok(proof) => proof,
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR

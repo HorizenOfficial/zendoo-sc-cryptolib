@@ -29,7 +29,6 @@ use primitives::{
     vrf::{FieldBasedVrf, ecvrf::*},
 };
 use proof_systems::groth16::{
-    Parameters,
     Proof, create_random_proof,
 };
 use demo_circuit::{
@@ -77,12 +76,6 @@ pub fn read_from_file<T: FromBytes>(file_path: &str) -> IoResult<T>{
     let mut fs = File::open(file_path)?;
     let t = T::read(&mut fs)?;
     Ok(t)
-}
-
-pub fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
-    let mut fs = File::create(file_path)?;
-    to_write.write(&mut fs)?;
-    Ok(())
 }
 
 //***************************Schnorr types and functions********************************************
@@ -211,25 +204,6 @@ pub fn compute_wcert_sysdata_hash(
     Ok(wcert_sysdata_hash)
 }
 
-//Return (wcert_sysdata_hash, pk_threshold_hash)
-pub fn get_public_inputs_for_naive_threshold_sig_proof(
-    pks:                      &[SchnorrPk],
-    threshold:                u64,
-    end_epoch_mc_b_hash:      &[u8; 32],
-    prev_end_epoch_mc_b_hash: &[u8; 32],
-    bt_list:                  &[BackwardTransfer],
-    valid_sigs:               u64,
-) -> Result<(FieldElement, FieldElement), Error> {
-
-    let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
-    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
-    let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
-    let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
-    let pks_threshold_hash = compute_pks_threshold_hash(pks, threshold)?;
-
-    Ok((wcert_sysdata_hash, pks_threshold_hash))
-}
-
 pub fn create_naive_threshold_sig_proof(
     pks:                      &[SchnorrPk],
     mut sigs:                 Vec<Option<SchnorrSig>>,
@@ -288,8 +262,7 @@ pub fn create_naive_threshold_sig_proof(
     );
 
     //Read proving key
-    let mut file = File::open(proving_key_path)?;
-    let params = Parameters::<MNT4>::read(&mut file)?;
+    let params = read_from_file(proving_key_path)?;
 
     //Create and return proof
     let mut rng = OsRng;
@@ -346,6 +319,8 @@ impl FieldBasedMerkleTreeConfig for FieldBasedMerkleTreeParams {
 }
 
 type GingerMerkleTree = FieldBasedMerkleHashTree<FieldBasedMerkleTreeParams>;
+
+#[allow(dead_code)]
 type GingerMerkleTreePath = FieldBasedMerkleTreePath<FieldBasedMerkleTreeParams>;
 
 pub fn new_ginger_merkle_tree(leaves: &[FieldElement]) -> Result<GingerMerkleTree, Error> {
@@ -356,12 +331,14 @@ pub fn get_ginger_merkle_root(tree: &GingerMerkleTree) -> FieldElement {
     tree.root()
 }
 
+#[allow(dead_code)]
 pub fn get_ginger_merkle_path(leaf: &FieldElement, leaf_index: usize, tree: &GingerMerkleTree)
     -> Result<GingerMerkleTreePath, Error>
 {
     tree.generate_proof(leaf_index, leaf)
 }
 
+#[allow(dead_code)]
 pub fn verify_ginger_merkle_path(path: GingerMerkleTreePath, merkle_root: &FieldElement, leaf: &FieldElement)
     -> Result<bool, Error>
 {
@@ -376,6 +353,31 @@ mod test {
         prepare_verifying_key, verify_proof,
     };
     use rand::RngCore;
+
+    fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
+        let mut fs = File::create(file_path)?;
+        to_write.write(&mut fs)?;
+        Ok(())
+    }
+
+    //Return (wcert_sysdata_hash, pk_threshold_hash)
+    pub fn get_public_inputs_for_naive_threshold_sig_proof(
+        pks:                      &[SchnorrPk],
+        threshold:                u64,
+        end_epoch_mc_b_hash:      &[u8; 32],
+        prev_end_epoch_mc_b_hash: &[u8; 32],
+        bt_list:                  &[BackwardTransfer],
+        valid_sigs:               u64,
+    ) -> Result<(FieldElement, FieldElement), Error> {
+
+        let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
+        let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
+        let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
+        let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
+        let pks_threshold_hash = compute_pks_threshold_hash(pks, threshold)?;
+
+        Ok((wcert_sysdata_hash, pks_threshold_hash))
+    }
 
     #[test]
     fn create_sample_naive_threshold_sig_circuit() {
