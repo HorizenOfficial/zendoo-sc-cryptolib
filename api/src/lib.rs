@@ -190,13 +190,13 @@ use std::any::Any;
 
 //Public Schnorr key utility functions
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeGetPublicKeySize(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeGetPublicKeySize(
     _env: JNIEnv,
     _schnorr_public_key_class: JClass,
 ) -> jint { G1_SIZE as jint }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSerializePublicKey(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSerializePublicKey(
     _env: JNIEnv,
     _schnorr_public_key: JObject,
 ) -> jbyteArray
@@ -215,7 +215,7 @@ pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSerializ
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeDeserializePublicKey(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeDeserializePublicKey(
     _env: JNIEnv,
     _schnorr_public_key_class: JClass,
     _public_key_bytes: jbyteArray,
@@ -239,7 +239,7 @@ pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeDeserial
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeFreePublicKey(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeFreePublicKey(
     _env: JNIEnv,
     _schnorr_public_key: JObject,
 )
@@ -255,13 +255,13 @@ pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeFreePubl
 
 //Secret Schnorr key utility functions
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGetSecretKeySize(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGetSecretKeySize(
     _env: JNIEnv,
     _schnorr_secret_key_class: JClass,
 ) -> jint { FS_SIZE as jint }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSerializeSecretKey(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSerializeSecretKey(
     _env: JNIEnv,
     _schnorr_secret_key: JObject,
 ) -> jbyteArray
@@ -280,7 +280,7 @@ pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSerializ
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeDeserializeSecretKey(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeDeserializeSecretKey(
     _env: JNIEnv,
     _schnorr_public_key_class: JClass,
     _secret_key_bytes: jbyteArray,
@@ -304,7 +304,7 @@ pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeDeserial
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeFreeSecretKey(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeFreeSecretKey(
     _env: JNIEnv,
     _schnorr_secret_key: JObject,
 )
@@ -320,13 +320,13 @@ pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeFreeSecr
 
 //Public VRF key utility functions
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeGetPublicKeySize(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeGetPublicKeySize(
     _env: JNIEnv,
     _vrf_public_key_class: JClass,
 ) -> jint { G1_SIZE as jint }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePublicKey(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePublicKey(
     _env: JNIEnv,
     _vrf_public_key: JObject,
 ) -> jbyteArray
@@ -346,7 +346,7 @@ pub extern "C" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePublicK
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeDeserializePublicKey(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeDeserializePublicKey(
     _env: JNIEnv,
     _vrf_public_key_class: JClass,
     _public_key_bytes: jbyteArray,
@@ -370,7 +370,7 @@ pub extern "C" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeDeserializePubli
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeFreePublicKey(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeFreePublicKey(
     _env: JNIEnv,
     _vrf_public_key: JObject,
 )
@@ -386,13 +386,13 @@ pub extern "C" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeFreePublicKey(
 
 //Secret VRF key utility functions
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetSecretKeySize(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetSecretKeySize(
     _env: JNIEnv,
     _schnorr_secret_key_class: JClass,
 ) -> jint { FS_SIZE as jint }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSecretKey(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSecretKey(
     _env: JNIEnv,
     _vrf_secret_key: JObject,
 ) -> jbyteArray
@@ -411,7 +411,7 @@ pub extern "C" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSecretK
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeDeserializeSecretKey(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeDeserializeSecretKey(
     _env: JNIEnv,
     _vrf_public_key_class: JClass,
     _secret_key_bytes: jbyteArray,
@@ -435,7 +435,7 @@ pub extern "C" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeDeserializeSecre
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeFreeSecretKey(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeFreeSecretKey(
     _env: JNIEnv,
     _vrf_secret_key: JObject,
 )
@@ -451,13 +451,13 @@ pub extern "C" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeFreeSecretKey(
 
 //Schnorr signature utility functions
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeGetSignatureSize(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeGetSignatureSize(
     _env: JNIEnv,
     _class: JClass,
 ) -> jint { SIG_SIZE as jint }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSerializeSignature(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSerializeSignature(
     _env: JNIEnv,
     _class: JClass,
     _sig: *const SchnorrSig,
@@ -473,7 +473,7 @@ pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSerializ
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDeserializeSignature(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDeserializeSignature(
     _env: JNIEnv,
     _class: JClass,
     _sigBytes: jbyteArray,
@@ -488,7 +488,7 @@ pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDeserial
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativefreeSignature(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativefreeSignature(
     _env: JNIEnv,
     _class: JClass,
     _sig: *mut SchnorrSig,
@@ -812,13 +812,13 @@ const VRF_OUTPUT_SIZE:  usize = HASH_SIZE;              // 96
 
 //VRF utility functions
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFProof_nativeGetProofSize(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeGetProofSize(
     _env: JNIEnv,
     _class: JClass,
 ) -> jint { VRF_PROOF_SIZE as jint }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
     _env: JNIEnv,
     _class: JClass,
     _proof: *const EcVrfProof,
@@ -834,7 +834,7 @@ pub extern "C" fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProof(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProof(
     _env: JNIEnv,
     _class: JClass,
     _proofBytes: jbyteArray,
@@ -849,7 +849,7 @@ pub extern "C" fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProof(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFProof_nativefreeProof(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativefreeProof(
     _env: JNIEnv,
     _class: JClass,
     _proof: *mut EcVrfProof,
