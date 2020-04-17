@@ -52,13 +52,13 @@ use jni::errors;
 
 //Public key utility functions
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeGetPublicKeySize(
+pub extern "system" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeGetPublicKeySize(
     _env: JNIEnv,
     _class: JClass,
 ) -> jint { G1_SIZE as jint }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeSerializePublicKey(
+pub extern "system" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeSerializePublicKey(
     _env: JNIEnv,
     _class: JClass,
     _pk: *const G1Affine,
@@ -74,7 +74,7 @@ pub extern "C" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeSerial
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeDeserializePublicKey(
+pub extern "system" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeDeserializePublicKey(
     _env: JNIEnv,
     _class: JClass,
     _pkBytes: jbyteArray,
@@ -89,7 +89,7 @@ pub extern "C" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeDeseri
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeFreePublicKey(
+pub extern "system" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeFreePublicKey(
     _env: JNIEnv,
     _class: JClass,
     _pk: *mut G1Affine,
@@ -101,13 +101,13 @@ pub extern "C" fn Java_com_horizen_librustsidechains_PublicKeyUtils_nativeFreePu
 
 //Secret key utility functions
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeGetSecretKeySize(
+pub extern "system" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeGetSecretKeySize(
     _env: JNIEnv,
     _class: JClass,
 ) -> jint { FS_SIZE as jint }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeSerializeSecretKey(
+pub extern "system" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeSerializeSecretKey(
     _env: JNIEnv,
     _class: JClass,
     _sk: *const Fs,
@@ -123,7 +123,7 @@ pub extern "C" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeSerial
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeDeserializeSecretKey(
+pub extern "system" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeDeserializeSecretKey(
     _env: JNIEnv,
     _class: JClass,
     _skBytes: jbyteArray,
@@ -138,7 +138,7 @@ pub extern "C" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeDeseri
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeFreeSecretKey(
+pub extern "system" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeFreeSecretKey(
     _env: JNIEnv,
     _class: JClass,
     _sk: *mut G1Affine,
@@ -150,13 +150,13 @@ pub extern "C" fn Java_com_horizen_librustsidechains_SecretKeyUtils_nativeFreeSe
 
 //Schnorr signature utility functions
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeGetSignatureSize(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeGetSignatureSize(
     _env: JNIEnv,
     _class: JClass,
 ) -> jint { SCHNORR_SIG_SIZE as jint }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSerializeSignature(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSerializeSignature(
     _env: JNIEnv,
     _class: JClass,
     _sig: *const SchnorrSig,
@@ -170,7 +170,7 @@ pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSerializ
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDeserializeSignature(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDeserializeSignature(
     _env: JNIEnv,
     _class: JClass,
     _sigBytes: jbyteArray,
@@ -182,7 +182,7 @@ pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDeserial
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativefreeSignature(
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativefreeSignature(
     _env: JNIEnv,
     _class: JClass,
     _sig: *mut SchnorrSig,
@@ -454,13 +454,13 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeComput
 //VRF utility functions
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFProof_nativeGetProofSize(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeGetProofSize(
     _env: JNIEnv,
     _class: JClass,
 ) -> jint { VRF_PROOF_SIZE as jint }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
     _env: JNIEnv,
     _class: JClass,
     _proof: *const VRFProof,
@@ -474,7 +474,7 @@ pub extern "C" fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProof(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProof(
     _env: JNIEnv,
     _class: JClass,
     _proofBytes: jbyteArray,
@@ -486,7 +486,7 @@ pub extern "C" fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProof(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_com_horizen_vrfnative_VRFProof_nativefreeProof(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativefreeProof(
     _env: JNIEnv,
     _class: JClass,
     _proof: *mut VRFProof,
