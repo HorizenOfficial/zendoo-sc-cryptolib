@@ -69,9 +69,9 @@ public class NaiveThresholdSigProofTest {
     public void testCreateProof() {
 
         ClassLoader classLoader = getClass().getClassLoader();
-        String verificationKeyPath = new File(classLoader.getResource("sample_params").getFile()).getAbsolutePath();
+        String provingKeyPath = new File(classLoader.getResource("sample_params").getFile()).getAbsolutePath();
         byte[] proof = NaiveThresholdSigProof.createProof(btList, endEpochBlockHash, prevEndEpochBlockHash,
-                signatureList, publicKeyList, threshold, verificationKeyPath);
+                signatureList, publicKeyList, threshold, provingKeyPath);
 
         assertNotNull("Proof must be not null.", proof);
     }
