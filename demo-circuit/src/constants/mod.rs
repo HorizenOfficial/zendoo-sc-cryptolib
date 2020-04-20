@@ -1,9 +1,8 @@
 use algebra::{
     fields::mnt4753::Fr,
-    curves::mnt6753::{G1Projective, G1Affine},
+    curves::mnt6753::G1Projective,
     biginteger::BigInteger768 as BigInteger,
-    Field, PrimeField, ProjectiveCurve, AffineCurve,
-    ToBits
+    Field, PrimeField, ProjectiveCurve,
 };
 
 use primitives::{
@@ -30,30 +29,30 @@ impl NaiveThresholdSigParams {
                 16508371799393812784,
                 15483496128959353847,
                 2048968449075429543,
-                3813485155185031268,
-                17391196392872785798,
-                443815587061199304,
-                809911665634108871,
-                3203999612048336978,
-                5914744227561871782,
-                11028425691428698474,
-                321931059609498,
+                16732582715505535218,
+                17185233299328629254,
+                215284426071672551,
+                5549254975250138323,
+                1580560065762820894,
+                7090381661442181239,
+                14966187896916716816,
+                75867572971213,
             ]));
 
         let y = Fr::from_repr(
             BigInteger([
-                7591787525067869101,
-                4520664314106635126,
-                3501384056613126553,
-                11132452857411289821,
-                1747040353565531240,
-                7804288879143509255,
-                10401228816538582578,
-                249784886659832058,
-                18437460134326584942,
-                2601603098127689962,
-                15861155813087701330,
-                165630173916516,
+                10704811943041274771,
+                2767103289650614019,
+                14558604087270339633,
+                16118780849751543899,
+                8585597437853085838,
+                449342974578382641,
+                8088465320681580870,
+                509643884085664102,
+                15310217451837794004,
+                4730806010349112824,
+                13668444198414977264,
+                219272068411579,
             ]));
 
         let z = Fr::from_repr(
@@ -93,99 +92,99 @@ impl VRFParams {
     pub fn new() -> Self {
 
         let gen_1 = G1Projective::new(
-            Fr::from_repr(
-                BigInteger([
-                    5396716016628894442,
-                    16250347609008978884,
-                    16400026874508537807,
-                    10600089309195725443,
-                    11944350598763714573,
-                    2786537730813240282,
-                    2015510033179394938,
-                    3299088900708041044,
-                    15128041131726196610,
-                    5318740608959163911,
-                    2933105954867468309,
-                    83897518704478,
-                ])),
-            Fr::from_repr(
-                BigInteger([
-                    13468382616245414545,
-                    16290186479897558800,
-                    12925105321291855571,
-                    3891803802780255771,
-                    17698947054166096401,
-                    17998405614620065768,
-                    16621291522318174175,
-                    11623058996253770026,
-                    17190152583483448914,
-                    14896007825055454618,
-                    13061929096323544340,
-                    390383849930062,
-                ])),
-            Fr::from_repr(
-                BigInteger([
-                    13373016969058414402,
-                    5670427856875409064,
-                    11667651089292452217,
-                    1113053963617943770,
-                    12325313033510771412,
-                    11510260603202358114,
-                    3606323059104122008,
-                    6452324570546309730,
-                    4644558993695221281,
-                    1127165286758606988,
-                    10756108507984535957,
-                    135547536859714,
-                ])),
+        Fr::from_repr(
+            BigInteger([
+                1294449187585434704,
+                5131287438243136725,
+                18081355146140789575,
+                15814805185239782286,
+                4405965803081461763,
+                4617523924423324244,
+                8379615642753764988,
+                2000790817957976954,
+                1770743024696829222,
+                664039781157959360,
+                8894836393413418304,
+                108509189311559,
+            ])),
+        Fr::from_repr(
+            BigInteger([
+                14207092875898659328,
+                17205966376070017323,
+                17535583566531148253,
+                16415296113678429706,
+                15093927965206654338,
+                7770144268668767567,
+                929832473226976009,
+                10710907410150181098,
+                13777945618797139330,
+                5683769430746598257,
+                1088380296753030517,
+                324687205438666,
+            ])),
+        Fr::from_repr(
+            BigInteger([
+                13373016969058414402,
+                5670427856875409064,
+                11667651089292452217,
+                1113053963617943770,
+                12325313033510771412,
+                11510260603202358114,
+                3606323059104122008,
+                6452324570546309730,
+                4644558993695221281,
+                1127165286758606988,
+                10756108507984535957,
+                135547536859714,
+            ])),
         );
 
         let gen_2 = G1Projective::new(
-            Fr::from_repr(
-                BigInteger([
-                    16938015810328924015,
-                    7595565542203433025,
-                    893702455010499521,
-                    12666324982058459803,
-                    2543921901818494643,
-                    1473610353719394482,
-                    4040564965617176901,
-                    2160693189112035292,
-                    11443207615946539506,
-                    14310461526530619301,
-                    6541239471591817974,
-                    74923674694220,
-                ])),
-            Fr::from_repr(
-                BigInteger([
-                    8953771389691604184,
-                    15164443554240298251,
-                    2246296914081141450,
-                    1647244817446500736,
-                    13791268742047804496,
-                    7712141360798675312,
-                    13477424548833542279,
-                    14232084298308623228,
-                    17640535737826677007,
-                    2300966962968597128,
-                    4476346818178979344,
-                    37543374044242,
-                ])),
-            Fr::from_repr(
-                BigInteger([
-                    13373016969058414402,
-                    5670427856875409064,
-                    11667651089292452217,
-                    1113053963617943770,
-                    12325313033510771412,
-                    11510260603202358114,
-                    3606323059104122008,
-                    6452324570546309730,
-                    4644558993695221281,
-                    1127165286758606988,
-                    10756108507984535957,
-                    135547536859714,
-                ])),
+        Fr::from_repr(
+            BigInteger([
+                649859634879180958,
+                13597720379005621868,
+                18064174816613973740,
+                8646429382307887638,
+                17014556852349184586,
+                1341584681953572340,
+                10416830578026787120,
+                12570924511801367504,
+                3370224175163505491,
+                16453203747482544835,
+                16824394801845877290,
+                57717353992973,
+            ])),
+        Fr::from_repr(
+            BigInteger([
+                11571775449869477883,
+                5057296380047860478,
+                8041855877286195997,
+                32169344314064857,
+                3655001595782824013,
+                3080788830673849929,
+                7716699506620825739,
+                16062320569088622625,
+                205603018711731380,
+                17023118407673105708,
+                4011605409044447956,
+                324662289883754,
+            ])),
+        Fr::from_repr(
+            BigInteger([
+                13373016969058414402,
+                5670427856875409064,
+                11667651089292452217,
+                1113053963617943770,
+                12325313033510771412,
+                11510260603202358114,
+                3606323059104122008,
+                6452324570546309730,
+                4644558993695221281,
+                1127165286758606988,
+                10756108507984535957,
+                135547536859714,
+            ])),
         );
 
         let group_hash_generators = Self::compute_group_hash_table([gen_1, gen_2].to_vec());
@@ -212,92 +211,121 @@ impl VRFParams {
     }
 }
 
-#[allow(dead_code)]
-fn hash_to_curve(
-    tag: &[u8],
-    personalization: &[u8]
-) -> G1Projective {
+#[cfg(test)]
+mod test
+{
+    use algebra::{
+        curves::mnt6753::G1Affine,
+        FpParameters, FromCompressedBits, AffineCurve, ToBits,
+    };
+    use super::*;
     use blake2s_simd::{
         Hash, Params
     };
-    use algebra::{
-        FpParameters, FromCompressedBits
-    };
+    use bit_vec::BitVec;
 
-    let compute_chunk =
-        |tag: &[u8], personalization: &[u8]| -> Hash {
-            Params::new()
-                .hash_length(32)
-                .personal(personalization)
-                .to_state()
-                .update(constants::GH_FIRST_BLOCK)
-                .update(tag)
-                .finalize()
-        };
+    #[allow(dead_code)]
+    fn hash_to_curve(
+        tag: &[u8],
+        personalization: &[u8]
+    ) -> Option<G1Projective> {
 
-    let tag_len = tag.len();
-    let mut tag = tag.clone().to_vec();
-    tag.push(0u8);
 
-    let g = loop {
+        let compute_chunk =
+            |tag: &[u8], personalization: &[u8]| -> Hash {
+                Params::new()
+                    .hash_length(32)
+                    .personal(personalization)
+                    .to_state()
+                    .update(constants::GH_FIRST_BLOCK)
+                    .update(tag)
+                    .finalize()
+            };
 
-        let mut chunks = vec![];
-        let bigint_size = (Fr::size_in_bits() + <Fr as PrimeField>::Params::REPR_SHAVE_BITS as usize)/8;
+        // Append counter byte to tag
+        let tag_len = tag.len();
+        let mut tag = tag.clone().to_vec();
+        tag.push(0u8);
+
+        // Compute number of hashes to be concatenated in order to obtain a field element
+        let field_size = Fr::size_in_bits();
+        let bigint_size = (field_size + <Fr as PrimeField>::Params::REPR_SHAVE_BITS as usize)/8;
         let chunk_num = if bigint_size % 32 == 0 { bigint_size/32 } else { (bigint_size/32) + 1};
+        let max_value = u8::max_value();
+        let mut g = None;
 
-        for _ in 0..chunk_num {
-            chunks.extend_from_slice(compute_chunk(tag.as_slice(), personalization).as_ref());
+        while tag[tag_len] <= max_value {
+
+            let mut chunks = vec![];
+
+            //chunk_i = H(chunk_i-1), chunk_0 = tag
+            let mut prev_hash = tag.clone();
+            for _ in 0..chunk_num {
+                let hash = compute_chunk(prev_hash.as_slice(), personalization);
+                chunks.extend_from_slice(hash.as_ref());
+                prev_hash = hash.as_ref().to_vec();
+            }
+            drop(prev_hash);
+
             tag[tag_len] += 1;
-        }
 
-        //Get field element from `chunks`
-        let fe = match Fr::from_random_bytes(&chunks[..bigint_size]) {
-            Some(fe) => fe,
-            None => continue
+            //Mask away REPR_SHAVE_BITS
+            let mut chunk_bits = BitVec::from_bytes(chunks.as_slice());
+            for i in field_size..(bigint_size * 8) {
+                chunk_bits.set(i, false);
+            }
+
+            //Get field element from `chunks`
+            let chunk_bytes = chunk_bits.to_bytes();
+            let fe = match Fr::from_random_bytes(&chunk_bytes[..bigint_size]) {
+                Some(fe) => fe,
+                None => continue
+            };
+
+            //Get point from chunks
+            let mut fe_bits = fe.write_bits();
+            fe_bits.push(false); //We don't want an infinity point
+            fe_bits.push(false); //We decide to choose the even y coordinate
+            match G1Affine::decompress(fe_bits) {
+                Ok(point) => {
+                    g = Some(point.into_projective());
+                    break;
+                },
+                Err(_) => continue
+            };
         };
-
-        //Get point from chunks
-        let mut fe_bits = fe.write_bits();
-        fe_bits.push(false); //We don't want an infinity point
-        fe_bits.push(false); //We decide to choose the even y coordinate
-        let g = match G1Affine::decompress(fe_bits) {
-            Ok(g) => g,
-            Err(_) => continue
-        };
-
-        break(g)
-    };
-    g.into_projective()
-}
+        g
+    }
 
 
-#[test]
-fn test_pk_null_gen() {
-    let tag = b"Strontium Sr 90";
-    let personalization = constants::NULL_PK_PERSONALIZATION;
-    let htc_out = hash_to_curve(tag, personalization);
-    println!("{:#?}", htc_out);
-    let null_pk = NaiveThresholdSigParams::new().null_pk;
-    assert_eq!(htc_out, null_pk);
-}
+    #[test]
+    fn test_pk_null_gen() {
+        let tag = b"Strontium Sr 90";
+        let personalization = constants::NULL_PK_PERSONALIZATION;
+        let htc_out = hash_to_curve(tag, personalization).unwrap();
+        println!("{:#?}", htc_out);
+        let null_pk = NaiveThresholdSigParams::new().null_pk;
+        assert_eq!(htc_out, null_pk);
+    }
 
-#[test]
-fn test_vrf_group_hash_gen() {
-    let personalization = constants::VRF_GROUP_HASH_GENERATORS_PERSONALIZATION;
+    #[test]
+    fn test_vrf_group_hash_gen() {
+        let personalization = constants::VRF_GROUP_HASH_GENERATORS_PERSONALIZATION;
 
-    //Gen1
-    let tag = b"Magnesium Mg 12";
-    let htc_g1_out = hash_to_curve(tag, personalization);
-    println!("{:#?}", htc_g1_out);
+        //Gen1
+        let tag = b"Magnesium Mg 12";
+        let htc_g1_out = hash_to_curve(tag, personalization).unwrap();
+        println!("{:#?}", htc_g1_out);
 
-    //Gen2
-    let tag = b"Gold Au 79";
-    let htc_g2_out = hash_to_curve(tag, personalization);
-    println!("{:#?}", htc_g2_out);
+        //Gen2
+        let tag = b"Gold Au 79";
+        let htc_g2_out = hash_to_curve(tag, personalization).unwrap();
+        println!("{:#?}", htc_g2_out);
 
-    //Check GH generators
-    let gh_generators = VRFParams::compute_group_hash_table(
-        [htc_g1_out, htc_g2_out].to_vec()
-    );
-    assert_eq!(gh_generators, VRFParams::new().group_hash_generators);
+        //Check GH generators
+        let gh_generators = VRFParams::compute_group_hash_table(
+            [htc_g1_out, htc_g2_out].to_vec()
+        );
+        assert_eq!(gh_generators, VRFParams::new().group_hash_generators);
+    }
 }
