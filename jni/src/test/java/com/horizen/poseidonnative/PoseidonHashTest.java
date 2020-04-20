@@ -1,5 +1,6 @@
 package com.horizen.poseidonnative;
 
+import com.horizen.librustsidechains.FieldElement;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -10,12 +11,13 @@ public class PoseidonHashTest {
     @Test
     public void testComputeHash() {
 
-        byte[] input = new byte[PoseidonHash.HASH_LENGTH];
+        FieldElement fieldElement = FieldElement.createFromLong(123456789L);
 
-        byte[] hash = PoseidonHash.nativeComputeHash(input);
+        FieldElement[] fieldElementArray = {fieldElement};
+
+        FieldElement hash = PoseidonHash.computeHash(fieldElementArray);
 
         assertNotNull("Hash must be computed", hash);
-        assertEquals("Hash size must be " + PoseidonHash.HASH_LENGTH, PoseidonHash.HASH_LENGTH, hash.length);
 
     }
 }

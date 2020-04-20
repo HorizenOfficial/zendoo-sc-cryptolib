@@ -1012,7 +1012,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 //Test functions
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_createFromLong(
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateFromLong(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be

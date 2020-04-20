@@ -11,4 +11,10 @@ public class FieldElement {
     private FieldElement(long fieldElementPointer) {
         this.fieldElementPointer = fieldElementPointer;
     }
+
+    private static native FieldElement nativeCreateFromLong(Long value);
+
+    public static FieldElement createFromLong(Long value) {
+        return nativeCreateFromLong(value);
+    }
 }

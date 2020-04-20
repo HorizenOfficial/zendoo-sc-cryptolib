@@ -1,5 +1,6 @@
 package com.horizen.poseidonnative;
 
+import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
 import java.util.Arrays;
@@ -12,5 +13,7 @@ public class PoseidonHash {
         Library.load();
     }
 
-    public static native byte[] nativeComputeHash(byte[] input); // jni call to Rust impl
+    private static native FieldElement nativeComputeHash(FieldElement[] fieldElement); // jni call to Rust impl
+
+    public static FieldElement computeHash(FieldElement[] fieldElement) {return nativeComputeHash(fieldElement);}
 }
