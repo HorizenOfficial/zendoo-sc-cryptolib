@@ -1008,3 +1008,31 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _env.byte_array_from_slice(proof_bytes.as_ref())
         .expect("Should be able to convert Rust slice into jbytearray")
 }
+
+//Test functions
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_createFromLong(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _long: jlong
+) -> jobject
+{
+    //Create field element from _long
+    let fe = read_field_element_from_u64(_long as u64);
+
+    //Return vrf output
+    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(fe)) as i64);
+
+    let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Should be able to find FieldElement class");
+
+    let result = _env.new_object(field_class, "(J)V", &[
+        JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+    *result
+}
