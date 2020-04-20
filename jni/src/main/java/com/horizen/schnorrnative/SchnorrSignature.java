@@ -19,6 +19,10 @@ public class SchnorrSignature
     this.signaturePointer = signaturePointer;
   }
 
+  public SchnorrSignature() {
+    this.signaturePointer = 0;
+  }
+
   private static native byte[] nativeSerializeSignature(long signaturePointer);
 
   private static native long nativeDeserializeSignature(byte[] signatureBytes);

@@ -862,6 +862,100 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeProofToHash
     *result
 }
 
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateMsgToSign(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _bt_list: jobjectArray,
+    _end_epoch_block_hash: jbyteArray,
+    _prev_end_epoch_block_hash: jbyteArray,
+) -> jobject
+{
+    //Extract backward transfers
+    let mut bt_list = vec![];
+
+    let bt_list_size = _env.get_array_length(_bt_list)
+        .expect("Should be able to get bt_list size");
+
+    for i in 0..bt_list_size {
+        let o = _env.get_object_array_element(_bt_list, i)
+            .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+
+
+        let pk: [u8; 32] = {
+            let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+
+            let mut pk_bytes = [0u8; 32];
+
+            _env.convert_byte_array(p)
+                .expect("Should be able to convert to Rust byte array")
+                .write(&mut pk_bytes[..])
+                .expect("Should be able to write into byte array of fixed size");
+
+            pk_bytes
+        };
+
+        let a = _env.call_method(o, "getAmount", "()J", &[])
+            .expect("Should be able to call getAmount method").j().unwrap() as u64;
+
+        bt_list.push(BackwardTransfer::new(pk, a));
+    }
+
+    //Extract block hashes
+    let end_epoch_block_hash = {
+        let t = _env.convert_byte_array(_end_epoch_block_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut end_epoch_block_hash_bytes = [0u8; 32];
+
+        t.write(&mut end_epoch_block_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        read_field_element_from_buffer_with_padding(&end_epoch_block_hash_bytes)
+            .expect("Should be able to read a FieldElement from a 32 byte array")
+
+    };
+
+    let prev_end_epoch_block_hash = {
+        let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
+
+        t.write(&mut prev_end_epoch_block_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        read_field_element_from_buffer_with_padding(&prev_end_epoch_block_hash_bytes)
+            .expect("Should be able to read a FieldElement from a 32 byte array")
+    };
+
+    //Compute message to sign:
+    let msg = match compute_msg_to_sign(
+        &end_epoch_block_hash,
+        &prev_end_epoch_block_hash,
+        bt_list.as_slice()
+    ){
+        Ok((_, msg)) => msg,
+        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
+    };
+
+    //Return msg
+    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(msg)) as i64);
+
+    let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Should be able to find FieldElement class");
+
+    let result = _env.new_object(field_class, "(J)V", &[
+        JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+    *result
+}
+
 //Naive threshold signature proof functions
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateProof(
@@ -1007,4 +1101,32 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     //Return proof serialized
     _env.byte_array_from_slice(proof_bytes.as_ref())
         .expect("Should be able to convert Rust slice into jbytearray")
+}
+
+//Test functions
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateFromLong(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _long: jlong
+) -> jobject
+{
+    //Create field element from _long
+    let fe = read_field_element_from_u64(_long as u64);
+
+    //Return field element
+    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(fe)) as i64);
+
+    let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Should be able to find FieldElement class");
+
+    let result = _env.new_object(field_class, "(J)V", &[
+        JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+    *result
 }
