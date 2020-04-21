@@ -214,42 +214,37 @@ impl VRFParams {
 #[cfg(test)]
 mod test
 {
-    use algebra::{
-        curves::mnt6753::G1Affine,
-        FpParameters, FromCompressedBits, AffineCurve, ToBits,
-    };
+    use algebra::{curves::mnt6753::G1Affine, FpParameters, FromCompressedBits, AffineCurve};
     use super::*;
     use blake2s_simd::{
         Hash, Params
     };
     use bit_vec::BitVec;
 
-    #[allow(dead_code)]
-    fn hash_to_curve(
+    fn hash_to_curve<F: PrimeField, G: AffineCurve + FromCompressedBits>(
         tag: &[u8],
         personalization: &[u8]
-    ) -> Option<G1Projective> {
-
+    ) -> Option<G> {
 
         let compute_chunk =
-            |tag: &[u8], personalization: &[u8]| -> Hash {
+            |input: &[u8], personalization: &[u8]| -> Hash {
                 Params::new()
                     .hash_length(32)
                     .personal(personalization)
                     .to_state()
                     .update(constants::GH_FIRST_BLOCK)
-                    .update(tag)
+                    .update(input)
                     .finalize()
             };
 
         // Append counter byte to tag
         let tag_len = tag.len();
-        let mut tag = tag.clone().to_vec();
+        let mut tag = tag.to_vec();
         tag.push(0u8);
 
         // Compute number of hashes to be concatenated in order to obtain a field element
-        let field_size = Fr::size_in_bits();
-        let bigint_size = (field_size + <Fr as PrimeField>::Params::REPR_SHAVE_BITS as usize)/8;
+        let field_size = F::size_in_bits();
+        let bigint_size = (field_size + F::Params::REPR_SHAVE_BITS as usize)/8;
         let chunk_num = if bigint_size % 32 == 0 { bigint_size/32 } else { (bigint_size/32) + 1};
         let max_value = u8::max_value();
         let mut g = None;
@@ -258,16 +253,15 @@ mod test
 
             let mut chunks = vec![];
 
-            //chunk_i = H(chunk_i-1), chunk_0 = tag
+            //chunk_0 = H(tag), chunk_1 = H(chunk_0) = H(H(tag)), ..., chunk_i = H(chunk_i-1)
             let mut prev_hash = tag.clone();
             for _ in 0..chunk_num {
                 let hash = compute_chunk(prev_hash.as_slice(), personalization);
                 chunks.extend_from_slice(hash.as_ref());
                 prev_hash = hash.as_ref().to_vec();
             }
-            drop(prev_hash);
 
-            tag[tag_len] += 1;
+            tag[tag_len] += 1u8;
 
             //Mask away REPR_SHAVE_BITS
             let mut chunk_bits = BitVec::from_bytes(chunks.as_slice());
@@ -277,7 +271,7 @@ mod test
 
             //Get field element from `chunks`
             let chunk_bytes = chunk_bits.to_bytes();
-            let fe = match Fr::from_random_bytes(&chunk_bytes[..bigint_size]) {
+            let fe = match F::from_random_bytes(&chunk_bytes[..bigint_size]) {
                 Some(fe) => fe,
                 None => continue
             };
@@ -286,9 +280,9 @@ mod test
             let mut fe_bits = fe.write_bits();
             fe_bits.push(false); //We don't want an infinity point
             fe_bits.push(false); //We decide to choose the even y coordinate
-            match G1Affine::decompress(fe_bits) {
+            match G::decompress(fe_bits) {
                 Ok(point) => {
-                    g = Some(point.into_projective());
+                    g = Some(point);
                     break;
                 },
                 Err(_) => continue
@@ -302,7 +296,9 @@ mod test
     fn test_pk_null_gen() {
         let tag = b"Strontium Sr 90";
         let personalization = constants::NULL_PK_PERSONALIZATION;
-        let htc_out = hash_to_curve(tag, personalization).unwrap();
+        let htc_out = hash_to_curve::<Fr, G1Affine>(tag, personalization)
+            .unwrap()
+            .into_projective();
         println!("{:#?}", htc_out);
         let null_pk = NaiveThresholdSigParams::new().null_pk;
         assert_eq!(htc_out, null_pk);
@@ -314,12 +310,16 @@ mod test
 
         //Gen1
         let tag = b"Magnesium Mg 12";
-        let htc_g1_out = hash_to_curve(tag, personalization).unwrap();
+        let htc_g1_out = hash_to_curve::<Fr, G1Affine>(tag, personalization)
+            .unwrap()
+            .into_projective();
         println!("{:#?}", htc_g1_out);
 
         //Gen2
         let tag = b"Gold Au 79";
-        let htc_g2_out = hash_to_curve(tag, personalization).unwrap();
+        let htc_g2_out = hash_to_curve::<Fr, G1Affine>(tag, personalization)
+            .unwrap()
+            .into_projective();
         println!("{:#?}", htc_g2_out);
 
         //Check GH generators
