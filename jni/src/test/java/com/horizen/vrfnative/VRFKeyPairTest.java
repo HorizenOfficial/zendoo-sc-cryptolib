@@ -30,9 +30,15 @@ public class VRFKeyPairTest {
 
         FieldElement fieldElement = FieldElement.createFromLong(123456789L);
 
-        VRFProof proof = keyPair.prove(fieldElement);
+        VRFOutput proofVRFOutputPair = keyPair.prove(fieldElement);
 
-        assertNotNull("Attempt to create proof failed.", proof);
+        assertNotNull("Attempt to create vrf proof and output failed.", proofVRFOutputPair);
+
+        FieldElement vrfOutput = keyPair.getPublicKey().proofToHash(proofVRFOutputPair.getVRFProof(), fieldElement);
+
+        assertNotNull("VRF Proof verification and VRF Output computation has failed.", proofVRFOutputPair);
+
+        assertEquals("prove() and proof_to_hash() vrf outputs must be equal", proofVRFOutputPair.getVRFOutput(), vrfOutput);
 
     }
 }

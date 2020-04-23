@@ -735,20 +735,41 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
         read_raw_pointer(m.j().unwrap() as *const FieldElement)
     };
 
-    //Sign message and return opaque pointer to sig
-    let proof = match vrf_prove(message, secret_key, public_key) {
-        Ok(p) => Box::into_raw(Box::new(p)),
+    //Compute vrf proof
+    let (proof, vrf_out) = match vrf_prove(message, secret_key, public_key) {
+        Ok((p, vrf_out)) =>
+            (Box::into_raw(Box::new(p)), Box::into_raw(Box::new(vrf_out))),
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
     };
 
-    let proof_result: jlong = jlong::from(proof as i64);
+    //Create VRFProof instance
+    let proof_ptr: jlong = jlong::from(proof as i64);
 
-    let class = _env.find_class("com/horizen/vrfnative/VRFProof")
+    let proof_class = _env.find_class("com/horizen/vrfnative/VRFProof")
         .expect("Should be able to find class VRFProof");
 
-    let result =  _env.new_object(class, "(J)V", &[
-        JValue::Long(proof_result)])
+    let proof_object =  _env.new_object(proof_class, "(J)V", &[
+        JValue::Long(proof_ptr)])
         .expect("Should be able to create new long for VRF proof");
+
+    //Create FieldElement instance
+    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(vrf_out)) as i64);
+
+    let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Should be able to find FieldElement class");
+
+    let field_object = _env.new_object(field_class, "(J)V", &[
+        JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+    //Create and return VRFOutput instance
+    let class = _env.find_class("com/horizen/vrfnative/VRFOutput")
+        .expect("Should be able to find VRFOutput class");
+
+    let result = _env.new_object(
+        class,
+        "(Lcom/horizen/vrfnative/VRFProof;Lcom/horizen/librustsidechains/FieldElement;)V",
+        &[JValue::Object(proof_object), JValue::Object(field_object)]
+    ).expect("Should be able to create new VRFOutput:(VRFProof, FieldElement) object");
 
     *result
 }
