@@ -300,9 +300,28 @@ pub fn vrf_verify_public_key(pk: &VRFPk) -> bool {
     SchnorrSigScheme::keyverify(&pk.into_projective())
 }
 
-pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<VRFProof, Error> {
+pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof, FieldElement), Error> {
     let mut rng = OsRng;
-    VRFScheme::prove(&mut rng, &VRF_GH_PARAMS, &pk.into_projective(), sk, &[*msg])
+
+    //Compute proof
+    let proof = VRFScheme::prove(
+        &mut rng,
+        &VRF_GH_PARAMS,
+        &pk.into_projective(),
+        sk,
+        &[*msg]
+    )?;
+
+    //Convert gamma from proof to field elements
+    let gamma_coords = proof.gamma.to_field_elements().unwrap();
+
+    //Compute VRF output
+    let mut hash_input = Vec::new();
+    hash_input.push(*msg);
+    hash_input.extend_from_slice(gamma_coords.as_slice());
+    let output = compute_poseidon_hash(hash_input.as_ref())?;
+
+    Ok((proof, output))
 }
 
 pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Result<FieldElement, Error> {
@@ -519,7 +538,7 @@ mod test {
         let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
         assert_eq!(sk, sk_deserialized);
 
-        let vrf_proof = vrf_prove(&msg, &sk, &pk).unwrap(); //Create vrf proof for msg
+        let (vrf_proof, vrf_out) = vrf_prove(&msg, &sk, &pk).unwrap(); //Create vrf proof for msg
 
         //Serialize/deserialize vrf proof
         let mut proof_serialized = vec![0u8; VRF_PROOF_SIZE];
@@ -527,13 +546,14 @@ mod test {
         let proof_deserialized = deserialize_from_buffer(&proof_serialized).unwrap();
         assert_eq!(vrf_proof, proof_deserialized);
 
-        let vrf_out = vrf_proof_to_hash(&msg, &pk, &vrf_proof).unwrap(); //Verify vrf proof and get vrf out for msg
-
         //Serialize/deserialize vrf out (i.e. a field element)
         let mut vrf_out_serialized = vec![0u8; FIELD_SIZE];
         serialize_to_buffer(&vrf_out, &mut vrf_out_serialized).unwrap();
         let vrf_out_deserialized = deserialize_from_buffer(&vrf_out_serialized).unwrap();
         assert_eq!(vrf_out, vrf_out_deserialized);
+
+        let vrf_out_dup = vrf_proof_to_hash(&msg, &pk, &vrf_proof).unwrap(); //Verify vrf proof and get vrf out for msg
+        assert_eq!(vrf_out, vrf_out_dup);
 
         //Negative case
         let wrong_msg = FieldElement::rand(&mut rng);

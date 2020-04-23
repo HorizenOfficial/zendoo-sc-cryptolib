@@ -28,9 +28,9 @@ public class VRFKeyPair {
         return nativeGenerate();
     }
 
-    private native VRFProof nativeProve(FieldElement message);
+    private native VRFOutput nativeProve(FieldElement message);
 
-    public VRFProof prove(FieldElement message) {
+    public VRFOutput prove(FieldElement message) {
         return nativeProve(message);
     }
 
