@@ -30,6 +30,7 @@ use primitives::{
 };
 use proof_systems::groth16::{
     Proof, create_random_proof,
+    prepare_verifying_key, verify_proof,
 };
 use demo_circuit::{
     constants::{
@@ -115,6 +116,8 @@ pub fn compute_poseidon_hash(input: &[FieldElement]) -> Result<FieldElement, Err
 }
 
 //*****************************Naive threshold sig circuit related functions************************
+
+pub type SCProof = Proof<MNT4>;
 
 #[derive(Clone, Default)]
 pub struct BackwardTransfer {
@@ -212,7 +215,7 @@ pub fn create_naive_threshold_sig_proof(
     bt_list:                  &[BackwardTransfer],
     threshold:                u64,
     proving_key_path:         &str
-) -> Result<Proof<MNT4>, Error> {
+) -> Result<SCProof, Error> {
 
     //Get max pks
     let max_pks = pks.len();
@@ -268,6 +271,52 @@ pub fn create_naive_threshold_sig_proof(
     let mut rng = OsRng;
     let proof = create_random_proof(c, &params, &mut rng)?;
     Ok(proof)
+}
+
+//Return (wcert_sysdata_hash, pk_threshold_hash)
+pub fn get_public_inputs_for_naive_threshold_sig_proof(
+    pks:                      &[SchnorrPk],
+    threshold:                u64,
+    end_epoch_mc_b_hash:      &[u8; 32],
+    prev_end_epoch_mc_b_hash: &[u8; 32],
+    bt_list:                  &[BackwardTransfer],
+    valid_sigs:               u64,
+) -> Result<(FieldElement, FieldElement), Error> {
+
+    let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
+    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
+    let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
+    let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
+    let pks_threshold_hash = compute_pks_threshold_hash(pks, threshold)?;
+
+    Ok((wcert_sysdata_hash, pks_threshold_hash))
+}
+
+pub fn verify_naive_threshold_sig_proof(
+    pks:                      &[SchnorrPk],
+    threshold:                u64,
+    end_epoch_mc_b_hash:      &[u8; 32],
+    prev_end_epoch_mc_b_hash: &[u8; 32],
+    bt_list:                  &[BackwardTransfer],
+    valid_sigs:               u64,
+    proof:                    SCProof,
+    vk_path:                  &str,
+) -> Result<bool, Error>
+{
+    //Verify proof
+    let (wcert_sysdata_hash, pks_threshold_hash) = get_public_inputs_for_naive_threshold_sig_proof(
+        &pks,
+        threshold,
+        &end_epoch_mc_b_hash,
+        &prev_end_epoch_mc_b_hash,
+        bt_list,
+        valid_sigs
+    ).unwrap();
+    let vk = read_from_file(vk_path)?;
+    let pvk = prepare_verifying_key(&vk); //Get verifying key
+    let is_verified = verify_proof(&pvk, &proof, &[pks_threshold_hash, wcert_sysdata_hash])?;
+
+    Ok(is_verified)
 }
 
 //VRF types and functions
@@ -368,34 +417,12 @@ pub fn verify_ginger_merkle_path(path: GingerMerkleTreePath, merkle_root: &Field
 mod test {
     use super::*;
     use algebra::UniformRand;
-    use proof_systems::groth16::{
-        prepare_verifying_key, verify_proof,
-    };
     use rand::RngCore;
 
     fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
         let mut fs = File::create(file_path)?;
         to_write.write(&mut fs)?;
         Ok(())
-    }
-
-    //Return (wcert_sysdata_hash, pk_threshold_hash)
-    pub fn get_public_inputs_for_naive_threshold_sig_proof(
-        pks:                      &[SchnorrPk],
-        threshold:                u64,
-        end_epoch_mc_b_hash:      &[u8; 32],
-        prev_end_epoch_mc_b_hash: &[u8; 32],
-        bt_list:                  &[BackwardTransfer],
-        valid_sigs:               u64,
-    ) -> Result<(FieldElement, FieldElement), Error> {
-
-        let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
-        let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
-        let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
-        let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
-        let pks_threshold_hash = compute_pks_threshold_hash(pks, threshold)?;
-
-        Ok((wcert_sysdata_hash, pks_threshold_hash))
     }
 
     #[test]

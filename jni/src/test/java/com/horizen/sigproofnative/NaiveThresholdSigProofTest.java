@@ -14,6 +14,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 public class NaiveThresholdSigProofTest {
 
@@ -74,5 +75,18 @@ public class NaiveThresholdSigProofTest {
                 signatureList, publicKeyList, threshold, provingKeyPath);
 
         assertNotNull("Proof must be not null.", proof);
+
+        String verificationKeyPath = new File(classLoader.getResource("sample_vk").getFile()).getAbsolutePath();
+        long quality = threshold;
+        boolean isProofVerified = NaiveThresholdSigProof.verifyProof(btList, publicKeyList, endEpochBlockHash,
+                prevEndEpochBlockHash, threshold, quality, proof, verificationKeyPath);
+
+        assertTrue("Proof must be verified", isProofVerified);
+
+        quality = threshold - 1;
+        isProofVerified = NaiveThresholdSigProof.verifyProof(btList, publicKeyList, endEpochBlockHash,
+                prevEndEpochBlockHash, threshold, quality, proof, verificationKeyPath);
+
+        assertFalse("Proof must not be verified", isProofVerified);
     }
 }

@@ -29,4 +29,19 @@ public class NaiveThresholdSigProof {
                 schnorrSignatureList.toArray(new SchnorrSignature[0]), schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
                 threshold, provingKeyPath);
     }
+
+    private static native boolean nativeVerifyProof(BackwardTransfer[] btList,
+                                      SchnorrPublicKey[] schnorrPublicKeyList,
+                                      byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
+                                      long threshold, long quality, byte[] proof, String verificationKeyPath);
+
+    public static boolean verifyProof(List<BackwardTransfer> btList,
+                                      List<SchnorrPublicKey> schnorrPublicKeyList,
+                                      byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
+                                      long threshold, long quality, byte[] proof, String verificationKeyPath){
+        return nativeVerifyProof(
+                btList.toArray(new BackwardTransfer[0]), schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
+                endEpochBlockHash, prevEndEpochBlockHash,
+                threshold, quality, proof, verificationKeyPath);
+    }
 }
