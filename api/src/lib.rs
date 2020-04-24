@@ -508,14 +508,9 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVer
 ) -> jboolean {
 
     //Read pk
-    let pk_object = _env.get_field(_public_key,
-                                   "publicKey",
-                                   "Lcom/horizen/schnorrnative/SchnorrPublicKey;"
-    ).expect("Should be able to get field publicKey").l().unwrap();
-
     let public_key = {
 
-        let p = _env.get_field(pk_object, "publicKeyPointer", "J")
+        let p = _env.get_field(_public_key, "publicKeyPointer", "J")
             .expect("Should be able to get field publicKeyPointer");
 
         read_raw_pointer(p.j().unwrap() as *const SchnorrPk)
@@ -753,7 +748,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
         .expect("Should be able to create new long for VRF proof");
 
     //Create FieldElement instance
-    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(vrf_out)) as i64);
+    let field_ptr: jlong = jlong::from(vrf_out as i64);
 
     let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
         .expect("Should be able to find FieldElement class");
@@ -834,15 +829,10 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeProofToHash
     _message: JObject,
 ) -> jobject
 {
-    //Read pk
-    let pk_object = _env.get_field(_vrf_public_key,
-                                   "publicKey",
-                                   "Lcom/horizen/vrfnative/VRFPublicKey;"
-    ).expect("Should be able to get field publicKey").l().unwrap();
 
     let public_key = {
 
-        let p = _env.get_field(pk_object, "publicKeyPointer", "J")
+        let p = _env.get_field(_vrf_public_key, "publicKeyPointer", "J")
             .expect("Should be able to get field publicKeyPointer");
 
         read_raw_pointer(p.j().unwrap() as *const VRFPk)
@@ -1125,7 +1115,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 }
 
 //Test functions
-
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateFromLong(
     _env: JNIEnv,
@@ -1150,4 +1139,39 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCre
         JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
 
     *result
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeEquals(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _field_element_1: JObject,
+    _field_element_2: JObject,
+) -> jboolean
+{
+    //Read field_1
+    let field_1 = {
+
+        let f =_env.get_field(_field_element_1, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer_1");
+
+        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+    };
+
+    //Read field_2
+    let field_2 = {
+
+        let f =_env.get_field(_field_element_2, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer_2");
+
+        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+    };
+
+    match field_1 == field_2 {
+        true => JNI_TRUE,
+        false => JNI_FALSE,
+    }
 }

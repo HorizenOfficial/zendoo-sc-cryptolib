@@ -5,8 +5,10 @@ import com.horizen.schnorrnative.SchnorrKeyPair;
 import com.horizen.schnorrnative.SchnorrSignature;
 import org.junit.Test;
 
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 public class VRFKeyPairTest {
 
@@ -22,7 +24,7 @@ public class VRFKeyPairTest {
     }
 
     @Test
-    public void testSign() {
+    public void testProveVerify() {
         VRFKeyPair keyPair = VRFKeyPair.generate();
 
         assertNotNull("Key pair generation was unsuccessful.", keyPair);
@@ -36,9 +38,13 @@ public class VRFKeyPairTest {
 
         FieldElement vrfOutput = keyPair.getPublicKey().proofToHash(proofVRFOutputPair.getVRFProof(), fieldElement);
 
-        assertNotNull("VRF Proof verification and VRF Output computation has failed.", proofVRFOutputPair);
+        assertNotNull("VRF Proof verification and VRF Output computation has failed.", vrfOutput);
 
         assertEquals("prove() and proof_to_hash() vrf outputs must be equal", proofVRFOutputPair.getVRFOutput(), vrfOutput);
+
+        FieldElement wrongFieldElement = FieldElement.createFromLong(123456780L);
+
+        assertNull("VRF Proof verification must fail", keyPair.getPublicKey().proofToHash(proofVRFOutputPair.getVRFProof(), wrongFieldElement));
 
     }
 }
