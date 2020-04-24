@@ -10,7 +10,7 @@ use algebra::{
     },
     FromBytes, ToBytes,
     BigInteger768,
-    ProjectiveCurve, AffineCurve
+    ProjectiveCurve, AffineCurve, ToConstraintField,
 };
 use primitives::{
     crh::{

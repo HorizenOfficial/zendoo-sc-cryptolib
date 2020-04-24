@@ -7,6 +7,7 @@ import java.util.Arrays;
 
 import static org.junit.Assert.*;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 public class SchnorrKeyPairTest {
 
@@ -22,7 +23,7 @@ public class SchnorrKeyPairTest {
     }
 
     @Test
-    public void testSign() {
+    public void testSignVerify() {
 
         SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
 
@@ -34,6 +35,13 @@ public class SchnorrKeyPairTest {
         SchnorrSignature signature = keyPair.signMessage(fieldElement);
 
         assertNotNull("Attempt to sign message failed.", signature);
+
+        assertTrue("Signature must be verified", keyPair.getPublicKey().verifySignature(signature, fieldElement));
+
+        FieldElement wrongFieldElement = FieldElement.createFromLong(123456780L);
+
+        assertFalse("Signature must not be verified", keyPair.getPublicKey().verifySignature(signature, wrongFieldElement));
+
     }
 
 }
