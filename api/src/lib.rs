@@ -1175,3 +1175,126 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeEqu
         false => JNI_FALSE,
     }
 }
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeVerifyProof(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _bt_list: jobjectArray,
+    _schnorr_pks_list:  jobjectArray,
+    _end_epoch_block_hash: jbyteArray,
+    _prev_end_epoch_block_hash: jbyteArray,
+    _threshold: jlong,
+    _quality: jlong,
+    _sc_proof_bytes: jbyteArray,
+    _verification_key_path: JString
+) -> jboolean {
+
+    //Extract backward transfers
+    let mut bt_list = vec![];
+
+    let bt_list_size = _env.get_array_length(_bt_list)
+        .expect("Should be able to get bt_list size");
+
+    for i in 0..bt_list_size {
+        let o = _env.get_object_array_element(_bt_list, i)
+            .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+
+
+        let pk: [u8; 32] = {
+            let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+
+            let mut pk_bytes = [0u8; 32];
+
+            _env.convert_byte_array(p)
+                .expect("Should be able to convert to Rust byte array")
+                .write(&mut pk_bytes[..])
+                .expect("Should be able to write into byte array of fixed size");
+
+            pk_bytes
+        };
+
+        let a = _env.call_method(o, "getAmount", "()J", &[])
+            .expect("Should be able to call getAmount method").j().unwrap() as u64;
+
+        bt_list.push(BackwardTransfer::new(pk, a));
+    }
+
+    //Extract Schnorr pks
+    let mut pks = vec![];
+
+    let pks_list_size = _env.get_array_length(_schnorr_pks_list)
+        .expect("Should be able to get schnorr_pks_list size");
+
+    for i in 0..pks_list_size {
+
+        let pk_object = _env.get_object_array_element(_schnorr_pks_list, i)
+            .expect(format!("Should be able to get elem {} of schnorr_pks_list", i).as_str());
+
+        let pk = _env.get_field(pk_object, "publicKeyPointer", "J")
+            .expect("Should be able to get field publicKeyPointer");
+
+        pks.push(*read_raw_pointer(pk.j().unwrap() as *const SchnorrPk));
+    }
+
+    //Extract block hashes
+    let end_epoch_block_hash = {
+        let t = _env.convert_byte_array(_end_epoch_block_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut end_epoch_block_hash_bytes = [0u8; 32];
+
+        t.write(&mut end_epoch_block_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        end_epoch_block_hash_bytes
+    };
+
+    let prev_end_epoch_block_hash = {
+        let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
+
+        t.write(&mut prev_end_epoch_block_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        prev_end_epoch_block_hash_bytes
+    };
+
+    //Extract threshold and quality
+    let threshold = _threshold as u64;
+    let quality = _quality as u64;
+
+    //Extract proof
+    let proof_bytes = _env.convert_byte_array(_sc_proof_bytes)
+        .expect("Should be able to convert to Rust byte array");
+    let proof = match deserialize_from_buffer(&proof_bytes[..]){
+        Ok(proof) => proof,
+        Err(_) => return JNI_FALSE // I/O ERROR
+    };
+
+    //Extract vk path
+    let vk_path = _env.get_string(_verification_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    //Verify proof
+    match verify_naive_threshold_sig_proof(
+        pks.as_slice(),
+        threshold,
+        &end_epoch_block_hash,
+        &prev_end_epoch_block_hash,
+        bt_list.as_slice(),
+        quality,
+        proof,
+        vk_path.to_str().unwrap()
+    ) {
+        Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
+        Err(_) => JNI_FALSE // CRYPTO_ERROR
+    }
+}
