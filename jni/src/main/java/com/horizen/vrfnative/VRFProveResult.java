@@ -4,7 +4,7 @@ import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
 
-public class VRFOutput {
+public class VRFProveResult {
     private VRFProof vrfProof;
     private FieldElement vrfOutput;
 
@@ -12,7 +12,7 @@ public class VRFOutput {
         Library.load();
     }
 
-    public VRFOutput(VRFProof vrfProof, FieldElement vrfOutput) {
+    public VRFProveResult(VRFProof vrfProof, FieldElement vrfOutput) {
         this.vrfProof = vrfProof;
         this.vrfOutput = vrfOutput;
     }
