@@ -311,7 +311,7 @@ pub fn verify_naive_threshold_sig_proof(
         &prev_end_epoch_mc_b_hash,
         bt_list,
         valid_sigs
-    ).unwrap();
+    )?;
     let vk = read_from_file(vk_path)?;
     let pvk = prepare_verifying_key(&vk); //Get verifying key
     let is_verified = verify_proof(&pvk, &proof, &[pks_threshold_hash, wcert_sysdata_hash])?;

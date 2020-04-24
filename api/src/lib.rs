@@ -756,15 +756,15 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
     let field_object = _env.new_object(field_class, "(J)V", &[
         JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
 
-    //Create and return VRFOutput instance
-    let class = _env.find_class("com/horizen/vrfnative/VRFOutput")
-        .expect("Should be able to find VRFOutput class");
+    //Create and return VRFProveResult instance
+    let class = _env.find_class("com/horizen/vrfnative/VRFProveResult")
+        .expect("Should be able to find VRFProveResult class");
 
     let result = _env.new_object(
         class,
         "(Lcom/horizen/vrfnative/VRFProof;Lcom/horizen/librustsidechains/FieldElement;)V",
         &[JValue::Object(proof_object), JValue::Object(field_object)]
-    ).expect("Should be able to create new VRFOutput:(VRFProof, FieldElement) object");
+    ).expect("Should be able to create new VRFProveResult:(VRFProof, FieldElement) object");
 
     *result
 }

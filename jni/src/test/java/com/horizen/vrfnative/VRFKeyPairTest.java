@@ -32,7 +32,7 @@ public class VRFKeyPairTest {
 
         FieldElement fieldElement = FieldElement.createFromLong(123456789L);
 
-        VRFOutput proofVRFOutputPair = keyPair.prove(fieldElement);
+        VRFProveResult proofVRFOutputPair = keyPair.prove(fieldElement);
 
         assertNotNull("Attempt to create vrf proof and output failed.", proofVRFOutputPair);
 
