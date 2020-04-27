@@ -43,11 +43,11 @@ public class FieldElement {
         return new FieldElement(nativeDeserializeFieldElement(fieldElementBytes));
     }
 
-    private static native void nativefreeFieldElement(long fieldElementPointer);
+    private static native void nativeFreeFieldElement(long fieldElementPointer);
 
     public void freeFieldElement() {
         if (fieldElementPointer != 0) {
-            nativefreeFieldElement(this.fieldElementPointer);
+            nativeFreeFieldElement(this.fieldElementPointer);
             fieldElementPointer = 0;
         }
     }
