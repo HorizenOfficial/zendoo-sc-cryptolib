@@ -10,7 +10,7 @@ use algebra::{
     },
     FromBytes, ToBytes,
     BigInteger768,
-    ProjectiveCurve, AffineCurve, ToConstraintField,
+    ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand,
 };
 use primitives::{
     crh::{
@@ -77,6 +77,11 @@ pub fn read_from_file<T: FromBytes>(file_path: &str) -> IoResult<T>{
     let mut fs = File::open(file_path)?;
     let t = T::read(&mut fs)?;
     Ok(t)
+}
+
+pub fn get_random_field_element() -> FieldElement {
+    let mut rng = OsRng;
+    FieldElement::rand(&mut rng)
 }
 
 //***************************Schnorr types and functions********************************************
@@ -416,7 +421,6 @@ pub fn verify_ginger_merkle_path(path: GingerMerkleTreePath, merkle_root: &Field
 #[cfg(test)]
 mod test {
     use super::*;
-    use algebra::UniformRand;
     use rand::RngCore;
 
     fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
