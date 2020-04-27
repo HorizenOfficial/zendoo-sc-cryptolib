@@ -1115,6 +1115,62 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 }
 
 //Test functions
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeSerializeFieldElement(
+    _env: JNIEnv,
+    _field_element: JObject,
+) -> jbyteArray
+{
+    let fe_pointer = _env.get_field(_field_element, "fieldElementPointer", "J")
+        .expect("Cannot get field element pointer.");
+
+    let fe = read_raw_pointer({fe_pointer.j().unwrap() as *const FieldElement});
+
+    let mut fe_bytes = [0u8; FIELD_SIZE];
+    serialize_from_raw_pointer(fe, &mut fe_bytes[..]);
+
+    _env.byte_array_from_slice(fe_bytes.as_ref())
+        .expect("Cannot write field element.")
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeDeserializeFieldElement(
+    _env: JNIEnv,
+    _class: JClass,
+    _field_element_bytes: jbyteArray,
+) -> *mut FieldElement
+{
+    let fe_bytes = _env.convert_byte_array(_field_element_bytes)
+        .expect("Should be able to convert to Rust byte array");
+    deserialize_to_raw_pointer(fe_bytes.as_slice())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateRandom(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+) -> jobject
+{
+    //Create random field element
+    let fe = get_random_field_element();
+
+    //Return field element
+    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(fe)) as i64);
+
+    let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Should be able to find FieldElement class");
+
+    let result = _env.new_object(field_class, "(J)V", &[
+        JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+    *result
+}
+
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateFromLong(
     _env: JNIEnv,
@@ -1139,6 +1195,17 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCre
         JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
 
     *result
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeFreeFieldElement(
+    _env: JNIEnv,
+    _class: JClass,
+    _fe: *mut FieldElement,
+)
+{
+    if _fe.is_null()  { return }
+    drop(unsafe { Box::from_raw(_fe) });
 }
 
 #[no_mangle]
