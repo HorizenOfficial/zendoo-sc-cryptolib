@@ -17,7 +17,7 @@ public class SchnorrSecretKeyTest {
         byte[] publicKeyBytes = keyPair.getPublicKey().serializePublicKey();
         byte[] secretKeyBytes = keyPair.getSecretKey().serializeSecretKey();
 
-        assertEquals("Public key size must me - " + SchnorrPublicKey.PUBLIC_KEY_LENGTH,
+        assertEquals("Public key size must be - " + SchnorrPublicKey.PUBLIC_KEY_LENGTH,
                 SchnorrPublicKey.PUBLIC_KEY_LENGTH,
                 publicKeyBytes.length);
         assertEquals("Secret key size must be - " + SchnorrSecretKey.SECRET_KEY_LENGTH,
