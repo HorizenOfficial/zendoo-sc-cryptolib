@@ -236,7 +236,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeFreePublicK
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetSecretKeySize(
     _env: JNIEnv,
-    _schnorr_secret_key_class: JClass,
+    _vrf_secret_key_class: JClass,
 ) -> jint { VRF_SK_SIZE as jint }
 
 #[no_mangle]
@@ -1114,68 +1114,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         .expect("Should be able to convert Rust slice into jbytearray")
 }
 
-//Test functions
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateFromLong(
-    _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
-    _class: JClass,
-    _long: jlong
-) -> jobject
-{
-    //Create field element from _long
-    let fe = read_field_element_from_u64(_long as u64);
-
-    //Return field element
-    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(fe)) as i64);
-
-    let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
-        .expect("Should be able to find FieldElement class");
-
-    let result = _env.new_object(field_class, "(J)V", &[
-        JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
-
-    *result
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeEquals(
-    _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
-    _field_element_1: JObject,
-    _field_element_2: JObject,
-) -> jboolean
-{
-    //Read field_1
-    let field_1 = {
-
-        let f =_env.get_field(_field_element_1, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer_1");
-
-        read_raw_pointer(f.j().unwrap() as *const FieldElement)
-    };
-
-    //Read field_2
-    let field_2 = {
-
-        let f =_env.get_field(_field_element_2, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer_2");
-
-        read_raw_pointer(f.j().unwrap() as *const FieldElement)
-    };
-
-    match field_1 == field_2 {
-        true => JNI_TRUE,
-        false => JNI_FALSE,
-    }
-}
-
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeVerifyProof(
     _env: JNIEnv,
@@ -1297,4 +1235,145 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
         Err(_) => JNI_FALSE // CRYPTO_ERROR
     }
+}
+
+//Field element related functions
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeGetFieldElementSize(
+    _env: JNIEnv,
+    _schnorr_secret_key_class: JClass,
+) -> jint { FIELD_SIZE as jint }
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateFromLong(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _long: jlong
+) -> jobject
+{
+    //Create field element from _long
+    let fe = read_field_element_from_u64(_long as u64);
+
+    //Return field element
+    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(fe)) as i64);
+
+    let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Should be able to find FieldElement class");
+
+    let result = _env.new_object(field_class, "(J)V", &[
+        JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+    *result
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeEquals(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _field_element_1: JObject,
+    _field_element_2: JObject,
+) -> jboolean
+{
+    //Read field_1
+    let field_1 = {
+
+        let f =_env.get_field(_field_element_1, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer_1");
+
+        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+    };
+
+    //Read field_2
+    let field_2 = {
+
+        let f =_env.get_field(_field_element_2, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer_2");
+
+        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+    };
+
+    match field_1 == field_2 {
+        true => JNI_TRUE,
+        false => JNI_FALSE,
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeSerializeFieldElement(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _field_element: JObject
+) -> jbyteArray
+{
+    let field_element = {
+
+        let f =_env.get_field(_field_element, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+    };
+
+    let mut fe = [0u8; FIELD_SIZE];
+    serialize_from_raw_pointer(field_element, &mut fe[..]);
+
+    _env.byte_array_from_slice(fe.as_ref())
+        .expect("Cannot write field element.")
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeDeserializeFieldElement(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _field_element_bytes: jbyteArray
+) -> jobject
+{
+
+    let fe_bytes = _env.convert_byte_array(_field_element_bytes)
+        .expect("Cannot read field element bytes.");
+
+    let field_element_pointer: *mut FieldElement = deserialize_to_raw_pointer(fe_bytes.as_slice());
+
+    let field_element: jlong = jlong::from(field_element_pointer as i64);
+
+    let field_element_class = _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Cannot find FieldElement class.");
+
+    let field_element_object = _env.new_object(field_element_class, "(J)V",
+                                            &[JValue::Long(field_element)])
+        .expect("Cannot create field element object.");
+
+    *field_element_object
+
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeFreeFieldElement(
+    _env: JNIEnv,
+    _field_element: JObject,
+)
+{
+    let field_element = {
+
+        let f =_env.get_field(_field_element, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        f.j().unwrap() as *mut FieldElement
+    };
+
+    if field_element.is_null()  { return }
+    drop(unsafe { Box::from_raw(field_element) });
 }
