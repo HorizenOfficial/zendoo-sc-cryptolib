@@ -38,7 +38,7 @@ public class VRFKeyPairTest {
             -106, -102, 105, 53, 77, -20, 114, 119, 118, 55, -96, -90, 60, 41, -72, 87, -48, -14, -98, 103, -71, 110,
             47, -26, 0, 0
         };
-        VRFSecretKey sk = VRFSecretKey.deserializeSecretKey(skBytes);
+        VRFSecretKey sk = VRFSecretKey.deserialize(skBytes);
 
         assertNotNull("sk deserialization must not fail", sk);
 

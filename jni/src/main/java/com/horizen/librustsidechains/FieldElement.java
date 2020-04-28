@@ -37,14 +37,14 @@ public class FieldElement {
         return nativeSerializeFieldElement();
     }
 
-    private static native long nativeDeserializeFieldElement(byte[] fieldElementBytes);
+    private static native FieldElement nativeDeserializeFieldElement(byte[] fieldElementBytes);
 
     public static FieldElement deserialize(byte[] fieldElementBytes) {
         if (fieldElementBytes.length != FIELD_ELEMENT_LENGTH)
             throw new IllegalArgumentException(String.format("Incorrect field element length, %d expected, %d found",
                     FIELD_ELEMENT_LENGTH, fieldElementBytes.length));
 
-        return new FieldElement(nativeDeserializeFieldElement(fieldElementBytes));
+        return nativeDeserializeFieldElement(fieldElementBytes);
     }
 
     private static native void nativeFreeFieldElement(long fieldElementPointer);

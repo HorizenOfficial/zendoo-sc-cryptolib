@@ -34,7 +34,7 @@ public class SchnorrKeyPairTest {
             -26, -31, 47, -103, 111, -86, -68, 39, 96, -124, -109, -64, -80, -116, -75, 90, 96, -118, 33, -39, -94, -28,
             121, 0, 1, 0
         };
-        SchnorrSecretKey sk = SchnorrSecretKey.deserializeSecretKey(skBytes);
+        SchnorrSecretKey sk = SchnorrSecretKey.deserialize(skBytes);
 
         assertNotNull("sk deserialization must not fail", sk);
 
