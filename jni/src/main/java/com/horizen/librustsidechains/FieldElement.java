@@ -24,6 +24,10 @@ public class FieldElement {
 
     public static FieldElement createRandom() { return nativeCreateRandom(); }
 
+    private static native int nativeGetFieldElementSize();
+
+    public static int getFieldElementSize() {return  nativeGetFieldElementSize();}
+
     private native byte[] nativeSerializeFieldElement();
 
     public byte[] serializeFieldElement() {
