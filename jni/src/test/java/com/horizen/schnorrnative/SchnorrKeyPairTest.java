@@ -81,31 +81,35 @@ public class SchnorrKeyPairTest {
     @Test
     public void testRandomSignVerify() {
 
-        SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
+        int samples = 100;
 
-        assertNotNull("Key pair generation was unsuccessful.", keyPair);
-        assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
+        for (int i = 0; i < samples; i++) {
+            SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
 
-        FieldElement fieldElement = FieldElement.createRandom();
+            assertNotNull("Key pair generation was unsuccessful.", keyPair);
+            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
 
-        SchnorrSignature signature = keyPair.signMessage(fieldElement);
+            FieldElement fieldElement = FieldElement.createRandom();
 
-        assertNotNull("Attempt to sign message failed.", signature);
+            SchnorrSignature signature = keyPair.signMessage(fieldElement);
 
-        assertTrue("Signature must be verified", keyPair.getPublicKey().verifySignature(signature, fieldElement));
+            assertNotNull("Attempt to sign message failed.", signature);
 
-        FieldElement wrongFieldElement = FieldElement.createRandom();
+            assertTrue("Signature must be verified", keyPair.getPublicKey().verifySignature(signature, fieldElement));
 
-        assertFalse("Signature must not be verified", keyPair.getPublicKey().verifySignature(signature, wrongFieldElement));
+            FieldElement wrongFieldElement = FieldElement.createRandom();
 
-        //Free memory
+            assertFalse("Signature must not be verified", keyPair.getPublicKey().verifySignature(signature, wrongFieldElement));
 
-        keyPair.getPublicKey().freePublicKey();
-        keyPair.getSecretKey().freeSecretKey();
+            //Free memory
 
-        fieldElement.freeFieldElement();
-        wrongFieldElement.freeFieldElement();
+            keyPair.getPublicKey().freePublicKey();
+            keyPair.getSecretKey().freeSecretKey();
 
-        signature.freeSignature();
+            fieldElement.freeFieldElement();
+            wrongFieldElement.freeFieldElement();
+
+            signature.freeSignature();
+        }
     }
 }
