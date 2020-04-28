@@ -113,37 +113,41 @@ public class VRFKeyPairTest {
 
     @Test
     public void testRandomProveVerify() {
-        VRFKeyPair keyPair = VRFKeyPair.generate();
+        int samples = 100;
 
-        assertNotNull("Key pair generation was unsuccessful.", keyPair);
-        assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
+        for(int i = 0; i < samples; i++) {
+            VRFKeyPair keyPair = VRFKeyPair.generate();
 
-        FieldElement fieldElement = FieldElement.createRandom();
+            assertNotNull("Key pair generation was unsuccessful.", keyPair);
+            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
 
-        VRFProveResult proofVRFOutputPair = keyPair.prove(fieldElement);
+            FieldElement fieldElement = FieldElement.createRandom();
 
-        assertNotNull("Attempt to create vrf proof and output failed.", proofVRFOutputPair);
+            VRFProveResult proofVRFOutputPair = keyPair.prove(fieldElement);
 
-        FieldElement vrfOutput = keyPair.getPublicKey().proofToHash(proofVRFOutputPair.getVRFProof(), fieldElement);
+            assertNotNull("Attempt to create vrf proof and output failed.", proofVRFOutputPair);
 
-        assertNotNull("VRF Proof verification and VRF Output computation must not fail.", vrfOutput);
+            FieldElement vrfOutput = keyPair.getPublicKey().proofToHash(proofVRFOutputPair.getVRFProof(), fieldElement);
 
-        assertEquals("prove() and proof_to_hash() vrf outputs must be equal", proofVRFOutputPair.getVRFOutput(), vrfOutput);
+            assertNotNull("VRF Proof verification and VRF Output computation must not fail.", vrfOutput);
 
-        FieldElement wrongFieldElement = FieldElement.createRandom();
+            assertEquals("prove() and proof_to_hash() vrf outputs must be equal", proofVRFOutputPair.getVRFOutput(), vrfOutput);
 
-        assertNull("VRF Proof verification must fail", keyPair.getPublicKey().proofToHash(proofVRFOutputPair.getVRFProof(), wrongFieldElement));
+            FieldElement wrongFieldElement = FieldElement.createRandom();
 
-        //Free memory
-        keyPair.getPublicKey().freePublicKey();
-        keyPair.getSecretKey().freeSecretKey();
+            assertNull("VRF Proof verification must fail", keyPair.getPublicKey().proofToHash(proofVRFOutputPair.getVRFProof(), wrongFieldElement));
 
-        fieldElement.freeFieldElement();
-        wrongFieldElement.freeFieldElement();
+            //Free memory
+            keyPair.getPublicKey().freePublicKey();
+            keyPair.getSecretKey().freeSecretKey();
 
-        vrfOutput.freeFieldElement();
-        proofVRFOutputPair.getVRFOutput().freeFieldElement();
+            fieldElement.freeFieldElement();
+            wrongFieldElement.freeFieldElement();
 
-        proofVRFOutputPair.getVRFProof().freeProof();
+            vrfOutput.freeFieldElement();
+            proofVRFOutputPair.getVRFOutput().freeFieldElement();
+
+            proofVRFOutputPair.getVRFProof().freeProof();
+        }
     }
 }
