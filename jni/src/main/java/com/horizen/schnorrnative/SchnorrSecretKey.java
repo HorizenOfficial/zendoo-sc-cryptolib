@@ -24,7 +24,7 @@ public class SchnorrSecretKey
 
     private static native SchnorrSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
 
-    public static SchnorrSecretKey deserializeSecretKey(byte[] secretKeyBytes) {
+    public static SchnorrSecretKey deserialize(byte[] secretKeyBytes) {
         if (secretKeyBytes.length != SECRET_KEY_LENGTH)
             throw new IllegalArgumentException(String.format("Incorrect secret key length, %d expected, %d found", SECRET_KEY_LENGTH, secretKeyBytes.length));
 

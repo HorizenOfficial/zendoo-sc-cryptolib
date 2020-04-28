@@ -31,8 +31,8 @@ public class SchnorrSecretKeyTest {
 
             assertTrue("Recreated key must be valid.", recreatedPublicKey.verifyKey());
 
-            SchnorrPublicKey deserializedPublicKey = SchnorrPublicKey.deserializePublicKey(publicKeyBytes);
-            SchnorrSecretKey deserializedSecretKey = SchnorrSecretKey.deserializeSecretKey(secretKeyBytes);
+            SchnorrPublicKey deserializedPublicKey = SchnorrPublicKey.deserialize(publicKeyBytes);
+            SchnorrSecretKey deserializedSecretKey = SchnorrSecretKey.deserialize(secretKeyBytes);
 
             assertTrue("Deserialized key must be valid.", deserializedPublicKey.verifyKey());
 

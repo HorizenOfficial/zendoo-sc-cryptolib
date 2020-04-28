@@ -22,7 +22,7 @@ public class VRFSecretKey
 
     private static native VRFSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
 
-    public static VRFSecretKey deserializeSecretKey(byte[] secretKeyBytes) {
+    public static VRFSecretKey deserialize(byte[] secretKeyBytes) {
         if (secretKeyBytes.length != SECRET_KEY_LENGTH)
             throw new IllegalArgumentException(String.format("Incorrect secret key length, %d expected, %d found", SECRET_KEY_LENGTH, secretKeyBytes.length));
 

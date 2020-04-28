@@ -23,7 +23,7 @@ public class SchnorrPublicKey
 
   private static native SchnorrPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes);
 
-  public static SchnorrPublicKey deserializePublicKey(byte[] publicKeyBytes) {
+  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes) {
     if (publicKeyBytes.length != PUBLIC_KEY_LENGTH)
       throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PUBLIC_KEY_LENGTH, publicKeyBytes.length));
 

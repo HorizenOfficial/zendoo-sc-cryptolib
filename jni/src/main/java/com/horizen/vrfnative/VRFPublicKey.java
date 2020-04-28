@@ -24,7 +24,7 @@ public class VRFPublicKey
 
   private static native VRFPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes);
 
-  public static VRFPublicKey deserializePublicKey(byte[] publicKeyBytes) {
+  public static VRFPublicKey deserialize(byte[] publicKeyBytes) {
     if (publicKeyBytes.length != PUBLIC_KEY_LENGTH)
       throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PUBLIC_KEY_LENGTH, publicKeyBytes.length));
 

@@ -69,11 +69,23 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeDes
     _env: JNIEnv,
     _class: JClass,
     _field_element_bytes: jbyteArray,
-) -> *mut FieldElement
+) -> jobject
 {
     let fe_bytes = _env.convert_byte_array(_field_element_bytes)
         .expect("Should be able to convert to Rust byte array");
-    deserialize_to_raw_pointer(fe_bytes.as_slice())
+
+    let fe_ptr: *const FieldElement = deserialize_to_raw_pointer(fe_bytes.as_slice());
+
+    let fe: jlong = jlong::from(fe_ptr as i64);
+
+    let fe_class = _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Cannot find FieldElement class.");
+
+    let fe_object = _env.new_object(fe_class, "(J)V",
+                                            &[JValue::Long(fe)])
+        .expect("Cannot create FieldElement object.");
+
+    *fe_object
 }
 
 #[no_mangle]
@@ -456,11 +468,23 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDes
     _env: JNIEnv,
     _class: JClass,
     _sig_bytes: jbyteArray,
-) -> *mut SchnorrSig
+) -> jobject
 {
     let sig_bytes = _env.convert_byte_array(_sig_bytes)
         .expect("Should be able to convert to Rust byte array");
-    deserialize_to_raw_pointer(sig_bytes.as_slice())
+
+    let sig_ptr: *const SchnorrSig = deserialize_to_raw_pointer(sig_bytes.as_slice());
+
+    let sig: jlong = jlong::from(sig_ptr as i64);
+
+    let sig_class = _env.find_class("com/horizen/schnorrnative/SchnorrSignature")
+        .expect("Cannot find SchnorrSignature class.");
+
+    let sig_object = _env.new_object(sig_class, "(J)V",
+                                            &[JValue::Long(sig)])
+        .expect("Cannot create signature object.");
+
+    *sig_object
 }
 
 #[no_mangle]
@@ -754,11 +778,23 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProo
     _env: JNIEnv,
     _class: JClass,
     _proof_bytes: jbyteArray,
-) -> *mut VRFProof
+) -> jobject
 {
     let proof_bytes = _env.convert_byte_array(_proof_bytes)
         .expect("Should be able to convert to Rust byte array");
-    deserialize_to_raw_pointer(proof_bytes.as_slice())
+
+    let proof_ptr: *const VRFProof = deserialize_to_raw_pointer(proof_bytes.as_slice());
+
+    let proof: jlong = jlong::from(proof_ptr as i64);
+
+    let proof_class = _env.find_class("com/horizen/vrfnative/VRFProof")
+        .expect("Cannot find VRFProof class.");
+
+    let proof_object = _env.new_object(proof_class, "(J)V",
+                                     &[JValue::Long(proof)])
+        .expect("Cannot create vrf proof object.");
+
+    *proof_object
 }
 
 #[no_mangle]

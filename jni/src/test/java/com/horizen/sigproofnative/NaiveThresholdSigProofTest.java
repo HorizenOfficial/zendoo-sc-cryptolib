@@ -105,7 +105,7 @@ public class NaiveThresholdSigProofTest {
         // Deserialize secret keys and get the corresponding public keys
         for (int i = 0; i<keyCount; i++) {
 
-            SchnorrSecretKey sk = SchnorrSecretKey.deserializeSecretKey(secretKeyList[i]);
+            SchnorrSecretKey sk = SchnorrSecretKey.deserialize(secretKeyList[i]);
             assertNotNull("sk" + i + "deserialization must not fail", sk);
 
             SchnorrPublicKey pk = new SchnorrKeyPair(sk).getPublicKey();
