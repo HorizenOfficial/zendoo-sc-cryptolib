@@ -28,8 +28,10 @@ public class SchnorrSecretKeyTest {
                     secretKeyBytes.length);
 
             SchnorrPublicKey recreatedPublicKey = keyPair.getSecretKey().getPublicKey();
+            byte[] recreatedPublicKeyBytes = recreatedPublicKey.serializePublicKey();
 
             assertTrue("Recreated key must be valid.", recreatedPublicKey.verifyKey());
+            assertArrayEquals("Recreated public key must be the same.", publicKeyBytes, recreatedPublicKeyBytes);
 
             SchnorrPublicKey deserializedPublicKey = SchnorrPublicKey.deserialize(publicKeyBytes);
             SchnorrSecretKey deserializedSecretKey = SchnorrSecretKey.deserialize(secretKeyBytes);
@@ -41,6 +43,8 @@ public class SchnorrSecretKeyTest {
 
             deserializedPublicKey.freePublicKey();
             deserializedSecretKey.freeSecretKey();
+
+            recreatedPublicKey.freePublicKey();
         }
     }
 }
