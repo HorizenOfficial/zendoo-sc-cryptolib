@@ -126,12 +126,12 @@ pub type SCProof = Proof<MNT4>;
 
 #[derive(Clone, Default)]
 pub struct BackwardTransfer {
-    pub pk_dest:    [u8; 32],
+    pub pk_dest:    [u8; 20],
     pub amount:     u64,
 }
 
 impl BackwardTransfer {
-    pub fn new(pk_dest: [u8; 32], amount: u64) -> Self
+    pub fn new(pk_dest: [u8; 20], amount: u64) -> Self
     {
         Self{ pk_dest, amount }
     }
