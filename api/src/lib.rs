@@ -1067,11 +1067,11 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
             .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
 
 
-        let pk: [u8; 32] = {
+        let pk: [u8; 20] = {
             let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
                 .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-            let mut pk_bytes = [0u8; 32];
+            let mut pk_bytes = [0u8; 20];
 
             _env.convert_byte_array(p)
                 .expect("Should be able to convert to Rust byte array")
@@ -1166,11 +1166,11 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
             .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
 
 
-        let pk: [u8; 32] = {
+        let pk: [u8; 20] = {
             let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
                 .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-            let mut pk_bytes = [0u8; 32];
+            let mut pk_bytes = [0u8; 20];
 
             _env.convert_byte_array(p)
                 .expect("Should be able to convert to Rust byte array")
@@ -1314,11 +1314,11 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
             .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
 
 
-        let pk: [u8; 32] = {
+        let pk: [u8; 20] = {
             let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
                 .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-            let mut pk_bytes = [0u8; 32];
+            let mut pk_bytes = [0u8; 20];
 
             _env.convert_byte_array(p)
                 .expect("Should be able to convert to Rust byte array")
