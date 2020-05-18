@@ -220,7 +220,7 @@ pub fn create_naive_threshold_sig_proof(
     bt_list:                  &[BackwardTransfer],
     threshold:                u64,
     proving_key_path:         &str
-) -> Result<SCProof, Error> {
+) -> Result<(SCProof, u64), Error> {
 
     //Get max pks
     let max_pks = pks.len();
@@ -275,7 +275,7 @@ pub fn create_naive_threshold_sig_proof(
     //Create and return proof
     let mut rng = OsRng;
     let proof = create_random_proof(c, &params, &mut rng)?;
-    Ok(proof)
+    Ok((proof, valid_signatures))
 }
 
 //Return (wcert_sysdata_hash, pk_threshold_hash)
