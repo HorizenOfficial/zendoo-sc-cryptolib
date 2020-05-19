@@ -1141,6 +1141,11 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateProof(
     _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
     _bt_list: jobjectArray,
     _end_epoch_block_hash: jbyteArray,
     _prev_end_epoch_block_hash: jbyteArray,
@@ -1279,13 +1284,13 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         .expect("Should be able to convert Rust slice into jbytearray");
 
     //Create new CreateProofResult object
-    let class = _env.find_class("com/horizen/sigproofnative/CreateProofResult")
+    let proof_result_class = _env.find_class("com/horizen/sigproofnative/CreateProofResult")
         .expect("Should be able to find CreateProofResult class");
 
     let result = _env.new_object(
-        class,
-        "(J[B)V",
-        &[JValue::Long(quality as i64), JValue::Object(JObject::from(proof_serialized))]
+        proof_result_class,
+        "([BJ)V",
+        &[JValue::Object(JObject::from(proof_serialized)), JValue::Long(jlong::from(quality as i64))]
     ).expect("Should be able to create new CreateProofResult:(long, byte[]) object");
 
     *result
