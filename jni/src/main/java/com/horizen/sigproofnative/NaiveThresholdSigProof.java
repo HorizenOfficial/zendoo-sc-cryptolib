@@ -16,12 +16,12 @@ public class NaiveThresholdSigProof {
         return nativeCreateMsgToSign(bt, endEpochBlockHash, prevEndEpochBlockHash);
     }
 
-    private static native byte[] nativeCreateProof(BackwardTransfer[] bt,
+    private static native CreateProofResult nativeCreateProof(BackwardTransfer[] bt,
                                                    byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
                                                    SchnorrSignature[] schnorrSignatures, SchnorrPublicKey[] schnorrPublicKeys,
                                                    long threshold, String provingKeyPath);
 
-    public static byte[] createProof(List<BackwardTransfer> btList,
+    public static CreateProofResult createProof(List<BackwardTransfer> btList,
                                      byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
                                      List<SchnorrSignature> schnorrSignatureList, List<SchnorrPublicKey> schnorrPublicKeyList,
                                      long threshold, String provingKeyPath) {

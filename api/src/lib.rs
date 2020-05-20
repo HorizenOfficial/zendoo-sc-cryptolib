@@ -1153,7 +1153,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _schnorr_pks_list:  jobjectArray,
     _threshold: jlong,
     _proving_key_path: JString
-) -> jbyteArray
+) -> jobject
 {
     //Extract backward transfers
     let mut bt_list = vec![];
@@ -1261,7 +1261,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
 
     //create proof
-    let proof = match create_naive_threshold_sig_proof(
+    let (proof, quality) = match create_naive_threshold_sig_proof(
         pks.as_slice(),
         sigs,
         &end_epoch_block_hash,
@@ -1280,8 +1280,20 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         .expect("Should be able to write proof into proof_bytes");
 
     //Return proof serialized
-    _env.byte_array_from_slice(proof_bytes.as_ref())
-        .expect("Should be able to convert Rust slice into jbytearray")
+    let proof_serialized = _env.byte_array_from_slice(proof_bytes.as_ref())
+        .expect("Should be able to convert Rust slice into jbytearray");
+
+    //Create new CreateProofResult object
+    let proof_result_class = _env.find_class("com/horizen/sigproofnative/CreateProofResult")
+        .expect("Should be able to find CreateProofResult class");
+
+    let result = _env.new_object(
+        proof_result_class,
+        "([BJ)V",
+        &[JValue::Object(JObject::from(proof_serialized)), JValue::Long(jlong::from(quality as i64))]
+    ).expect("Should be able to create new CreateProofResult:(long, byte[]) object");
+
+    *result
 }
 
 //Test functions

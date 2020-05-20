@@ -181,13 +181,14 @@ public class NaiveThresholdSigProofTest {
 
         ClassLoader classLoader = getClass().getClassLoader();
         String provingKeyPath = new File(classLoader.getResource("sample_params").getFile()).getAbsolutePath();
-        byte[] proof = NaiveThresholdSigProof.createProof(btList, endEpochBlockHash, prevEndEpochBlockHash,
+        CreateProofResult proofResult = NaiveThresholdSigProof.createProof(btList, endEpochBlockHash, prevEndEpochBlockHash,
                 signatureList, publicKeyList, threshold, provingKeyPath);
 
-        assertNotNull("Proof must be not null.", proof);
+        assertNotNull("Proof creation must be successfull", proofResult);
 
         String verificationKeyPath = new File(classLoader.getResource("sample_vk").getFile()).getAbsolutePath();
-        long quality = threshold;
+        byte[] proof = proofResult.getProof();
+        long quality = proofResult.getQuality();
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(btList, publicKeyList, endEpochBlockHash,
                 prevEndEpochBlockHash, threshold, quality, proof, verificationKeyPath);
 
