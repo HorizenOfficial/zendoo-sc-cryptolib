@@ -43,7 +43,7 @@ use jni::sys::{JNI_TRUE, JNI_FALSE};
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeGetFieldElementSize(
     _env: JNIEnv,
-    _schnorr_secret_key_class: JClass,
+    _field_element_class: JClass,
 ) -> jint { FIELD_SIZE as jint }
 
 #[no_mangle]
@@ -278,7 +278,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSer
 
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeDeserializeSecretKey(
     _env: JNIEnv,
-    _schnorr_public_key_class: JClass,
+    _schnorr_secret_key_class: JClass,
     _secret_key_bytes: jbyteArray,
 ) -> jobject
 {
@@ -382,7 +382,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeFreePublicK
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetSecretKeySize(
     _env: JNIEnv,
-    _schnorr_secret_key_class: JClass,
+    _vrf_secret_key_class: JClass,
 ) -> jint { VRF_SK_SIZE as jint }
 
 #[no_mangle]
@@ -406,7 +406,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSe
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeDeserializeSecretKey(
     _env: JNIEnv,
-    _vrf_public_key_class: JClass,
+    _vrf_secret_key_class: JClass,
     _secret_key_bytes: jbyteArray,
 ) -> jobject
 {
@@ -543,10 +543,6 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeGener
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignMessage(
     _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
     _schnorr_key_pair: JObject,
     _message: JObject,
 ) -> jobject {
@@ -608,10 +604,6 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignM
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVerifyKey(
     _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
     _public_key: JObject,
 ) -> jboolean
 {
@@ -628,10 +620,6 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVer
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGetPublicKey(
     _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
     _secret_key: JObject
 ) -> jobject {
 
@@ -656,10 +644,6 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGet
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVerifySignature(
     _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
     _public_key: JObject,
     _signature: JObject,
     _message: JObject,
@@ -705,10 +689,6 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVer
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeComputeHash(
     _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
     _class: JClass,
     _input: jobjectArray,
 ) -> jobject
@@ -855,10 +835,6 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeGenerate(
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
     _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
     _vrf_key_pair: JObject,
     _message: JObject
 ) -> jobject {
@@ -942,10 +918,6 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetPublicKey(
     _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
     _vrf_secret_key: JObject
 ) -> jobject {
 
@@ -969,10 +941,6 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetPublicKe
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeVerifyKey(
     _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
     _vrf_public_key: JObject,
 ) -> jboolean
 {
@@ -990,10 +958,6 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeVerifyKey(
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeProofToHash(
     _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
     _vrf_public_key: JObject,
     _proof: JObject,
     _message: JObject,

@@ -460,6 +460,9 @@ mod test {
         let proving_key_path = "./sample_proving_key";
         write_to_file(&params, proving_key_path).unwrap();
 
+        let verifying_key_path = "./sample_vk";
+        write_to_file(&(params.vk), verifying_key_path).unwrap();
+
         //Generate sample pks and sigs vec
         let threshold: u64 = 2;
         let mut pks = vec![];
@@ -476,7 +479,7 @@ mod test {
         sigs.push(Some(schnorr_sign(&msg, &sks[2], &pks[2]).unwrap()));
 
         //Create and serialize proof
-        let proof = create_naive_threshold_sig_proof(
+        let (proof, quality) = create_naive_threshold_sig_proof(
             pks.as_slice(),
             sigs,
             &end_epoch_mc_b_hash,
@@ -495,7 +498,7 @@ mod test {
             &end_epoch_mc_b_hash,
             &prev_end_epoch_mc_b_hash,
             bt_list.as_slice(),
-            2
+            quality
         ).unwrap();
         let pvk = prepare_verifying_key(&params.vk); //Get verifying key
         assert!(verify_proof(&pvk, &proof, &[pks_threshold_hash, wcert_sysdata_hash]).unwrap()); //Assert proof verification passes
@@ -507,7 +510,7 @@ mod test {
             &end_epoch_mc_b_hash,
             &prev_end_epoch_mc_b_hash,
             bt_list.as_slice(),
-            1
+            quality - 1
         ).unwrap();
         assert!(!verify_proof(&pvk, &proof, &[wrong_pks_threshold_hash, wrong_wcert_sysdata_hash]).unwrap()); //Assert proof verification passes
     }
