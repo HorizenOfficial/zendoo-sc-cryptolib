@@ -219,7 +219,6 @@ pub fn create_naive_threshold_sig_proof(
     prev_end_epoch_mc_b_hash: &[u8; 32],
     bt_list:                  &[BackwardTransfer],
     threshold:                u64,
-    constant:                 &FieldElement,
     proving_key_path:         &str
 ) -> Result<(SCProof, u64), Error> {
 
@@ -252,9 +251,6 @@ pub fn create_naive_threshold_sig_proof(
     //Compute b as v-t and convert it to field element
     let b = read_field_element_from_u64(valid_signatures - threshold);
 
-    //Compute wcert_sysdata_hash
-    let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_signatures, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
-
     //Convert affine pks to projective
     let pks = pks.iter().map(|&pk| pk.into_projective()).collect::<Vec<_>>();
 
@@ -263,8 +259,7 @@ pub fn create_naive_threshold_sig_proof(
 
     let c = NaiveTresholdSignature::<FieldElement>::new(
         pks, sigs, threshold, b, end_epoch_mc_b_hash,
-        prev_end_epoch_mc_b_hash, mr_bt, *constant,
-        wcert_sysdata_hash, max_pks,
+        prev_end_epoch_mc_b_hash, mr_bt, max_pks,
     );
 
     //Read proving key
@@ -292,6 +287,7 @@ pub fn verify_naive_threshold_sig_proof(
     let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
     let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
     let aggregated_input = compute_poseidon_hash(&[*constant, wcert_sysdata_hash])?;
+
     //Verify proof
     let vk = read_from_file(vk_path)?;
     let pvk = prepare_verifying_key(&vk); //Get verifying key
@@ -464,7 +460,6 @@ mod test {
             &prev_end_epoch_mc_b_hash,
             bt_list.as_slice(),
             threshold,
-            &constant,
             proving_key_path
         ).unwrap();
         let proof_path = "./sample_proof";

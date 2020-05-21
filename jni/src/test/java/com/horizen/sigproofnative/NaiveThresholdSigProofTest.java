@@ -182,18 +182,20 @@ public class NaiveThresholdSigProofTest {
 
         ClassLoader classLoader = getClass().getClassLoader();
 
-        FieldElement constant = NaiveThresholdSigProof.getConstant(publicKeyList, threshold);
-        assertNotNull("Constant creation must be successfull", constant);
-
         String provingKeyPath = new File(classLoader.getResource("sample_params").getFile()).getAbsolutePath();
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(btList, endEpochBlockHash, prevEndEpochBlockHash,
-                signatureList, publicKeyList, threshold, constant, provingKeyPath);
+                signatureList, publicKeyList, threshold, provingKeyPath);
 
         assertNotNull("Proof creation must be successfull", proofResult);
 
         String verificationKeyPath = new File(classLoader.getResource("sample_vk").getFile()).getAbsolutePath();
+
         byte[] proof = proofResult.getProof();
         long quality = proofResult.getQuality();
+
+        FieldElement constant = NaiveThresholdSigProof.getConstant(publicKeyList, threshold);
+        assertNotNull("Constant creation must be successfull", constant);
+
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
                 prevEndEpochBlockHash, constant, quality, proof, verificationKeyPath);
 

@@ -1167,7 +1167,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _schnorr_sigs_list: jobjectArray,
     _schnorr_pks_list:  jobjectArray,
     _threshold: jlong,
-    _constant: JObject,
     _proving_key_path: JString
 ) -> jobject
 {
@@ -1268,15 +1267,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         prev_end_epoch_block_hash_bytes
     };
 
-    //Extract constant
-    let constant = {
-
-        let c =_env.get_field(_constant, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(c.j().unwrap() as *const FieldElement)
-    };
-
     //Extract threshold
     let threshold = _threshold as u64;
 
@@ -1293,7 +1283,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         &prev_end_epoch_block_hash,
         bt_list.as_slice(),
         threshold,
-        constant,
         proving_key_path.to_str().unwrap()
     ) {
         Ok(proof) => proof,

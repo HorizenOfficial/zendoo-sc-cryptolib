@@ -4,9 +4,7 @@ pub mod tests;
 use algebra::{fields::mnt4753::Fr as MNT4Fr, curves::mnt6753::G1Projective as MNT6G1Projective, Field, PrimeField, ToBits};
 use primitives::{
     signature::schnorr::field_based_schnorr::FieldBasedSchnorrSignature,
-    crh::{
-        MNT4PoseidonHash, FieldBasedHash,
-    },
+    crh::MNT4PoseidonHash,
 };
 use r1cs_crypto::{
     signature::{
@@ -16,17 +14,11 @@ use r1cs_crypto::{
     crh::{MNT4PoseidonHashGadget, FieldBasedHashGadget},
 };
 
-use r1cs_std::{
-    groups::curves::short_weierstrass::mnt::mnt6::mnt6753::MNT6G1Gadget,
-    fields::{
-        fp::FpGadget, FieldGadget,
-    },
-    alloc::AllocGadget,
-    bits::{
-        boolean::Boolean, FromBitsGadget,
-    },
-    eq::EqGadget,
-};
+use r1cs_std::{groups::curves::short_weierstrass::mnt::mnt6::mnt6753::MNT6G1Gadget, fields::{
+    fp::FpGadget, FieldGadget,
+}, alloc::AllocGadget, bits::{
+    boolean::Boolean, FromBitsGadget,
+}, eq::EqGadget, Assignment};
 
 use r1cs_core::{ConstraintSystem, ConstraintSynthesizer, SynthesisError};
 
@@ -60,9 +52,6 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
     prev_end_epoch_mc_b_hash: Option<MNT4Fr>,
     mr_bt:                    Option<MNT4Fr>,
 
-    //Public inputs
-    aggregated_input:         Option<MNT4Fr>, //H(pks_threshold_hash, wcert_sysdata_hash)
-
     //Other
     max_pks:                  usize,
     _field:                   PhantomData<F>,
@@ -77,8 +66,6 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
         end_epoch_mc_b_hash:      MNT4Fr,
         prev_end_epoch_mc_b_hash: MNT4Fr,
         mr_bt:                    MNT4Fr,
-        pks_threshold_hash:       MNT4Fr,
-        wcert_sysdata_hash:       MNT4Fr,
         max_pks:                  usize,
     ) -> Self {
 
@@ -89,7 +76,6 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
             let to_skip = MNT4Fr::size_in_bits() - (log_max_pks + 1);
             b_bits[to_skip..].to_vec().iter().map(|&b| Some(b)).collect::<Vec<_>>()
         };
-        let aggregated_input = MNT4PoseidonHash::evaluate(&[pks_threshold_hash, wcert_sysdata_hash]).ok();
         Self{
             pks: pks.iter().map(|&pk| Some(pk)).collect::<Vec<_>>(),
             sigs,
@@ -98,7 +84,6 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
             end_epoch_mc_b_hash:      Some(end_epoch_mc_b_hash),
             prev_end_epoch_mc_b_hash: Some(prev_end_epoch_mc_b_hash),
             mr_bt:                    Some(mr_bt),
-            aggregated_input,
             max_pks,
             _field: PhantomData
         }
@@ -213,14 +198,18 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
         )?;
 
         //Check pks_threshold_hash and wcert_sysdata_hash
-        let expected_aggregated_input = MNT4FrGadget::alloc_input(
-            cs.ns(|| "alloc aggregated input"),
-            || self.aggregated_input.ok_or(SynthesisError::AssignmentMissing)
-        )?;
 
         let actual_aggregated_input = MNT4PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "H(pks_threshold_hash, wcert_sysdata_hash)"),
             &[pks_threshold_hash_g, wcert_sysdata_hash_g]
+        )?;
+
+        let expected_aggregated_input = MNT4FrGadget::alloc_input(
+            cs.ns(|| "alloc aggregated input"),
+            || {
+                let aggregated_input_val = actual_aggregated_input.get_value().get()?;
+                Ok(aggregated_input_val)
+            }
         )?;
 
         expected_aggregated_input.enforce_equal(
@@ -274,7 +263,6 @@ pub fn generate_parameters(max_pks: usize) -> Result<Parameters<MNT4>, Synthesis
         end_epoch_mc_b_hash:      None,
         prev_end_epoch_mc_b_hash: None,
         mr_bt:                    None,
-        aggregated_input:         None,
         max_pks,
         _field:                   PhantomData
     };
@@ -375,8 +363,8 @@ mod test {
 
         //Create proof for our circuit
         let c = NaiveTresholdSignature::<MNT4Fr>::new(
-            pks, sigs, t_field, b_field, end_epoch_mc_b_hash, prev_end_epoch_mc_b_hash,
-            mr_bt, pks_threshold_hash, wcert_sysdata_hash, max_pks,
+            pks, sigs, t_field, b_field, end_epoch_mc_b_hash,
+            prev_end_epoch_mc_b_hash, mr_bt, max_pks,
         );
 
         //Return proof and public inputs if success
