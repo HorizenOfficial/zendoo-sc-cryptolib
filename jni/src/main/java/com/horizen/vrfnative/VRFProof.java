@@ -21,7 +21,7 @@ public class VRFProof
 
   private static native byte[] nativeSerializeProof(long proofPointer);
 
-  private static native long nativeDeserializeProof(byte[] proofBytes);
+  private static native VRFProof nativeDeserializeProof(byte[] proofBytes);
 
   private static native void nativefreeProof(long proofPointer);
 
@@ -29,7 +29,7 @@ public class VRFProof
     if (proofBytes.length != PROOF_LENGTH)
       throw new IllegalArgumentException(String.format("Incorrect proof length, %d expected, %d found", PROOF_LENGTH, proofBytes.length));
 
-    return new VRFProof(nativeDeserializeProof(proofBytes));
+    return nativeDeserializeProof(proofBytes);
   }
 
   public byte[] serializeProof() {

@@ -8,35 +8,43 @@ public class SchnorrSecretKeyTest {
 
 
     @Test
-    public void testKey() {
+    public void testRandomKey() {
 
-        SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
+        int samples = 100;
 
-        assertNotNull("Key pair generation was unsuccessful.", keyPair);
+        for( int i = 0; i < samples; i++ ) {
+            SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
 
-        byte[] publicKeyBytes = keyPair.getPublicKey().serializePublicKey();
-        byte[] secretKeyBytes = keyPair.getSecretKey().serializeSecretKey();
+            assertNotNull("Key pair generation was unsuccessful.", keyPair);
 
-        assertEquals("Public key size must me - " + SchnorrPublicKey.PUBLIC_KEY_LENGTH,
-                SchnorrPublicKey.PUBLIC_KEY_LENGTH,
-                publicKeyBytes.length);
-        assertEquals("Secret key size must be - " + SchnorrSecretKey.SECRET_KEY_LENGTH,
-                SchnorrSecretKey.SECRET_KEY_LENGTH,
-                secretKeyBytes.length);
+            byte[] publicKeyBytes = keyPair.getPublicKey().serializePublicKey();
+            byte[] secretKeyBytes = keyPair.getSecretKey().serializeSecretKey();
 
-        SchnorrPublicKey recreatedPublicKey = keyPair.getSecretKey().getPublicKey();
+            assertEquals("Public key size must be - " + SchnorrPublicKey.PUBLIC_KEY_LENGTH,
+                    SchnorrPublicKey.PUBLIC_KEY_LENGTH,
+                    publicKeyBytes.length);
+            assertEquals("Secret key size must be - " + SchnorrSecretKey.SECRET_KEY_LENGTH,
+                    SchnorrSecretKey.SECRET_KEY_LENGTH,
+                    secretKeyBytes.length);
 
-        assertTrue("Recreated key must be valid.", recreatedPublicKey.verifyKey());
+            SchnorrPublicKey recreatedPublicKey = keyPair.getSecretKey().getPublicKey();
+            byte[] recreatedPublicKeyBytes = recreatedPublicKey.serializePublicKey();
 
-        SchnorrPublicKey deserializedPublicKey = SchnorrPublicKey.deserializePublicKey(publicKeyBytes);
-        SchnorrSecretKey deserializedSecretKey = SchnorrSecretKey.deserializeSecretKey(secretKeyBytes);
+            assertTrue("Recreated key must be valid.", recreatedPublicKey.verifyKey());
+            assertArrayEquals("Recreated public key must be the same.", publicKeyBytes, recreatedPublicKeyBytes);
 
-        assertTrue("Deserialized key must be valid.", deserializedPublicKey.verifyKey());
+            SchnorrPublicKey deserializedPublicKey = SchnorrPublicKey.deserialize(publicKeyBytes);
+            SchnorrSecretKey deserializedSecretKey = SchnorrSecretKey.deserialize(secretKeyBytes);
 
-        keyPair.getPublicKey().freePublicKey();
-        keyPair.getSecretKey().freeSecretKey();
+            assertTrue("Deserialized key must be valid.", deserializedPublicKey.verifyKey());
 
-        deserializedPublicKey.freePublicKey();
-        deserializedSecretKey.freeSecretKey();
+            keyPair.getPublicKey().freePublicKey();
+            keyPair.getSecretKey().freeSecretKey();
+
+            deserializedPublicKey.freePublicKey();
+            deserializedSecretKey.freeSecretKey();
+
+            recreatedPublicKey.freePublicKey();
+        }
     }
 }

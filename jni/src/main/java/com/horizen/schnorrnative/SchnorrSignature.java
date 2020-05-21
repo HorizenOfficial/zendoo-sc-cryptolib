@@ -25,7 +25,7 @@ public class SchnorrSignature
 
   private static native byte[] nativeSerializeSignature(long signaturePointer);
 
-  private static native long nativeDeserializeSignature(byte[] signatureBytes);
+  private static native SchnorrSignature nativeDeserializeSignature(byte[] signatureBytes);
 
   private static native void nativefreeSignature(long signaturePointer);
 
@@ -33,7 +33,7 @@ public class SchnorrSignature
     if (signatureBytes.length != SIGNATURE_LENGTH)
       throw new IllegalArgumentException(String.format("Incorrect signature length, %d expected, %d found", SIGNATURE_LENGTH, signatureBytes.length));
 
-    return new SchnorrSignature(nativeDeserializeSignature(signatureBytes));
+    return nativeDeserializeSignature(signatureBytes);
   }
 
   public byte[] serializeSignature() {
