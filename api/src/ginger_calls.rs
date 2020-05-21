@@ -291,11 +291,11 @@ pub fn verify_naive_threshold_sig_proof(
     let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
     let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
     let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
-
+    let aggregated_input = compute_poseidon_hash(&[*constant, wcert_sysdata_hash])?;
     //Verify proof
     let vk = read_from_file(vk_path)?;
     let pvk = prepare_verifying_key(&vk); //Get verifying key
-    let is_verified = verify_proof(&pvk, &proof, &[*constant, wcert_sysdata_hash])?;
+    let is_verified = verify_proof(&pvk, &proof, &[aggregated_input])?;
 
     Ok(is_verified)
 }
