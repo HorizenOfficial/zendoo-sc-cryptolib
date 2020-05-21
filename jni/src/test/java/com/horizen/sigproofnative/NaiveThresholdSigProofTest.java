@@ -22,7 +22,7 @@ import static org.junit.Assert.assertFalse;
 public class NaiveThresholdSigProofTest {
 
     static int keyCount = 3;
-    static int threshold = 2;
+    static long threshold = 2;
     static int backwardTransferCout = 10;
 
     byte[] endEpochBlockHash = new byte[32];
@@ -181,23 +181,27 @@ public class NaiveThresholdSigProofTest {
     private void createAndVerifyProof() {
 
         ClassLoader classLoader = getClass().getClassLoader();
+
+        FieldElement constant = NaiveThresholdSigProof.getConstant(publicKeyList, threshold);
+        assertNotNull("Constant creation must be successfull", constant);
+
         String provingKeyPath = new File(classLoader.getResource("sample_params").getFile()).getAbsolutePath();
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(btList, endEpochBlockHash, prevEndEpochBlockHash,
-                signatureList, publicKeyList, threshold, provingKeyPath);
+                signatureList, publicKeyList, threshold, constant, provingKeyPath);
 
         assertNotNull("Proof creation must be successfull", proofResult);
 
         String verificationKeyPath = new File(classLoader.getResource("sample_vk").getFile()).getAbsolutePath();
         byte[] proof = proofResult.getProof();
         long quality = proofResult.getQuality();
-        boolean isProofVerified = NaiveThresholdSigProof.verifyProof(btList, publicKeyList, endEpochBlockHash,
-                prevEndEpochBlockHash, threshold, quality, proof, verificationKeyPath);
+        boolean isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
+                prevEndEpochBlockHash, constant, quality, proof, verificationKeyPath);
 
         assertTrue("Proof must be verified", isProofVerified);
 
         quality = threshold - 1;
-        isProofVerified = NaiveThresholdSigProof.verifyProof(btList, publicKeyList, endEpochBlockHash,
-                prevEndEpochBlockHash, threshold, quality, proof, verificationKeyPath);
+        isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
+                prevEndEpochBlockHash, constant, quality, proof, verificationKeyPath);
 
         assertFalse("Proof must not be verified", isProofVerified);
     }

@@ -1007,6 +1007,58 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeProofToHash
     *result
 }
 
+//Naive threshold signature proof functions
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeGetConstant(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _schnorr_pks_list: jobjectArray,
+    _threshold: jlong,
+) -> jobject
+{
+    //Extract Schnorr pks
+    let mut pks = vec![];
+
+    let pks_list_size = _env.get_array_length(_schnorr_pks_list)
+        .expect("Should be able to get schnorr_pks_list size");
+
+    for i in 0..pks_list_size {
+
+        let pk_object = _env.get_object_array_element(_schnorr_pks_list, i)
+            .expect(format!("Should be able to get elem {} of schnorr_pks_list", i).as_str());
+
+        let pk = _env.get_field(pk_object, "publicKeyPointer", "J")
+            .expect("Should be able to get field publicKeyPointer");
+
+        pks.push(*read_raw_pointer(pk.j().unwrap() as *const SchnorrPk));
+    }
+
+    //Extract threshold
+    let threshold = _threshold as u64;
+
+    //Compute constant
+    let constant = match compute_pks_threshold_hash(pks.as_slice(), threshold){
+        Ok(constant) => constant,
+        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
+    };
+
+    //Return constant
+    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(constant)) as i64);
+
+    let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Should be able to find FieldElement class");
+
+    let result = _env.new_object(field_class, "(J)V", &[
+        JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+    *result
+}
+
+
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateMsgToSign(
     _env: JNIEnv,
@@ -1101,7 +1153,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     *result
 }
 
-//Naive threshold signature proof functions
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateProof(
     _env: JNIEnv,
@@ -1116,6 +1167,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _schnorr_sigs_list: jobjectArray,
     _schnorr_pks_list:  jobjectArray,
     _threshold: jlong,
+    _constant: JObject,
     _proving_key_path: JString
 ) -> jobject
 {
@@ -1216,6 +1268,15 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         prev_end_epoch_block_hash_bytes
     };
 
+    //Extract constant
+    let constant = {
+
+        let c =_env.get_field(_constant, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(c.j().unwrap() as *const FieldElement)
+    };
+
     //Extract threshold
     let threshold = _threshold as u64;
 
@@ -1232,6 +1293,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         &prev_end_epoch_block_hash,
         bt_list.as_slice(),
         threshold,
+        constant,
         proving_key_path.to_str().unwrap()
     ) {
         Ok(proof) => proof,
@@ -1270,10 +1332,9 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // an argument slot
     _class: JClass,
     _bt_list: jobjectArray,
-    _schnorr_pks_list:  jobjectArray,
     _end_epoch_block_hash: jbyteArray,
     _prev_end_epoch_block_hash: jbyteArray,
-    _threshold: jlong,
+    _constant: JObject,
     _quality: jlong,
     _sc_proof_bytes: jbyteArray,
     _verification_key_path: JString
@@ -1310,23 +1371,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         bt_list.push(BackwardTransfer::new(pk, a));
     }
 
-    //Extract Schnorr pks
-    let mut pks = vec![];
-
-    let pks_list_size = _env.get_array_length(_schnorr_pks_list)
-        .expect("Should be able to get schnorr_pks_list size");
-
-    for i in 0..pks_list_size {
-
-        let pk_object = _env.get_object_array_element(_schnorr_pks_list, i)
-            .expect(format!("Should be able to get elem {} of schnorr_pks_list", i).as_str());
-
-        let pk = _env.get_field(pk_object, "publicKeyPointer", "J")
-            .expect("Should be able to get field publicKeyPointer");
-
-        pks.push(*read_raw_pointer(pk.j().unwrap() as *const SchnorrPk));
-    }
-
     //Extract block hashes
     let end_epoch_block_hash = {
         let t = _env.convert_byte_array(_end_epoch_block_hash)
@@ -1352,8 +1396,16 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         prev_end_epoch_block_hash_bytes
     };
 
-    //Extract threshold and quality
-    let threshold = _threshold as u64;
+    //Extract constant
+    let constant = {
+
+        let c =_env.get_field(_constant, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(c.j().unwrap() as *const FieldElement)
+    };
+
+    //Extract quality
     let quality = _quality as u64;
 
     //Extract proof
@@ -1370,13 +1422,12 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //Verify proof
     match verify_naive_threshold_sig_proof(
-        pks.as_slice(),
-        threshold,
+        constant,
         &end_epoch_block_hash,
         &prev_end_epoch_block_hash,
         bt_list.as_slice(),
         quality,
-        proof,
+        &proof,
         vk_path.to_str().unwrap()
     ) {
         Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
