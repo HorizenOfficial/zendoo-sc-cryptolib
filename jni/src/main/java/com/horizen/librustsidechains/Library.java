@@ -14,7 +14,7 @@ public class Library {
     private static String osxOsName = "osx";
 
     private static String windowsLibName = commonLibName + ".dll";
-    private static String linuxLibName = commonLibName + ".so";
+    private static String linuxLibName = "lib" + commonLibName + ".so";
     private static String osxLibName = commonLibName + ".jnilib";
 
     static {
