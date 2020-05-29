@@ -14,17 +14,11 @@ use r1cs_crypto::{
     crh::{MNT4PoseidonHashGadget, FieldBasedHashGadget},
 };
 
-use r1cs_std::{
-    groups::curves::short_weierstrass::mnt::mnt6::mnt6753::MNT6G1Gadget,
-    fields::{
-        fp::FpGadget, FieldGadget,
-    },
-    alloc::AllocGadget,
-    bits::{
-        boolean::Boolean, FromBitsGadget,
-    },
-    eq::EqGadget,
-};
+use r1cs_std::{groups::curves::short_weierstrass::mnt::mnt6::mnt6753::MNT6G1Gadget, fields::{
+    fp::FpGadget, FieldGadget,
+}, alloc::AllocGadget, bits::{
+    boolean::Boolean, FromBitsGadget,
+}, eq::EqGadget, Assignment};
 
 use r1cs_core::{ConstraintSystem, ConstraintSynthesizer, SynthesisError};
 
@@ -58,10 +52,6 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
     prev_end_epoch_mc_b_hash: Option<MNT4Fr>,
     mr_bt:                    Option<MNT4Fr>,
 
-    //Public inputs
-    pks_threshold_hash:       Option<MNT4Fr>, //H(H(pks), threshold)
-    wcert_sysdata_hash:       Option<MNT4Fr>, //H(valid_signatures, MR(BT), BH(Bi-1), BH(Bi))
-
     //Other
     max_pks:                  usize,
     _field:                   PhantomData<F>,
@@ -76,8 +66,6 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
         end_epoch_mc_b_hash:      MNT4Fr,
         prev_end_epoch_mc_b_hash: MNT4Fr,
         mr_bt:                    MNT4Fr,
-        pks_threshold_hash:       MNT4Fr,
-        wcert_sysdata_hash:       MNT4Fr,
         max_pks:                  usize,
     ) -> Self {
 
@@ -96,8 +84,6 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
             end_epoch_mc_b_hash:      Some(end_epoch_mc_b_hash),
             prev_end_epoch_mc_b_hash: Some(prev_end_epoch_mc_b_hash),
             mr_bt:                    Some(mr_bt),
-            pks_threshold_hash:       Some(pks_threshold_hash),
-            wcert_sysdata_hash:       Some(wcert_sysdata_hash),
             max_pks,
             _field: PhantomData
         }
@@ -115,12 +101,6 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
 
         //Check pks are consistent with self.hash_commitment
 
-        //Allocate hash_commitment as public input
-        let expected_pks_threshold_hash_g = MNT4FrGadget::alloc_input(
-            cs.ns(|| "alloc pks_threshold_hash"),
-            || self.pks_threshold_hash.ok_or(SynthesisError::AssignmentMissing)
-        )?;
-
         //Allocate public keys as witnesses
         let mut pks_g = Vec::with_capacity(self.max_pks);
 
@@ -135,8 +115,8 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
             pks_g.push(pk_g);
         }
 
-        //Check pks
-        let mut actual_pks_threshold_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
+        //Enforce pks_threshold_hash
+        let mut pks_threshold_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "hash public keys"),
             pks_g.iter().map(|pk| pk.x.clone()).collect::<Vec<_>>().as_slice(),
         )?;
@@ -147,15 +127,9 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
             || self.threshold.ok_or(SynthesisError::AssignmentMissing)
         )?;
 
-        //Check pks_threshold_hash
-        actual_pks_threshold_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
+        pks_threshold_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "H(H(pks), threshold)"),
-            &[actual_pks_threshold_hash_g, t_g.clone()],
-        )?;
-
-        expected_pks_threshold_hash_g.enforce_equal(
-            cs.ns(|| "check pks_threshold_hash"),
-            &actual_pks_threshold_hash_g,
+            &[pks_threshold_hash_g, t_g.clone()],
         )?;
 
         //Check signatures
@@ -217,20 +191,30 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
             )?;
         }
 
-        //Enforce correct wcert_sysdata_hash
-        let expected_wcert_sysdata_hash_g = MNT4FrGadget::alloc_input(
-            cs.ns(|| "alloc wcert_sysdata_hash_g"),
-            || self.wcert_sysdata_hash.ok_or(SynthesisError::AssignmentMissing)
-        )?;
-
-        let actual_wcert_sysdata_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
+        //Enforce wcert_sysdata_hash
+        let wcert_sysdata_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "H(valid_signatures, MR(BT), BH(i-1), BH(i))"),
             &[valid_signatures.clone(), mr_bt_g, prev_end_epoch_mc_block_hash_g, end_epoch_mc_block_hash_g]
         )?;
 
-        expected_wcert_sysdata_hash_g.enforce_equal(
-            cs.ns(|| "check wcert_sysdata_hash"),
-            &actual_wcert_sysdata_hash_g,
+        //Check pks_threshold_hash and wcert_sysdata_hash
+
+        let actual_aggregated_input = MNT4PoseidonHashGadget::check_evaluation_gadget(
+            cs.ns(|| "H(pks_threshold_hash, wcert_sysdata_hash)"),
+            &[pks_threshold_hash_g, wcert_sysdata_hash_g]
+        )?;
+
+        let expected_aggregated_input = MNT4FrGadget::alloc_input(
+            cs.ns(|| "alloc aggregated input"),
+            || {
+                let aggregated_input_val = actual_aggregated_input.get_value().get()?;
+                Ok(aggregated_input_val)
+            }
+        )?;
+
+        expected_aggregated_input.enforce_equal(
+            cs.ns(|| "check aggregated input"),
+            &actual_aggregated_input
         )?;
 
         //Alloc the b's as witnesses
@@ -279,8 +263,6 @@ pub fn generate_parameters(max_pks: usize) -> Result<Parameters<MNT4>, Synthesis
         end_epoch_mc_b_hash:      None,
         prev_end_epoch_mc_b_hash: None,
         mr_bt:                    None,
-        pks_threshold_hash:       None,
-        wcert_sysdata_hash:       None,
         max_pks,
         _field:                   PhantomData
     };
@@ -377,17 +359,19 @@ mod test {
             rng.gen()
         };
 
+        let aggregated_input = MNT4PoseidonHash::evaluate(&[pks_threshold_hash, wcert_sysdata_hash]).unwrap();
+
         //Create proof for our circuit
         let c = NaiveTresholdSignature::<MNT4Fr>::new(
-            pks, sigs, t_field, b_field, end_epoch_mc_b_hash, prev_end_epoch_mc_b_hash,
-            mr_bt, pks_threshold_hash, wcert_sysdata_hash, max_pks,
+            pks, sigs, t_field, b_field, end_epoch_mc_b_hash,
+            prev_end_epoch_mc_b_hash, mr_bt, max_pks,
         );
 
         //Return proof and public inputs if success
         let start = std::time::Instant::now();
         let proof = match create_random_proof(c, &params, &mut rng) {
             Ok(proof) => {
-                let public_inputs = vec![pks_threshold_hash, wcert_sysdata_hash];
+                let public_inputs = vec![aggregated_input];
                 Ok((proof, public_inputs))
             }
             Err(e) => Err(e)

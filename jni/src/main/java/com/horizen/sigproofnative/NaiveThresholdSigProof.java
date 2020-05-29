@@ -8,6 +8,12 @@ import java.util.List;
 
 public class NaiveThresholdSigProof {
 
+    private static native FieldElement nativeGetConstant(SchnorrPublicKey[] schnorrPublicKeys, long threshold);
+
+    public static FieldElement getConstant(List<SchnorrPublicKey> schnorrPublicKeys, long threshold) {
+        return nativeGetConstant(schnorrPublicKeys.toArray(new SchnorrPublicKey[0]), threshold);
+    }
+
     private static native FieldElement nativeCreateMsgToSign(BackwardTransfer[] bt,
                                                              byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash);
 
@@ -31,17 +37,15 @@ public class NaiveThresholdSigProof {
     }
 
     private static native boolean nativeVerifyProof(BackwardTransfer[] btList,
-                                      SchnorrPublicKey[] schnorrPublicKeyList,
                                       byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
-                                      long threshold, long quality, byte[] proof, String verificationKeyPath);
+                                      FieldElement constant, long quality, byte[] proof, String verificationKeyPath);
 
     public static boolean verifyProof(List<BackwardTransfer> btList,
-                                      List<SchnorrPublicKey> schnorrPublicKeyList,
                                       byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
-                                      long threshold, long quality, byte[] proof, String verificationKeyPath){
+                                      FieldElement constant, long quality, byte[] proof, String verificationKeyPath){
         return nativeVerifyProof(
-                btList.toArray(new BackwardTransfer[0]), schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
+                btList.toArray(new BackwardTransfer[0]),
                 endEpochBlockHash, prevEndEpochBlockHash,
-                threshold, quality, proof, verificationKeyPath);
+                constant, quality, proof, verificationKeyPath);
     }
 }
