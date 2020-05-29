@@ -67,8 +67,7 @@ struct NaiveTresholdSignatureTest{
     mr_bt:                    MNT4Fr,
 
     //Public inputs
-    pks_threshold_hash:       MNT4Fr,
-    wcert_sysdata_hash:       MNT4Fr,
+    aggregated_input:         MNT4Fr,
 
     //Other
     max_pks:                  usize,
@@ -146,6 +145,9 @@ fn generate_inputs
         rng.gen()
     };
 
+    //Compute aggregated input
+    let aggregated_input = MNT4PoseidonHash::evaluate(&[pks_threshold_hash, wcert_sysdata_hash]).unwrap();
+
     //Create instance of the circuit
     NaiveTresholdSignatureTest {
         pks,
@@ -155,8 +157,7 @@ fn generate_inputs
         end_epoch_mc_b_hash,
         prev_end_epoch_mc_b_hash,
         mr_bt,
-        pks_threshold_hash,
-        wcert_sysdata_hash,
+        aggregated_input,
         max_pks,
     }
 }
@@ -166,19 +167,13 @@ fn generate_constraints(
     mut cs: TestConstraintSystem<MNT4Fr>,
 ) -> bool
 {
-//Internal checks
+    //Internal checks
     let log_max_pks = (c.max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
     assert_eq!(c.max_pks, c.pks.len());
     assert_eq!(c.max_pks, c.sigs.len());
     assert_eq!(log_max_pks + 1, c.b.len());
 
     //Check pks are consistent with c.hash_commitment
-
-    //Allocate hash_commitment as public input
-    let expected_pks_threshold_hash_g = MNT4FrGadget::alloc_input(
-        cs.ns(|| "alloc pks_threshold_hash"),
-        || Ok(c.pks_threshold_hash)
-    ).unwrap();
 
     //Allocate public keys as witnesses
     let mut pks_g = Vec::with_capacity(c.max_pks);
@@ -195,7 +190,7 @@ fn generate_constraints(
     }
 
     //Check pks
-    let mut actual_pks_threshold_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
+    let mut pks_threshold_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
         cs.ns(|| "hash public keys"),
         pks_g.iter().map(|pk| pk.x.clone()).collect::<Vec<_>>().as_slice(),
     ).unwrap();
@@ -207,14 +202,9 @@ fn generate_constraints(
     ).unwrap();
 
     //Check hash commitment
-    actual_pks_threshold_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
+    pks_threshold_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
         cs.ns(|| "H(H(pks), threshold)"),
-        &[actual_pks_threshold_hash_g, t_g.clone()],
-    ).unwrap();
-
-    expected_pks_threshold_hash_g.enforce_equal(
-        cs.ns(|| "check pks_threshold_hash"),
-        &actual_pks_threshold_hash_g,
+        &[pks_threshold_hash_g, t_g.clone()],
     ).unwrap();
 
     //Check signatures
@@ -278,20 +268,27 @@ fn generate_constraints(
     }
 
     //Enforce correct wcert_sysdata_hash
-    let expected_wcert_sysdata_hash_g = MNT4FrGadget::alloc_input(
-        cs.ns(|| "alloc wcert_sysdata_hash_g"),
-        || Ok(c.wcert_sysdata_hash)
-    ).unwrap();
-
-    let actual_wcert_sysdata_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
+    let wcert_sysdata_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
         cs.ns(|| "H(valid_signatures, MR(BT), BH(Bi-1), BH(Bi))"),
         &[valid_signatures.clone(), mr_bt_g, prev_end_epoch_mc_block_hash_g, end_epoch_mc_block_hash_g]
     ).unwrap();
 
-    expected_wcert_sysdata_hash_g.enforce_equal(
-        cs.ns(|| "check wcert_sysdata_hash"),
-        &actual_wcert_sysdata_hash_g,
+    //Check pks_threshold_hash and wcert_sysdata_hash
+    let expected_aggregated_input = MNT4FrGadget::alloc_input(
+        cs.ns(|| "alloc aggregated input"),
+        || Ok(c.aggregated_input)
     ).unwrap();
+
+    let actual_aggregated_input = MNT4PoseidonHashGadget::check_evaluation_gadget(
+        cs.ns(|| "H(pks_threshold_hash, wcert_sysdata_hash)"),
+        &[pks_threshold_hash_g, wcert_sysdata_hash_g]
+    ).unwrap();
+
+    expected_aggregated_input.enforce_equal(
+        cs.ns(|| "check aggregated input"),
+        &actual_aggregated_input
+    ).unwrap();
+
 
     //Alloc the b's as witnesses
     let mut bs_g = Vec::with_capacity(log_max_pks + 1);
