@@ -1078,29 +1078,31 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     let bt_list_size = _env.get_array_length(_bt_list)
         .expect("Should be able to get bt_list size");
 
-    for i in 0..bt_list_size {
-        let o = _env.get_object_array_element(_bt_list, i)
-            .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+    if bt_list_size > 0
+    {
+        for i in 0..bt_list_size {
+            let o = _env.get_object_array_element(_bt_list, i)
+                .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
 
+            let pk: [u8; 20] = {
+                let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                    .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-        let pk: [u8; 20] = {
-            let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
-                .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+                let mut pk_bytes = [0u8; 20];
 
-            let mut pk_bytes = [0u8; 20];
+                _env.convert_byte_array(p)
+                    .expect("Should be able to convert to Rust byte array")
+                    .write(&mut pk_bytes[..])
+                    .expect("Should be able to write into byte array of fixed size");
 
-            _env.convert_byte_array(p)
-                .expect("Should be able to convert to Rust byte array")
-                .write(&mut pk_bytes[..])
-                .expect("Should be able to write into byte array of fixed size");
+                pk_bytes
+            };
 
-            pk_bytes
-        };
+            let a = _env.call_method(o, "getAmount", "()J", &[])
+                .expect("Should be able to call getAmount method").j().unwrap() as u64;
 
-        let a = _env.call_method(o, "getAmount", "()J", &[])
-            .expect("Should be able to call getAmount method").j().unwrap() as u64;
-
-        bt_list.push(BackwardTransfer::new(pk, a));
+            bt_list.push(BackwardTransfer::new(pk, a));
+        }
     }
 
     //Extract block hashes
@@ -1176,29 +1178,31 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     let bt_list_size = _env.get_array_length(_bt_list)
         .expect("Should be able to get bt_list size");
 
-    for i in 0..bt_list_size {
-        let o = _env.get_object_array_element(_bt_list, i)
-            .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+    if bt_list_size > 0 {
+        for i in 0..bt_list_size {
+            let o = _env.get_object_array_element(_bt_list, i)
+                .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
 
 
-        let pk: [u8; 20] = {
-            let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
-                .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+            let pk: [u8; 20] = {
+                let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                    .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-            let mut pk_bytes = [0u8; 20];
+                let mut pk_bytes = [0u8; 20];
 
-            _env.convert_byte_array(p)
-                .expect("Should be able to convert to Rust byte array")
-                .write(&mut pk_bytes[..])
-                .expect("Should be able to write into byte array of fixed size");
+                _env.convert_byte_array(p)
+                    .expect("Should be able to convert to Rust byte array")
+                    .write(&mut pk_bytes[..])
+                    .expect("Should be able to write into byte array of fixed size");
 
-            pk_bytes
-        };
+                pk_bytes
+            };
 
-        let a = _env.call_method(o, "getAmount", "()J", &[])
-            .expect("Should be able to call getAmount method").j().unwrap() as u64;
+            let a = _env.call_method(o, "getAmount", "()J", &[])
+                .expect("Should be able to call getAmount method").j().unwrap() as u64;
 
-        bt_list.push(BackwardTransfer::new(pk, a));
+            bt_list.push(BackwardTransfer::new(pk, a));
+        }
     }
 
     //Extract Schnorr signatures and the corresponding Schnorr pks
@@ -1335,29 +1339,31 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     let bt_list_size = _env.get_array_length(_bt_list)
         .expect("Should be able to get bt_list size");
 
-    for i in 0..bt_list_size {
-        let o = _env.get_object_array_element(_bt_list, i)
-            .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+    if bt_list_size > 0 {
+        for i in 0..bt_list_size {
+            let o = _env.get_object_array_element(_bt_list, i)
+                .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
 
 
-        let pk: [u8; 20] = {
-            let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
-                .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+            let pk: [u8; 20] = {
+                let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                    .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-            let mut pk_bytes = [0u8; 20];
+                let mut pk_bytes = [0u8; 20];
 
-            _env.convert_byte_array(p)
-                .expect("Should be able to convert to Rust byte array")
-                .write(&mut pk_bytes[..])
-                .expect("Should be able to write into byte array of fixed size");
+                _env.convert_byte_array(p)
+                    .expect("Should be able to convert to Rust byte array")
+                    .write(&mut pk_bytes[..])
+                    .expect("Should be able to write into byte array of fixed size");
 
-            pk_bytes
-        };
+                pk_bytes
+            };
 
-        let a = _env.call_method(o, "getAmount", "()J", &[])
-            .expect("Should be able to call getAmount method").j().unwrap() as u64;
+            let a = _env.call_method(o, "getAmount", "()J", &[])
+                .expect("Should be able to call getAmount method").j().unwrap() as u64;
 
-        bt_list.push(BackwardTransfer::new(pk, a));
+            bt_list.push(BackwardTransfer::new(pk, a));
+        }
     }
 
     //Extract block hashes
