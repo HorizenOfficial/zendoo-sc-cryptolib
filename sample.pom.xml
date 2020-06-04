@@ -1,0 +1,24 @@
+<Build>
+  <Extensions>
+    <Extension>
+      <GroupId>io.packagecloud.maven.wagon</GroupId>
+      <ArtifactId>maven-packagecloud-wagon</ArtifactId>
+      <Version>0.1.0</Version>
+    </Extension>
+  </Extensions>
+</Build>
+
+<DistributionManagement>
+  <Repository>
+    <Id>packagecloud-travis</Id>
+    <Url>
+      packagecloud+https://packagecloud.io/zensystem/zendoo-sc-cryptolib
+    </Url>
+  </Repository>
+  <SnapshotRepository>
+    <Id>packagecloud-travis</Id>
+    <Url>
+      packagecloud+https://packagecloud.io/zensystem/zendoo-sc-cryptolib
+    </Url>
+  </SnapshotRepository>
+</DistributionManagement>

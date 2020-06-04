@@ -1,0 +1,15 @@
+os: linux
+dist: xenial
+language: java
+addons:
+  apt:
+    packages:
+      - ant
+      - libxml-xpath-perl
+services:
+  - docker
+
+script: >-
+  source ci/check_tag.sh &&
+  docker build -t zencash/zendoo-sc-cryptolib-builder ./ci &&
+  docker run --rm -v "$(pwd):/build" -e LOCAL_USER_ID="$(id -u)" -e LOCAL_GRP_ID="$(id -g)" -e PUBLISH -e PACKAGECLOUD_TOKEN zencash/zendoo-sc-cryptolib-builder /build/ci/start_ci.sh

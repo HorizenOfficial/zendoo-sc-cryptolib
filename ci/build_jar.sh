@@ -1,7 +1,11 @@
+#!/bin/bash
+
+set -eo pipefail
+
 cargo clean
 
-cargo build --release --target=x86_64-pc-windows-gnu
-cargo build --release --target=x86_64-unknown-linux-gnu
+cargo build -j$(($(nproc)+1)) --release --target=x86_64-pc-windows-gnu
+cargo build -j$(($(nproc)+1)) --release --target=x86_64-unknown-linux-gnu
 
 
 mkdir -p jni/src/main/resources/native/linux64
@@ -12,3 +16,8 @@ cp target/x86_64-pc-windows-gnu/release/zendoo_sc.dll jni/src/main/resources/nat
 
 cd jni
 mvn clean package
+
+if [ "$PUBLISH" = "true" ]; then
+  echo "Deploying package to maven repository."
+  mvn deploy
+fi
