@@ -1,5 +1,11 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+# check required vars are set
+if [ -z "${CONTAINER_JAVA_VER+x}" ] && [ -z "${CONTAINER_RUST_VER+x}" ]; then
+  echo "CONTAINER_JAVA_VER and CONTAINER_RUST_VER environment variables need to be set!"
+  exit 1
+fi
 
 # Add local zenbuilder user
 # Either use LOCAL_USER_ID:LOCAL_GRP_ID if set via environment
@@ -22,20 +28,33 @@ echo "Starting with UID/GID: $LOCAL_UID:$LOCAL_GID"
 
 export HOME=/home/zenbuilder
 
+# Get Java $CONTAINER_JAVA_VER
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y "$CONTAINER_JAVA_VER" maven
+apt-get -y clean
+apt-get -y autoclean
+rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
+
+# Get Rust $CONTAINER_RUST_VER
+curl https://sh.rustup.rs -sSf | gosu zenbuilder bash -s -- --default-toolchain none -y
+gosu zenbuilder echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
+export PATH="/home/zenbuilder/.cargo/bin:${PATH}"
+gosu zenbuilder rustup toolchain install "$CONTAINER_RUST_VER"
+gosu zenbuilder rustup target add --toolchain "$CONTAINER_RUST_VER" x86_64-pc-windows-gnu
+# fix "error: could not compile `api`." "/usr/bin/ld: unrecognized option '--nxcompat'"
+# https://github.com/rust-lang/rust/issues/32859#issuecomment-284308455
+# appears to be fixed in rust 1.42.0
+gosu zenbuilder cat << EOF > $HOME/.cargo/config
+[target.x86_64-pc-windows-gnu]
+linker = "$(which x86_64-w64-mingw32-gcc)"
+EOF
+
+# Print version information
+gosu zenbuilder java -version
+gosu zenbuilder rustc --version
+
 # Fix ownership recursively
 chown -RH zenbuilder:zenbuilder /build
 
-# Get Rust
-curl https://sh.rustup.rs -sSf | gosu zenbuilder bash -s -- -y
-gosu zenbuilder echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
-export PATH="/home/zenbuilder/.cargo/bin:${PATH}"
-
-
-# Set Rust
-gosu zenbuilder /home/zenbuilder/.cargo/bin/rustup target add x86_64-pc-windows-gnu
-
-#Add maven settings
-gosu zenbuilder bash -c "mkdir -p $HOME/.m2 && cp /build/.travis.settings.xml $HOME/.m2/settings.xml"
-
-exec gosu zenbuilder "$@"
+exec gosu zenbuilder /usr/local/bin//entrypoint_setup_gpg.sh "$@"
 
