@@ -19,8 +19,8 @@ fn read_nullable_raw_pointer<'a, T>(input: *const T) -> Option<&'a T> {
     unsafe { input.as_ref() }
 }
 
-fn deserialize_to_raw_pointer<T: FromBytes>(buffer: &[u8]) -> *mut T {
-    match deserialize_from_buffer(buffer) {
+fn deserialize_to_raw_pointer<T: FromBytes>(buffer: &[u8], checked: bool) -> *mut T {
+    match deserialize_from_buffer(buffer, checked) {
         Ok(t) => Box::into_raw(Box::new(t)),
         Err(_) => return null_mut(),
     }
@@ -74,7 +74,7 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeDes
     let fe_bytes = _env.convert_byte_array(_field_element_bytes)
         .expect("Should be able to convert to Rust byte array");
 
-    let fe_ptr: *const FieldElement = deserialize_to_raw_pointer(fe_bytes.as_slice());
+    let fe_ptr: *const FieldElement = deserialize_to_raw_pointer(fe_bytes.as_slice(), true);
 
     let fe: jlong = jlong::from(fe_ptr as i64);
 
@@ -220,7 +220,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeDes
     let pk_bytes = _env.convert_byte_array(_public_key_bytes)
         .expect("Cannot read public key bytes.");
 
-    let public_key_pointer: *const SchnorrPk = deserialize_to_raw_pointer(pk_bytes.as_slice());
+    let public_key_pointer: *const SchnorrPk = deserialize_to_raw_pointer(pk_bytes.as_slice(), false);
 
     let public_key: jlong = jlong::from(public_key_pointer as i64);
 
@@ -284,7 +284,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeDes
 {
     let sk_bytes = _env.convert_byte_array(_secret_key_bytes)
         .expect("Cannot read public key bytes.");
-    let secret_key_pointer: *const SchnorrSk = deserialize_to_raw_pointer(sk_bytes.as_slice());
+    let secret_key_pointer: *const SchnorrSk = deserialize_to_raw_pointer(sk_bytes.as_slice(), true);
 
     let secret_key: jlong = jlong::from(secret_key_pointer as i64);
 
@@ -349,7 +349,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeDeserialize
     let pk_bytes = _env.convert_byte_array(_public_key_bytes)
         .expect("Cannot read public key bytes.");
 
-    let public_key_pointer: *mut VRFPk = deserialize_to_raw_pointer(pk_bytes.as_slice());
+    let public_key_pointer: *mut VRFPk = deserialize_to_raw_pointer(pk_bytes.as_slice(), false);
 
     let public_key: jlong = jlong::from(public_key_pointer as i64);
 
@@ -413,7 +413,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeDeserialize
     let sk_bytes = _env.convert_byte_array(_secret_key_bytes)
         .expect("Cannot read public key bytes.");
 
-    let secret_key_pointer: *mut SchnorrSk = deserialize_to_raw_pointer(sk_bytes.as_slice());
+    let secret_key_pointer: *mut SchnorrSk = deserialize_to_raw_pointer(sk_bytes.as_slice(), true);
 
     let secret_key: jlong = jlong::from(secret_key_pointer as i64);
 
@@ -473,7 +473,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDes
     let sig_bytes = _env.convert_byte_array(_sig_bytes)
         .expect("Should be able to convert to Rust byte array");
 
-    let sig_ptr: *const SchnorrSig = deserialize_to_raw_pointer(sig_bytes.as_slice());
+    let sig_ptr: *const SchnorrSig = deserialize_to_raw_pointer(sig_bytes.as_slice(), true);
 
     let sig: jlong = jlong::from(sig_ptr as i64);
 
@@ -763,7 +763,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProo
     let proof_bytes = _env.convert_byte_array(_proof_bytes)
         .expect("Should be able to convert to Rust byte array");
 
-    let proof_ptr: *const VRFProof = deserialize_to_raw_pointer(proof_bytes.as_slice());
+    let proof_ptr: *const VRFProof = deserialize_to_raw_pointer(proof_bytes.as_slice(), true);
 
     let proof: jlong = jlong::from(proof_ptr as i64);
 
@@ -1169,7 +1169,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _schnorr_sigs_list: jobjectArray,
     _schnorr_pks_list:  jobjectArray,
     _threshold: jlong,
-    _proving_key_path: JString
+    _proving_key_path: JString,
+    _enforce_membership_proving_key: jboolean,
 ) -> jobject
 {
     //Extract backward transfers
@@ -1278,7 +1279,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     let proving_key_path = _env.get_string(_proving_key_path)
         .expect("Should be able to read jstring as Rust String");
 
-
     //create proof
     let (proof, quality) = match create_naive_threshold_sig_proof(
         pks.as_slice(),
@@ -1287,7 +1287,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         &prev_end_epoch_block_hash,
         bt_list.as_slice(),
         threshold,
-        proving_key_path.to_str().unwrap()
+        proving_key_path.to_str().unwrap(),
+        _enforce_membership_proving_key == JNI_TRUE,
     ) {
         Ok(proof) => proof,
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
@@ -1330,7 +1331,9 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _constant: JObject,
     _quality: jlong,
     _sc_proof_bytes: jbyteArray,
-    _verification_key_path: JString
+    _enforce_membership_proof: jboolean,
+    _verification_key_path: JString,
+    _enforce_membership_vk: jboolean,
 ) -> jboolean {
 
     //Extract backward transfers
@@ -1406,7 +1409,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     //Extract proof
     let proof_bytes = _env.convert_byte_array(_sc_proof_bytes)
         .expect("Should be able to convert to Rust byte array");
-    let proof = match deserialize_from_buffer(&proof_bytes[..]){
+    let proof = match deserialize_from_buffer(&proof_bytes[..], _enforce_membership_proof == JNI_TRUE){
         Ok(proof) => proof,
         Err(_) => return JNI_FALSE // I/O ERROR
     };
@@ -1423,7 +1426,9 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         bt_list.as_slice(),
         quality,
         &proof,
-        vk_path.to_str().unwrap()
+        vk_path.to_str().unwrap(),
+        _enforce_membership_vk == JNI_TRUE,
+
     ) {
         Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
         Err(_) => JNI_FALSE // CRYPTO_ERROR
