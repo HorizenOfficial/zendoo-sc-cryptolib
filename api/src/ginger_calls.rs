@@ -20,7 +20,10 @@ use primitives::{
             BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters
         },
     },
-    merkle_tree::field_based_mht::{FieldBasedMerkleHashTree, FieldBasedMerkleTreeConfig, FieldBasedMerkleTreePath},
+    merkle_tree::field_based_mht::{
+        FieldBasedMerkleHashTree, FieldBasedMerkleTreeConfig,
+        FieldBasedMerkleTreePath, MNT4753_PHANTOM_MERKLE_ROOT,
+    },
     signature::{
         FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
             FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature
@@ -178,20 +181,19 @@ pub fn compute_msg_to_sign(
     bt_list:                  &[BackwardTransfer],
 ) -> Result<(FieldElement, FieldElement), Error> {
 
-    let mut bt_field_list = vec![];
-    for bt in bt_list.iter() {
-        let bt_f = bt.to_field_element()?;
-        bt_field_list.push(bt_f);
-    }
+    let mr_bt = if bt_list.is_empty() {
+        MNT4753_PHANTOM_MERKLE_ROOT
+    } else {
+        let mut bt_field_list = vec![];
+        for bt in bt_list.iter() {
+            let bt_f = bt.to_field_element()?;
+            bt_field_list.push(bt_f);
+        }
 
-    //Compute bt_list merkle_root
-    let bt_mt = new_ginger_merkle_tree(bt_field_list.as_slice())?;
-
-    drop(bt_field_list);
-
-    let mr_bt = get_ginger_merkle_root(&bt_mt);
-
-    drop(bt_mt);
+        //Compute bt_list merkle_root
+        let bt_mt = new_ginger_merkle_tree(bt_field_list.as_slice())?;
+        get_ginger_merkle_root(&bt_mt)
+    };
 
     //Compute message to be verified
     let msg = compute_poseidon_hash(&[mr_bt, *prev_end_epoch_mc_b_hash, *end_epoch_mc_b_hash])?;
@@ -416,8 +418,7 @@ mod test {
         unsafe { Vec::from_raw_parts(p as *mut i8, len, cap) }
     }
 
-    #[test]
-    fn create_sample_naive_threshold_sig_circuit() {
+    fn create_sample_naive_threshold_sig_circuit(bt_num: usize) {
         //assume to have 3 pks, threshold = 2
         let mut rng = OsRng;
 
@@ -429,7 +430,6 @@ mod test {
         let end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
         let prev_end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
 
-        let bt_num = 10;
         let mut bt_list = vec![];
         for _ in 0..bt_num {
             bt_list.push(BackwardTransfer::default());
@@ -502,6 +502,12 @@ mod test {
             &proof,
             "./sample_vk",
         ).unwrap());
+    }
+
+    #[test]
+    fn naive_threshold_sig_circuit_test() {
+        create_sample_naive_threshold_sig_circuit(10);
+        create_sample_naive_threshold_sig_circuit(0);
     }
 
     #[test]
