@@ -220,6 +220,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeDes
     let pk_bytes = _env.convert_byte_array(_public_key_bytes)
         .expect("Cannot read public key bytes.");
 
+    // Public key validity can be check after, if needed, using keyVerify() function
     let public_key_pointer: *const SchnorrPk = deserialize_to_raw_pointer(pk_bytes.as_slice(), false);
 
     let public_key: jlong = jlong::from(public_key_pointer as i64);
@@ -349,6 +350,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeDeserialize
     let pk_bytes = _env.convert_byte_array(_public_key_bytes)
         .expect("Cannot read public key bytes.");
 
+    // Public key validity can be check later, if needed, using keyVerify() function
     let public_key_pointer: *mut VRFPk = deserialize_to_raw_pointer(pk_bytes.as_slice(), false);
 
     let public_key: jlong = jlong::from(public_key_pointer as i64);

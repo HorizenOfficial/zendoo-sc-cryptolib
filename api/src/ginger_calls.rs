@@ -492,7 +492,7 @@ mod test {
             quality,
             &proof,
             "./sample_vk",
-            false,
+            true,
         ).unwrap());
 
 
@@ -505,7 +505,7 @@ mod test {
             quality - 1,
             &proof,
             "./sample_vk",
-            false,
+            true,
         ).unwrap());
     }
 
