@@ -289,13 +289,13 @@ public class NaiveThresholdSigProofTest {
         assertNotNull("Constant creation must be successfull", constant);
 
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
-                prevEndEpochBlockHash, constant, quality, proof, false, verificationKeyPath, false);
+                prevEndEpochBlockHash, constant, quality, proof, true, verificationKeyPath, true);
 
         assertTrue("Proof must be verified", isProofVerified);
 
         quality = threshold - 1;
         isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
-                prevEndEpochBlockHash, constant, quality, proof, false, verificationKeyPath, false);
+                prevEndEpochBlockHash, constant, quality, proof, true, verificationKeyPath, true);
 
         assertFalse("Proof must not be verified", isProofVerified);
     }

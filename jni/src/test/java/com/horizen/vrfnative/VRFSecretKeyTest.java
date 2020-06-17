@@ -34,13 +34,11 @@ public class VRFSecretKeyTest {
             assertTrue("Recreated key must be valid.", recreatedPublicKey.verifyKey());
             assertArrayEquals("Recreated public key must be the same.", publicKeyBytes, recreatedPublicKeyBytes);
 
-            VRFPublicKey deserializedPublicKey = VRFPublicKey.deserialize(publicKeyBytes);
+            VRFPublicKey deserializedPublicKey = VRFPublicKey.deserialize(publicKeyBytes, true);
             VRFSecretKey deserializedSecretKey = VRFSecretKey.deserialize(secretKeyBytes);
 
             assertNotNull("publicKey deserialization must not fail", deserializedPublicKey);
             assertNotNull("secretKey deserialization must not fail", deserializedSecretKey);
-
-            assertTrue("Deserialized key must be valid.", deserializedPublicKey.verifyKey());
 
             keyPair.getPublicKey().freePublicKey();
             keyPair.getSecretKey().freeSecretKey();

@@ -76,7 +76,7 @@ public class VRFKeyPairTest {
             88, -12, -127, -52, -33, -63, -112, 8, 64, 58, 49, -4, 86, -76, 40, 56, 28, 120, 92, 14, -112, -53, 8, 31,
             -41, -77, -73, -80, 50, -62, 99, 94, -67, 15, -110, 26, -41, 27, -126, 123, 0, 0
         };
-        VRFProof proof = VRFProof.deserialize(proofBytes);
+        VRFProof proof = VRFProof.deserialize(proofBytes, true);
 
         assertNotNull("proof deserialization must not fail", proof);
 
@@ -124,6 +124,8 @@ public class VRFKeyPairTest {
             FieldElement fieldElement = FieldElement.createRandom();
 
             VRFProveResult proofVRFOutputPair = keyPair.prove(fieldElement);
+
+            assertTrue("VRF Proof must be valid", proofVRFOutputPair.getVRFProof().isValidVRFProof());
 
             assertNotNull("Attempt to create vrf proof and output failed.", proofVRFOutputPair);
 

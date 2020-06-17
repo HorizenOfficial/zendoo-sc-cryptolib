@@ -6,12 +6,12 @@ edition = "2018"
 include = ["Cargo.toml", "src"]
 
 [dependencies]
-algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "gro16_to_bytes_checked"}
-primitives = {version = "0.1.0", features = ["signature"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "gro16_to_bytes_checked"}
-r1cs-crypto = {version = "0.1.0", features = ["signature"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "gro16_to_bytes_checked"}
-r1cs-core = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "gro16_to_bytes_checked"}
-r1cs-std = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "gro16_to_bytes_checked"}
-proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "gro16_to_bytes_checked"}
+algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "read_checked_unchecked"}
+primitives = {version = "0.1.0", features = ["signature"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "read_checked_unchecked"}
+r1cs-crypto = {version = "0.1.0", features = ["signature"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "read_checked_unchecked"}
+r1cs-core = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "read_checked_unchecked"}
+r1cs-std = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "read_checked_unchecked"}
+proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "read_checked_unchecked"}
 
 derivative = "1"
 lazy_static = "1"

@@ -8,7 +8,7 @@ use algebra::{
             G1Projective as MNT6G1Projective, G1Affine as MNT6G1Affine
         },
     },
-    FromBytes, ToBytes,
+    FromBytes, FromBytesChecked, SemanticallyValid, ToBytes,
     BigInteger768,
     ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand,
 };
@@ -68,18 +68,26 @@ pub type Error = Box<dyn std::error::Error>;
 //*******************************Generic I/O functions**********************************************
 // Note: Should decide if panicking or handling IO errors
 
-pub fn deserialize_from_buffer<T: FromBytes>(buffer: &[u8], checked: bool) ->  IoResult<T> {
-    if checked { T::read(buffer) } else { T::read_unchecked(buffer) }
+pub fn deserialize_from_buffer<T: FromBytes>(buffer: &[u8]) ->  IoResult<T> {
+    T::read(buffer)
+}
 
+pub fn deserialize_from_buffer_checked<T: FromBytesChecked>(buffer: &[u8]) ->  IoResult<T> {
+    T::read_checked(buffer)
 }
 
 pub fn serialize_to_buffer<T: ToBytes>(to_write: &T, buffer: &mut [u8]) -> IoResult<()> {
     to_write.write(buffer)
 }
 
-pub fn read_from_file<T: FromBytes>(file_path: &str, checked: bool) -> IoResult<T>{
+pub fn read_from_file<T: FromBytes>(file_path: &str) -> IoResult<T>{
     let mut fs = File::open(file_path)?;
-    if checked { T::read(&mut fs) } else { T::read_unchecked(&mut fs) }
+    T::read(&mut fs)
+}
+
+pub fn read_from_file_checked<T: FromBytesChecked>(file_path: &str) -> IoResult<T>{
+    let mut fs = File::open(file_path)?;
+    T::read_checked(&mut fs)
 }
 
 pub fn get_random_field_element() -> FieldElement {
@@ -266,7 +274,11 @@ pub fn create_naive_threshold_sig_proof(
     );
 
     //Read proving key
-    let params = read_from_file(proving_key_path, enforce_membership)?;
+    let params = if enforce_membership {
+        read_from_file_checked(proving_key_path)
+    } else {
+        read_from_file(proving_key_path)
+    }?;
 
     //Create and return proof
     let mut rng = OsRng;
@@ -293,7 +305,11 @@ pub fn verify_naive_threshold_sig_proof(
     let aggregated_input = compute_poseidon_hash(&[*constant, wcert_sysdata_hash])?;
 
     //Verify proof
-    let vk = read_from_file(vk_path, enforce_membership)?;
+    let vk = if enforce_membership {
+        read_from_file_checked(vk_path)
+    } else {
+        read_from_file(vk_path)
+    }?;
     let pvk = prepare_verifying_key(&vk); //Get verifying key
     let is_verified = verify_proof(&pvk, &proof, &[aggregated_input])?;
 
@@ -356,6 +372,10 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
 
 pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Result<FieldElement, Error> {
     VRFScheme::proof_to_hash(&VRF_GH_PARAMS,&pk.into_projective(), &[*msg], proof)
+}
+
+pub fn is_valid_vrf_proof(proof: &VRFProof) -> bool {
+    proof.is_valid()
 }
 
 //************Merkle Tree functions******************
@@ -527,13 +547,13 @@ mod test {
         //Serialize/deserialize pk
         let mut pk_serialized = vec![0u8; SCHNORR_PK_SIZE];
         serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
-        let pk_deserialized = deserialize_from_buffer(&pk_serialized, true).unwrap();
+        let pk_deserialized = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
         let mut sk_serialized = vec![0u8; SCHNORR_SK_SIZE];
         serialize_to_buffer(&sk, &mut sk_serialized).unwrap();
-        let sk_deserialized = deserialize_from_buffer(&sk_serialized, true).unwrap();
+        let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
         assert_eq!(sk, sk_deserialized);
 
         let sig = schnorr_sign(&msg, &sk, &pk).unwrap(); //Sign msg
@@ -541,7 +561,7 @@ mod test {
         //Serialize/deserialize sig
         let mut sig_serialized = vec![0u8; SCHNORR_SIG_SIZE];
         serialize_to_buffer(&sig, &mut sig_serialized).unwrap();
-        let sig_deserialized = deserialize_from_buffer(&sig_serialized, true).unwrap();
+        let sig_deserialized = deserialize_from_buffer(&sig_serialized).unwrap();
         assert_eq!(sig, sig_deserialized);
 
         assert!(schnorr_verify_signature(&msg, &pk, &sig).unwrap()); //Verify sig
@@ -563,27 +583,28 @@ mod test {
         //Serialize/deserialize pk
         let mut pk_serialized = vec![0u8; VRF_PK_SIZE];
         serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
-        let pk_deserialized = deserialize_from_buffer(&pk_serialized, true).unwrap();
+        let pk_deserialized = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
         let mut sk_serialized = vec![0u8; VRF_SK_SIZE];
         serialize_to_buffer(&sk, &mut sk_serialized).unwrap();
-        let sk_deserialized = deserialize_from_buffer(&sk_serialized, true).unwrap();
+        let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
         assert_eq!(sk, sk_deserialized);
 
         let (vrf_proof, vrf_out) = vrf_prove(&msg, &sk, &pk).unwrap(); //Create vrf proof for msg
+        assert!(is_valid_vrf_proof(&vrf_proof));
 
         //Serialize/deserialize vrf proof
         let mut proof_serialized = vec![0u8; VRF_PROOF_SIZE];
         serialize_to_buffer(&vrf_proof, &mut proof_serialized).unwrap();
-        let proof_deserialized = deserialize_from_buffer(&proof_serialized, true).unwrap();
+        let proof_deserialized = deserialize_from_buffer_checked(&proof_serialized).unwrap();
         assert_eq!(vrf_proof, proof_deserialized);
 
         //Serialize/deserialize vrf out (i.e. a field element)
         let mut vrf_out_serialized = vec![0u8; FIELD_SIZE];
         serialize_to_buffer(&vrf_out, &mut vrf_out_serialized).unwrap();
-        let vrf_out_deserialized = deserialize_from_buffer(&vrf_out_serialized, true).unwrap();
+        let vrf_out_deserialized = deserialize_from_buffer(&vrf_out_serialized).unwrap();
         assert_eq!(vrf_out, vrf_out_deserialized);
 
         let vrf_out_dup = vrf_proof_to_hash(&msg, &pk, &vrf_proof).unwrap(); //Verify vrf proof and get vrf out for msg
