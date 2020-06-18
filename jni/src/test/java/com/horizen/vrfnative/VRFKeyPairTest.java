@@ -14,23 +14,19 @@ public class VRFKeyPairTest {
 
 
     @Test
-    public void testGenerate() {
+    public void testGenerate() throws Exception {
 
-        VRFKeyPair keyPair = VRFKeyPair.generate();
+        try(VRFKeyPair keyPair = VRFKeyPair.generate())
+        {
+            assertNotNull("Key pair generation was unsuccessful.", keyPair);
 
-        assertNotNull("Key pair generation was unsuccessful.", keyPair);
-
-        assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
-
-        //Free memory
-        keyPair.getPublicKey().freePublicKey();
-        keyPair.getSecretKey().freeSecretKey();
+            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
+        }
     }
 
     @Test
-    public void testProveVerify() {
+    public void testProveVerify() throws Exception {
 
-        // Deserialize sk and compute pk from it
         byte[] skBytes = {
             55, -30, 33, 71, -114, -74, 105, 126, -61, -19, 7, 118, -13, 108, 23, -51, -92, 69, -60, -65, 62, -58, -29,
             48, 116, -107, -55, 51, 86, 102, -100, 76, 36, -40, -91, 23, -85, 124, -125, 77, 19, 29, 125, -17, -87, -5,
@@ -38,13 +34,7 @@ public class VRFKeyPairTest {
             113, -61, 8, -6, -29, -80, -121, -60, 54, -14, -110, -104, 59, 100, -1, -27, 77, 71, 60, -32, -122, 1, 39,
             -50, -96, 29, 0, 0
         };
-        VRFSecretKey sk = VRFSecretKey.deserialize(skBytes);
 
-        assertNotNull("sk deserialization must not fail", sk);
-
-        VRFKeyPair keyPair = new VRFKeyPair(sk);
-
-        // Deserialize message
         byte[] messageBytes = {
             -2, 99, 94, 19, 56, 121, 107, 88, 17, -102, 17, -95, 80, 104, 126, 125, -27, 66, -43, 122, 39, -124, 95,
             115, 100, 122, 80, -44, -31, 38, -78, -27, 40, -55, 11, -39, -11, -16, -59, -17, 100, 26, 54, 8, -99, -99,
@@ -52,11 +42,7 @@ public class VRFKeyPairTest {
             -102, -128, 19, 67, -18, -101, 92, 21, -120, -37, -67, 69, 14, -112, -78, 23, 94, 56, -82, 120, -2, -122,
             57, -120, 37, 119, 1, 0
         };
-        FieldElement message = FieldElement.deserialize(messageBytes);
 
-        assertNotNull("message deserialization must not fail", sk);
-
-        // Deserialize proof
         byte[] proofBytes = {
             61, 100, 69, 22, -85, 79, -64, 99, -98, -99, -62, -128, 54, -14, -122, 102, -59, 109, 65, -64, 75, 37, -81,
             -40, 8, -108, -77, -112, -2, 122, 20, -20, -50, -91, -26, -54, -116, 61, -14, 99, -13, -80, -111, 23, 65,
@@ -76,11 +62,7 @@ public class VRFKeyPairTest {
             88, -12, -127, -52, -33, -63, -112, 8, 64, 58, 49, -4, 86, -76, 40, 56, 28, 120, 92, 14, -112, -53, 8, 31,
             -41, -77, -73, -80, 50, -62, 99, 94, -67, 15, -110, 26, -41, 27, -126, 123, 0, 0
         };
-        VRFProof proof = VRFProof.deserialize(proofBytes);
 
-        assertNotNull("proof deserialization must not fail", proof);
-
-        // Deserialize VRF Output
         byte[] vrfOutputBytes = {
             -126, 18, -112, -103, 101, 88, -117, -21, 7, -72, -74, -128, -128, -99, -107, 31, -48, -44, 44, 38, 121, 28,
             -33, -88, -74, -68, 66, 26, -100, 115, -95, -98, -50, -57, -112, -81, 16, -72, -118, -58, -74, 65, 90, -96,
@@ -88,66 +70,58 @@ public class VRFKeyPairTest {
             -9, 101, 30, -95, -15, -52, -72, -53, -97, -22, 120, 115, -54, 97, 16, -30, -54, 3, -11, 36, -97, -70, -46,
             42, -43, 11, 104, 1, 0
         };
-        FieldElement expectedVrfOutput = FieldElement.deserialize(vrfOutputBytes);
 
-        assertNotNull("expectedVrfOutput deserialization must not fail", sk);
+        try
+        (
+            VRFSecretKey sk = VRFSecretKey.deserialize(skBytes);
+            VRFKeyPair keyPair = new VRFKeyPair(sk);
+            FieldElement message = FieldElement.deserialize(messageBytes);
+            VRFProof proof = VRFProof.deserialize(proofBytes);
+            FieldElement expectedVrfOutput = FieldElement.deserialize(vrfOutputBytes)
+        )
+        {
+            assertNotNull("sk deserialization must not fail", sk);
+            assertNotNull("message deserialization must not fail", message);
+            assertNotNull("proof deserialization must not fail", proof);
+            assertNotNull("expectedVrfOutput deserialization must not fail", sk);
 
-        // Verify proof and get vrf output
-        FieldElement vrfOutput = keyPair.getPublicKey().proofToHash(proof, message);
+            try(FieldElement vrfOutput = keyPair.getPublicKey().proofToHash(proof, message))
+            {
+                assertNotNull("VRF Proof verification and VRF Output computation has failed.", vrfOutput);
 
-        assertNotNull("VRF Proof verification and VRF Output computation has failed.", vrfOutput);
-
-        // Check vrfOutput == expectedVrfOutput
-        assertEquals("vrfOutput and expectedVrfOutput must be equal", vrfOutput, expectedVrfOutput);
-
-        //Free memory
-        keyPair.getPublicKey().freePublicKey();
-        keyPair.getSecretKey().freeSecretKey();
-
-        message.freeFieldElement();
-        vrfOutput.freeFieldElement();
-        expectedVrfOutput.freeFieldElement();
-
-        proof.freeProof();
+                // Check vrfOutput == expectedVrfOutput
+                assertEquals("vrfOutput and expectedVrfOutput must be equal", vrfOutput, expectedVrfOutput);
+            }
+        }
     }
 
     @Test
-    public void testRandomProveVerify() {
+    public void testRandomProveVerify() throws Exception {
         int samples = 100;
 
         for(int i = 0; i < samples; i++) {
-            VRFKeyPair keyPair = VRFKeyPair.generate();
+            try
+            (
+                VRFKeyPair keyPair = VRFKeyPair.generate();
+                FieldElement fieldElement = FieldElement.createRandom();
+                FieldElement wrongFieldElement = FieldElement.createRandom()
+            )
+            {
+                assertNotNull("Key pair generation was unsuccessful.", keyPair);
+                assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
 
-            assertNotNull("Key pair generation was unsuccessful.", keyPair);
-            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
-
-            FieldElement fieldElement = FieldElement.createRandom();
-
-            VRFProveResult proofVRFOutputPair = keyPair.prove(fieldElement);
-
-            assertNotNull("Attempt to create vrf proof and output failed.", proofVRFOutputPair);
-
-            FieldElement vrfOutput = keyPair.getPublicKey().proofToHash(proofVRFOutputPair.getVRFProof(), fieldElement);
-
-            assertNotNull("VRF Proof verification and VRF Output computation must not fail.", vrfOutput);
-
-            assertEquals("prove() and proof_to_hash() vrf outputs must be equal", proofVRFOutputPair.getVRFOutput(), vrfOutput);
-
-            FieldElement wrongFieldElement = FieldElement.createRandom();
-
-            assertNull("VRF Proof verification must fail", keyPair.getPublicKey().proofToHash(proofVRFOutputPair.getVRFProof(), wrongFieldElement));
-
-            //Free memory
-            keyPair.getPublicKey().freePublicKey();
-            keyPair.getSecretKey().freeSecretKey();
-
-            fieldElement.freeFieldElement();
-            wrongFieldElement.freeFieldElement();
-
-            vrfOutput.freeFieldElement();
-            proofVRFOutputPair.getVRFOutput().freeFieldElement();
-
-            proofVRFOutputPair.getVRFProof().freeProof();
+                try
+                (
+                    VRFProveResult proofVRFOutputPair = keyPair.prove(fieldElement);
+                    FieldElement vrfOutput = keyPair.getPublicKey().proofToHash(proofVRFOutputPair.getVRFProof(), fieldElement)
+                )
+                {
+                    assertNotNull("Attempt to create vrf proof and output failed.", proofVRFOutputPair);
+                    assertNotNull("VRF Proof verification and VRF Output computation must not fail.", vrfOutput);
+                    assertEquals("prove() and proof_to_hash() vrf outputs must be equal", proofVRFOutputPair.getVRFOutput(), vrfOutput);
+                    assertNull("VRF Proof verification must fail", keyPair.getPublicKey().proofToHash(proofVRFOutputPair.getVRFProof(), wrongFieldElement));
+                }
+            }
         }
     }
 }
