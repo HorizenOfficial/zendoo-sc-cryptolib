@@ -53,13 +53,51 @@ public class PoseidonHashTest {
             try
             (
                 FieldElement expectedHash = FieldElement.deserialize(hashBytes);
-                FieldElement hash = PoseidonHash.computeHash(hashInput)
+                FieldElement hash = PoseidonHash.computeHash(hashInput);
+                UpdatablePoseidonHash digest = UpdatablePoseidonHash.getInstance()
             )
             {
                 assertNotNull("Hash must be computed", hash);
                 assertNotNull("expectedHash deserialization must not fail", expectedHash);
                 // Check hash == expectedHash
                 assertEquals("Hardcoded and computed hashes must be equal", expectedHash, hash);
+
+                //Test Updatable variant
+                digest.update(lhs);
+                digest.finalizeHash(); //Calling finalizeHash() keeps the state
+
+                digest.update(rhs);
+                try
+                (
+                    FieldElement uhOutput = digest.finalizeHash();
+                    FieldElement uhOutputTemp = digest.finalizeHash() //.finalizeHash() is idempotent
+                )
+                {
+                    assertEquals("Normal and updatable hash results must be equal", uhOutput, hash);
+                    assertEquals(".finalizeHash() is not idempotent", uhOutputTemp, hash);
+                }
+            }
+
+            // Test initializing UpdatablePoseidonHash with personalization is the same as concatenating
+            // to PoseidonHash input the personalization and the (eventual) padding.
+            FieldElement[] personalization = hashInput;
+            try
+            (
+                UpdatablePoseidonHash digest = UpdatablePoseidonHash.getInstance(personalization);
+                FieldElement random_f = FieldElement.createRandom();
+            )
+            {
+                digest.update(random_f);
+                FieldElement[] newHashInput = {personalization[0], personalization[1], random_f};
+
+                try
+                (
+                    FieldElement uh_output = digest.finalizeHash();
+                    FieldElement h_output = PoseidonHash.computeHash(newHashInput);
+                )
+                {
+                    assertEquals("Updatable with personalization and normal outputs must be equal", uh_output, h_output);
+                }
             }
         }
     }

@@ -14,8 +14,12 @@ use algebra::{
 };
 use primitives::{
     crh::{
-        poseidon::MNT4PoseidonHash,
-        FieldBasedHash,
+        poseidon::{
+            parameters::MNT4753PoseidonParameters,
+            updatable::UpdatablePoseidonHash,
+            MNT4PoseidonHash
+        },
+        FieldBasedHash, UpdatableFieldBasedHash,
         bowe_hopwood::{
             BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters
         },
@@ -117,7 +121,21 @@ pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &
     SchnorrSigScheme::verify(&pk.into_projective(), &[*msg], signature)
 }
 
-//************************************Poseidon Hash function****************************************
+//************************************Poseidon Hash functions****************************************
+
+pub type UpdatableFieldHash = UpdatablePoseidonHash<FieldElement, MNT4753PoseidonParameters>;
+
+pub fn get_updatable_poseidon_hash(personalization: Option<Vec<FieldElement>>) -> UpdatableFieldHash {
+    UpdatableFieldHash::new(personalization)
+}
+
+pub fn update_poseidon_hash(hash: &mut UpdatableFieldHash, input: FieldElement){
+    hash.update(input);
+}
+
+pub fn finalize_poseidon_hash(hash: &UpdatableFieldHash) -> FieldElement{
+    hash.finalize()
+}
 
 pub fn compute_poseidon_hash(input: &[FieldElement]) -> Result<FieldElement, Error> {
     MNT4PoseidonHash::evaluate(input)
@@ -607,5 +625,41 @@ mod test {
             assert!(verify_ginger_merkle_path(path.clone(), &root, &leaves[i]).unwrap());
             assert!(!verify_ginger_merkle_path(path, &wrong_root, &leaves[i]).unwrap());
         }
+    }
+
+
+    #[test]
+    fn sample_poseidon_hash(){
+        let mut rng = OsRng;
+        let hash_input = vec![FieldElement::rand(&mut rng); 2];
+
+        //Compute poseidon hash
+        let h_output = compute_poseidon_hash(hash_input.as_slice()).unwrap();
+
+        //Do the same but using UpdatablePoseidonHash
+        let mut uh = get_updatable_poseidon_hash(None);
+
+        update_poseidon_hash(&mut uh, hash_input[0]);
+        uh.finalize(); //Call to finalize() keeps the state
+        update_poseidon_hash(&mut uh, hash_input[1]);
+        assert_eq!(h_output, finalize_poseidon_hash(&uh));
+
+        //finalize() is idempotent
+        assert_eq!(h_output, finalize_poseidon_hash(&uh));
+
+        // Test initializing UpdatablePoseidonHash with personalization is the same as concatenating
+        // to PoseidonHash input the personalization and the (eventual) padding.
+        {
+            let mut personalization = vec![FieldElement::rand(&mut rng); 2];
+            let mut uh = get_updatable_poseidon_hash(Some(personalization.clone()));
+            update_poseidon_hash(&mut uh, hash_input[0]);
+            update_poseidon_hash(&mut uh, hash_input[1]);
+
+            let uh_output = finalize_poseidon_hash(&uh);
+            personalization.extend_from_slice(hash_input.as_slice());
+            let h_output = compute_poseidon_hash(personalization.as_slice()).unwrap();
+            assert_eq!(uh_output, h_output);
+        }
+
     }
 }

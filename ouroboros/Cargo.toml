@@ -5,7 +5,7 @@ authors = ["DanieleDiBenedetto <daniele@horizenlabs.io>"]
 edition = "2018"
 
 [dependencies]
-algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "development"}
-primitives = {version = "0.1.0", features = ["vrf"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "development"}
+algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "updatable_poseidon"}
+primitives = {version = "0.1.0", features = ["vrf"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "updatable_poseidon"}
 rand = { version = "0.7" }
 

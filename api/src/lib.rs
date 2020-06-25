@@ -15,6 +15,11 @@ fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
     unsafe { &*input }
 }
 
+fn read_mut_raw_pointer<'a, T>(input: *mut T) -> &'a mut T {
+    assert!(!input.is_null());
+    unsafe { &mut *input }
+}
+
 fn read_nullable_raw_pointer<'a, T>(input: *const T) -> Option<&'a T> {
     unsafe { input.as_ref() }
 }
@@ -684,6 +689,123 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVer
         },
         Err(_) => JNI_FALSE //CRYPTO_ERROR
     }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_poseidonnative_UpdatablePoseidonHash_nativeGetUpdatablePoseidonHash(
+    _env: JNIEnv,
+    _class: JClass,
+    _personalization: jobjectArray,
+) -> jobject
+{
+    //Read _personalization as array of FieldElement
+    let personalization_len = _env.get_array_length(_personalization)
+        .expect("Should be able to read personalization array size");
+    let mut personalization = vec![];
+
+    // Array can be empty
+    for i in 0..personalization_len {
+        let field_obj = _env.get_object_array_element(_personalization, i)
+            .expect(format!("Should be able to read elem {} of the personalization array", i).as_str());
+
+        let field = {
+
+            let f =_env.get_field(field_obj, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            read_raw_pointer(f.j().unwrap() as *const FieldElement)
+        };
+
+        personalization.push(*field);
+    }
+
+    //Instantiate UpdatablePoseidonHash
+    let uh = get_updatable_poseidon_hash(
+        if personalization.is_empty() { None } else { Some(personalization) }
+    );
+
+    //Return UpdatablePoseidonHash instance
+    let uh_ptr: jlong = jlong::from(Box::into_raw(Box::new(uh)) as i64);
+
+    let uh_class =  _env.find_class("com/horizen/poseidonnative/UpdatablePoseidonHash")
+        .expect("Should be able to find UpdatablePoseidonHash class");
+
+    let result = _env.new_object(uh_class, "(J)V", &[
+        JValue::Long(uh_ptr)]).expect("Should be able to create new long for UpdatablePoseidonHash");
+
+    *result
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_poseidonnative_UpdatablePoseidonHash_nativeUpdate(
+    _env: JNIEnv,
+    _uh: JObject,
+    _input: JObject,
+){
+    //Read UpdatablePoseidonHash instance
+    let digest = {
+
+        let uh = _env.get_field(_uh, "updatablePoseidonHashPointer", "J")
+            .expect("Should be able to get field updatablePoseidonHashPointer");
+
+        read_mut_raw_pointer(uh.j().unwrap() as *mut UpdatableFieldHash)
+    };
+
+    //Read input
+    let input = {
+
+        let i =_env.get_field(_input, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(i.j().unwrap() as *const FieldElement)
+    };
+
+    update_poseidon_hash(digest, *input);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_poseidonnative_UpdatablePoseidonHash_nativeFinalize(
+    _env: JNIEnv,
+    _uh: JObject,
+) -> jobject
+{
+    //Read UpdatablePoseidonHash instance
+    let digest = {
+
+        let uh = _env.get_field(_uh, "updatablePoseidonHashPointer", "J")
+            .expect("Should be able to get field updatablePoseidonHashPointer");
+
+        read_raw_pointer(uh.j().unwrap() as *const UpdatableFieldHash)
+    };
+
+    //Get digest
+    let output = finalize_poseidon_hash(digest);
+
+    //Return output
+    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(output)) as i64);
+
+    let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Should be able to find FieldElement class");
+
+    let result = _env.new_object(field_class, "(J)V", &[
+        JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+    *result
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_poseidonnative_UpdatablePoseidonHash_nativeFreeUpdatablePoseidonHash(
+    _env: JNIEnv,
+    _uh: JObject,
+)
+{
+    let uh_pointer = _env.get_field(_uh, "updatablePoseidonHashPointer", "J")
+        .expect("Cannot get secret key pointer.");
+
+    let uh = uh_pointer.j().unwrap() as *mut UpdatableFieldHash;
+
+    if uh.is_null()  { return }
+    drop(unsafe { Box::from_raw(uh) });
 }
 
 #[no_mangle]
