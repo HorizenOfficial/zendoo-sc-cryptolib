@@ -721,7 +721,7 @@ pub extern "system" fn Java_com_horizen_poseidonnative_UpdatablePoseidonHash_nat
 
     //Instantiate UpdatablePoseidonHash
     let uh = get_updatable_poseidon_hash(
-        if personalization.is_empty() { None } else { Some(personalization) }
+        if personalization.is_empty() { None } else { Some(personalization.as_slice()) }
     );
 
     //Return UpdatablePoseidonHash instance
@@ -760,7 +760,7 @@ pub extern "system" fn Java_com_horizen_poseidonnative_UpdatablePoseidonHash_nat
         read_raw_pointer(i.j().unwrap() as *const FieldElement)
     };
 
-    update_poseidon_hash(digest, *input);
+    update_poseidon_hash(digest, input);
 }
 
 #[no_mangle]
