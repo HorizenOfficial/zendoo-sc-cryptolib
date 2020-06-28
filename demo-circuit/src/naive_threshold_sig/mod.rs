@@ -1,11 +1,20 @@
 #[cfg(test)]
 pub mod tests;
 
-use algebra::{fields::mnt4753::Fr as MNT4Fr, curves::mnt6753::G1Projective as MNT6G1Projective, Field, PrimeField, ToBits};
+use algebra::{fields::mnt4753::Fr as MNT4Fr, curves::{
+    mnt4753::MNT4, mnt6753::G1Projective as MNT6G1Projective
+}, Field, PrimeField, ToBits};
+
+use proof_systems::groth16::{
+    Parameters, generator::generate_random_parameters,
+    Proof, prover::create_random_proof,
+};
+
 use primitives::{
     signature::schnorr::field_based_schnorr::FieldBasedSchnorrSignature,
     crh::MNT4PoseidonHash,
 };
+
 use r1cs_crypto::{
     signature::{
         schnorr::field_based_schnorr::{FieldBasedSchnorrSigGadget, FieldBasedSchnorrSigVerificationGadget},
@@ -24,7 +33,6 @@ use r1cs_core::{ConstraintSystem, ConstraintSynthesizer, SynthesisError};
 
 use crate::constants::NaiveThresholdSigParams;
 
-use std::marker::PhantomData;
 use rand::rngs::OsRng;
 use lazy_static::*;
 
@@ -41,56 +49,59 @@ type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
 //Field types
 type MNT4FrGadget = FpGadget<MNT4Fr>;
 
-pub struct NaiveTresholdSignature<F: PrimeField>{
+pub struct NaiveThresholdSignature<'a>{
 
     //Witnesses
-    pks:                      Vec<Option<MNT6G1Projective>>, //pk_n = g^sk_n
-    sigs:                     Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>, //sig_n = sign(sk_n, H(MR(BT), BH(Bi-1), BH(Bi)))
+    pks:                      &'a [Option<MNT6G1Projective>], //pk_n = g^sk_n
+    sigs:                     &'a [Option<FieldBasedSchnorrSignature<MNT4Fr>>], //sig_n = sign(sk_n, H(MR(BT), BH(Bi-1), BH(Bi)))
     threshold:                Option<MNT4Fr>,
-    b:                        Vec<Option<bool>>,
+    b:                        &'a [Option<bool>],
     end_epoch_mc_b_hash:      Option<MNT4Fr>,
     prev_end_epoch_mc_b_hash: Option<MNT4Fr>,
     mr_bt:                    Option<MNT4Fr>,
 
     //Other
     max_pks:                  usize,
-    _field:                   PhantomData<F>,
 }
 
-impl<F: PrimeField>NaiveTresholdSignature<F> {
-    pub fn new(
-        pks:                      Vec<MNT6G1Projective>,
-        sigs:                     Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>,
-        threshold:                MNT4Fr,
-        b:                        MNT4Fr,
-        end_epoch_mc_b_hash:      MNT4Fr,
-        prev_end_epoch_mc_b_hash: MNT4Fr,
-        mr_bt:                    MNT4Fr,
-        max_pks:                  usize,
-    ) -> Self {
+pub fn create_proof(
+    pks:                      &[MNT6G1Projective],
+    sigs:                     &[Option<FieldBasedSchnorrSignature<MNT4Fr>>],
+    threshold:                MNT4Fr,
+    b:                        MNT4Fr,
+    end_epoch_mc_b_hash:      MNT4Fr,
+    prev_end_epoch_mc_b_hash: MNT4Fr,
+    mr_bt:                    MNT4Fr,
+    max_pks:                  usize,
+    params:                   &Parameters<MNT4>
+) -> Result<Proof<MNT4>, SynthesisError> {
 
-        //Convert b to the needed bool vector
-        let b_bool = {
-            let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
-            let b_bits = b.write_bits();
-            let to_skip = MNT4Fr::size_in_bits() - (log_max_pks + 1);
-            b_bits[to_skip..].to_vec().iter().map(|&b| Some(b)).collect::<Vec<_>>()
-        };
-        Self{
-            pks: pks.iter().map(|&pk| Some(pk)).collect::<Vec<_>>(),
-            sigs,
-            threshold: Some(threshold),
-            b: b_bool,
-            end_epoch_mc_b_hash:      Some(end_epoch_mc_b_hash),
-            prev_end_epoch_mc_b_hash: Some(prev_end_epoch_mc_b_hash),
-            mr_bt:                    Some(mr_bt),
-            max_pks,
-            _field: PhantomData
-        }
-    }
+    //Convert b to the needed bool vector
+    let b_bool = {
+        let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
+        let to_skip = MNT4Fr::size_in_bits() - (log_max_pks + 1);
+        b.write_bits()[to_skip..].iter().map(|&b| Some(b)).collect::<Vec<_>>()
+    };
+    let pks = pks.iter().map(|&pk| Some(pk)).collect::<Vec<_>>();
+
+    let c  = NaiveThresholdSignature{
+        pks: pks.as_slice(),
+        sigs,
+        threshold: Some(threshold),
+        b: &b_bool.as_slice(),
+        end_epoch_mc_b_hash:      Some(end_epoch_mc_b_hash),
+        prev_end_epoch_mc_b_hash: Some(prev_end_epoch_mc_b_hash),
+        mr_bt:                    Some(mr_bt),
+        max_pks,
+    };
+
+    //Create and return proof
+    let mut rng = OsRng;
+    let proof = create_random_proof(c, &params, &mut rng)?;
+    Ok(proof)
 }
 
-impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> {
+impl<'a> ConstraintSynthesizer<MNT4Fr> for NaiveThresholdSignature<'a> {
     fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
 
         //Internal checks
@@ -242,8 +253,6 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
     }
 }
 
-use algebra::curves::mnt4753::MNT4;
-use proof_systems::groth16::{Parameters, generator::generate_random_parameters};
 
 #[allow(dead_code)]
 pub fn generate_parameters(max_pks: usize) -> Result<Parameters<MNT4>, SynthesisError> {
@@ -255,19 +264,26 @@ pub fn generate_parameters(max_pks: usize) -> Result<Parameters<MNT4>, Synthesis
     let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
 
     // Create parameters for our circuit
-    let c = NaiveTresholdSignature::<MNT4Fr> {
-        pks:                      vec![None; max_pks],
-        sigs:                     vec![None; max_pks],
-        threshold:                None,
-        b:                        vec![None; log_max_pks + 1],
-        end_epoch_mc_b_hash:      None,
-        prev_end_epoch_mc_b_hash: None,
-        mr_bt:                    None,
-        max_pks,
-        _field:                   PhantomData
+    let params =
+    {
+        let dummy_pks = vec![None; max_pks];
+        let dummy_sigs = vec![None; max_pks];
+        let dummy_b = vec![None; log_max_pks + 1];
+
+        let c = NaiveThresholdSignature {
+            pks: dummy_pks.as_slice(),
+            sigs: dummy_sigs.as_slice(),
+            threshold: None,
+            b: dummy_b.as_slice(),
+            end_epoch_mc_b_hash: None,
+            prev_end_epoch_mc_b_hash: None,
+            mr_bt: None,
+            max_pks,
+        };
+
+         generate_random_parameters::<MNT4, _, _>(c, &mut rng)
     };
 
-    let params = generate_random_parameters::<MNT4, _, _>(c, &mut rng);
     params
 }
 
@@ -283,7 +299,7 @@ mod test {
     };
     use proof_systems::groth16::{
         Parameters,
-        Proof, create_random_proof,
+        Proof,
         prepare_verifying_key, verify_proof,
     };
     use rand::{
@@ -362,21 +378,17 @@ mod test {
         let aggregated_input = MNT4PoseidonHash::evaluate(&[pks_threshold_hash, wcert_sysdata_hash]).unwrap();
 
         //Create proof for our circuit
-        let c = NaiveTresholdSignature::<MNT4Fr>::new(
-            pks, sigs, t_field, b_field, end_epoch_mc_b_hash,
-            prev_end_epoch_mc_b_hash, mr_bt, max_pks,
-        );
-
-        //Return proof and public inputs if success
-        let start = std::time::Instant::now();
-        let proof = match create_random_proof(c, &params, &mut rng) {
+        let proof = match create_proof(
+            pks.as_slice(), sigs.as_slice(), t_field, b_field, end_epoch_mc_b_hash,
+            prev_end_epoch_mc_b_hash, mr_bt, max_pks, &params
+        ) {
             Ok(proof) => {
                 let public_inputs = vec![aggregated_input];
                 Ok((proof, public_inputs))
             }
             Err(e) => Err(e)
         };
-        println!("Proof creation time: {:?}", start.elapsed());
+
         proof
     }
 

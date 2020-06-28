@@ -55,13 +55,13 @@ type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
 //Field types
 type MNT4FrGadget = FpGadget<MNT4Fr>;
 
-struct NaiveTresholdSignatureTest{
+struct NaiveThresholdSignatureTest<'a>{
 
     //Witnesses
-    pks:                      Vec<MNT6G1Projective>,
-    sigs:                     Vec<FieldBasedSchnorrSignature<MNT4Fr>>,
+    pks:                      &'a [MNT6G1Projective],
+    sigs:                     &'a [FieldBasedSchnorrSignature<MNT4Fr>],
     threshold:                MNT4Fr,
-    b:                        Vec<bool>,
+    b:                        &'a [bool],
     end_epoch_mc_b_hash:      MNT4Fr,
     prev_end_epoch_mc_b_hash: MNT4Fr,
     mr_bt:                    MNT4Fr,
@@ -74,14 +74,14 @@ struct NaiveTresholdSignatureTest{
 }
 
 
-fn generate_inputs
+fn run_test_circuit
 (
     max_pks:                  usize,
     valid_sigs:               usize,
     threshold:                usize,
     wrong_pks_threshold_hash: bool,
     wrong_wcert_sysdata_hash: bool,
-) -> NaiveTresholdSignatureTest
+) -> bool
 {
     //Istantiate rng
     let mut rng = OsRng::default();
@@ -149,21 +149,24 @@ fn generate_inputs
     let aggregated_input = MNT4PoseidonHash::evaluate(&[pks_threshold_hash, wcert_sysdata_hash]).unwrap();
 
     //Create instance of the circuit
-    NaiveTresholdSignatureTest {
-        pks,
-        sigs,
+    let c = NaiveThresholdSignatureTest {
+        pks: pks.as_slice(),
+        sigs: sigs.as_slice(),
         threshold: t_field,
-        b: b_bool,
+        b: b_bool.as_slice(),
         end_epoch_mc_b_hash,
         prev_end_epoch_mc_b_hash,
         mr_bt,
         aggregated_input,
         max_pks,
-    }
+    };
+
+    let cs = TestConstraintSystem::<MNT4Fr>::new();
+    return generate_constraints(c, cs);
 }
 
 fn generate_constraints(
-    c: NaiveTresholdSignatureTest,
+    c: NaiveThresholdSignatureTest,
     mut cs: TestConstraintSystem<MNT4Fr>,
 ) -> bool
 {
@@ -332,9 +335,7 @@ fn random_naive_threshold_sig_test() {
         println!("Valid signatures: {}", v);
         println!("CS satisfiable: {}", satisfiable);
 
-        let c = generate_inputs(n, v, t, false, false);
-        let cs = TestConstraintSystem::<MNT4Fr>::new();
-        let is_satisfied = generate_constraints(c, cs);
+        let is_satisfied = run_test_circuit(n, v, t, false, false);
 
         // The output must be false whenever the cs should be satisfiable
         // but it actually isn't, and viceversa. This behaviour can be
@@ -352,64 +353,46 @@ fn naive_threshold_sig_test_all_cases() {
     println!("Test success case with v > t");
     let v = rng.gen_range(1, n);
     let t = rng.gen_range(0, v);
-    let c = generate_inputs(n, v, t, false, false);
-    let cs = TestConstraintSystem::<MNT4Fr>::new();
-    assert!(generate_constraints(c, cs));
+    assert!(run_test_circuit(n, v, t, false, false));
     println!("Ok !");
 
     println!("Test success case with v == t");
     let v = rng.gen_range(1, n);
     let t = v;
-    let c = generate_inputs(n, v, t, false, false);
-    let cs = TestConstraintSystem::<MNT4Fr>::new();
-    assert!(generate_constraints(c, cs));
+    assert!(run_test_circuit(n, v, t, false, false));
     println!("Ok !");
 
     println!("Test negative case with v < t");
     let t = rng.gen_range(1, n);
     let v = rng.gen_range(0, t);
-    let c = generate_inputs(n, v, t, false, false);
-    let cs = TestConstraintSystem::<MNT4Fr>::new();
-    assert!(!generate_constraints(c, cs));
+    assert!(!run_test_circuit(n, v, t, false, false));
     println!("Ok !");
 
     println!("Test case v = t = 0");
-    let c = generate_inputs(n, 0, 0, false, false);
-    let cs = TestConstraintSystem::<MNT4Fr>::new();
-    assert!(generate_constraints(c, cs));
+    assert!(run_test_circuit(n, 0, 0, false, false));
     println!("Ok !");
 
     println!("Test case v = t = n");
-    let c = generate_inputs(n, n, n, false, false);
-    let cs = TestConstraintSystem::<MNT4Fr>::new();
-    assert!(generate_constraints(c, cs));
+    assert!(run_test_circuit(n, n, n, false, false));
     println!("Ok !");
 
     println!("Test case v = n and t = 0");
-    let c = generate_inputs(n, n, 0, false, false);
-    let cs = TestConstraintSystem::<MNT4Fr>::new();
-    assert!(generate_constraints(c, cs));
+    assert!(run_test_circuit(n, n, 0, false, false));
     println!("Ok !");
 
     println!("Test negative case v = 0 and t = n");
-    let c = generate_inputs(n, 0, n, false, false);
-    let cs = TestConstraintSystem::<MNT4Fr>::new();
-    assert!(!generate_constraints(c, cs));
+    assert!(!run_test_circuit(n, 0, n, false, false));
     println!("Ok !");
 
     println!("Test negative case wrong pks_threshold_hash");
     let v = rng.gen_range(1, n);
     let t = rng.gen_range(0, v);
-    let c = generate_inputs(n, v, t, true, false);
-    let cs = TestConstraintSystem::<MNT4Fr>::new();
-    assert!(!generate_constraints(c, cs));
+    assert!(!run_test_circuit(n, v, t, true, false));
     println!("Ok !");
 
     println!("Test negative case wrong wcert_sysdata_hash");
     let v = rng.gen_range(1, n);
     let t = rng.gen_range(0, v);
-    let c = generate_inputs(n, v, t, false, true);
-    let cs = TestConstraintSystem::<MNT4Fr>::new();
-    assert!(!generate_constraints(c, cs));
+    assert!(!run_test_circuit(n, v, t, false, true));
     println!("Ok !");
 }

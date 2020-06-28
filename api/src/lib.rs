@@ -1282,7 +1282,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     //create proof
     let (proof, quality) = match create_naive_threshold_sig_proof(
         pks.as_slice(),
-        sigs,
+        sigs.as_mut_slice(),
         &end_epoch_block_hash,
         &prev_end_epoch_block_hash,
         bt_list.as_slice(),

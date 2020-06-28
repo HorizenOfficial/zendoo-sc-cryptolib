@@ -32,7 +32,7 @@ use primitives::{
     vrf::{FieldBasedVrf, ecvrf::*},
 };
 use proof_systems::groth16::{
-    Proof, create_random_proof,
+    Parameters, Proof,
     prepare_verifying_key, verify_proof,
 };
 use demo_circuit::{
@@ -125,6 +125,7 @@ pub fn compute_poseidon_hash(input: &[FieldElement]) -> Result<FieldElement, Err
 
 //*****************************Naive threshold sig circuit related functions************************
 
+pub type SCParameters = Parameters<MNT4>;
 pub type SCProof = Proof<MNT4>;
 
 #[derive(Clone, Default)]
@@ -216,7 +217,7 @@ pub fn compute_wcert_sysdata_hash(
 
 pub fn create_naive_threshold_sig_proof(
     pks:                      &[SchnorrPk],
-    mut sigs:                 Vec<Option<SchnorrSig>>,
+    sigs:                     &mut [Option<SchnorrSig>],
     end_epoch_mc_b_hash:      &[u8; 32],
     prev_end_epoch_mc_b_hash: &[u8; 32],
     bt_list:                  &[BackwardTransfer],
@@ -259,17 +260,14 @@ pub fn create_naive_threshold_sig_proof(
     //Convert needed variables into field elements
     let threshold = read_field_element_from_u64(threshold);
 
-    let c = NaiveTresholdSignature::<FieldElement>::new(
-        pks, sigs, threshold, b, end_epoch_mc_b_hash,
-        prev_end_epoch_mc_b_hash, mr_bt, max_pks,
-    );
-
     //Read proving key
-    let params = read_from_file(proving_key_path)?;
+    let params = read_from_file::<SCParameters>(proving_key_path)?;
 
-    //Create and return proof
-    let mut rng = OsRng;
-    let proof = create_random_proof(c, &params, &mut rng)?;
+    let proof = create_proof(
+        pks.as_slice(), sigs, threshold, b, end_epoch_mc_b_hash,
+        prev_end_epoch_mc_b_hash, mr_bt, max_pks, &params
+    )?;
+
     Ok((proof, valid_signatures))
 }
 
@@ -386,7 +384,7 @@ pub fn get_ginger_merkle_path(leaf: &FieldElement, leaf_index: usize, tree: &Gin
 }
 
 #[allow(dead_code)]
-pub fn verify_ginger_merkle_path(path: GingerMerkleTreePath, merkle_root: &FieldElement, leaf: &FieldElement)
+pub fn verify_ginger_merkle_path(path: &GingerMerkleTreePath, merkle_root: &FieldElement, leaf: &FieldElement)
     -> Result<bool, Error>
 {
     path.verify(merkle_root, leaf)
@@ -470,7 +468,7 @@ mod test {
         //Create and serialize proof
         let (proof, quality) = create_naive_threshold_sig_proof(
             pks.as_slice(),
-            sigs,
+            sigs.as_mut_slice(),
             &end_epoch_mc_b_hash,
             &prev_end_epoch_mc_b_hash,
             bt_list.as_slice(),
@@ -604,8 +602,8 @@ mod test {
 
         for i in 0..leaves_num {
             let path = get_ginger_merkle_path(&leaves[i], i, &mt).unwrap();
-            assert!(verify_ginger_merkle_path(path.clone(), &root, &leaves[i]).unwrap());
-            assert!(!verify_ginger_merkle_path(path, &wrong_root, &leaves[i]).unwrap());
+            assert!(verify_ginger_merkle_path(&path, &root, &leaves[i]).unwrap());
+            assert!(!verify_ginger_merkle_path(&path, &wrong_root, &leaves[i]).unwrap());
         }
     }
 }
