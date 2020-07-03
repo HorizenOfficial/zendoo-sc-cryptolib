@@ -78,7 +78,8 @@ public class VRFKeyPairTest {
         };
         VRFProof proof = VRFProof.deserialize(proofBytes, true);
 
-        assertNotNull("proof deserialization must not fail", proof);
+        assertNotNull("VRF proof deserialization must not fail", proof);
+        assertTrue("VRF Proof must be valid", proof.isValidVRFProof());
 
         // Deserialize VRF Output
         byte[] vrfOutputBytes = {

@@ -485,12 +485,17 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDes
     _env: JNIEnv,
     _class: JClass,
     _sig_bytes: jbyteArray,
+    _check_sig: jboolean,
 ) -> jobject
 {
     let sig_bytes = _env.convert_byte_array(_sig_bytes)
         .expect("Should be able to convert to Rust byte array");
 
-    let sig_ptr: *const SchnorrSig = deserialize_to_raw_pointer(sig_bytes.as_slice());
+    let sig_ptr: *const SchnorrSig = if _check_sig == JNI_TRUE {
+        deserialize_to_raw_pointer(sig_bytes.as_slice())
+    } else {
+        deserialize_to_raw_pointer_checked(sig_bytes.as_slice())
+    };
 
     let sig: jlong = jlong::from(sig_ptr as i64);
 
@@ -502,6 +507,22 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDes
         .expect("Cannot create signature object.");
 
     *sig_object
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeIsValidSignature(
+    _env: JNIEnv,
+    _sig: JObject,
+) -> jboolean
+{
+    let sig = _env.get_field(_sig, "signaturePointer", "J")
+        .expect("Should be able to get field signaturePointer").j().unwrap() as *const SchnorrSig;
+
+    if is_valid(read_raw_pointer(sig)) {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
+    }
 }
 
 #[no_mangle]
@@ -808,7 +829,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeIsValidVRFProof
     let proof = _env.get_field(_vrf_proof, "proofPointer", "J")
         .expect("Should be able to get field proofPointer").j().unwrap() as *const VRFProof;
 
-    if is_valid_vrf_proof(read_raw_pointer(proof)) {
+    if is_valid(read_raw_pointer(proof)) {
         JNI_TRUE
     } else {
         JNI_FALSE

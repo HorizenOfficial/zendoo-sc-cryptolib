@@ -9,7 +9,7 @@ incremental = true
 panic = "unwind"
 
 [profile.dev]
-opt-level = 0
+opt-level = 3
 panic = "unwind"
 
 [profile.test]

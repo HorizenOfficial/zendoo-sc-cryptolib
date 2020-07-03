@@ -3,7 +3,9 @@ pub mod tests;
 
 use algebra::{fields::mnt4753::Fr as MNT4Fr, curves::mnt6753::G1Projective as MNT6G1Projective, Field, PrimeField, ToBits};
 use primitives::{
-    signature::schnorr::field_based_schnorr::FieldBasedSchnorrSignature,
+    signature::schnorr::field_based_schnorr::{
+        FieldBasedSchnorrSignature, FieldBasedSchnorrPk,
+    },
     crh::MNT4PoseidonHash,
 };
 use r1cs_crypto::{
@@ -33,7 +35,8 @@ lazy_static! {
 }
 
 //Sig types
-type SchnorrSigGadget = FieldBasedSchnorrSigGadget<MNT4Fr>;
+type SchnorrSigGadget = FieldBasedSchnorrSigGadget<MNT4Fr, MNT6G1Projective>;
+type SchnorrPkGadget = FieldBasedSchnorrPkGadget<MNT4Fr, MNT6G1Projective, MNT6G1Gadget>;
 type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
     MNT4Fr, MNT6G1Projective, MNT6G1Gadget, MNT4PoseidonHash, MNT4PoseidonHashGadget
 >;
@@ -44,8 +47,8 @@ type MNT4FrGadget = FpGadget<MNT4Fr>;
 pub struct NaiveTresholdSignature<F: PrimeField>{
 
     //Witnesses
-    pks:                      Vec<Option<MNT6G1Projective>>, //pk_n = g^sk_n
-    sigs:                     Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>, //sig_n = sign(sk_n, H(MR(BT), BH(Bi-1), BH(Bi)))
+    pks:                      Vec<Option<FieldBasedSchnorrPk<MNT6G1Projective>>>, //pk_n = g^sk_n
+    sigs:                     Vec<Option<FieldBasedSchnorrSignature<MNT4Fr, MNT6G1Projective>>>, //sig_n = sign(sk_n, H(MR(BT), BH(Bi-1), BH(Bi)))
     threshold:                Option<MNT4Fr>,
     b:                        Vec<Option<bool>>,
     end_epoch_mc_b_hash:      Option<MNT4Fr>,
@@ -59,8 +62,8 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 
 impl<F: PrimeField>NaiveTresholdSignature<F> {
     pub fn new(
-        pks:                      Vec<MNT6G1Projective>,
-        sigs:                     Vec<Option<FieldBasedSchnorrSignature<MNT4Fr>>>,
+        pks:                      Vec<FieldBasedSchnorrPk<MNT6G1Projective>>,
+        sigs:                     Vec<Option<FieldBasedSchnorrSignature<MNT4Fr, MNT6G1Projective>>>,
         threshold:                MNT4Fr,
         b:                        MNT4Fr,
         end_epoch_mc_b_hash:      MNT4Fr,
@@ -108,7 +111,7 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
             // It's safe to not perform any check when allocating the pks,
             // considering that the pks are hashed, so they should be public
             // at some point, therefore verifiable by everyone.
-            let pk_g = MNT6G1Gadget::alloc_without_check(
+            let pk_g = SchnorrPkGadget::alloc_without_check(
                 cs.ns(|| format!("alloc_pk_{}", i)),
                 || pk.ok_or(SynthesisError::AssignmentMissing)
             )?;
@@ -118,7 +121,7 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
         //Enforce pks_threshold_hash
         let mut pks_threshold_hash_g = MNT4PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "hash public keys"),
-            pks_g.iter().map(|pk| pk.x.clone()).collect::<Vec<_>>().as_slice(),
+            pks_g.iter().map(|pk| pk.pk.x.clone()).collect::<Vec<_>>().as_slice(),
         )?;
 
         //Allocate threshold as witness
@@ -244,6 +247,7 @@ impl<F: PrimeField> ConstraintSynthesizer<MNT4Fr> for NaiveTresholdSignature<F> 
 
 use algebra::curves::mnt4753::MNT4;
 use proof_systems::groth16::{Parameters, generator::generate_random_parameters};
+use r1cs_crypto::signature::schnorr::field_based_schnorr::FieldBasedSchnorrPkGadget;
 
 #[allow(dead_code)]
 pub fn generate_parameters(max_pks: usize) -> Result<Parameters<MNT4>, SynthesisError> {
@@ -344,7 +348,7 @@ mod test {
         let b_field = valid_field - &t_field;
 
         //Compute pks_threshold_hash
-        let pks_hash_input = pks.iter().map(|pk| pk.into_affine().x).collect::<Vec<_>>();
+        let pks_hash_input = pks.iter().map(|pk| pk.0.into_affine().x).collect::<Vec<_>>();
         let pks_hash = MNT4PoseidonHash::evaluate(pks_hash_input.as_slice()).unwrap();
         let pks_threshold_hash = if !wrong_pks_threshold_hash {
             MNT4PoseidonHash::evaluate(&[pks_hash, t_field]).unwrap()

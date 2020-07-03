@@ -120,7 +120,7 @@ public class NaiveThresholdSigProofTest {
         // Deserialize Schnorr Signatures
         for (int i = 0; i<keyCount; i++) {
             if (i < threshold) {
-                SchnorrSignature sig = SchnorrSignature.deserialize(serializedSignatureList[i]);
+                SchnorrSignature sig = SchnorrSignature.deserialize(serializedSignatureList[i], true);
                 assertNotNull("sig" + i + "deserialization must not fail", sig);
                 signatureList.add(sig);
             } else {
@@ -210,7 +210,7 @@ public class NaiveThresholdSigProofTest {
         // Deserialize Schnorr Signatures
         for (int i = 0; i<keyCount; i++) {
             if (i < threshold) {
-                SchnorrSignature sig = SchnorrSignature.deserialize(serializedSignatureList[i]);
+                SchnorrSignature sig = SchnorrSignature.deserialize(serializedSignatureList[i], true);
                 assertNotNull("sig" + i + "deserialization must not fail", sig);
                 signatureList.add(sig);
             } else {

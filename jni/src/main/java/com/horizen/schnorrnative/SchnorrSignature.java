@@ -25,20 +25,30 @@ public class SchnorrSignature
 
   private static native byte[] nativeSerializeSignature(long signaturePointer);
 
-  private static native SchnorrSignature nativeDeserializeSignature(byte[] signatureBytes);
+  private static native SchnorrSignature nativeDeserializeSignature(byte[] signatureBytes, boolean checkSignature);
 
   private static native void nativefreeSignature(long signaturePointer);
 
-  public static SchnorrSignature deserialize(byte[] signatureBytes) {
+  public static SchnorrSignature deserialize(byte[] signatureBytes, boolean checkSignature) {
     if (signatureBytes.length != SIGNATURE_LENGTH)
       throw new IllegalArgumentException(String.format("Incorrect signature length, %d expected, %d found", SIGNATURE_LENGTH, signatureBytes.length));
 
-    return nativeDeserializeSignature(signatureBytes);
+    return nativeDeserializeSignature(signatureBytes, checkSignature);
   }
 
   public byte[] serializeSignature() {
     return nativeSerializeSignature(this.signaturePointer);
   }
+
+  private native boolean nativeIsValidSignature(); // jni call to Rust impl
+
+  public boolean isValidSignature() {
+    if (signaturePointer == 0)
+      throw new IllegalArgumentException("Schnorr signature was freed.");
+
+    return nativeIsValidSignature();
+  }
+
 
   public void freeSignature() {
     if (signaturePointer != 0) {

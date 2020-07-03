@@ -64,7 +64,9 @@ public class SchnorrKeyPairTest {
             -22, 13, -91, 117, -100, -22, -103, -81, -118, -33, -76, -18, -100, -119, 11, -37, 12, -46, 28, -43, -105,
             66, -117, -100, 39, 0, 0
         };
-        SchnorrSignature sig = SchnorrSignature.deserialize(sigBytes);
+        SchnorrSignature sig = SchnorrSignature.deserialize(sigBytes, true);
+        assertNotNull("signature deserialization must not fail", message);
+        assertTrue("Schnorr signature must be valid", sig.isValidSignature());
 
         //Verify signature
         assertTrue("Signature must be verified", keyPair.getPublicKey().verifySignature(sig, message));
@@ -92,6 +94,8 @@ public class SchnorrKeyPairTest {
             FieldElement fieldElement = FieldElement.createRandom();
 
             SchnorrSignature signature = keyPair.signMessage(fieldElement);
+
+            assertTrue("Schnorr signature must be valid", signature.isValidSignature());
 
             assertNotNull("Attempt to sign message failed.", signature);
 
