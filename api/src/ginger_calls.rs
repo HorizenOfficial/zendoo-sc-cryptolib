@@ -539,7 +539,7 @@ mod test {
     #[test]
     fn naive_threshold_sig_circuit_test() {
         create_sample_naive_threshold_sig_circuit(10);
-        //create_sample_naive_threshold_sig_circuit(0);
+        create_sample_naive_threshold_sig_circuit(0);
     }
 
     #[test]
