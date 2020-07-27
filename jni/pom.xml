@@ -41,7 +41,7 @@
   </distributionManagement>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <project.github.organization>ZencashOfficial</project.github.organization>
+    <project.github.organization>HorizenOfficial</project.github.organization>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
     <scala.version>2.12.8</scala.version>
