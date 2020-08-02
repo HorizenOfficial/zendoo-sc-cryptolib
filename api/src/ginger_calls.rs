@@ -12,29 +12,23 @@ use algebra::{
     BigInteger768,
     ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand,
 };
-use primitives::{
-    crh::{
-        poseidon::{
-            parameters::MNT4753PoseidonParameters,
-            updatable::UpdatablePoseidonHash,
-            MNT4PoseidonHash
-        },
-        FieldBasedHash, UpdatableFieldBasedHash,
-        bowe_hopwood::{
-            BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters
-        },
+use primitives::{crh::{
+    poseidon::{
+        parameters::MNT4753PoseidonParameters,
+        PoseidonHash, MNT4PoseidonHash
     },
-    merkle_tree::field_based_mht::{
-        FieldBasedMerkleHashTree, FieldBasedMerkleTreeConfig,
-        FieldBasedMerkleTreePath, MNT4753_PHANTOM_MERKLE_ROOT,
+    FieldBasedHash,
+    bowe_hopwood::{
+        BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters
     },
-    signature::{
-        FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
-            FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature
-        },
+}, merkle_tree::field_based_mht::{
+    FieldBasedMerkleHashTree, FieldBasedMerkleTreeConfig,
+    FieldBasedMerkleTreePath, MNT4753_PHANTOM_MERKLE_ROOT,
+}, signature::{
+    FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
+        FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature
     },
-    vrf::{FieldBasedVrf, ecvrf::*},
-};
+}, vrf::{FieldBasedVrf, ecvrf::*}};
 use proof_systems::groth16::{
     Proof, create_random_proof,
     prepare_verifying_key, verify_proof,
@@ -123,22 +117,22 @@ pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &
 
 //************************************Poseidon Hash functions****************************************
 
-pub type UpdatableFieldHash = UpdatablePoseidonHash<FieldElement, MNT4753PoseidonParameters>;
+pub type FieldHash = PoseidonHash<FieldElement, MNT4753PoseidonParameters>;
 
-pub fn get_updatable_poseidon_hash(personalization: Option<&[FieldElement]>) -> UpdatableFieldHash {
-    UpdatableFieldHash::new(personalization)
+pub fn get_poseidon_hash(personalization: Option<&[FieldElement]>) -> FieldHash {
+    FieldHash::init(personalization)
 }
 
-pub fn update_poseidon_hash(hash: &mut UpdatableFieldHash, input: &FieldElement){
-    hash.update(input);
+pub fn update_poseidon_hash(hash: &mut FieldHash, input: &FieldElement){
+    hash.update(*input);
 }
 
-pub fn finalize_poseidon_hash(hash: &UpdatableFieldHash) -> FieldElement{
+pub fn reset_poseidon_hash(hash: &mut FieldHash, personalization: Option<&[FieldElement]>){
+    hash.reset(personalization);
+}
+
+pub fn finalize_poseidon_hash(hash: &FieldHash) -> FieldElement{
     hash.finalize()
-}
-
-pub fn compute_poseidon_hash(input: &[FieldElement]) -> Result<FieldElement, Error> {
-    MNT4PoseidonHash::evaluate(input)
 }
 
 //*****************************Naive threshold sig circuit related functions************************
@@ -187,9 +181,14 @@ pub fn read_field_element_from_u64(num: u64) -> FieldElement {
 // in MC during SC creation.
 pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<FieldElement, Error> {
     let threshold_field = read_field_element_from_u64(threshold);
-    let pks_x = pks.iter().map(|pk| pk.x).collect::<Vec<_>>();
-    let pks_hash = compute_poseidon_hash(pks_x.as_slice())?;
-    compute_poseidon_hash(&[pks_hash, threshold_field])
+    let mut h = FieldHash::init(None);
+    pks.iter().for_each(|pk| { h.update(pk.x); });
+    let pks_hash = h.finalize();
+    Ok(h
+        .reset(None)
+        .update(pks_hash)
+        .update(threshold_field)
+        .finalize())
 }
 
 //Compute and return (MR(bt_list), H(MR(bt_list), H(bi-1), H(bi))
@@ -214,7 +213,11 @@ pub fn compute_msg_to_sign(
     };
 
     //Compute message to be verified
-    let msg = compute_poseidon_hash(&[mr_bt, *prev_end_epoch_mc_b_hash, *end_epoch_mc_b_hash])?;
+    let msg = FieldHash::init(None)
+        .update(mr_bt)
+        .update(*prev_end_epoch_mc_b_hash)
+        .update(*end_epoch_mc_b_hash)
+        .finalize();
 
     Ok((mr_bt, msg))
 }
@@ -228,7 +231,12 @@ pub fn compute_wcert_sysdata_hash(
 
     //Compute quality and wcert_sysdata_hash
     let quality = read_field_element_from_u64(valid_sigs);
-    let wcert_sysdata_hash = compute_poseidon_hash(&[quality, *mr_bt, *prev_end_epoch_mc_b_hash, *end_epoch_mc_b_hash])?;
+    let wcert_sysdata_hash = FieldHash::init(None)
+        .update(quality)
+        .update(*mr_bt)
+        .update(*prev_end_epoch_mc_b_hash)
+        .update(*end_epoch_mc_b_hash)
+        .finalize();
     Ok(wcert_sysdata_hash)
 }
 
@@ -306,7 +314,10 @@ pub fn verify_naive_threshold_sig_proof(
     let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
     let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
     let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
-    let aggregated_input = compute_poseidon_hash(&[*constant, wcert_sysdata_hash])?;
+    let aggregated_input = FieldHash::init(None)
+        .update(*constant)
+        .update(wcert_sysdata_hash)
+        .finalize();
 
     //Verify proof
     let vk = read_from_file(vk_path)?;
@@ -365,7 +376,12 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
     let mut hash_input = Vec::new();
     hash_input.push(*msg);
     hash_input.extend_from_slice(gamma_coords.as_slice());
-    let output = compute_poseidon_hash(hash_input.as_ref())?;
+    let output = {
+        let mut h = FieldHash::init(None);
+        h.update(*msg);
+        gamma_coords.into_iter().for_each(|c| { h.update(c); });
+        h.finalize()
+    };
 
     Ok((proof, output))
 }
@@ -622,44 +638,31 @@ mod test {
 
         for i in 0..leaves_num {
             let path = get_ginger_merkle_path(&leaves[i], i, &mt).unwrap();
-            assert!(verify_ginger_merkle_path(path.clone(), &root, &leaves[i]).unwrap());
-            assert!(!verify_ginger_merkle_path(path, &wrong_root, &leaves[i]).unwrap());
+            assert!(verify_ginger_merkle_path(&path, &root, &leaves[i]).unwrap());
+            assert!(!verify_ginger_merkle_path(&path, &wrong_root, &leaves[i]).unwrap());
         }
     }
-
 
     #[test]
     fn sample_poseidon_hash(){
         let mut rng = OsRng;
         let hash_input = vec![FieldElement::rand(&mut rng); 2];
+        let mut h = get_poseidon_hash(None);
 
         //Compute poseidon hash
-        let h_output = compute_poseidon_hash(hash_input.as_slice()).unwrap();
+        update_poseidon_hash(&mut h, &hash_input[0]);
+        update_poseidon_hash(&mut h, &hash_input[1]);
+        let h_output = finalize_poseidon_hash(&h);
 
-        //Do the same but using UpdatablePoseidonHash
-        let mut uh = get_updatable_poseidon_hash(None);
-
-        update_poseidon_hash(&mut uh, &hash_input[0]);
-        uh.finalize(); //Call to finalize() keeps the state
-        update_poseidon_hash(&mut uh, &hash_input[1]);
-        assert_eq!(h_output, finalize_poseidon_hash(&uh));
+        //Call to finalize keeps the state
+        reset_poseidon_hash(&mut h, None);
+        update_poseidon_hash(&mut h, &hash_input[0]);
+        finalize_poseidon_hash(&h); //Call to finalize() keeps the state
+        update_poseidon_hash(&mut h, &hash_input[1]);
+        assert_eq!(h_output, finalize_poseidon_hash(&h));
 
         //finalize() is idempotent
-        assert_eq!(h_output, finalize_poseidon_hash(&uh));
-
-        // Test initializing UpdatablePoseidonHash with personalization is the same as concatenating
-        // to PoseidonHash input the personalization and the (eventual) padding.
-        {
-            let mut personalization = vec![FieldElement::rand(&mut rng); 2];
-            let mut uh = get_updatable_poseidon_hash(Some(personalization.as_slice()));
-            update_poseidon_hash(&mut uh, &hash_input[0]);
-            update_poseidon_hash(&mut uh, &hash_input[1]);
-
-            let uh_output = finalize_poseidon_hash(&uh);
-            personalization.extend_from_slice(hash_input.as_slice());
-            let h_output = compute_poseidon_hash(personalization.as_slice()).unwrap();
-            assert_eq!(uh_output, h_output);
-        }
+        assert_eq!(h_output, finalize_poseidon_hash(&h));
 
     }
 }

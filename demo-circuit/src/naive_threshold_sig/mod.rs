@@ -303,12 +303,17 @@ mod test {
 
         //Istantiate rng
         let mut rng = OsRng::default();
+        let mut h = MNT4PoseidonHash::init(None);
 
         //Generate message to sign
         let mr_bt: MNT4Fr = rng.gen();
         let prev_end_epoch_mc_b_hash: MNT4Fr = rng.gen();
         let end_epoch_mc_b_hash: MNT4Fr = rng.gen();
-        let message = MNT4PoseidonHash::evaluate(&[mr_bt, prev_end_epoch_mc_b_hash, end_epoch_mc_b_hash]).unwrap();
+        let message = h
+            .update(mr_bt)
+            .update(prev_end_epoch_mc_b_hash)
+            .update(end_epoch_mc_b_hash)
+            .finalize();
 
         //Generate another random message used to simulate a non-valid signature
         let invalid_message: MNT4Fr = rng.gen();
@@ -344,22 +349,38 @@ mod test {
         let b_field = valid_field - &t_field;
 
         //Compute pks_threshold_hash
-        let pks_hash_input = pks.iter().map(|pk| pk.into_affine().x).collect::<Vec<_>>();
-        let pks_hash = MNT4PoseidonHash::evaluate(pks_hash_input.as_slice()).unwrap();
+        h.reset(None);
+        pks.iter().for_each(|pk| { h.update(pk.into_affine().x); });
+        let pks_hash = h.finalize();
         let pks_threshold_hash = if !wrong_pks_threshold_hash {
-            MNT4PoseidonHash::evaluate(&[pks_hash, t_field]).unwrap()
+            h
+                .reset(None)
+                .update(pks_hash)
+                .update(t_field)
+                .finalize()
         } else {
             rng.gen()
         };
 
         //Compute wcert_sysdata_hash
         let wcert_sysdata_hash = if !wrong_wcert_sysdata_hash {
-            MNT4PoseidonHash::evaluate(&[valid_field, mr_bt, prev_end_epoch_mc_b_hash, end_epoch_mc_b_hash]).unwrap()
+            h
+                .reset(None)
+                .update(valid_field)
+                .update(mr_bt)
+                .update(prev_end_epoch_mc_b_hash)
+                .update(end_epoch_mc_b_hash)
+                .finalize()
         } else {
             rng.gen()
         };
 
-        let aggregated_input = MNT4PoseidonHash::evaluate(&[pks_threshold_hash, wcert_sysdata_hash]).unwrap();
+        // Compute aggregated input
+        let aggregated_input = h
+            .reset(None)
+            .update(pks_threshold_hash)
+            .update(wcert_sysdata_hash)
+            .finalize();
 
         //Create proof for our circuit
         let c = NaiveTresholdSignature::<MNT4Fr>::new(

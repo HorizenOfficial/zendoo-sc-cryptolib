@@ -53,20 +53,16 @@ public class PoseidonHashTest {
             try
             (
                 FieldElement expectedHash = FieldElement.deserialize(hashBytes);
-                FieldElement hash = PoseidonHash.computeHash(hashInput);
-                UpdatablePoseidonHash digest = UpdatablePoseidonHash.getInstance()
+                PoseidonHash digest = PoseidonHash.getInstance()
             )
             {
-                assertNotNull("Hash must be computed", hash);
                 assertNotNull("expectedHash deserialization must not fail", expectedHash);
-                // Check hash == expectedHash
-                assertEquals("Hardcoded and computed hashes must be equal", expectedHash, hash);
 
-                //Test Updatable variant
                 digest.update(lhs);
-                digest.finalizeHash(); //Calling finalizeHash() keeps the state
-
                 digest.update(rhs);
+                FieldElement hash = digest.finalizeHash();
+
+                assertEquals("hash must be equal to expected hash", hash, expectedHash);
                 try
                 (
                     FieldElement uhOutput = digest.finalizeHash();
