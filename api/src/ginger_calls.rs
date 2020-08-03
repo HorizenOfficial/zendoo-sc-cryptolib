@@ -430,6 +430,7 @@ pub fn verify_ginger_merkle_path(path: &GingerMerkleTreePath, merkle_root: &Fiel
 mod test {
     use super::*;
     use rand::RngCore;
+    use algebra::{to_bytes, ToBytes};
 
     fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
         let mut fs = File::create(file_path)?;
@@ -461,6 +462,8 @@ mod test {
         let mut prev_end_epoch_mc_b_hash = [0u8; 32];
         rng.fill_bytes(&mut end_epoch_mc_b_hash);
         rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
+        println!("end epoch: {:?}", into_i8(end_epoch_mc_b_hash.to_vec()));
+        println!("prev end epoch: {:?}", into_i8(prev_end_epoch_mc_b_hash.to_vec()));
         let end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
         let prev_end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
 
@@ -498,6 +501,13 @@ mod test {
         sigs.push(Some(schnorr_sign(&msg, &sks[0], &pks[0]).unwrap()));
         sigs.push(None);
         sigs.push(Some(schnorr_sign(&msg, &sks[2], &pks[2]).unwrap()));
+
+        println!("sk: {:?}", into_i8(to_bytes!(sks[0]).unwrap()));
+        println!("sk: {:?}", into_i8(to_bytes!(sks[2]).unwrap()));
+        println!("sk: {:?}", into_i8(to_bytes!(sks[1]).unwrap()));
+
+        println!("sig: {:?}", into_i8(to_bytes!(sigs[0].unwrap()).unwrap()));
+        println!("sig: {:?}", into_i8(to_bytes!(sigs[2].unwrap()).unwrap()));
 
         let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
 
@@ -541,7 +551,7 @@ mod test {
     #[test]
     fn naive_threshold_sig_circuit_test() {
         create_sample_naive_threshold_sig_circuit(10);
-        create_sample_naive_threshold_sig_circuit(0);
+        //create_sample_naive_threshold_sig_circuit(0);
     }
 
     #[test]

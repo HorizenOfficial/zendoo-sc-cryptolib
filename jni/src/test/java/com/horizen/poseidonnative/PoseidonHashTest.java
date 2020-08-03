@@ -59,40 +59,18 @@ public class PoseidonHashTest {
                 assertNotNull("expectedHash deserialization must not fail", expectedHash);
 
                 digest.update(lhs);
+                FieldElement temp = digest.finalizeHash(); // Calls to finalize keeps the state
+                temp.freeFieldElement();
                 digest.update(rhs);
-                FieldElement hash = digest.finalizeHash();
-
-                assertEquals("hash must be equal to expected hash", hash, expectedHash);
-                try
-                (
-                    FieldElement uhOutput = digest.finalizeHash();
-                    FieldElement uhOutputTemp = digest.finalizeHash() //.finalizeHash() is idempotent
-                )
-                {
-                    assertEquals("Normal and updatable hash results must be equal", uhOutput, hash);
-                    assertEquals(".finalizeHash() is not idempotent", uhOutputTemp, hash);
-                }
-            }
-
-            // Test initializing UpdatablePoseidonHash with personalization is the same as concatenating
-            // to PoseidonHash input the personalization and the (eventual) padding.
-            FieldElement[] personalization = hashInput;
-            try
-            (
-                UpdatablePoseidonHash digest = UpdatablePoseidonHash.getInstance(personalization);
-                FieldElement random_f = FieldElement.createRandom();
-            )
-            {
-                digest.update(random_f);
-                FieldElement[] newHashInput = {personalization[0], personalization[1], random_f};
 
                 try
                 (
-                    FieldElement uh_output = digest.finalizeHash();
-                    FieldElement h_output = PoseidonHash.computeHash(newHashInput);
+                    FieldElement hash = digest.finalizeHash();
+                    FieldElement hashTemp = digest.finalizeHash() //.finalizeHash() is idempotent
                 )
                 {
-                    assertEquals("Updatable with personalization and normal outputs must be equal", uh_output, h_output);
+                    assertEquals("hash must be equal to expected hash", hash, expectedHash);
+                    assertEquals(".finalizeHash() is not idempotent", hash, hashTemp);
                 }
             }
         }
