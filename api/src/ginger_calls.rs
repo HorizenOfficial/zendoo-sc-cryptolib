@@ -1,17 +1,11 @@
-use algebra::{
-    fields::{
-        mnt4753::{Fr as MNT4Fr, Fq as MNT4Fq}, PrimeField
+use algebra::{fields::{
+    mnt4753::{Fr as MNT4Fr, Fq as MNT4Fq}, PrimeField
+}, curves::{
+    mnt4753::MNT4,
+    mnt6753::{
+        G1Projective as MNT6G1Projective, G1Affine as MNT6G1Affine
     },
-    curves::{
-        mnt4753::MNT4,
-        mnt6753::{
-            G1Projective as MNT6G1Projective, G1Affine as MNT6G1Affine
-        },
-    },
-    FromBytes, ToBytes,
-    BigInteger768,
-    ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand,
-};
+}, FromBytes, ToBytes, BigInteger768, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits};
 use primitives::{crh::{
     poseidon::{
         parameters::MNT4753PoseidonParameters,
@@ -21,9 +15,9 @@ use primitives::{crh::{
     bowe_hopwood::{
         BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters
     },
-}, merkle_tree::field_based_mht::{
-    FieldBasedMerkleHashTree, FieldBasedMerkleTreeConfig,
-    FieldBasedMerkleTreePath, MNT4753_PHANTOM_MERKLE_ROOT,
+},  merkle_tree::field_based_mht::{
+    smt::*,
+    smt::big_lazy_merkle_tree::*,
 }, signature::{
     FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
         FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature
@@ -45,6 +39,9 @@ use std::{
     fs::File, io::Result as IoResult
 };
 use lazy_static::*;
+use primitives::merkle_tree::field_based_mht::MNT4753_PHANTOM_MERKLE_ROOT;
+use primitives::merkle_tree::field_based_mht::ramht::poseidon::PoseidonRandomAccessMerkleTree;
+use primitives::merkle_tree::field_based_mht::ramht::RandomAccessMerkleTree;
 
 pub type FieldElement = MNT4Fr;
 pub const FIELD_SIZE: usize = 96; //Field size in bytes
@@ -208,8 +205,7 @@ pub fn compute_msg_to_sign(
         }
 
         //Compute bt_list merkle_root
-        let bt_mt = new_ginger_merkle_tree(bt_field_list.as_slice())?;
-        get_ginger_merkle_root(&bt_mt)
+        compute_bt_root(bt_field_list.as_slice())?
     };
 
     //Compute message to be verified
@@ -392,38 +388,84 @@ pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Re
 
 //************Merkle Tree functions******************
 
-pub struct FieldBasedMerkleTreeParams;
+type BTMerkleTree = PoseidonRandomAccessMerkleTree<FieldElement, MNT4753PoseidonParameters>;
+const BT_MERKLE_TREE_HEIGHT: usize = 13;
 
-impl FieldBasedMerkleTreeConfig for FieldBasedMerkleTreeParams {
-    const HEIGHT: usize = 13;
-    type H = MNT4PoseidonHash;
+fn compute_bt_root(bts: &[FieldElement]) -> Result<FieldElement, Error> {
+    let mut bt_mt = BTMerkleTree::init(2usize.pow((BT_MERKLE_TREE_HEIGHT - 1) as u32));
+    for &bt in bts.iter(){
+        bt_mt.append(bt);
+    }
+    bt_mt.finalize_in_place();
+    bt_mt.root().ok_or(Error::from("Failed to compute BT Merkle Tree root"))
 }
 
-type GingerMerkleTree = FieldBasedMerkleHashTree<FieldBasedMerkleTreeParams>;
+pub const SC_UTXO_MERKLE_TREE_HEIGHT: usize = 13;
+pub const NON_EMPTY_POSITION: i32 = -1;
 
-#[allow(dead_code)]
-type GingerMerkleTreePath = FieldBasedMerkleTreePath<FieldBasedMerkleTreeParams>;
-
-pub fn new_ginger_merkle_tree(leaves: &[FieldElement]) -> Result<GingerMerkleTree, Error> {
-    GingerMerkleTree::new(leaves)
+fn leaf_to_index(leaf: &FieldElement) -> usize {
+    //let leaf_bits = &leaf.write_bits()[..SC_UTXO_MERKLE_TREE_HEIGHT - 1];
+    let bits = leaf.write_bits();
+    assert!(SC_UTXO_MERKLE_TREE_HEIGHT - 1 <= bits.len());
+    let leaf_bits = &bits[..SC_UTXO_MERKLE_TREE_HEIGHT - 1];
+    let position = leaf_bits.iter().rev().fold(0, |acc, &b| acc*2 + b as usize);
+    position
 }
 
-pub fn get_ginger_merkle_root(tree: &GingerMerkleTree) -> FieldElement {
-    tree.root()
+pub type ScUtxoMerkleTree = MNT4PoseidonSmt;
+
+pub fn new_ginger_merkle_tree(db_path: &str, cache_path: &str) -> Result<ScUtxoMerkleTree, Error> {
+    match ScUtxoMerkleTree::new(
+        2usize.pow((SC_UTXO_MERKLE_TREE_HEIGHT - 1) as u32),
+        db_path.to_owned(),
+        cache_path.to_owned()
+    ) {
+        Ok(tree) => Ok(tree),
+        Err(e) => Err(Box::new(e))
+    }
 }
 
-#[allow(dead_code)]
-pub fn get_ginger_merkle_path(leaf: &FieldElement, leaf_index: usize, tree: &GingerMerkleTree)
-    -> Result<GingerMerkleTreePath, Error>
+pub fn add_leaf_to_ginger_merkle_tree(tree: &mut ScUtxoMerkleTree, leaf: &FieldElement, position: usize){
+    tree.insert_leaf(Coord::new(0, position), *leaf)
+}
+
+pub fn get_position_in_ginger_merkle_tree(tree: &ScUtxoMerkleTree, leaf: &FieldElement) -> i32
 {
-    tree.generate_proof(leaf_index, leaf)
+    let position = leaf_to_index(leaf);
+    match tree.is_leaf_empty(Coord::new(0, position)){
+        true => position as i32,
+        false => NON_EMPTY_POSITION
+    }
 }
 
-#[allow(dead_code)]
-pub fn verify_ginger_merkle_path(path: &GingerMerkleTreePath, merkle_root: &FieldElement, leaf: &FieldElement)
-    -> Result<bool, Error>
-{
-    path.verify(merkle_root, leaf)
+pub fn get_ginger_merkle_root(tree: &ScUtxoMerkleTree) -> FieldElement {
+    tree.get_root()
+}
+
+///////////LAZY VARIANT
+pub type LazyScUtxoMerkleTree = MNT4PoseidonSmtLazy;
+type GingerLeaf = OperationLeaf<FieldElement>;
+
+pub fn new_lazy_ginger_merkle_tree(db_path: &str, cache_path: &str) -> Result<LazyScUtxoMerkleTree, Error> {
+    match LazyScUtxoMerkleTree::new(
+        2usize.pow((SC_UTXO_MERKLE_TREE_HEIGHT - 1) as u32),
+        db_path.to_owned(),
+        cache_path.to_owned()
+    ) {
+        Ok(tree) => Ok(tree),
+        Err(e) => Err(Box::new(e))
+    }
+}
+
+pub fn add_leaves_to_ginger_merkle_tree(tree: &mut LazyScUtxoMerkleTree, leaves: &[FieldElement]) -> FieldElement{
+    let leaves = leaves.iter().map(|leaf| {
+        GingerLeaf::new(0, leaf_to_index(leaf), ActionLeaf::Insert, Some(*leaf))
+    }).collect::<Vec<_>>();
+    tree.process_leaves(leaves)
+}
+
+pub fn get_lazy_ginger_merkle_root(tree: &LazyScUtxoMerkleTree) -> FieldElement {
+    tree.get_root()
 }
 
 #[cfg(test)]
@@ -551,7 +593,7 @@ mod test {
     #[test]
     fn naive_threshold_sig_circuit_test() {
         create_sample_naive_threshold_sig_circuit(10);
-        //create_sample_naive_threshold_sig_circuit(0);
+        create_sample_naive_threshold_sig_circuit(0);
     }
 
     #[test]
@@ -638,19 +680,39 @@ mod test {
         let leaves_num = 16;
         let mut leaves = vec![];
         let mut rng = OsRng;
+
+        // Non lazy
+        let mut mt = new_ginger_merkle_tree(
+            "./temp_db",
+            "./temp_cache",
+        ).unwrap();
+
+        // Add leaves to mt in different positions
         for _ in 0..leaves_num {
-            leaves.push(FieldElement::rand(&mut rng));
+            loop {
+                let r = FieldElement::rand(&mut rng);
+                let position = get_position_in_ginger_merkle_tree(&mt, &r);
+                if position != NON_EMPTY_POSITION { //Ensure that each leaf ends up in a different position
+                    leaves.push(r);
+                    add_leaf_to_ginger_merkle_tree(&mut mt, &r, position as usize);
+                    break;
+                }
+            }
         }
 
-        let mt = GingerMerkleTree::new(leaves.as_slice()).unwrap();
-        let root = get_ginger_merkle_root(&mt);
-        let wrong_root = FieldElement::rand(&mut rng);
+        //Get root of mt
+        let mt_root = get_ginger_merkle_root(&mt);
 
-        for i in 0..leaves_num {
-            let path = get_ginger_merkle_path(&leaves[i], i, &mt).unwrap();
-            assert!(verify_ginger_merkle_path(&path, &root, &leaves[i]).unwrap());
-            assert!(!verify_ginger_merkle_path(&path, &wrong_root, &leaves[i]).unwrap());
-        }
+        // Lazy
+        let mut lazy_mt = new_lazy_ginger_merkle_tree(
+            "./temp_db_lazy",
+            "./temp_cache_lazy",
+        ).unwrap();
+
+        // No conflicts here because we ensured each leaf to fall in a different position
+        let lazy_mt_root = add_leaves_to_ginger_merkle_tree(&mut lazy_mt, leaves.as_slice());
+
+        assert_eq!(mt_root, lazy_mt_root);
     }
 
     #[test]

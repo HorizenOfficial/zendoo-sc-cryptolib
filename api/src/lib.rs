@@ -849,6 +849,247 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFreePo
     drop(unsafe { Box::from_raw(h) });
 }
 
+//Merkle tree functions
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeInit(
+    _env: JNIEnv,
+    _class: JClass,
+    _db_path: JString,
+    _cache_path: JString
+) -> jobject
+{
+    // Read db_path
+    let db_path = _env.get_string(_db_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Read cache_path
+    let cache_path =_env.get_string(_cache_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Create new BigMerkleTree Rust side
+    let mt = new_ginger_merkle_tree(
+        db_path.to_str().unwrap(),
+        cache_path.to_str().unwrap()
+    ).expect("Should be able to create new BigMerkleTree");
+
+    // Create and return new BigMerkleTree Java side
+
+    let mt_ptr: jlong = jlong::from(Box::into_raw(Box::new(mt)) as i64);
+
+    _env.new_object(_class, "(J)V", &[JValue::Long(mt_ptr)])
+        .expect("Should be able to create new BigMerkleTree object")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeGetPosition(
+    _env: JNIEnv,
+    _tree: JObject,
+    _leaf: JObject,
+) -> jint
+{
+    let leaf = {
+
+        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let tree = {
+
+        let t =_env.get_field(_leaf, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        read_raw_pointer(t.j().unwrap() as *const ScUtxoMerkleTree)
+    };
+
+    get_position_in_ginger_merkle_tree(tree, leaf) as jint
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeAddLeaf(
+    _env: JNIEnv,
+    _tree: JObject,
+    _leaf: JObject,
+    _position: jint,
+)
+{
+    let leaf = {
+
+        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let tree = {
+
+        let t =_env.get_field(_leaf, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut ScUtxoMerkleTree)
+    };
+
+    add_leaf_to_ginger_merkle_tree(tree, leaf, _position as usize);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeRoot(
+    _env: JNIEnv,
+    _tree: JObject,
+) -> jobject
+{
+    let tree = {
+
+        let t =_env.get_field(_tree, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        read_raw_pointer(t.j().unwrap() as *const ScUtxoMerkleTree)
+    };
+
+    let root = get_ginger_merkle_root(tree);
+
+    let root_ptr: jlong = jlong::from(Box::into_raw(Box::new(root)) as i64);
+
+    let fe_class = _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Cannot find FieldElement class.");
+
+    _env.new_object(fe_class, "(J)V", &[JValue::Long(root_ptr)])
+        .expect("Cannot create FieldElement object.")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeFreeMerkleTree(
+    _env: JNIEnv,
+    _tree: *mut ScUtxoMerkleTree,
+)
+{
+    if _tree.is_null()  { return }
+    drop(unsafe { Box::from_raw(_tree) });
+}
+
+// Lazy variant
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeInit(
+    _env: JNIEnv,
+    _class: JClass,
+    _db_path: JString,
+    _cache_path: JString
+) -> jobject
+{
+    // Read db_path
+    let db_path = _env.get_string(_db_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Read cache_path
+    let cache_path =_env.get_string(_cache_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Create new BigLazyMerkleTree Rust side
+    let mt = new_lazy_ginger_merkle_tree(
+        db_path.to_str().unwrap(),
+        cache_path.to_str().unwrap()
+    ).expect("Should be able to create new BigLazyMerkleTree");
+
+    // Create and return new BigLazyMerkleTree Java side
+
+    let mt_ptr: jlong = jlong::from(Box::into_raw(Box::new(mt)) as i64);
+
+    _env.new_object(_class, "(J)V", &[JValue::Long(mt_ptr)])
+        .expect("Should be able to create new BigLazyMerkleTree object")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeAddLeaves(
+    _env: JNIEnv,
+    _tree: JObject,
+    _leaves: jobjectArray,
+) -> jobject
+{
+    //Read _leaves as array of FieldElement
+    let leaves_len = _env.get_array_length(_leaves)
+        .expect("Should be able to read leaves array size");
+    let mut leaves = vec![];
+
+    for i in 0..leaves_len {
+        let field_obj = _env.get_object_array_element(_leaves, i)
+            .expect(format!("Should be able to read elem {} of the leaves array", i).as_str());
+
+        let field = {
+
+            let f =_env.get_field(field_obj, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            read_raw_pointer(f.j().unwrap() as *const FieldElement)
+        };
+
+        leaves.push(*field);
+    }
+
+    // Read tree
+    let tree = {
+
+        let t =_env.get_field(_tree, "lazyMerkleTreePointer", "J")
+            .expect("Should be able to get field lazyMerkleTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut LazyScUtxoMerkleTree)
+    };
+
+    // Update the tree with leaves and get the root
+    let root = add_leaves_to_ginger_merkle_tree(tree, leaves.as_slice());
+
+    // Return root as FieldElement object
+    let root_ptr: jlong = jlong::from(Box::into_raw(Box::new(root)) as i64);
+
+    let fe_class = _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Cannot find FieldElement class.");
+
+    _env.new_object(fe_class, "(J)V", &[JValue::Long(root_ptr)])
+        .expect("Cannot create FieldElement object.")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeRoot(
+    _env: JNIEnv,
+    _tree: JObject,
+) -> jobject
+{
+    let tree = {
+
+        let t =_env.get_field(_tree, "lazyMerkleTreePointer", "J")
+            .expect("Should be able to get field lazyMerkleTreePointer");
+
+        read_raw_pointer(t.j().unwrap() as *const LazyScUtxoMerkleTree)
+    };
+
+    let root = get_lazy_ginger_merkle_root(tree);
+
+    let root_ptr: jlong = jlong::from(Box::into_raw(Box::new(root)) as i64);
+
+    let fe_class = _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Cannot find FieldElement class.");
+
+    _env.new_object(fe_class, "(J)V", &[JValue::Long(root_ptr)])
+        .expect("Cannot create FieldElement object.")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeFreeLazyMerkleTree(
+    _env: JNIEnv,
+    _tree: *mut LazyScUtxoMerkleTree,
+)
+{
+    if _tree.is_null()  { return }
+    drop(unsafe { Box::from_raw(_tree) });
+}
+
+
 //VRF utility functions
 
 #[no_mangle]
