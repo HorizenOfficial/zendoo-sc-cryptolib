@@ -404,9 +404,13 @@ pub const SC_UTXO_MERKLE_TREE_HEIGHT: usize = 13;
 pub const NON_EMPTY_POSITION: i32 = -1;
 
 fn leaf_to_index(leaf: &FieldElement) -> usize {
-    //let leaf_bits = &leaf.write_bits()[..SC_UTXO_MERKLE_TREE_HEIGHT - 1];
+
+    // Convert field element to bits
     let bits = leaf.write_bits();
     assert!(SC_UTXO_MERKLE_TREE_HEIGHT - 1 <= bits.len());
+
+    // Use log_2(num_leaves) MSB of serialized FieldElement to estabilish leaf position inside
+    // the tree
     let leaf_bits = &bits[..SC_UTXO_MERKLE_TREE_HEIGHT - 1];
     let position = leaf_bits.iter().rev().fold(0, |acc, &b| acc*2 + b as usize);
     position
@@ -425,6 +429,11 @@ pub fn new_ginger_merkle_tree(db_path: &str, cache_path: &str) -> Result<ScUtxoM
     }
 }
 
+// Note: If position is non empty the old leaf will be overwritten.
+// If that's not the desired behaviour, then leaf should depend on some tweakable
+// parameter that allows to re-compute a new position for it, possible multiple times.
+// Of course, for best performances you should minimize the risk of having collisions:
+// i.e. SC_UTXO_MERKLE_TREE_HEIGHT >> EXPECTED_MERKLE_TREE_HEIGHT.
 pub fn add_leaf_to_ginger_merkle_tree(tree: &mut ScUtxoMerkleTree, leaf: &FieldElement, position: usize){
     tree.insert_leaf(Coord::new(0, position), *leaf)
 }
@@ -457,6 +466,9 @@ pub fn new_lazy_ginger_merkle_tree(db_path: &str, cache_path: &str) -> Result<La
     }
 }
 
+// Note: If a position is non-empty for a certain leaf in the MerkleTree, that leaf will be
+// overwritten by the new one. If that's not the desired behaviour, you must ensure that
+// all the leaves will end up in different positions prior to calling this function.
 pub fn add_leaves_to_ginger_merkle_tree(tree: &mut LazyScUtxoMerkleTree, leaves: &[FieldElement]) -> FieldElement{
     let leaves = leaves.iter().map(|leaf| {
         GingerLeaf::new(0, leaf_to_index(leaf), ActionLeaf::Insert, Some(*leaf))
@@ -677,7 +689,7 @@ mod test {
 
     #[test]
     fn sample_merkle_tree(){
-        let leaves_num = 16;
+        let leaves_num = 2usize.pow(10 as u32);
         let mut leaves = vec![];
         let mut rng = OsRng;
 
