@@ -15,28 +15,42 @@ public class BigMerkleTree implements AutoCloseable {
         this.merkleTreePointer = merkleTreePointer;
     }
 
-    private static native BigMerkleTree nativeInit(String dbPath, String cachePath);
+    private static native BigMerkleTree nativeInit(int height, String dbPath, String cachePath);
 
-    public static BigMerkleTree init(String dbPath, String cachePath) {
-        return nativeInit(dbPath, cachePath);
+    public static BigMerkleTree init(int height, String dbPath, String cachePath) {
+        return nativeInit(height, dbPath, cachePath);
     }
 
     private native int nativeGetPosition(FieldElement leaf);
 
-    // Returns the position to which insert the leaf in the tree if it's empty, otherwise -1
+    // Returns the position to which insert the leaf
     public int getPosition(FieldElement leaf) {
+        if (merkleTreePointer == 0)
+            throw new IllegalArgumentException("merkleTreePointer must be not null.");
         return nativeGetPosition(leaf);
     }
 
-    private native boolean nativeAddLeaf(FieldElement leaf, int position);
+    private native boolean nativeIsPositionEmpty(int position);
 
-    public boolean addLeaf(FieldElement leaf, int position){
-        return nativeAddLeaf(leaf, position);
+    public boolean isPositionEmpty(int position){
+        if (merkleTreePointer == 0)
+            throw new IllegalArgumentException("merkleTreePointer must be not null.");
+        return nativeIsPositionEmpty(position);
+    }
+
+    private native void nativeAddLeaf(FieldElement leaf, int position);
+
+    public void addLeaf(FieldElement leaf, int position){
+        if (merkleTreePointer == 0)
+            throw new IllegalArgumentException("merkleTreePointer must be not null.");
+        nativeAddLeaf(leaf, position);
     }
 
     private native FieldElement nativeRoot();
 
     public FieldElement root() {
+        if (merkleTreePointer == 0)
+            throw new IllegalArgumentException("merkleTreePointer must be not null.");
         return nativeRoot();
     }
 

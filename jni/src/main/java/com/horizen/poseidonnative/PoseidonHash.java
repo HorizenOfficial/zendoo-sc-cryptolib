@@ -62,6 +62,17 @@ public class PoseidonHash implements AutoCloseable {
         return nativeReset(new FieldElement[0]);
     }
 
+    // For backward compatibility with previous implementation, if needed
+    public static FieldElement computePoseidonHash(FieldElement[] inputs){
+        PoseidonHash digest = PoseidonHash.getInstance();
+        for (FieldElement fe: inputs)
+            digest.update(fe);
+        FieldElement hashOutput = digest.finalizeHash();
+
+        digest.freePoseidonHash();
+        return hashOutput;
+    }
+
     private native void nativeFreePoseidonHash();
 
     public void freePoseidonHash(){

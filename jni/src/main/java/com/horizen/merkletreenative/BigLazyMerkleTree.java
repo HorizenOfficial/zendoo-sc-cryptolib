@@ -1,5 +1,7 @@
 package com.horizen.merkletreenative;
 
+import java.util.List;
+
 import com.horizen.librustsidechains.Library;
 import com.horizen.librustsidechains.FieldElement;
 
@@ -15,22 +17,26 @@ public class BigLazyMerkleTree implements AutoCloseable {
         this.lazyMerkleTreePointer = lazyMerkleTreePointer;
     }
 
-    private static native BigLazyMerkleTree nativeInit(String dbPath, String cachePath);
+    private static native BigLazyMerkleTree nativeInit(int height, String dbPath, String cachePath);
 
-    public static BigLazyMerkleTree init(String dbPath, String cachePath) {
-        return nativeInit(dbPath, cachePath);
+    public static BigLazyMerkleTree init(int height, String dbPath, String cachePath) {
+        return nativeInit(height, dbPath, cachePath);
     }
 
     private native FieldElement nativeAddLeaves(FieldElement[] leaves);
 
     // Add leaves to tree, compute and return the root
-    public FieldElement addLeaves(FieldElement[] leaves){
-        return nativeAddLeaves(leaves);
+    public FieldElement addLeaves(List<FieldElement> leaves){
+        if (lazyMerkleTreePointer == 0)
+            throw new IllegalArgumentException("lazyMerkleTreePointer must be not null.");
+        return nativeAddLeaves(leaves.toArray(new FieldElement[0]));
     }
 
     private native FieldElement nativeRoot();
 
     public FieldElement root() {
+        if (lazyMerkleTreePointer == 0)
+            throw new IllegalArgumentException("lazyMerkleTreePointer must be not null.");
         return nativeRoot();
     }
 
