@@ -15,11 +15,18 @@ public class BigMerkleTree implements AutoCloseable {
         this.merkleTreePointer = merkleTreePointer;
     }
 
-    private static native BigMerkleTree nativeInit(int height, String dbPath, String cachePath);
+    private static native BigMerkleTree nativeInit(int height, String statePath, String dbPath, String cachePath);
 
-    public static BigMerkleTree init(int height, String dbPath, String cachePath) {
-        return nativeInit(height, dbPath, cachePath);
+    public static BigMerkleTree init(int height, String statePath, String dbPath, String cachePath) {
+        return nativeInit(height, statePath, dbPath, cachePath);
     }
+
+    private static native BigMerkleTree nativeLoad(String statePath, String dbPath, String cachePath);
+
+    public static BigMerkleTree load(String statePath, String dbPath, String cachePath) {
+        return nativeInit(statePath, dbPath, cachePath);
+    }
+
 
     private native int nativeGetPosition(FieldElement leaf);
 
@@ -56,9 +63,20 @@ public class BigMerkleTree implements AutoCloseable {
 
     private static native void nativeFreeMerkleTree(long merkleTreePointer);
 
+    // Free Rust memory from MerkleTree
     public void freeMerkleTree() {
         if (merkleTreePointer != 0) {
             nativeFreeMerkleTree(this.merkleTreePointer);
+            merkleTreePointer = 0;
+        }
+    }
+
+    private static native void nativeFreeAndDestroyMerkleTree(long merkleTreePointer);
+
+    // Free Rust memory from MerkleTree + delete persistent data
+    public void freeAndDestroyMerkleTree() {
+        if (merkleTreePointer != 0) {
+            nativeFreeAndDestroyMerkleTree(this.merkleTreePointer);
             merkleTreePointer = 0;
         }
     }

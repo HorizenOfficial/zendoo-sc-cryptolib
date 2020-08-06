@@ -446,15 +446,34 @@ fn leaf_to_index(leaf: &FieldElement, height: usize) -> usize {
     position
 }
 
-pub fn new_ginger_smt(height: usize, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error> {
-    match GingerSMT::new(
+pub fn new_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error> {
+    match GingerSMT::new_unitialized(
         2usize.pow((height - 1) as u32),
+        true,
+        Some(state_path.to_owned()),
         db_path.to_owned(),
         cache_path.to_owned()
     ) {
         Ok(tree) => Ok(tree),
         Err(e) => Err(Box::new(e))
     }
+}
+
+pub fn restore_ginger_smt(state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error>
+{
+    match GingerSMT::new(
+        true,
+        state_path.to_owned(),
+        db_path.to_owned(),
+        cache_path.to_owned()
+    ) {
+        Ok(tree) => Ok(tree),
+        Err(e) => Err(Box::new(e))
+    }
+}
+
+pub fn set_ginger_smt_persistency(tree: &mut GingerSMT, persistency: bool) {
+    tree.set_persistency(persistency);
 }
 
 // Note: If position is non empty the old leaf will be overwritten.
@@ -484,15 +503,34 @@ pub fn get_ginger_smt_root(tree: &GingerSMT) -> FieldElement {
 pub type LazyGingerSMT = MNT4PoseidonSmtLazy;
 type GingerLeaf = OperationLeaf<FieldElement>;
 
-pub fn new_lazy_ginger_smt(height:usize, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error> {
-    match LazyGingerSMT::new(
+pub fn new_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error> {
+    match LazyGingerSMT::new_unitialized(
         2usize.pow((height - 1) as u32),
+        true,
+        Some(state_path.to_owned()),
         db_path.to_owned(),
         cache_path.to_owned()
     ) {
         Ok(tree) => Ok(tree),
         Err(e) => Err(Box::new(e))
     }
+}
+
+pub fn restore_lazy_ginger_smt(state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error>
+{
+    match LazyGingerSMT::new(
+        true,
+        state_path.to_owned(),
+        db_path.to_owned(),
+        cache_path.to_owned()
+    ) {
+        Ok(tree) => Ok(tree),
+        Err(e) => Err(Box::new(e))
+    }
+}
+
+pub fn set_ginger_lazy_smt_persistency(tree: &mut LazyGingerSMT, persistency: bool) {
+    tree.set_persistency(persistency);
 }
 
 // Note: If a position is non-empty for a certain leaf, the corresponding leaf in the
@@ -515,6 +553,7 @@ mod test {
     use super::*;
     use rand::RngCore;
     use algebra::{to_bytes, ToBytes, Field};
+    use std::path::Path;
 
     fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
         let mut fs = File::create(file_path)?;
@@ -728,6 +767,7 @@ mod test {
         // Get GingerSMT
         let mut smt = new_ginger_smt(
             height,
+            "./temp_state",
             "./temp_db",
             "./temp_cache",
         ).unwrap();
@@ -756,6 +796,7 @@ mod test {
         // Get LazyGingerSMT
         let mut lazy_smt = new_lazy_ginger_smt(
             height,
+            "./temp_state_lazy",
             "./temp_db_lazy",
             "./temp_cache_lazy",
         ).unwrap();
@@ -779,6 +820,76 @@ mod test {
         let ramt_root = get_ginger_ramt_root(&ramt).expect("Tree must've been finalized");
 
         assert_eq!(ramt_root, lazy_smt_root);
+    }
+
+    #[test]
+    fn sample_restore_merkle_tree(){
+        let expected_root = FieldElement::new(
+            BigInteger768([
+                17131081159200801074,
+                9006481350618111567,
+                12051725085490156787,
+                2023238364439588976,
+                13194888104290656497,
+                14162537977718443379,
+                13575626123664189275,
+                9267800406229717074,
+                8973990559932404408,
+                1830585533392189796,
+                16667600459761825175,
+                476991746583444
+            ])
+        );
+
+        // create a persistent smt in a separate scope
+        {
+            let mut smt = new_ginger_smt(
+                6,
+                "./persistency_test_info",
+                "./db_leaves_persistency_test_info",
+                "./db_cache_persistency_test_info"
+            ).unwrap();
+
+            //Insert some leaves in the tree
+            let leaves = vec![FieldElement::from(1u16), FieldElement::from(2u16)];
+            add_leaf_to_ginger_smt(&mut smt, &leaves[0], 0);
+            add_leaf_to_ginger_smt(&mut smt, &leaves[1], 9);
+
+            // smt gets dropped but its info should be saved
+        }
+
+        // files and directories should have been created
+        assert!(Path::new("./persistency_test_info").exists());
+        assert!(Path::new("./db_leaves_persistency_test_info").exists());
+        assert!(Path::new("./db_cache_persistency_test_info").exists());
+
+        // create a non-persistent smt in another scope by restoring the previous one
+        {
+            let mut smt = restore_ginger_smt(
+                "./persistency_test_info",
+                "./db_leaves_persistency_test_info",
+                "./db_cache_persistency_test_info"
+            ).unwrap();
+
+            // insert other leaves
+            let leaves = vec![FieldElement::from(10u16), FieldElement::from(3u16)];
+            add_leaf_to_ginger_smt(&mut smt, &leaves[0], 16);
+            add_leaf_to_ginger_smt(&mut smt, &leaves[1], 29);
+
+            // if truly state has been kept, then the equality below must pass, since `root` was
+            // computed in one go with another smt
+            assert_eq!(expected_root, get_ginger_smt_root(&smt));
+
+            //Set the persistency of the tree to false so that the tree gets dropped
+            set_ginger_smt_persistency(&mut smt, false);
+
+            // smt gets dropped and state and dbs are deleted
+        }
+
+        // files and directories should have been deleted
+        assert!(!Path::new("./persistency_test_info").exists());
+        assert!(!Path::new("./db_leaves_persistency_test_info").exists());
+        assert!(!Path::new("./db_cache_persistency_test_info").exists());
     }
 
     #[test]

@@ -1000,10 +1000,15 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeIni
     _env: JNIEnv,
     _class: JClass,
     _height: jint,
+    _state_path: JString,
     _db_path: JString,
     _cache_path: JString
 ) -> jobject
 {
+    // Read state_path
+    let state_path = _env.get_string(_state_path)
+        .expect("Should be able to read jstring as Rust String");
+
     // Read db_path
     let db_path = _env.get_string(_db_path)
         .expect("Should be able to read jstring as Rust String");
@@ -1015,9 +1020,47 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeIni
     // Create new BigMerkleTree Rust side
     let mt = new_ginger_smt(
         _height as usize,
+        state_path.to_str().unwrap(),
         db_path.to_str().unwrap(),
         cache_path.to_str().unwrap()
     ).expect("Should be able to create new BigMerkleTree");
+
+    // Create and return new BigMerkleTree Java side
+
+    let mt_ptr: jlong = jlong::from(Box::into_raw(Box::new(mt)) as i64);
+
+    _env.new_object(_class, "(J)V", &[JValue::Long(mt_ptr)])
+        .expect("Should be able to create new BigMerkleTree object")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeLoad(
+    _env: JNIEnv,
+    _class: JClass,
+    _state_path: JString,
+    _db_path: JString,
+    _cache_path: JString
+) -> jobject
+{
+    // Read state_path
+    let state_path = _env.get_string(_state_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Read db_path
+    let db_path = _env.get_string(_db_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Read cache_path
+    let cache_path =_env.get_string(_cache_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Create new BigMerkleTree Rust side
+    let mt = restore_ginger_smt(
+        state_path.to_str().unwrap(),
+        db_path.to_str().unwrap(),
+        cache_path.to_str().unwrap()
+    ).expect("Should be able to restore BigMerkleTree");
 
     // Create and return new BigMerkleTree Java side
 
@@ -1135,16 +1178,35 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeFre
     drop(unsafe { Box::from_raw(_tree) });
 }
 
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeFreeAndDestroyMerkleTree(
+    _env: JNIEnv,
+    _tree: *mut GingerSMT,
+)
+{
+    if _tree.is_null()  { return }
+
+    let tree = read_mut_raw_pointer(_tree);
+    set_ginger_smt_persistency(tree, false);
+
+    drop(unsafe { Box::from_raw(_tree) });
+}
+
 ////////////LAZY SPARSE MERKLE TREE
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeInit(
     _env: JNIEnv,
     _class: JClass,
     _height: jint,
+    _state_path: JString,
     _db_path: JString,
     _cache_path: JString
 ) -> jobject
 {
+    // Read state_path
+    let state_path = _env.get_string(_state_path)
+        .expect("Should be able to read jstring as Rust String");
+
     // Read db_path
     let db_path = _env.get_string(_db_path)
         .expect("Should be able to read jstring as Rust String");
@@ -1156,9 +1218,47 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativ
     // Create new BigLazyMerkleTree Rust side
     let mt = new_lazy_ginger_smt(
         _height as usize,
+        state_path.to_str().unwrap(),
         db_path.to_str().unwrap(),
         cache_path.to_str().unwrap()
     ).expect("Should be able to create new BigLazyMerkleTree");
+
+    // Create and return new BigLazyMerkleTree Java side
+
+    let mt_ptr: jlong = jlong::from(Box::into_raw(Box::new(mt)) as i64);
+
+    _env.new_object(_class, "(J)V", &[JValue::Long(mt_ptr)])
+        .expect("Should be able to create new BigLazyMerkleTree object")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeLoad(
+    _env: JNIEnv,
+    _class: JClass,
+    _state_path: JString,
+    _db_path: JString,
+    _cache_path: JString
+) -> jobject
+{
+    // Read state_path
+    let state_path = _env.get_string(_state_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Read db_path
+    let db_path = _env.get_string(_db_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Read cache_path
+    let cache_path =_env.get_string(_cache_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Create new BigLazyMerkleTree Rust side
+    let mt = restore_lazy_ginger_smt(
+        state_path.to_str().unwrap(),
+        db_path.to_str().unwrap(),
+        cache_path.to_str().unwrap()
+    ).expect("Should be able to restore BigLazyMerkleTree");
 
     // Create and return new BigLazyMerkleTree Java side
 
@@ -1252,6 +1352,20 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativ
 )
 {
     if _tree.is_null()  { return }
+    drop(unsafe { Box::from_raw(_tree) });
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeFreeAndDestroyLazyMerkleTree(
+    _env: JNIEnv,
+    _tree: *mut LazyGingerSMT,
+)
+{
+    if _tree.is_null()  { return }
+
+    let tree = read_mut_raw_pointer(_tree);
+    set_ginger_lazy_smt_persistency(tree, false);
+
     drop(unsafe { Box::from_raw(_tree) });
 }
 

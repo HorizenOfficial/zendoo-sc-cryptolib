@@ -17,10 +17,16 @@ public class BigLazyMerkleTree implements AutoCloseable {
         this.lazyMerkleTreePointer = lazyMerkleTreePointer;
     }
 
-    private static native BigLazyMerkleTree nativeInit(int height, String dbPath, String cachePath);
+    private static native BigLazyMerkleTree nativeInit(int height, String statePath, String dbPath, String cachePath);
 
-    public static BigLazyMerkleTree init(int height, String dbPath, String cachePath) {
-        return nativeInit(height, dbPath, cachePath);
+    public static BigLazyMerkleTree init(int height, String statePath, String dbPath, String cachePath) {
+        return nativeInit(height, statePath, dbPath, cachePath);
+    }
+
+    private static native BigLazyMerkleTree nativeLoad(String statePath, String dbPath, String cachePath);
+
+    public static BigLazyMerkleTree load(String statePath, String dbPath, String cachePath) {
+        return nativeInit(statePath, dbPath, cachePath);
     }
 
     private native FieldElement nativeAddLeaves(FieldElement[] leaves);
@@ -42,9 +48,20 @@ public class BigLazyMerkleTree implements AutoCloseable {
 
     private static native void nativeFreeLazyMerkleTree(long lazyMerkleTreePointer);
 
+    // Free Rust memory from LazyMerkleTree
     public void freeLazyMerkleTree() {
         if (lazyMerkleTreePointer != 0) {
             nativeFreeLazyMerkleTree(this.lazyMerkleTreePointer);
+            lazyMerkleTreePointer = 0;
+        }
+    }
+
+    private static native void nativeFreeAndDestroyLazyMerkleTree(long lazyMerkleTreePointer);
+
+    // Free Rust memory from LazyMerkleTree + delete persistent data
+    public void freeAndDestroyLazyMerkleTree() {
+        if (lazyMerkleTreePointer != 0) {
+            nativeFreeAndDestroyLazyMerkleTree(this.lazyMerkleTreePointer);
             lazyMerkleTreePointer = 0;
         }
     }
