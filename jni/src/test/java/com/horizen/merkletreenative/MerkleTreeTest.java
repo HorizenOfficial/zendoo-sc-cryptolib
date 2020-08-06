@@ -139,7 +139,7 @@ public class MerkleTreeTest {
         FieldElement expectedRoot = FieldElement.deserialize(expectedRootBytes);
 
         //Get BigMerkleTree
-        BigMerkleTree smt = BigMerkleTree.init(height, "./db_big", "./cache_big");
+        BigMerkleTree smt = BigMerkleTree.init(height, "./state_big", "./db_big", "./cache_big");
         int i = 0;
         for (FieldElement leaf: leaves) {
             int position = smt.getPosition(leaf);
@@ -158,7 +158,7 @@ public class MerkleTreeTest {
         smtRoot.freeFieldElement();
 
         //Get BigLazyMerkleTree
-        BigLazyMerkleTree smtLazy = BigLazyMerkleTree.init(height, "./db_big_lazy", "./cache_big_lazy");
+        BigLazyMerkleTree smtLazy = BigLazyMerkleTree.init(height, "./state_big_lazy", "./db_big_lazy", "./cache_big_lazy");
 
         //Add leaves to BigLazyMerkleTree
         smtLazy.addLeaves(leaves);

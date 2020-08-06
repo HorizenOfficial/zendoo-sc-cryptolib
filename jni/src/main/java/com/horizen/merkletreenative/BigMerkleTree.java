@@ -24,9 +24,8 @@ public class BigMerkleTree implements AutoCloseable {
     private static native BigMerkleTree nativeLoad(String statePath, String dbPath, String cachePath);
 
     public static BigMerkleTree load(String statePath, String dbPath, String cachePath) {
-        return nativeInit(statePath, dbPath, cachePath);
+        return nativeLoad(statePath, dbPath, cachePath);
     }
-
 
     private native int nativeGetPosition(FieldElement leaf);
 

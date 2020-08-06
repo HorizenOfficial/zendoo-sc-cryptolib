@@ -26,7 +26,7 @@ public class BigLazyMerkleTree implements AutoCloseable {
     private static native BigLazyMerkleTree nativeLoad(String statePath, String dbPath, String cachePath);
 
     public static BigLazyMerkleTree load(String statePath, String dbPath, String cachePath) {
-        return nativeInit(statePath, dbPath, cachePath);
+        return nativeLoad(statePath, dbPath, cachePath);
     }
 
     private native FieldElement nativeAddLeaves(FieldElement[] leaves);
