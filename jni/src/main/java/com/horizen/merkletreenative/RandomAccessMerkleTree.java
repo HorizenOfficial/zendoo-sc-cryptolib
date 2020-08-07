@@ -83,6 +83,6 @@ public class RandomAccessMerkleTree implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        freeRandomAccessMerkleTree();
+        //freeRandomAccessMerkleTree();
     }
 }
