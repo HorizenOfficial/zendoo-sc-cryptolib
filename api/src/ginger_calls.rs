@@ -36,7 +36,7 @@ use demo_circuit::{
 use rand::rngs::OsRng;
 
 use std::{
-    fs::File, io::Result as IoResult
+    fs::File, io::Result as IoResult, path::Path
 };
 use lazy_static::*;
 use primitives::merkle_tree::field_based_mht::MNT4753_PHANTOM_MERKLE_ROOT;
@@ -431,9 +431,17 @@ pub fn reset_ginger_ramt(tree: &mut GingerRAMT){
 
 pub type GingerSMT = MNT4PoseidonSmt;
 
+
+// Note: If position is non empty in the SMTs the old leaf will be overwritten.
+// If that's not the desired behaviour, then leaf should depend on some tweakable
+// parameter that allows to re-compute a new position for it, possibly multiple times.
+// Therefore, it is advisable to minimize the risk of having collisions, e.g. by ensuring
+// that PREDEFINED_MERKLE_TREE_HEIGHT >> EXPECTED_OPERATIONAL_MERKLE_TREE_HEIGHT
+// or by using an injective leaf-to-index function
+
 //TODO: Are leaves plain data packed into a field element or hashes ?
 //      Is this function ok or additional hashes/manipulations are needed ?
-fn leaf_to_index(leaf: &FieldElement, height: usize) -> usize {
+fn leaf_to_index(leaf: &FieldElement, height: usize) -> u64 {
 
     // Convert field element to bits
     let bits = leaf.write_bits();
@@ -442,11 +450,34 @@ fn leaf_to_index(leaf: &FieldElement, height: usize) -> usize {
     // Use log_2(num_leaves) MSB of serialized FieldElement to estabilish leaf position inside
     // the tree
     let leaf_bits = &bits[..height - 1];
-    let position = leaf_bits.iter().rev().fold(0, |acc, &b| acc*2 + b as usize);
+    let position = leaf_bits.iter().rev().fold(0, |acc, &b| acc*2 + b as u64);
     position
 }
 
-pub fn new_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error> {
+pub fn get_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error>{
+
+    match(Path::new(state_path).exists(), Path::new(db_path).exists(), Path::new(cache_path).exists()){
+
+        // If all required information are available, then load the tree
+        (true, true, true) => {
+            let tree = restore_ginger_smt(state_path, db_path, cache_path)?;
+            assert!(height >= 2);
+            //TODO: In GingerLib height is intended as "depth". Modify here or there.
+            assert_eq!(tree.height(), height - 1);
+            Ok(tree)
+        },
+
+        // If no information is available, create a new tree
+        (false, false, false) => {
+            new_ginger_smt(height, state_path, db_path, cache_path)
+        }
+
+        // Other combinations are considered illegal
+        _ => Err(Error::from("Unable to restore MerkleTree: incomplete data"))
+    }
+}
+
+fn new_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error> {
     match GingerSMT::new_unitialized(
         2usize.pow((height - 1) as u32),
         true,
@@ -459,7 +490,7 @@ pub fn new_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path
     }
 }
 
-pub fn restore_ginger_smt(state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error>
+fn restore_ginger_smt(state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error>
 {
     match GingerSMT::new(
         true,
@@ -476,22 +507,21 @@ pub fn set_ginger_smt_persistency(tree: &mut GingerSMT, persistency: bool) {
     tree.set_persistency(persistency);
 }
 
-// Note: If position is non empty the old leaf will be overwritten.
-// If that's not the desired behaviour, then leaf should depend on some tweakable
-// parameter that allows to re-compute a new position for it, possibly multiple times.
-// Of course, for best performances you should minimize the risk of having collisions:
-// i.e. PREDEFINED_MERKLE_TREE_HEIGHT >> EXPECTED_OPERATIONAL_MERKLE_TREE_HEIGHT.
-pub fn add_leaf_to_ginger_smt(tree: &mut GingerSMT, leaf: &FieldElement, position: usize){
-    tree.insert_leaf(Coord::new(0, position), *leaf)
-}
-
-pub fn get_position_in_ginger_smt(tree: &GingerSMT, leaf: &FieldElement) -> usize
+pub fn get_position_in_ginger_smt(tree: &GingerSMT, leaf: &FieldElement) -> u64
 {
     leaf_to_index(leaf, tree.height())
 }
 
-pub fn is_position_empty_in_ginger_smt(tree: &GingerSMT, position: usize) -> bool {
-    tree.is_leaf_empty(Coord::new(0, position))
+pub fn is_position_empty_in_ginger_smt(tree: &GingerSMT, position: u64) -> bool {
+    tree.is_leaf_empty(Coord::new(0, position as usize))
+}
+
+pub fn add_leaf_to_ginger_smt(tree: &mut GingerSMT, leaf: &FieldElement, position: u64){
+    tree.insert_leaf(Coord::new(0, position as usize), *leaf);
+}
+
+pub fn remove_leaf_from_ginger_smt(tree: &mut GingerSMT, position: u64){
+    tree.remove_leaf(Coord::new(0, position as usize));
 }
 
 pub fn get_ginger_smt_root(tree: &GingerSMT) -> FieldElement {
@@ -503,7 +533,28 @@ pub fn get_ginger_smt_root(tree: &GingerSMT) -> FieldElement {
 pub type LazyGingerSMT = MNT4PoseidonSmtLazy;
 type GingerLeaf = OperationLeaf<FieldElement>;
 
-pub fn new_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error> {
+pub fn get_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error>{
+
+    match(Path::new(state_path).exists(), Path::new(db_path).exists(), Path::new(cache_path).exists()){
+
+        // If all required information are available, then load the tree
+        (true, true, true) => {
+            let tree = restore_lazy_ginger_smt(state_path, db_path, cache_path)?;
+            assert_eq!(tree.height(), height);
+            Ok(tree)
+        },
+
+        // If no information is available, create a new tree
+        (false, false, false) => {
+            new_lazy_ginger_smt(height, state_path, db_path, cache_path)
+        }
+
+        // Other combinations are considered illegal
+        _ => unreachable!()
+    }
+}
+
+fn new_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error> {
     match LazyGingerSMT::new_unitialized(
         2usize.pow((height - 1) as u32),
         true,
@@ -516,7 +567,7 @@ pub fn new_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache
     }
 }
 
-pub fn restore_lazy_ginger_smt(state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error>
+fn restore_lazy_ginger_smt(state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error>
 {
     match LazyGingerSMT::new(
         true,
@@ -533,13 +584,25 @@ pub fn set_ginger_lazy_smt_persistency(tree: &mut LazyGingerSMT, persistency: bo
     tree.set_persistency(persistency);
 }
 
-// Note: If a position is non-empty for a certain leaf, the corresponding leaf in the
-// Merkle Tree will be overwritten by the new one. If that's not the desired behaviour,
-// you must ensure that all the leaves will end up in different positions prior to
-// calling this function.
+pub fn get_position_in_lazy_ginger_smt(tree: &LazyGingerSMT, leaf: &FieldElement) -> u64
+{
+    leaf_to_index(leaf, tree.height())
+}
+
+pub fn is_position_empty_in_lazy_ginger_smt(tree: &LazyGingerSMT, position: u64) -> bool {
+    tree.is_leaf_empty(Coord::new(0, position as usize))
+}
+
 pub fn add_leaves_to_ginger_lazy_smt(tree: &mut LazyGingerSMT, leaves: &[FieldElement]) -> FieldElement{
     let leaves = leaves.iter().map(|leaf| {
-        GingerLeaf::new(0, leaf_to_index(leaf, tree.height()), ActionLeaf::Insert, Some(*leaf))
+        GingerLeaf::new(0, leaf_to_index(leaf, tree.height()) as usize, ActionLeaf::Insert, Some(*leaf))
+    }).collect::<Vec<_>>();
+    tree.process_leaves(leaves)
+}
+
+pub fn remove_leaves_from_ginger_lazy_smt(tree: &mut LazyGingerSMT, positions: &[i64]) -> FieldElement{
+    let leaves = positions.iter().map(|&position| {
+        GingerLeaf::new(0, position as usize, ActionLeaf::Remove, None)
     }).collect::<Vec<_>>();
     tree.process_leaves(leaves)
 }
@@ -553,7 +616,6 @@ mod test {
     use super::*;
     use rand::RngCore;
     use algebra::{to_bytes, ToBytes, Field};
-    use std::path::Path;
 
     fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
         let mut fs = File::create(file_path)?;
@@ -674,7 +736,7 @@ mod test {
     #[test]
     fn sample_calls_naive_threshold_sig_circuit() {
         create_sample_naive_threshold_sig_circuit(10);
-        create_sample_naive_threshold_sig_circuit(0);
+        //create_sample_naive_threshold_sig_circuit(0);
     }
 
     #[test]
@@ -765,7 +827,7 @@ mod test {
         let mut rng = OsRng;
 
         // Get GingerSMT
-        let mut smt = new_ginger_smt(
+        let mut smt = get_ginger_smt(
             height,
             "./temp_state",
             "./temp_db",
@@ -783,18 +845,22 @@ mod test {
                     println!("Leaf: {:?}", into_i8(to_bytes!(r).unwrap()));
                     println!("Position: {:?}", position);
                     println!("__________________");
-                    add_leaf_to_ginger_smt(&mut smt, &r, position as usize);
+                    add_leaf_to_ginger_smt(&mut smt, &r, position as u64);
                     break;
                 }
             }
         }
+
+        //Remove first and last leaves
+        remove_leaf_from_ginger_smt(&mut smt, positions[0]);
+        remove_leaf_from_ginger_smt(&mut smt, positions[leaves_num - 1]);
 
         //Get root of GingerSMT
         let smt_root = get_ginger_smt_root(&smt);
         println!("Expected root: {:?}", into_i8(to_bytes!(smt_root).unwrap()));
 
         // Get LazyGingerSMT
-        let mut lazy_smt = new_lazy_ginger_smt(
+        let mut lazy_smt = get_lazy_ginger_smt(
             height,
             "./temp_state_lazy",
             "./temp_db_lazy",
@@ -802,7 +868,11 @@ mod test {
         ).unwrap();
 
         // No conflicts here because we ensured each leaf to fall in a different position
-        let lazy_smt_root = add_leaves_to_ginger_lazy_smt(&mut lazy_smt, leaves.as_slice());
+        add_leaves_to_ginger_lazy_smt(&mut lazy_smt, leaves.as_slice());
+
+        // Remove first and last leaves
+        let lazy_smt_root = remove_leaves_from_ginger_lazy_smt(&mut lazy_smt, &[positions[0] as i64, positions[(leaves_num - 1)] as i64]);
+
         assert_eq!(smt_root, lazy_smt_root);
 
         //Get RAMT
@@ -810,8 +880,8 @@ mod test {
 
         // Must place the leaves at the same positions of the previous trees
         let mut ramt_leaves = vec![FieldElement::zero(); 2usize.pow((height - 1) as u32)];
-        for (&leaf, &position) in leaves.iter().zip(positions.iter()){
-            ramt_leaves[position as usize] = leaf;
+        for i in 1..(leaves_num - 1){
+            ramt_leaves[positions[i] as usize] = leaves[i];
         }
 
         // Append leaves to the tree and compute the root
@@ -820,31 +890,36 @@ mod test {
         let ramt_root = get_ginger_ramt_root(&ramt).expect("Tree must've been finalized");
 
         assert_eq!(ramt_root, lazy_smt_root);
+
+        //Delete SMTs data
+        //set_ginger_smt_persistency(&mut smt, false);
+        set_ginger_lazy_smt_persistency(&mut lazy_smt, false);
     }
 
     #[test]
     fn sample_restore_merkle_tree(){
         let expected_root = FieldElement::new(
             BigInteger768([
-                17131081159200801074,
-                9006481350618111567,
-                12051725085490156787,
-                2023238364439588976,
-                13194888104290656497,
-                14162537977718443379,
-                13575626123664189275,
-                9267800406229717074,
-                8973990559932404408,
-                1830585533392189796,
-                16667600459761825175,
-                476991746583444
-            ])
-        );
+                1174313500572535251,
+                11989340445607088007,
+                12453165802583165309,
+                6869334689845037123,
+                18071747287931669646,
+                10010741666663785511,
+                17335522832723564810,
+                8102968406317429938,
+                11258756029259070139,
+                11585029297630923139,
+                10229262840520193915,
+                10238382938508
+            ]));
+
+        let height = 6;
 
         // create a persistent smt in a separate scope
         {
-            let mut smt = new_ginger_smt(
-                6,
+            let mut smt = get_ginger_smt(
+                height,
                 "./persistency_test_info",
                 "./db_leaves_persistency_test_info",
                 "./db_cache_persistency_test_info"
@@ -854,6 +929,7 @@ mod test {
             let leaves = vec![FieldElement::from(1u16), FieldElement::from(2u16)];
             add_leaf_to_ginger_smt(&mut smt, &leaves[0], 0);
             add_leaf_to_ginger_smt(&mut smt, &leaves[1], 9);
+            remove_leaf_from_ginger_smt(&mut smt, 0);
 
             // smt gets dropped but its info should be saved
         }
@@ -865,7 +941,8 @@ mod test {
 
         // create a non-persistent smt in another scope by restoring the previous one
         {
-            let mut smt = restore_ginger_smt(
+            let mut smt = get_ginger_smt(
+                height,
                 "./persistency_test_info",
                 "./db_leaves_persistency_test_info",
                 "./db_cache_persistency_test_info"
@@ -875,6 +952,7 @@ mod test {
             let leaves = vec![FieldElement::from(10u16), FieldElement::from(3u16)];
             add_leaf_to_ginger_smt(&mut smt, &leaves[0], 16);
             add_leaf_to_ginger_smt(&mut smt, &leaves[1], 29);
+            remove_leaf_from_ginger_smt(&mut smt, 16);
 
             // if truly state has been kept, then the equality below must pass, since `root` was
             // computed in one go with another smt

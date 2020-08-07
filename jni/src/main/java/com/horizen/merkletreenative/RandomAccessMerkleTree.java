@@ -65,6 +65,7 @@ public class RandomAccessMerkleTree implements AutoCloseable {
 
     private native void nativeReset();
 
+    // Restore the internal state of this instance to the initial one.
     public void reset() {
         if (randomAccessMerkleTreePointer == 0)
             throw new IllegalArgumentException("RandomAccessMerkleTree instance was freed.");

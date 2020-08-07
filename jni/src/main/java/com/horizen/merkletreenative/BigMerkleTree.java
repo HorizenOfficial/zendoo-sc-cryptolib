@@ -21,35 +21,37 @@ public class BigMerkleTree implements AutoCloseable {
         return nativeInit(height, statePath, dbPath, cachePath);
     }
 
-    private static native BigMerkleTree nativeLoad(String statePath, String dbPath, String cachePath);
-
-    public static BigMerkleTree load(String statePath, String dbPath, String cachePath) {
-        return nativeLoad(statePath, dbPath, cachePath);
-    }
-
-    private native int nativeGetPosition(FieldElement leaf);
+    private native long nativeGetPosition(FieldElement leaf);
 
     // Returns the position to which insert the leaf
-    public int getPosition(FieldElement leaf) {
+    public long getPosition(FieldElement leaf) {
         if (merkleTreePointer == 0)
             throw new IllegalArgumentException("merkleTreePointer must be not null.");
         return nativeGetPosition(leaf);
     }
 
-    private native boolean nativeIsPositionEmpty(int position);
+    private native boolean nativeIsPositionEmpty(long position);
 
-    public boolean isPositionEmpty(int position){
+    public boolean isPositionEmpty(long position){
         if (merkleTreePointer == 0)
             throw new IllegalArgumentException("merkleTreePointer must be not null.");
         return nativeIsPositionEmpty(position);
     }
 
-    private native void nativeAddLeaf(FieldElement leaf, int position);
+    private native void nativeAddLeaf(FieldElement leaf, long position);
 
-    public void addLeaf(FieldElement leaf, int position){
+    public void addLeaf(FieldElement leaf, long position){
         if (merkleTreePointer == 0)
             throw new IllegalArgumentException("merkleTreePointer must be not null.");
         nativeAddLeaf(leaf, position);
+    }
+
+    private native void nativeRemoveLeaf(long position);
+
+    public void removeLeaf(long position){
+        if (merkleTreePointer == 0)
+            throw new IllegalArgumentException("merkleTreePointer must be not null.");
+            nativeRemoveLeaf(position);
     }
 
     private native FieldElement nativeRoot();

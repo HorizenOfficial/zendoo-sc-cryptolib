@@ -23,10 +23,21 @@ public class BigLazyMerkleTree implements AutoCloseable {
         return nativeInit(height, statePath, dbPath, cachePath);
     }
 
-    private static native BigLazyMerkleTree nativeLoad(String statePath, String dbPath, String cachePath);
+    private native long nativeGetPosition(FieldElement leaf);
 
-    public static BigLazyMerkleTree load(String statePath, String dbPath, String cachePath) {
-        return nativeLoad(statePath, dbPath, cachePath);
+    // Returns the position to which insert the leaf
+    public long getPosition(FieldElement leaf) {
+        if (lazyMerkleTreePointer == 0)
+            throw new IllegalArgumentException("lazyMerkleTreePointer must be not null.");
+        return nativeGetPosition(leaf);
+    }
+
+    private native boolean nativeIsPositionEmpty(long position);
+
+    public boolean isPositionEmpty(long position){
+        if (lazyMerkleTreePointer == 0)
+            throw new IllegalArgumentException("lazyMerkleTreePointer must be not null.");
+        return nativeIsPositionEmpty(position);
     }
 
     private native FieldElement nativeAddLeaves(FieldElement[] leaves);
@@ -36,6 +47,14 @@ public class BigLazyMerkleTree implements AutoCloseable {
         if (lazyMerkleTreePointer == 0)
             throw new IllegalArgumentException("lazyMerkleTreePointer must be not null.");
         return nativeAddLeaves(leaves.toArray(new FieldElement[0]));
+    }
+
+    private native void nativeRemoveLeaves(long[] positions);
+
+    public void removeLeaves(long[] positions){
+        if (lazyMerkleTreePointer == 0)
+            throw new IllegalArgumentException("lazyMerkleTreePointer must be not null.");
+        nativeRemoveLeaves(positions);
     }
 
     private native FieldElement nativeRoot();
