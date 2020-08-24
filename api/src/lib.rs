@@ -987,11 +987,12 @@ pub extern "system" fn Java_com_horizen_merkletreenative_RandomAccessMerkleTree_
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_merkletreenative_RandomAccessMerkleTree_nativeFreeRandomAccessMerkleTree(
     _env: JNIEnv,
+    _class: JClass,
     _tree: *mut GingerRAMT,
 )
 {
-    //if _tree.is_null()  { return }
-    //drop(unsafe { Box::from_raw(_tree) });
+    if _tree.is_null()  { return }
+    drop(unsafe { Box::from_raw(_tree) });
 }
 
 ////////////SPARSE MERKLE TREE
@@ -1152,25 +1153,27 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeRoo
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeFreeMerkleTree(
     _env: JNIEnv,
+    _class: JClass,
     _tree: *mut GingerSMT,
 )
 {
-    //if _tree.is_null()  { return }
-    //drop(unsafe { Box::from_raw(_tree) });
+    if _tree.is_null()  { return }
+    drop(unsafe { Box::from_raw(_tree) });
 }
 
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeFreeAndDestroyMerkleTree(
     _env: JNIEnv,
+    _class: JClass,
     _tree: *mut GingerSMT,
 )
 {
-    //if _tree.is_null()  { return }
+    if _tree.is_null()  { return }
 
-    //let tree = read_mut_raw_pointer(_tree);
-    //set_ginger_smt_persistency(tree, false);
+    let tree = read_mut_raw_pointer(_tree);
+    set_ginger_smt_persistency(tree, false);
 
-    //drop(unsafe { Box::from_raw(_tree) });
+    drop(unsafe { Box::from_raw(_tree) });
 }
 
 ////////////LAZY SPARSE MERKLE TREE
@@ -1374,25 +1377,27 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativ
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeFreeLazyMerkleTree(
     _env: JNIEnv,
+    _class: JClass,
     _tree: *mut LazyGingerSMT,
 )
 {
-    //if _tree.is_null()  { return }
-    //drop(unsafe { Box::from_raw(_tree) });
+    if _tree.is_null()  { return }
+    drop(unsafe { Box::from_raw(_tree) });
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeFreeAndDestroyLazyMerkleTree(
+pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeFreeAndDestroyLazyMerkleTree(
     _env: JNIEnv,
+    _class: JClass,
     _tree: *mut LazyGingerSMT,
 )
 {
-    //if _tree.is_null()  { return }
+    if _tree.is_null()  { return }
 
-    //let tree = read_mut_raw_pointer(_tree);
-    //set_ginger_lazy_smt_persistency(tree, false);
+    let tree = read_mut_raw_pointer(_tree);
+    set_ginger_lazy_smt_persistency(tree, false);
 
-    //drop(unsafe { Box::from_raw(_tree) });
+    drop(unsafe { Box::from_raw(_tree) });
 }
 
 

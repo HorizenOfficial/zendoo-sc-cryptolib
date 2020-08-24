@@ -158,7 +158,7 @@ public class MerkleTreeTest {
         assertEquals("BigMerkleTree root is not as expected", smtRoot, expectedRoot);
 
         //Free memory
-        //smt.freeAndDestroyMerkleTree();
+        smt.freeAndDestroyMerkleTree();
         smtRoot.freeFieldElement();
 
         //Get BigLazyMerkleTree
@@ -174,7 +174,7 @@ public class MerkleTreeTest {
         assertEquals("BigLazyMerkleTree root is not as expected", smtLazyRoot, expectedRoot);
 
         //Free memory
-        //smtLazy.freeAndDestroyLazyMerkleTree();
+        smtLazy.freeAndDestroyLazyMerkleTree();
         smtLazyRoot.freeFieldElement();
 
         //Get RandomAccessMerkleTree
@@ -210,8 +210,8 @@ public class MerkleTreeTest {
 
         //Free memory
         zero.freeFieldElement();
-        //ramt.freeRandomAccessMerkleTree();
-        //ramtCopy.freeRandomAccessMerkleTree();
+        ramt.freeRandomAccessMerkleTree();
+        ramtCopy.freeRandomAccessMerkleTree();
         ramtRoot.freeFieldElement();
         ramtRootCopy.freeFieldElement();
 

@@ -84,6 +84,6 @@ public class BigMerkleTree implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        //freeMerkleTree();
+        freeMerkleTree();
     }
 }
