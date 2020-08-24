@@ -540,7 +540,8 @@ pub fn get_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache
         // If all required information are available, then load the tree
         (true, true, true) => {
             let tree = restore_lazy_ginger_smt(state_path, db_path, cache_path)?;
-            assert_eq!(tree.height(), height);
+            //TODO: In GingerLib height is intended as "depth". Modify here or there.
+            assert_eq!(tree.height(), height - 1);
             Ok(tree)
         },
 
