@@ -7,7 +7,7 @@ In particular it exposes interfaces to:
 
 * handle the finite fields that are the alphabets of the zk Proving Systems
 * call the Poseidon function, a Snark friendly hashing algorithm
-* use a Poseidon-based Merkle Tree (calculate root, verify merkle path, ...)
+* use a Poseidon-based Merkle Tree coming in different variants (in-memory random access, persistent sparse, persistent lazy sparse) 
 * compute and verify Schnorr signatures, handle associated keypairs
 * compute and verify a VRF proof, fetch a VRF output, handle associated keypairs (to support Ouroborous-style PoS sidechain consensus)
 * create and manage Zendoo Sidechain proofs
