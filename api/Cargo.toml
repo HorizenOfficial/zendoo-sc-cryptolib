@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-primitives = {version = "0.1.0", features = ["merkle_tree", "signature", "vrf"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
+primitives = {version = "0.1.0", features = ["smt", "signature", "vrf"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
 proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
 
 ouroboros = {path = "../ouroboros"}
