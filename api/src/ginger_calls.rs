@@ -648,8 +648,10 @@ mod test {
         let mut prev_end_epoch_mc_b_hash = [0u8; 32];
         rng.fill_bytes(&mut end_epoch_mc_b_hash);
         rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
-        println!("end epoch: {:?}", into_i8(end_epoch_mc_b_hash.to_vec()));
-        println!("prev end epoch: {:?}", into_i8(prev_end_epoch_mc_b_hash.to_vec()));
+        println!("end epoch u8: {:?}", end_epoch_mc_b_hash);
+        println!("prev end epoch u8: {:?}", prev_end_epoch_mc_b_hash);
+        println!("end epoch i8: {:?}", into_i8(end_epoch_mc_b_hash.to_vec()));
+        println!("prev end epoch i8: {:?}", into_i8(prev_end_epoch_mc_b_hash.to_vec()));
         let end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
         let prev_end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
 
@@ -667,10 +669,10 @@ mod test {
 
         //Generate params and write them to file
         let params = generate_parameters(3).unwrap();
-        let proving_key_path = "./sample_proving_key";
+        let proving_key_path = if bt_num != 0 {"./sample_params"} else {"./sample_params_no_bwt"};
         write_to_file(&params, proving_key_path).unwrap();
 
-        let verifying_key_path = "./sample_vk";
+        let verifying_key_path = if bt_num != 0 {"./sample_vk"} else {"./sample_vk_no_bwt"};
         write_to_file(&(params.vk), verifying_key_path).unwrap();
 
         //Generate sample pks and sigs vec
@@ -696,6 +698,7 @@ mod test {
         println!("sig: {:?}", into_i8(to_bytes!(sigs[2].unwrap()).unwrap()));
 
         let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
+        println!("Constant u8: {:?}", to_bytes!(constant).unwrap());
 
         //Create and serialize proof
         let (proof, quality) = create_naive_threshold_sig_proof(
@@ -707,7 +710,7 @@ mod test {
             threshold,
             proving_key_path
         ).unwrap();
-        let proof_path = "./sample_proof";
+        let proof_path = if bt_num != 0 {"./sample_proof"} else {"./sample_proof_no_bwt"};
         write_to_file(&proof, proof_path).unwrap();
 
         //Verify proof
@@ -718,7 +721,7 @@ mod test {
             bt_list.as_slice(),
             quality,
             &proof,
-            "./sample_vk",
+            verifying_key_path,
         ).unwrap());
 
 
@@ -730,14 +733,16 @@ mod test {
             bt_list.as_slice(),
             quality - 1,
             &proof,
-            "./sample_vk",
+            verifying_key_path,
         ).unwrap());
     }
 
     #[test]
     fn sample_calls_naive_threshold_sig_circuit() {
+        println!("****************With BWT**********************");
         create_sample_naive_threshold_sig_circuit(10);
-        //create_sample_naive_threshold_sig_circuit(0);
+        println!("****************Without BWT*******************");
+        create_sample_naive_threshold_sig_circuit(0);
     }
 
     #[test]
