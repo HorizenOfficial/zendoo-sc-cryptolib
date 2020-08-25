@@ -25,7 +25,7 @@ The library can be built by using Cargo:
 ```
 	cargo build
 ```  
-
+Note: You need `clang` installed. 
 There are a few Rust tests that can be executed still with the usual Cargo command:  
 
 ```
