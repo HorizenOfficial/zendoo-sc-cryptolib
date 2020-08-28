@@ -1711,10 +1711,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     let threshold = _threshold as u64;
 
     //Compute constant
-    let constant = match compute_pks_threshold_hash(pks.as_slice(), threshold){
-        Ok(constant) => constant,
-        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
-    };
+    let constant = compute_pks_threshold_hash(pks.as_slice(), threshold);
 
     //Return constant
     let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(constant)) as i64);

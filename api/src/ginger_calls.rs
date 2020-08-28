@@ -176,16 +176,16 @@ pub fn read_field_element_from_u64(num: u64) -> FieldElement {
 
 // Computes H(H(pks), threshold): used to generate the constant value needed to be declared
 // in MC during SC creation.
-pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<FieldElement, Error> {
+pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> FieldElement {
     let threshold_field = read_field_element_from_u64(threshold);
     let mut h = FieldHash::init(None);
     pks.iter().for_each(|pk| { h.update(pk.x); });
     let pks_hash = h.finalize();
-    Ok(h
+    h
         .reset(None)
         .update(pks_hash)
         .update(threshold_field)
-        .finalize())
+        .finalize()
 }
 
 const BT_MERKLE_TREE_HEIGHT: usize = 13;
@@ -697,7 +697,7 @@ mod test {
         println!("sig: {:?}", into_i8(to_bytes!(sigs[0].unwrap()).unwrap()));
         println!("sig: {:?}", into_i8(to_bytes!(sigs[2].unwrap()).unwrap()));
 
-        let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
+        let constant = compute_pks_threshold_hash(pks.as_slice(), threshold);
         println!("Constant u8: {:?}", to_bytes!(constant).unwrap());
 
         //Create and serialize proof
