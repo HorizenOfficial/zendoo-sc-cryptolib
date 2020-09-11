@@ -193,7 +193,8 @@ pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> FieldEle
 const BT_MERKLE_TREE_HEIGHT: usize = 12;
 
 fn compute_bt_root(bts: &[FieldElement]) -> Result<FieldElement, Error> {
-    let mut bt_mt = GingerMHT::init(BT_MERKLE_TREE_HEIGHT, 2usize.pow((BT_MERKLE_TREE_HEIGHT - 1) as u32));
+    let mut bt_mt =
+        GingerMHT::init(BT_MERKLE_TREE_HEIGHT, 2usize.pow(BT_MERKLE_TREE_HEIGHT as u32));
     for &bt in bts.iter(){
         bt_mt.append(bt);
     }

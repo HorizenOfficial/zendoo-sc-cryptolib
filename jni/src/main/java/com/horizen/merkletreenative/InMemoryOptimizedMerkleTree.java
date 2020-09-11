@@ -19,6 +19,18 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
 
     private static native InMemoryOptimizedMerkleTree nativeInit(int height, long processingStep);
 
+    // Creates a new InMemoryOptimizedMerkleTree given its `height` and `processingStep`.
+    // `processingStep` is used to tune the memory usage of the tree.
+    // In particular, `processing_step` defines the
+    // number of leaves to store before triggering the computation of the root.
+    // Decreasing `processing_step` leads to less memory consumption but
+    // significantly worsen performances; conversely, increasing
+    // `processing_step` increases the memory usage too but improves performances.
+    // Meaningful values for `processing_step` are between 1 (i.e. update the root
+    // at each leaf), leading to best memory efficiency but worst performances, and
+    // the maximum number of leaves (or the mean number of leaves you plan to add),
+    // leading to worse memory efficiency but best performances (root is computed
+    // just once, but all the leaves must be kept in memory).
     public static InMemoryOptimizedMerkleTree init(int height, long processingStep){
         return nativeInit(height, processingStep);
     }
