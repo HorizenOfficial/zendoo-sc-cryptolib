@@ -2,8 +2,6 @@ package com.horizen.schnorrnative;
 
 import com.horizen.librustsidechains.Library;
 
-import java.util.Arrays;
-
 public class SchnorrSecretKey implements AutoCloseable
 {
     public static final int SECRET_KEY_LENGTH = 96;

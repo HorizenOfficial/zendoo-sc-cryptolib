@@ -3,7 +3,6 @@ package com.horizen.vrfnative;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
-
 public class VRFProveResult implements AutoCloseable {
     private VRFProof vrfProof;
     private FieldElement vrfOutput;

@@ -851,28 +851,84 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFreePo
 
 //Merkle tree functions
 
+//////////// MERKLE PATH
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify(
+    _env: JNIEnv,
+    _path: JObject,
+    _height: jint,
+    _leaf: JObject,
+    _root: JObject,
+) -> jboolean
+{
+    let leaf = {
+
+        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let root = {
+
+        let fe =_env.get_field(_root, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    match verify_ginger_merkle_path(path, _height as usize, leaf, root) {
+        Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
+        Err(_) => JNI_FALSE // CRYPTO_ERROR
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeFreeMerklePath(
+    _env: JNIEnv,
+    _class: JClass,
+    _path: *mut GingerMHTPath,
+)
+{
+    if _path.is_null()  { return }
+    drop(unsafe { Box::from_raw(_path) });
+}
+
 ////////////RANDOM ACCESS MERKLE TREE
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_RandomAccessMerkleTree_nativeInit(
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeInit(
     _env: JNIEnv,
     _class: JClass,
     _height: jint,
+    _processing_step: jlong,
 ) -> jobject
 {
-    // Create new RandomAccessMerkleTree Rust side
-    let mt = new_ginger_ramt(_height as usize);
+    // Create new InMemoryOptimizedMerkleTree Rust side
+    let mt = new_ginger_mht(
+        _height as usize,
+        _processing_step as usize
+    );
 
-    // Create and return new RandomAccessMerkleTree Java side
+    // Create and return new InMemoryOptimizedMerkleTree Java side
 
     let mt_ptr: jlong = jlong::from(Box::into_raw(Box::new(mt)) as i64);
 
     _env.new_object(_class, "(J)V", &[JValue::Long(mt_ptr)])
-        .expect("Should be able to create new RandomAccessMerkleTree object")
+        .expect("Should be able to create new InMemoryOptimizedMerkleTree object")
         .into_inner()
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_RandomAccessMerkleTree_nativeAppend(
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeAppend(
     _env: JNIEnv,
     _tree: JObject,
     _leaf: JObject,
@@ -888,73 +944,73 @@ pub extern "system" fn Java_com_horizen_merkletreenative_RandomAccessMerkleTree_
 
     let tree = {
 
-        let t =_env.get_field(_tree, "randomAccessMerkleTreePointer", "J")
-            .expect("Should be able to get field randomAccessMerkleTreePointer");
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut GingerRAMT)
+        read_mut_raw_pointer(t.j().unwrap() as *mut GingerMHT)
     };
 
-    append_leaf_to_ginger_ramt(tree, leaf);
+    append_leaf_to_ginger_mht(tree, leaf);
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_RandomAccessMerkleTree_nativeFinalize(
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalize(
     _env: JNIEnv,
     _tree: JObject,
 ) -> jobject
 {
     let tree = {
 
-        let t =_env.get_field(_tree, "randomAccessMerkleTreePointer", "J")
-            .expect("Should be able to get field randomAccessMerkleTreePointer");
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        read_raw_pointer(t.j().unwrap() as *const GingerRAMT)
+        read_raw_pointer(t.j().unwrap() as *const GingerMHT)
     };
 
-    let tree_copy = finalize_ginger_ramt(tree);
+    let tree_copy = finalize_ginger_mht(tree);
 
     let tree_copy_ptr: jlong = jlong::from(Box::into_raw(Box::new(tree_copy)) as i64);
 
-    let tree_class = _env.find_class("com/horizen/merkletreenative/RandomAccessMerkleTree")
-        .expect("Cannot find RandomAccessMerkleTree class.");
+    let tree_class = _env.find_class("com/horizen/merkletreenative/InMemoryOptimizedMerkleTree")
+        .expect("Cannot find InMemoryOptimizedMerkleTree class.");
 
     _env.new_object(tree_class, "(J)V", &[JValue::Long(tree_copy_ptr)])
-        .expect("Cannot create RandomAccessMerkleTree object.")
+        .expect("Cannot create InMemoryOptimizedMerkleTree object.")
         .into_inner()
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_RandomAccessMerkleTree_nativeFinalizeInPlace(
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalizeInPlace(
     _env: JNIEnv,
     _tree: JObject,
 )
 {
     let tree = {
 
-        let t =_env.get_field(_tree, "randomAccessMerkleTreePointer", "J")
-            .expect("Should be able to get field randomAccessMerkleTreePointer");
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut GingerRAMT)
+        read_mut_raw_pointer(t.j().unwrap() as *mut GingerMHT)
     };
 
-    finalize_ginger_ramt_in_place(tree);
+    finalize_ginger_mht_in_place(tree);
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_RandomAccessMerkleTree_nativeRoot(
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeRoot(
     _env: JNIEnv,
     _tree: JObject,
 ) -> jobject
 {
     let tree = {
 
-        let t =_env.get_field(_tree, "randomAccessMerkleTreePointer", "J")
-            .expect("Should be able to get field randomAccessMerkleTreePointer");
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        read_raw_pointer(t.j().unwrap() as *const GingerRAMT)
+        read_raw_pointer(t.j().unwrap() as *const GingerMHT)
     };
 
-    let root = get_ginger_ramt_root(tree)
+    let root = get_ginger_mht_root(tree)
         .expect("Tree must've been finalized");
 
     let root_ptr: jlong = jlong::from(Box::into_raw(Box::new(root)) as i64);
@@ -968,27 +1024,55 @@ pub extern "system" fn Java_com_horizen_merkletreenative_RandomAccessMerkleTree_
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_RandomAccessMerkleTree_nativeReset(
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeGetMerklePath(
+    _env: JNIEnv,
+    _tree: JObject,
+    _leaf_index: jlong,
+) -> jobject
+{
+    let tree = {
+
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHT)
+    };
+
+    let path = get_ginger_mht_path(tree, _leaf_index as u64)
+        .expect("Tree must've been finalized");
+
+    let path_ptr: jlong = jlong::from(Box::into_raw(Box::new(path)) as i64);
+
+    let path_class = _env.find_class("com/horizen/merkletreenative/MerklePath")
+        .expect("Cannot find MerklePath class.");
+
+    _env.new_object(path_class, "(J)V", &[JValue::Long(path_ptr)])
+        .expect("Cannot create MerklePath object.")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeReset(
     _env: JNIEnv,
     _tree: JObject,
 )
 {
     let tree = {
 
-        let t =_env.get_field(_tree, "randomAccessMerkleTreePointer", "J")
-            .expect("Should be able to get field randomAccessMerkleTreePointer");
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut GingerRAMT)
+        read_mut_raw_pointer(t.j().unwrap() as *mut GingerMHT)
     };
 
-    reset_ginger_ramt(tree);
+    reset_ginger_mht(tree);
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_RandomAccessMerkleTree_nativeFreeRandomAccessMerkleTree(
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFreeInMemoryOptimizedMerkleTree(
     _env: JNIEnv,
     _class: JClass,
-    _tree: *mut GingerRAMT,
+    _tree: *mut GingerMHT,
 )
 {
     if _tree.is_null()  { return }
@@ -1147,6 +1231,33 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeRoo
 
     _env.new_object(fe_class, "(J)V", &[JValue::Long(root_ptr)])
         .expect("Cannot create FieldElement object.")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeGetMerklePath(
+    _env: JNIEnv,
+    _tree: JObject,
+    _leaf_position: jlong,
+) -> jobject
+{
+    let tree = {
+
+        let t =_env.get_field(_tree, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut GingerSMT)
+    };
+
+    let path = get_ginger_smt_path(tree, _leaf_position as u64);
+
+    let path_ptr: jlong = jlong::from(Box::into_raw(Box::new(path)) as i64);
+
+    let path_class = _env.find_class("com/horizen/merkletreenative/MerklePath")
+        .expect("Cannot find MerklePath class.");
+
+    _env.new_object(path_class, "(J)V", &[JValue::Long(path_ptr)])
+        .expect("Cannot create MerklePath object.")
         .into_inner()
 }
 
@@ -1335,7 +1446,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativ
     };
 
     // Update the tree with leaves and get the root
-    let root = remove_leaves_from_ginger_lazy_smt(tree, positions.as_slice());
+    let root = remove_leaves_from_ginger_lazy_smt(
+        tree,
+        positions.as_slice(),
+    );
 
     // Return root as FieldElement object
     let root_ptr: jlong = jlong::from(Box::into_raw(Box::new(root)) as i64);
@@ -1371,6 +1485,33 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativ
 
     _env.new_object(fe_class, "(J)V", &[JValue::Long(root_ptr)])
         .expect("Cannot create FieldElement object.")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeGetMerklePath(
+    _env: JNIEnv,
+    _tree: JObject,
+    _leaf_position: jlong,
+) -> jobject
+{
+    let tree = {
+
+        let t =_env.get_field(_tree, "lazyMerkleTreePointer", "J")
+            .expect("Should be able to get field lazyMerkleTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut LazyGingerSMT)
+    };
+
+    let path = get_lazy_ginger_smt_path(tree, _leaf_position as u64);
+
+    let path_ptr: jlong = jlong::from(Box::into_raw(Box::new(path)) as i64);
+
+    let path_class = _env.find_class("com/horizen/merkletreenative/MerklePath")
+        .expect("Cannot find MerklePath class.");
+
+    _env.new_object(path_class, "(J)V", &[JValue::Long(path_ptr)])
+        .expect("Cannot create MerklePath object.")
         .into_inner()
 }
 

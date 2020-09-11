@@ -3,8 +3,6 @@ package com.horizen.poseidonnative;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
-import java.util.Arrays;
-
 public class PoseidonHash implements AutoCloseable {
 
     public static final int HASH_LENGTH = 96;

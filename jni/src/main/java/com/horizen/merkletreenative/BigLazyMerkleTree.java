@@ -14,6 +14,8 @@ public class BigLazyMerkleTree implements AutoCloseable {
     }
 
     private BigLazyMerkleTree(long lazyMerkleTreePointer) {
+        if (lazyMerkleTreePointer == 0)
+            throw new IllegalArgumentException("lazyMerkleTreePointer must be not null.");
         this.lazyMerkleTreePointer = lazyMerkleTreePointer;
     }
 
@@ -28,7 +30,7 @@ public class BigLazyMerkleTree implements AutoCloseable {
     // Returns the position to which insert the leaf
     public long getPosition(FieldElement leaf) {
         if (lazyMerkleTreePointer == 0)
-            throw new IllegalArgumentException("lazyMerkleTreePointer must be not null.");
+            throw new IllegalArgumentException("LazyBigMerkleTree instance was freed.");
         return nativeGetPosition(leaf);
     }
 
@@ -36,7 +38,7 @@ public class BigLazyMerkleTree implements AutoCloseable {
 
     public boolean isPositionEmpty(long position){
         if (lazyMerkleTreePointer == 0)
-            throw new IllegalArgumentException("lazyMerkleTreePointer must be not null.");
+            throw new IllegalArgumentException("LazyBigMerkleTree instance was freed.");
         return nativeIsPositionEmpty(position);
     }
 
@@ -45,7 +47,7 @@ public class BigLazyMerkleTree implements AutoCloseable {
     // Add leaves to tree, compute and return the root
     public FieldElement addLeaves(List<FieldElement> leaves){
         if (lazyMerkleTreePointer == 0)
-            throw new IllegalArgumentException("lazyMerkleTreePointer must be not null.");
+            throw new IllegalArgumentException("LazyBigMerkleTree instance was freed.");
         return nativeAddLeaves(leaves.toArray(new FieldElement[0]));
     }
 
@@ -53,7 +55,7 @@ public class BigLazyMerkleTree implements AutoCloseable {
 
     public void removeLeaves(long[] positions){
         if (lazyMerkleTreePointer == 0)
-            throw new IllegalArgumentException("lazyMerkleTreePointer must be not null.");
+            throw new IllegalArgumentException("LazyBigMerkleTree instance was freed.");
         nativeRemoveLeaves(positions);
     }
 
@@ -61,8 +63,16 @@ public class BigLazyMerkleTree implements AutoCloseable {
 
     public FieldElement root() {
         if (lazyMerkleTreePointer == 0)
-            throw new IllegalArgumentException("lazyMerkleTreePointer must be not null.");
+            throw new IllegalArgumentException("LazyBigMerkleTree instance was freed.");
         return nativeRoot();
+    }
+
+    private native MerklePath nativeGetMerklePath(long leafPosition);
+
+    public MerklePath getMerklePath(long leafPosition) {
+        if (lazyMerkleTreePointer == 0)
+            throw new IllegalArgumentException("LazyBigMerkleTree instance was freed.");
+        return nativeGetMerklePath(leafPosition);
     }
 
     private static native void nativeFreeLazyMerkleTree(long lazyMerkleTreePointer);

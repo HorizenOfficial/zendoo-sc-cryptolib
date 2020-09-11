@@ -17,17 +17,13 @@ import static org.junit.Assert.*;
 
 public class MerkleTreeTest {
 
-    static long[] positions = { 0L, 46L, 117L, 5L, 104L, 206L, 153L, 245L };
-    static int height = 10;
+    static long[] positions = { 256L, 46L, 373L, 261L, 360L, 462L, 409L, 245L };
+    static int height = 9;
     static int numLeaves = 8;
     List<FieldElement> leaves;
 
     static byte[] expectedRootBytes = {
-            32, -55, -54, 82, 75, -100, 57, 43, 120, 95, 38, -62, 88, -69, 64, -5, 110, -79, -26, 36, 72, 11, 88, -125,
-            115, 18, -1, -13, -122, 6, 108, 23, -78, -1, -75, -115, 96, -55, 109, 74, 126, -44, -47, 67, 86, 4, -66, 19,
-            -46, -39, 47, -85, -124, -122, -47, -104, -90, 75, -54, -64, -101, -126, -18, -34, 44, 60, 123, 88, 102,
-            -15, 83, 58, -42, -120, -122, 63, 40, -25, -56, -15, 18, 120, 84, -28, -69, -81, 33, 56, -52, -108, -116,
-            -100, 107, -8, 0, 0
+        118, -113, -72, 105, 101, -50, 88, 52, -117, -107, -71, -27, -41, -44, 72, -90, 28, -51, 78, 16, -118, -20, 7, -33, -122, 118, 54, -2, -17, 26, 97, 122, -19, -111, 76, 10, 98, -60, -85, 22, -114, -93, -22, 104, -39, -11, 91, 101, -97, 64, -23, 55, -84, -49, 61, 22, -34, -77, 89, 16, -50, -120, 9, -34, -32, 38, -98, 25, -68, -73, -8, 69, 97, 114, -102, -5, 103, -93, 85, -34, -46, 40, -103, 63, 102, 2, -55, -3, -9, -14, -53, 4, -116, -82, 1, 0
     };
     FieldElement expectedRoot;
 
@@ -75,11 +71,20 @@ public class MerkleTreeTest {
         int i = 0;
         for (FieldElement leaf: leaves) {
             long position = smt.getPosition(leaf);
-            assertEquals("Computed position for leaf " + i + "is not the expected one", positions[i], position);
+            assertEquals("Computed position for leaf " + i + " is not the expected one", positions[i], position);
             assertTrue("Position must be empty", smt.isPositionEmpty(position));
             smt.addLeaf(leaf, position);
             i++;
         }
+
+        // Verify Merkle paths for each leaf
+        FieldElement tempSmtRoot = smt.root();
+        for (FieldElement leaf: leaves) {
+            MerklePath path = smt.getMerklePath(smt.getPosition(leaf));
+            assertTrue("Merkle Path must be verified", path.verify(height, leaf, tempSmtRoot));
+            path.freeMerklePath();
+        }
+        tempSmtRoot.freeFieldElement();
 
         smt.removeLeaf(positions[0]);
         smt.removeLeaf(positions[numLeaves - 1]);
@@ -97,7 +102,17 @@ public class MerkleTreeTest {
 
         //Add leaves to BigLazyMerkleTree
         smtLazy.addLeaves(leaves);
-        long[] leavesToRemove = { 0L, 245L };
+
+        // Verify Merkle paths for each leaf
+        FieldElement tempLazySmtRoot = smtLazy.root();
+        for (FieldElement leaf: leaves) {
+            MerklePath path = smtLazy.getMerklePath(smtLazy.getPosition(leaf));
+            assertTrue("Merkle Path must be verified", path.verify(height, leaf, tempLazySmtRoot));
+            path.freeMerklePath();
+        }
+        tempLazySmtRoot.freeFieldElement();
+
+        long[] leavesToRemove = { 256L, 245L };
         smtLazy.removeLeaves(leavesToRemove);
 
         //Compute root and assert equality with the expected one
@@ -108,43 +123,50 @@ public class MerkleTreeTest {
         smtLazy.freeAndDestroyLazyMerkleTree();
         smtLazyRoot.freeFieldElement();
 
-        //Get RandomAccessMerkleTree
-        RandomAccessMerkleTree ramt = RandomAccessMerkleTree.init(height);
+        //Get InMemoryOptimizedMerkleTree
+        InMemoryOptimizedMerkleTree mht = InMemoryOptimizedMerkleTree.init(height, numLeaves);
 
         // Must place the leaves at the same positions of the previous trees
-        List<FieldElement> ramtLeaves = new ArrayList<>();
+        List<FieldElement> mhtLeaves = new ArrayList<>();
         //Initialize all leaves to zero
         FieldElement zero = FieldElement.createFromLong(0L);
         for(int j = 0; j < 512; j++)
-            ramtLeaves.add(zero);
+            mhtLeaves.add(zero);
         //Substitute at positions the correct leaves
         for (int j = 1; j < numLeaves - 1; j++) {
             // Warning: Conversion from long to int is not to be used for production.
-            ramtLeaves.set((int)positions[j], leaves.get(j));
+            mhtLeaves.set((int)positions[j], leaves.get(j));
         }
 
-        //Append all the leaves to ramt
-        for (FieldElement leaf: ramtLeaves)
-            ramt.append(leaf);
+        //Append all the leaves to mht
+        for (FieldElement leaf: mhtLeaves)
+            mht.append(leaf);
 
         //Finalize the tree
-        ramt.finalizeTreeInPlace();
+        mht.finalizeTreeInPlace();
+
+        // Verify Merkle paths for each leaf
+        FieldElement mhtRoot = mht.root();
+        for (int j = 1; j < numLeaves - 1; j++) {
+            MerklePath path = mht.getMerklePath((int)positions[j]);
+            assertTrue("Merkle Path must be verified", path.verify(height, leaves.get(j), mhtRoot));
+            path.freeMerklePath();
+        }
 
         //Compute root and assert equality with the expected one
-        FieldElement ramtRoot = ramt.root();
-        assertEquals("RandomAccessMerkleTree root is not as expected", ramtRoot, expectedRoot);
+        assertEquals("InMemoryOptimizedMerkleTree root is not as expected", mhtRoot, expectedRoot);
 
         //It is the same with finalizeTree()
-        RandomAccessMerkleTree ramtCopy = ramt.finalizeTree();
-        FieldElement ramtRootCopy = ramtCopy.root();
-        assertEquals("RandomAccessMerkleTree copy root is not as expected", ramtRootCopy, expectedRoot);
+        InMemoryOptimizedMerkleTree mhtCopy = mht.finalizeTree();
+        FieldElement mhtRootCopy = mhtCopy.root();
+        assertEquals("InMemoryOptimizedMerkleTree copy root is not as expected", mhtRootCopy, expectedRoot);
 
         //Free memory
         zero.freeFieldElement();
-        ramt.freeRandomAccessMerkleTree();
-        ramtCopy.freeRandomAccessMerkleTree();
-        ramtRoot.freeFieldElement();
-        ramtRootCopy.freeFieldElement();
+        mht.freeInMemoryOptimizedMerkleTree();
+        mhtCopy.freeInMemoryOptimizedMerkleTree();
+        mhtRoot.freeFieldElement();
+        mhtRootCopy.freeFieldElement();
     }
 
     @Test

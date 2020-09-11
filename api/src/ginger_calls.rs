@@ -1,28 +1,32 @@
 use algebra::{fields::{
-    mnt4753::{Fr as MNT4Fr, Fq as MNT4Fq}, PrimeField
+    mnt4753::{Fr, Fq as ScalarFieldElement}, PrimeField
 }, curves::{
-    mnt4753::MNT4,
+    mnt4753::MNT4 as PairingCurve,
     mnt6753::{
-        G1Projective as MNT6G1Projective, G1Affine as MNT6G1Affine
+        G1Projective as GroupProjective, G1Affine as GroupAffine
     },
 }, FromBytes, ToBytes, BigInteger768, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits};
 use primitives::{crh::{
     poseidon::{
-        parameters::MNT4753PoseidonParameters,
-        PoseidonHash, MNT4PoseidonHash
+        MNT4PoseidonHash,
+        batched_crh::MNT4BatchPoseidonHash as BatchFieldHash,
     },
     FieldBasedHash,
     bowe_hopwood::{
         BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters
     },
-},  merkle_tree::field_based_mht::{
-    smt::*,
-    smt::big_lazy_merkle_tree::*,
+}, merkle_tree::field_based_mht::{
+    smt::{BigMerkleTree, LazyBigMerkleTree, Coord, OperationLeaf},
+    optimized::FieldBasedOptimizedMHT,
+    poseidon::{MNT4753_PHANTOM_MERKLE_ROOT as PHANTOM_MERKLE_ROOT, MNT4753_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS},
+    FieldBasedMerkleTree, FieldBasedMerkleTreePrecomputedEmptyConstants,
+    FieldBasedMerkleTreeParameters, BatchFieldBasedMerkleTreeParameters,
+    FieldBasedMerkleTreePath, FieldBasedMHTPath,
 }, signature::{
     FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
         FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature
     },
-}, vrf::{FieldBasedVrf, ecvrf::*}};
+}, vrf::{FieldBasedVrf, ecvrf::*}, ActionLeaf};
 use proof_systems::groth16::{
     Proof, create_random_proof,
     prepare_verifying_key, verify_proof,
@@ -39,11 +43,9 @@ use std::{
     fs::File, io::Result as IoResult, path::Path
 };
 use lazy_static::*;
-use primitives::merkle_tree::field_based_mht::MNT4753_PHANTOM_MERKLE_ROOT;
-use primitives::merkle_tree::field_based_mht::ramht::poseidon::PoseidonRandomAccessMerkleTree;
-use primitives::merkle_tree::field_based_mht::ramht::RandomAccessMerkleTree;
 
-pub type FieldElement = MNT4Fr;
+pub type FieldElement = Fr;
+
 pub const FIELD_SIZE: usize = 96; //Field size in bytes
 pub const SCALAR_FIELD_SIZE: usize = FIELD_SIZE;// 96
 pub const G1_SIZE: usize = 193;
@@ -84,10 +86,10 @@ pub fn get_random_field_element() -> FieldElement {
 
 //***************************Schnorr types and functions********************************************
 
-pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<MNT4Fr, MNT6G1Projective, MNT4PoseidonHash>;
-pub type SchnorrSig = FieldBasedSchnorrSignature<MNT4Fr>;
-pub type SchnorrPk = MNT6G1Affine;
-pub type SchnorrSk = MNT4Fq;
+pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, GroupProjective, FieldHash>;
+pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement>;
+pub type SchnorrPk = GroupAffine;
+pub type SchnorrSk = ScalarFieldElement;
 
 pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
     let mut rng = OsRng;
@@ -114,7 +116,7 @@ pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &
 
 //************************************Poseidon Hash functions****************************************
 
-pub type FieldHash = PoseidonHash<FieldElement, MNT4753PoseidonParameters>;
+pub type FieldHash = MNT4PoseidonHash;
 
 pub fn get_poseidon_hash(personalization: Option<&[FieldElement]>) -> FieldHash {
     FieldHash::init(personalization)
@@ -134,7 +136,7 @@ pub fn finalize_poseidon_hash(hash: &FieldHash) -> FieldElement{
 
 //*****************************Naive threshold sig circuit related functions************************
 
-pub type SCProof = Proof<MNT4>;
+pub type SCProof = Proof<PairingCurve>;
 
 #[derive(Clone, Default)]
 pub struct BackwardTransfer {
@@ -188,10 +190,10 @@ pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> FieldEle
         .finalize()
 }
 
-const BT_MERKLE_TREE_HEIGHT: usize = 13;
+const BT_MERKLE_TREE_HEIGHT: usize = 12;
 
 fn compute_bt_root(bts: &[FieldElement]) -> Result<FieldElement, Error> {
-    let mut bt_mt = GingerRAMT::init(2usize.pow((BT_MERKLE_TREE_HEIGHT - 1) as u32));
+    let mut bt_mt = GingerMHT::init(BT_MERKLE_TREE_HEIGHT, 2usize.pow((BT_MERKLE_TREE_HEIGHT - 1) as u32));
     for &bt in bts.iter(){
         bt_mt.append(bt);
     }
@@ -207,7 +209,7 @@ pub fn compute_msg_to_sign(
 ) -> Result<(FieldElement, FieldElement), Error> {
 
     let mr_bt = if bt_list.is_empty() {
-        MNT4753_PHANTOM_MERKLE_ROOT
+        PHANTOM_MERKLE_ROOT //Note: Can actually be taken from MHT_PARAMETERS::nodes[BT_MERKLE_TREE_HEIGHT]
     } else {
         let mut bt_field_list = vec![];
         for bt in bt_list.iter() {
@@ -337,18 +339,18 @@ pub fn verify_naive_threshold_sig_proof(
 //VRF types and functions
 
 lazy_static! {
-    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<MNT6G1Projective> = {
+    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<GroupProjective> = {
         let params = VRFParams::new();
-        BoweHopwoodPedersenParameters::<MNT6G1Projective>{generators: params.group_hash_generators}
+        BoweHopwoodPedersenParameters::<GroupProjective>{generators: params.group_hash_generators}
     };
 }
 
-type GroupHash = BoweHopwoodPedersenCRH<MNT6G1Projective, VRFWindow>;
+type GroupHash = BoweHopwoodPedersenCRH<GroupProjective, VRFWindow>;
 
-pub type VRFScheme = FieldBasedEcVrf<MNT4Fr, MNT6G1Projective, MNT4PoseidonHash, GroupHash>;
-pub type VRFProof = FieldBasedEcVrfProof<MNT4Fr, MNT6G1Projective>;
-pub type VRFPk = MNT6G1Affine;
-pub type VRFSk = MNT4Fq;
+pub type VRFScheme = FieldBasedEcVrf<FieldElement, GroupProjective, FieldHash, GroupHash>;
+pub type VRFProof = FieldBasedEcVrfProof<FieldElement, GroupProjective>;
+pub type VRFPk = GroupAffine;
+pub type VRFSk = ScalarFieldElement;
 
 pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
     let mut rng = OsRng;
@@ -399,57 +401,83 @@ pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Re
 
 //************Merkle Tree functions******************
 
-////////////RANDOM ACCESS MERKLE TREE
+////////////MERKLE_PATH
+pub type GingerMHTPath = FieldBasedMHTPath<GingerMerkleTreeParameters>;
 
-pub type GingerRAMT = PoseidonRandomAccessMerkleTree<FieldElement, MNT4753PoseidonParameters>;
-
-pub fn new_ginger_ramt(height: usize) -> GingerRAMT {
-    GingerRAMT::init(2usize.pow((height - 1) as u32))
+pub fn verify_ginger_merkle_path(
+    path: &GingerMHTPath,
+    height: usize,
+    leaf: &FieldElement,
+    root: &FieldElement
+) -> Result<bool, Error> {
+    path.verify(height, leaf, root)
 }
 
-pub fn append_leaf_to_ginger_ramt(tree: &mut GingerRAMT, leaf: &FieldElement){
+////////////OPTIMIZED MERKLE TREE
+
+#[derive(Debug, Clone)]
+pub struct GingerMerkleTreeParameters;
+
+impl FieldBasedMerkleTreeParameters for GingerMerkleTreeParameters {
+    type Data = FieldElement;
+    type H = FieldHash;
+    const MERKLE_ARITY: usize = 2;
+    const EMPTY_HASH_CST: Option<FieldBasedMerkleTreePrecomputedEmptyConstants<'static, Self::H>> =
+        Some(MHT_PARAMETERS);
+}
+
+impl BatchFieldBasedMerkleTreeParameters for GingerMerkleTreeParameters {
+    type BH = BatchFieldHash;
+}
+
+pub type GingerMHT = FieldBasedOptimizedMHT<GingerMerkleTreeParameters>;
+
+pub fn new_ginger_mht(height: usize, processing_step: usize) -> GingerMHT {
+    GingerMHT::init(height, processing_step)
+}
+
+pub fn append_leaf_to_ginger_mht(tree: &mut GingerMHT, leaf: &FieldElement){
     tree.append(*leaf);
 }
 
-pub fn finalize_ginger_ramt(tree: &GingerRAMT) -> GingerRAMT {
+pub fn finalize_ginger_mht(tree: &GingerMHT) -> GingerMHT {
     tree.finalize()
 }
 
-pub fn finalize_ginger_ramt_in_place(tree: &mut GingerRAMT) {
+pub fn finalize_ginger_mht_in_place(tree: &mut GingerMHT) {
     tree.finalize_in_place();
 }
 
-pub fn get_ginger_ramt_root(tree: &GingerRAMT) -> Option<FieldElement> {
+pub fn get_ginger_mht_root(tree: &GingerMHT) -> Option<FieldElement> {
     tree.root()
 }
 
-pub fn reset_ginger_ramt(tree: &mut GingerRAMT){
+pub fn get_ginger_mht_path(tree: &GingerMHT, leaf_index: u64) -> Option<GingerMHTPath> {
+    tree.get_merkle_path(leaf_index as usize)
+}
+
+pub fn reset_ginger_mht(tree: &mut GingerMHT){
     tree.reset();
 }
 
 ////////////SPARSE MERKLE TREE
 
-pub type GingerSMT = MNT4PoseidonSmt;
-
+pub type GingerSMT = BigMerkleTree<GingerMerkleTreeParameters>;
 
 // Note: If position is non empty in the SMTs the old leaf will be overwritten.
 // If that's not the desired behaviour, then leaf should depend on some tweakable
 // parameter that allows to re-compute a new position for it, possibly multiple times.
-// Therefore, it is advisable to minimize the risk of having collisions, e.g. by ensuring
-// that PREDEFINED_MERKLE_TREE_HEIGHT >> EXPECTED_OPERATIONAL_MERKLE_TREE_HEIGHT
-// or by using an injective leaf-to-index function
-
-//TODO: Are leaves plain data packed into a field element or hashes ?
-//      Is this function ok or additional hashes/manipulations are needed ?
+// Therefore, it is advisable to minimize the risk of having collisions,or to handle
+// them
 fn leaf_to_index(leaf: &FieldElement, height: usize) -> u64 {
 
     // Convert field element to bits
     let bits = leaf.write_bits();
-    assert!(height - 1 <= bits.len());
+    assert!(height <= bits.len());
 
     // Use log_2(num_leaves) MSB of serialized FieldElement to estabilish leaf position inside
     // the tree
-    let leaf_bits = &bits[..height - 1];
+    let leaf_bits = &bits[..height];
     let position = leaf_bits.iter().rev().fold(0, |acc, &b| acc*2 + b as u64);
     position
 }
@@ -461,9 +489,7 @@ pub fn get_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path
         // If all required information are available, then load the tree
         (true, true, true) => {
             let tree = restore_ginger_smt(state_path, db_path, cache_path)?;
-            assert!(height >= 2);
-            //TODO: In GingerLib height is intended as "depth". Modify here or there.
-            assert_eq!(tree.height(), height - 1);
+            assert_eq!(tree.height(), height);
             Ok(tree)
         },
 
@@ -478,8 +504,8 @@ pub fn get_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path
 }
 
 fn new_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error> {
-    match GingerSMT::new_unitialized(
-        2usize.pow((height - 1) as u32),
+    match GingerSMT::new(
+        height,
         true,
         Some(state_path.to_owned()),
         db_path.to_owned(),
@@ -492,7 +518,7 @@ fn new_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &s
 
 fn restore_ginger_smt(state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error>
 {
-    match GingerSMT::new(
+    match GingerSMT::load(
         true,
         state_path.to_owned(),
         db_path.to_owned(),
@@ -528,9 +554,13 @@ pub fn get_ginger_smt_root(tree: &GingerSMT) -> FieldElement {
     tree.get_root()
 }
 
+pub fn get_ginger_smt_path(tree: &mut GingerSMT, leaf_position: u64) -> GingerMHTPath {
+    tree.get_merkle_path(Coord::new(0, leaf_position as usize)).into()
+}
+
 ////////////LAZY SPARSE MERKLE TREE
 
-pub type LazyGingerSMT = MNT4PoseidonSmtLazy;
+pub type LazyGingerSMT = LazyBigMerkleTree<GingerMerkleTreeParameters>;
 type GingerLeaf = OperationLeaf<FieldElement>;
 
 pub fn get_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error>{
@@ -540,8 +570,7 @@ pub fn get_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache
         // If all required information are available, then load the tree
         (true, true, true) => {
             let tree = restore_lazy_ginger_smt(state_path, db_path, cache_path)?;
-            //TODO: In GingerLib height is intended as "depth". Modify here or there.
-            assert_eq!(tree.height(), height - 1);
+            assert_eq!(tree.height(), height);
             Ok(tree)
         },
 
@@ -556,8 +585,8 @@ pub fn get_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache
 }
 
 fn new_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error> {
-    match LazyGingerSMT::new_unitialized(
-        2usize.pow((height - 1) as u32),
+    match LazyGingerSMT::new(
+        height,
         true,
         Some(state_path.to_owned()),
         db_path.to_owned(),
@@ -570,7 +599,7 @@ fn new_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_pat
 
 fn restore_lazy_ginger_smt(state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error>
 {
-    match LazyGingerSMT::new(
+    match LazyGingerSMT::load(
         true,
         state_path.to_owned(),
         db_path.to_owned(),
@@ -610,6 +639,10 @@ pub fn remove_leaves_from_ginger_lazy_smt(tree: &mut LazyGingerSMT, positions: &
 
 pub fn get_lazy_ginger_smt_root(tree: &LazyGingerSMT) -> FieldElement {
     tree.get_root()
+}
+
+pub fn get_lazy_ginger_smt_path(tree: &mut LazyGingerSMT, leaf_position: u64) -> GingerMHTPath {
+    tree.get_merkle_path(Coord::new(0, leaf_position as usize)).into()
 }
 
 #[cfg(test)]
@@ -857,12 +890,19 @@ mod test {
             }
         }
 
+        //Create and verify merkle paths for each leaf
+        let mut smt_root = get_ginger_smt_root(&smt);
+        for i in 0..leaves_num {
+            let path = get_ginger_smt_path(&mut smt, positions[i]);
+            assert!(verify_ginger_merkle_path(&path, height, &leaves[i], &smt_root).unwrap())
+        }
+
         //Remove first and last leaves
         remove_leaf_from_ginger_smt(&mut smt, positions[0]);
         remove_leaf_from_ginger_smt(&mut smt, positions[leaves_num - 1]);
 
         //Get root of GingerSMT
-        let smt_root = get_ginger_smt_root(&smt);
+        smt_root = get_ginger_smt_root(&smt);
         println!("Expected root: {:?}", into_i8(to_bytes!(smt_root).unwrap()));
 
         // Get LazyGingerSMT
@@ -876,29 +916,41 @@ mod test {
         // No conflicts here because we ensured each leaf to fall in a different position
         add_leaves_to_ginger_lazy_smt(&mut lazy_smt, leaves.as_slice());
 
+        //Create and verify merkle paths for each leaf
+        let mut lazy_smt_root = get_lazy_ginger_smt_root(&lazy_smt);
+        for i in 0..leaves_num {
+            let path = get_lazy_ginger_smt_path(&mut lazy_smt, positions[i]);
+            assert!(verify_ginger_merkle_path(&path, height, &leaves[i], &lazy_smt_root).unwrap());
+        }
+
         // Remove first and last leaves
-        let lazy_smt_root = remove_leaves_from_ginger_lazy_smt(&mut lazy_smt, &[positions[0] as i64, positions[(leaves_num - 1)] as i64]);
+        lazy_smt_root = remove_leaves_from_ginger_lazy_smt(&mut lazy_smt, &[positions[0] as i64, positions[(leaves_num - 1)] as i64]);
 
         assert_eq!(smt_root, lazy_smt_root);
 
-        //Get RAMT
-        let mut ramt = new_ginger_ramt(height);
+        //Get GingerMHT
+        let mut mht = new_ginger_mht(height, leaves_num);
 
         // Must place the leaves at the same positions of the previous trees
-        let mut ramt_leaves = vec![FieldElement::zero(); 2usize.pow((height - 1) as u32)];
+        let mut mht_leaves = vec![FieldElement::zero(); 2usize.pow(height as u32)];
         for i in 1..(leaves_num - 1){
-            ramt_leaves[positions[i] as usize] = leaves[i];
+            mht_leaves[positions[i] as usize] = leaves[i];
         }
 
         // Append leaves to the tree and compute the root
-        ramt_leaves.iter().for_each(|leaf| { append_leaf_to_ginger_ramt(&mut ramt, leaf) });
-        finalize_ginger_ramt_in_place(&mut ramt);
-        let ramt_root = get_ginger_ramt_root(&ramt).expect("Tree must've been finalized");
+        mht_leaves.iter().for_each(|leaf| { append_leaf_to_ginger_mht(&mut mht, leaf) });
+        finalize_ginger_mht_in_place(&mut mht);
+        let mht_root = get_ginger_mht_root(&mht).expect("Tree must've been finalized");
 
-        assert_eq!(ramt_root, lazy_smt_root);
+        //Create and verify merkle paths for each leaf
+        for i in 1..(leaves_num - 1) {
+            let path = get_ginger_mht_path(&mht, positions[i]).unwrap();
+            assert!(verify_ginger_merkle_path(&path, height, &leaves[i], &mht_root).unwrap())
+        }
+        assert_eq!(mht_root, lazy_smt_root);
 
         //Delete SMTs data
-        //set_ginger_smt_persistency(&mut smt, false);
+        set_ginger_smt_persistency(&mut smt, false);
         set_ginger_lazy_smt_persistency(&mut lazy_smt, false);
     }
 
@@ -920,7 +972,7 @@ mod test {
                 10238382938508
             ]));
 
-        let height = 6;
+        let height = 5;
 
         // create a persistent smt in a separate scope
         {
@@ -996,6 +1048,5 @@ mod test {
 
         //finalize() is idempotent
         assert_eq!(h_output, finalize_poseidon_hash(&h));
-
     }
 }
