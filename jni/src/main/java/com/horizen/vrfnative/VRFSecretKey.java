@@ -33,7 +33,7 @@ public class VRFSecretKey implements AutoCloseable
 
     public byte[] serializeSecretKey() {
         if (secretKeyPointer == 0)
-            throw new IllegalArgumentException("Secret key was freed.");
+            throw new IllegalStateException("Secret key was freed.");
 
         return nativeSerializeSecretKey();
     }
@@ -51,7 +51,7 @@ public class VRFSecretKey implements AutoCloseable
 
     public VRFPublicKey getPublicKey() {
         if (secretKeyPointer == 0)
-            throw new IllegalArgumentException("Secret key was freed.");
+            throw new IllegalStateException("Secret key was freed.");
 
         return nativeGetPublicKey();
     }

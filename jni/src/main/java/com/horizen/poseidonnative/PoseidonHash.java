@@ -34,7 +34,7 @@ public class PoseidonHash implements AutoCloseable {
 
     public void update(FieldElement input) {
         if (poseidonHashPointer == 0)
-            throw new IllegalArgumentException("PoseidonHash instance was freed.");
+            throw new IllegalStateException("PoseidonHash instance was freed.");
         nativeUpdate(input);
     }
 
@@ -42,7 +42,7 @@ public class PoseidonHash implements AutoCloseable {
 
     public FieldElement finalizeHash() {
         if (poseidonHashPointer == 0)
-            throw new IllegalArgumentException("PoseidonHash instance was freed.");
+            throw new IllegalStateException("PoseidonHash instance was freed.");
         return nativeFinalize();
     }
 
@@ -50,13 +50,13 @@ public class PoseidonHash implements AutoCloseable {
 
     public FieldElement reset(FieldElement[] personalization) {
         if (poseidonHashPointer == 0)
-            throw new IllegalArgumentException("PoseidonHash instance was freed.");
+            throw new IllegalStateException("PoseidonHash instance was freed.");
         return nativeReset(personalization);
     }
 
     public FieldElement reset() {
         if (poseidonHashPointer == 0)
-            throw new IllegalArgumentException("PoseidonHash instance was freed.");
+            throw new IllegalStateException("PoseidonHash instance was freed.");
         return nativeReset(new FieldElement[0]);
     }
 

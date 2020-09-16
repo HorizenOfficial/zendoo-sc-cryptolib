@@ -28,7 +28,7 @@ public class BigMerkleTree implements AutoCloseable {
     // Returns the position to which insert the leaf
     public long getPosition(FieldElement leaf) {
         if (merkleTreePointer == 0)
-            throw new IllegalArgumentException("BigMerkleTree instance was freed.");
+            throw new IllegalStateException("BigMerkleTree instance was freed.");
         return nativeGetPosition(leaf);
     }
 
@@ -36,7 +36,7 @@ public class BigMerkleTree implements AutoCloseable {
 
     public boolean isPositionEmpty(long position){
         if (merkleTreePointer == 0)
-            throw new IllegalArgumentException("BigMerkleTree instance was freed.");
+            throw new IllegalStateException("BigMerkleTree instance was freed.");
         return nativeIsPositionEmpty(position);
     }
 
@@ -44,7 +44,7 @@ public class BigMerkleTree implements AutoCloseable {
 
     public void addLeaf(FieldElement leaf, long position){
         if (merkleTreePointer == 0)
-            throw new IllegalArgumentException("BigMerkleTree instance was freed.");
+            throw new IllegalStateException("BigMerkleTree instance was freed.");
         nativeAddLeaf(leaf, position);
     }
 
@@ -52,7 +52,7 @@ public class BigMerkleTree implements AutoCloseable {
 
     public void removeLeaf(long position){
         if (merkleTreePointer == 0)
-            throw new IllegalArgumentException("BigMerkleTree instance was freed.");
+            throw new IllegalStateException("BigMerkleTree instance was freed.");
             nativeRemoveLeaf(position);
     }
 
@@ -60,7 +60,7 @@ public class BigMerkleTree implements AutoCloseable {
 
     public FieldElement root() {
         if (merkleTreePointer == 0)
-            throw new IllegalArgumentException("BigMerkleTree instance was freed.");
+            throw new IllegalStateException("BigMerkleTree instance was freed.");
         return nativeRoot();
     }
 
@@ -68,7 +68,7 @@ public class BigMerkleTree implements AutoCloseable {
 
     public MerklePath getMerklePath(long leafPosition) {
         if (merkleTreePointer == 0)
-            throw new IllegalArgumentException("BigMerkleTree instance was freed.");
+            throw new IllegalStateException("BigMerkleTree instance was freed.");
         return nativeGetMerklePath(leafPosition);
     }
 

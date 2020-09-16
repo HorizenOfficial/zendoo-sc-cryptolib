@@ -39,7 +39,7 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
 
     public void append(FieldElement input) {
         if (inMemoryOptimizedMerkleTreePointer == 0)
-            throw new IllegalArgumentException("InMemoryOptimizedMerkleTree instance was freed.");
+            throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
         nativeAppend(input);
     }
 
@@ -49,7 +49,7 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
     // to continue updating the original tree.
     public InMemoryOptimizedMerkleTree finalizeTree() {
         if (inMemoryOptimizedMerkleTreePointer == 0)
-            throw new IllegalArgumentException("InMemoryOptimizedMerkleTree instance was freed.");
+            throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
         return nativeFinalize();
     }
 
@@ -59,7 +59,7 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
     // to continue updating the tree, unless by restoring the original state (by calling reset()).
     public void finalizeTreeInPlace() {
         if (inMemoryOptimizedMerkleTreePointer == 0)
-            throw new IllegalArgumentException("InMemoryOptimizedMerkleTree instance was freed.");
+            throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
         nativeFinalizeInPlace();
     }
 
@@ -69,7 +69,7 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
     // If not, the call will result in an exception.
     public FieldElement root() {
         if (inMemoryOptimizedMerkleTreePointer == 0)
-            throw new IllegalArgumentException("InMemoryOptimizedMerkleTree instance was freed.");
+            throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
         return nativeRoot();
     }
 
@@ -77,7 +77,7 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
 
     public MerklePath getMerklePath(long leafIndex) {
         if (inMemoryOptimizedMerkleTreePointer == 0)
-            throw new IllegalArgumentException("InMemoryOptimizedMerkleTree instance was freed.");
+            throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
         return nativeGetMerklePath(leafIndex);
     }
 
@@ -86,7 +86,7 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
     // Restore the internal state of this instance to the initial one.
     public void reset() {
         if (inMemoryOptimizedMerkleTreePointer == 0)
-            throw new IllegalArgumentException("InMemoryOptimizedMerkleTree instance was freed.");
+            throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
         nativeReset();
     }
 

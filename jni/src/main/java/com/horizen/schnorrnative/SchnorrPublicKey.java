@@ -34,7 +34,7 @@ public class SchnorrPublicKey implements AutoCloseable
 
   public byte[] serializePublicKey() {
     if (publicKeyPointer == 0)
-      throw new IllegalArgumentException("Public key was freed.");
+      throw new IllegalStateException("Public key was freed.");
 
     return nativeSerializePublicKey();
   }
@@ -54,14 +54,14 @@ public class SchnorrPublicKey implements AutoCloseable
 
   public boolean verifySignature(SchnorrSignature signature, FieldElement message) {
     if (publicKeyPointer == 0)
-      throw new IllegalArgumentException("Public key was freed.");
+      throw new IllegalStateException("Public key was freed.");
 
     return nativeVerifySignature(signature, message);
   }
 
   public boolean verifyKey() {
     if (publicKeyPointer == 0)
-      throw new IllegalArgumentException("Public key was freed.");
+      throw new IllegalStateException("Public key was freed.");
 
     return nativeVerifyKey();
   }

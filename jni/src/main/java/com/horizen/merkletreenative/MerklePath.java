@@ -21,7 +21,7 @@ public class MerklePath implements AutoCloseable {
 
     public boolean verify(int merkleTreeHeight, FieldElement leaf, FieldElement root) {
         if (merklePathPointer == 0)
-            throw new IllegalArgumentException("MerklePath instance was freed.");
+            throw new IllegalStateException("MerklePath instance was freed.");
         return nativeVerify(merkleTreeHeight, leaf, root);
     }
 
