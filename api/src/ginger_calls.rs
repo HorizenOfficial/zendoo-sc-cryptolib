@@ -21,7 +21,7 @@ use primitives::{crh::{
     poseidon::{MNT4753_PHANTOM_MERKLE_ROOT as PHANTOM_MERKLE_ROOT, MNT4753_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS},
     FieldBasedMerkleTree, FieldBasedMerkleTreePrecomputedEmptyConstants,
     FieldBasedMerkleTreeParameters, BatchFieldBasedMerkleTreeParameters,
-    FieldBasedMerkleTreePath, FieldBasedMHTPath,
+    FieldBasedMerkleTreePath, FieldBasedBinaryMHTPath,
 }, signature::{
     FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
         FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature
@@ -37,7 +37,10 @@ use demo_circuit::{
     },
     naive_threshold_sig::*
 };
-use rand::rngs::OsRng;
+use rand::{
+    SeedableRng, rngs::OsRng
+};
+use rand_xorshift::XorShiftRng;
 
 use std::{
     fs::File, io::Result as IoResult, path::Path
@@ -79,8 +82,10 @@ pub fn read_from_file<T: FromBytes>(file_path: &str) -> IoResult<T>{
     Ok(t)
 }
 
-pub fn get_random_field_element() -> FieldElement {
-    let mut rng = OsRng;
+// NOTE: This function relies on a non-cryptographically safe RNG, therefore it
+// must be used ONLY for testing purposes
+pub fn get_random_field_element(seed: u64) -> FieldElement {
+    let mut rng = XorShiftRng::seed_from_u64(seed);
     FieldElement::rand(&mut rng)
 }
 
@@ -403,7 +408,7 @@ pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Re
 //************Merkle Tree functions******************
 
 ////////////MERKLE_PATH
-pub type GingerMHTPath = FieldBasedMHTPath<GingerMerkleTreeParameters>;
+pub type GingerMHTPath = FieldBasedBinaryMHTPath<GingerMerkleTreeParameters>;
 
 pub fn verify_ginger_merkle_path(
     path: &GingerMHTPath,
@@ -412,6 +417,30 @@ pub fn verify_ginger_merkle_path(
     root: &FieldElement
 ) -> Result<bool, Error> {
     path.verify(height, leaf, root)
+}
+
+pub fn verify_ginger_merkle_path_without_length_check(
+    path: &GingerMHTPath,
+    leaf: &FieldElement,
+    root: &FieldElement
+) -> Result<bool, Error> {
+    path.verify_without_length_check(leaf, root)
+}
+
+pub fn is_path_leftmost(path: &GingerMHTPath) -> bool {
+    path.is_leftmost()
+}
+
+pub fn is_path_rightmost(path: &GingerMHTPath) -> bool {
+    path.is_rightmost()
+}
+
+pub fn get_leaf_index_from_path(path: &GingerMHTPath) -> u64 {
+    path.leaf_index() as u64
+}
+
+pub fn get_path_size_in_bytes(path: &GingerMHTPath) -> usize {
+    ((1 + FIELD_SIZE) * path.get_length()) + 1
 }
 
 ////////////OPTIMIZED MERKLE TREE
@@ -454,7 +483,10 @@ pub fn get_ginger_mht_root(tree: &GingerMHT) -> Option<FieldElement> {
 }
 
 pub fn get_ginger_mht_path(tree: &GingerMHT, leaf_index: u64) -> Option<GingerMHTPath> {
-    tree.get_merkle_path(leaf_index as usize)
+    match tree.get_merkle_path(leaf_index as usize) {
+        Some(path) => Some(path.into()),
+        None => None,
+    }
 }
 
 pub fn reset_ginger_mht(tree: &mut GingerMHT){
@@ -485,22 +517,11 @@ fn leaf_to_index(leaf: &FieldElement, height: usize) -> u64 {
 
 pub fn get_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error>{
 
-    match(Path::new(state_path).exists(), Path::new(db_path).exists(), Path::new(cache_path).exists()){
-
-        // If all required information are available, then load the tree
-        (true, true, true) => {
-            let tree = restore_ginger_smt(state_path, db_path, cache_path)?;
-            assert_eq!(tree.height(), height);
-            Ok(tree)
-        },
-
-        // If no information is available, create a new tree
-        (false, false, false) => {
-            new_ginger_smt(height, state_path, db_path, cache_path)
-        }
-
-        // Other combinations are considered illegal
-        _ => Err(Error::from("Unable to restore MerkleTree: incomplete data"))
+    // If at least the leaves database is available, we can restore the tree
+    if Path::new(db_path).exists() {
+        restore_ginger_smt(height, state_path, db_path, cache_path)
+    } else { // Otherwise we need to create a new tree
+        new_ginger_smt(height, state_path, db_path, cache_path)
     }
 }
 
@@ -517,9 +538,10 @@ fn new_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &s
     }
 }
 
-fn restore_ginger_smt(state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error>
+fn restore_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error>
 {
     match GingerSMT::load(
+        height,
         true,
         state_path.to_owned(),
         db_path.to_owned(),
@@ -528,6 +550,10 @@ fn restore_ginger_smt(state_path: &str, db_path: &str, cache_path: &str) -> Resu
         Ok(tree) => Ok(tree),
         Err(e) => Err(Box::new(e))
     }
+}
+
+pub fn flush_ginger_smt(tree: &mut GingerSMT) {
+    tree.flush()
 }
 
 pub fn set_ginger_smt_persistency(tree: &mut GingerSMT, persistency: bool) {
@@ -556,7 +582,7 @@ pub fn get_ginger_smt_root(tree: &GingerSMT) -> FieldElement {
 }
 
 pub fn get_ginger_smt_path(tree: &mut GingerSMT, leaf_position: u64) -> GingerMHTPath {
-    tree.get_merkle_path(Coord::new(0, leaf_position as usize)).into()
+    tree.get_merkle_path(Coord::new(0, leaf_position as usize))
 }
 
 ////////////LAZY SPARSE MERKLE TREE
@@ -566,22 +592,11 @@ type GingerLeaf = OperationLeaf<FieldElement>;
 
 pub fn get_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error>{
 
-    match(Path::new(state_path).exists(), Path::new(db_path).exists(), Path::new(cache_path).exists()){
-
-        // If all required information are available, then load the tree
-        (true, true, true) => {
-            let tree = restore_lazy_ginger_smt(state_path, db_path, cache_path)?;
-            assert_eq!(tree.height(), height);
-            Ok(tree)
-        },
-
-        // If no information is available, create a new tree
-        (false, false, false) => {
-            new_lazy_ginger_smt(height, state_path, db_path, cache_path)
-        }
-
-        // Other combinations are considered illegal
-        _ => unreachable!()
+    // If at least the leaves database is available, we can restore the tree
+    if Path::new(db_path).exists() {
+        restore_lazy_ginger_smt(height, state_path, db_path, cache_path)
+    } else { // Otherwise we need to create a new tree
+        new_lazy_ginger_smt(height, state_path, db_path, cache_path)
     }
 }
 
@@ -598,9 +613,10 @@ fn new_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_pat
     }
 }
 
-fn restore_lazy_ginger_smt(state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error>
+fn restore_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error>
 {
     match LazyGingerSMT::load(
+        height,
         true,
         state_path.to_owned(),
         db_path.to_owned(),
@@ -609,6 +625,10 @@ fn restore_lazy_ginger_smt(state_path: &str, db_path: &str, cache_path: &str) ->
         Ok(tree) => Ok(tree),
         Err(e) => Err(Box::new(e))
     }
+}
+
+pub fn flush_lazy_ginger_smt(tree: &mut LazyGingerSMT){
+    tree.flush()
 }
 
 pub fn set_ginger_lazy_smt_persistency(tree: &mut LazyGingerSMT, persistency: bool) {
@@ -628,14 +648,14 @@ pub fn add_leaves_to_ginger_lazy_smt(tree: &mut LazyGingerSMT, leaves: &[FieldEl
     let leaves = leaves.iter().map(|leaf| {
         GingerLeaf::new(0, leaf_to_index(leaf, tree.height()) as usize, ActionLeaf::Insert, Some(*leaf))
     }).collect::<Vec<_>>();
-    tree.process_leaves(leaves)
+    tree.process_leaves(leaves.as_slice())
 }
 
 pub fn remove_leaves_from_ginger_lazy_smt(tree: &mut LazyGingerSMT, positions: &[i64]) -> FieldElement{
     let leaves = positions.iter().map(|&position| {
         GingerLeaf::new(0, position as usize, ActionLeaf::Remove, None)
     }).collect::<Vec<_>>();
-    tree.process_leaves(leaves)
+    tree.process_leaves(leaves.as_slice())
 }
 
 pub fn get_lazy_ginger_smt_root(tree: &LazyGingerSMT) -> FieldElement {
@@ -643,7 +663,7 @@ pub fn get_lazy_ginger_smt_root(tree: &LazyGingerSMT) -> FieldElement {
 }
 
 pub fn get_lazy_ginger_smt_path(tree: &mut LazyGingerSMT, leaf_position: u64) -> GingerMHTPath {
-    tree.get_merkle_path(Coord::new(0, leaf_position as usize)).into()
+    tree.get_merkle_path(Coord::new(0, leaf_position as usize))
 }
 
 #[cfg(test)]
@@ -891,20 +911,12 @@ mod test {
             }
         }
 
-        //Create and verify merkle paths for each leaf
-        let mut smt_root = get_ginger_smt_root(&smt);
-        for i in 0..leaves_num {
-            let path = get_ginger_smt_path(&mut smt, positions[i]);
-            assert!(verify_ginger_merkle_path(&path, height, &leaves[i], &smt_root).unwrap())
-        }
-
         //Remove first and last leaves
         remove_leaf_from_ginger_smt(&mut smt, positions[0]);
         remove_leaf_from_ginger_smt(&mut smt, positions[leaves_num - 1]);
 
         //Get root of GingerSMT
-        smt_root = get_ginger_smt_root(&smt);
-        println!("Expected root: {:?}", into_i8(to_bytes!(smt_root).unwrap()));
+        let smt_root = get_ginger_smt_root(&smt);
 
         // Get LazyGingerSMT
         let mut lazy_smt = get_lazy_ginger_smt(
@@ -917,15 +929,8 @@ mod test {
         // No conflicts here because we ensured each leaf to fall in a different position
         add_leaves_to_ginger_lazy_smt(&mut lazy_smt, leaves.as_slice());
 
-        //Create and verify merkle paths for each leaf
-        let mut lazy_smt_root = get_lazy_ginger_smt_root(&lazy_smt);
-        for i in 0..leaves_num {
-            let path = get_lazy_ginger_smt_path(&mut lazy_smt, positions[i]);
-            assert!(verify_ginger_merkle_path(&path, height, &leaves[i], &lazy_smt_root).unwrap());
-        }
-
         // Remove first and last leaves
-        lazy_smt_root = remove_leaves_from_ginger_lazy_smt(&mut lazy_smt, &[positions[0] as i64, positions[(leaves_num - 1)] as i64]);
+        let lazy_smt_root = remove_leaves_from_ginger_lazy_smt(&mut lazy_smt, &[positions[0] as i64, positions[(leaves_num - 1)] as i64]);
 
         assert_eq!(smt_root, lazy_smt_root);
 
@@ -943,11 +948,6 @@ mod test {
         finalize_ginger_mht_in_place(&mut mht);
         let mht_root = get_ginger_mht_root(&mht).expect("Tree must've been finalized");
 
-        //Create and verify merkle paths for each leaf
-        for i in 1..(leaves_num - 1) {
-            let path = get_ginger_mht_path(&mht, positions[i]).unwrap();
-            assert!(verify_ginger_merkle_path(&path, height, &leaves[i], &mht_root).unwrap())
-        }
         assert_eq!(mht_root, lazy_smt_root);
 
         //Delete SMTs data
@@ -956,7 +956,49 @@ mod test {
     }
 
     #[test]
-    fn sample_restore_merkle_tree(){
+    fn sample_calls_merkle_path() {
+        let height = 5;
+        let leaves_num = 2usize.pow(height as u32);
+
+        // Get GingerMHT
+        let mut mht = new_ginger_mht(height, leaves_num);
+
+        // Add leaves
+        let mut mht_leaves = Vec::with_capacity(leaves_num);
+        for i in 0..leaves_num {
+            let leaf = get_random_field_element(i as u64);
+            mht_leaves.push(leaf);
+            append_leaf_to_ginger_mht(&mut mht, &leaf);
+        }
+
+        // Compute the root
+        finalize_ginger_mht_in_place(&mut mht);
+        let mht_root = get_ginger_mht_root(&mht).expect("Tree must've been finalized");
+
+        for i in 0..leaves_num {
+
+            //Create and verify merkle paths for each leaf
+            let path = get_ginger_mht_path(&mht, i as u64).unwrap();
+            assert!(verify_ginger_merkle_path_without_length_check(&path,&mht_leaves[i], &mht_root).unwrap());
+
+            // Check leaf index is the correct one
+            assert_eq!(i as u64, get_leaf_index_from_path(&path));
+
+            if i == 0 { assert!(is_path_leftmost(&path)); } // leftmost check
+            else if i == leaves_num - 1 { assert!(is_path_rightmost(&path)) }  //rightmost check
+            else { assert!(!is_path_leftmost(&path)); assert!(!is_path_rightmost(&path)); } // other cases check
+
+            // Serialization/deserialization test
+            let path_size = get_path_size_in_bytes(&path);
+            let mut path_serialized = vec![0u8; path_size];
+            serialize_to_buffer(&path, &mut path_serialized).unwrap();
+            let path_deserialized: GingerMHTPath = deserialize_from_buffer(&path_serialized).unwrap();
+            assert_eq!(path, path_deserialized);
+        }
+    }
+
+    #[test]
+    fn sample_restore_merkle_tree() {
         let expected_root = FieldElement::new(
             BigInteger768([
                 1174313500572535251,

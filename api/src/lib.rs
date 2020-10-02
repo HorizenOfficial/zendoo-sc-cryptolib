@@ -101,10 +101,11 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCre
     // used, but still needs to have
     // an argument slot
     _class: JClass,
+    _seed: jlong,
 ) -> jobject
 {
     //Create random field element
-    let fe = get_random_field_element();
+    let fe = get_random_field_element(_seed as u64);
 
     //Return field element
     let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(fe)) as i64);
@@ -893,6 +894,142 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerifyWithoutLengthCheck(
+    _env: JNIEnv,
+    _path: JObject,
+    _leaf: JObject,
+    _root: JObject,
+) -> jboolean
+{
+    let leaf = {
+
+        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let root = {
+
+        let fe =_env.get_field(_root, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    match verify_ginger_merkle_path_without_length_check(path, leaf, root) {
+        Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
+        Err(_) => JNI_FALSE // CRYPTO_ERROR
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsLeftmost(
+    _env: JNIEnv,
+    _path: JObject,
+) -> jboolean
+{
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    is_path_leftmost(path) as jboolean
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsRightmost(
+    _env: JNIEnv,
+    _path: JObject,
+) -> jboolean
+{
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    is_path_rightmost(path) as jboolean
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeLeafIndex(
+    _env: JNIEnv,
+    _path: JObject,
+) -> jlong
+{
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    get_leaf_index_from_path(path) as jlong
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeSerialize(
+    _env: JNIEnv,
+    _path: JObject,
+) -> jbyteArray
+{
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    let path_bytes_len = get_path_size_in_bytes(path);
+    let mut path_bytes = vec![0u8; path_bytes_len];
+    serialize_to_buffer(path, path_bytes.as_mut_slice())
+        .expect("Unable to write Merkle Path to buffer");
+
+    _env.byte_array_from_slice(path_bytes.as_ref())
+        .expect("Cannot write Merkle Path to jbyteArray.")
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeDeserialize(
+    _env: JNIEnv,
+    _class: JClass,
+    _path_bytes: jbyteArray,
+) -> jobject
+{
+    let path_bytes = _env.convert_byte_array(_path_bytes)
+        .expect("Should be able to convert to Rust byte array");
+
+    let path_ptr: *const GingerMHTPath = deserialize_to_raw_pointer(path_bytes.as_slice());
+
+    let path: jlong = jlong::from(path_ptr as i64);
+
+    let path_class = _env.find_class("com/horizen/merkletreenative/MerklePath")
+        .expect("Cannot find MerklePath class.");
+
+    let path_object = _env.new_object(path_class, "(J)V",
+                                    &[JValue::Long(path)])
+        .expect("Cannot create MerklePath object.");
+
+    *path_object
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeFreeMerklePath(
     _env: JNIEnv,
     _class: JClass,
@@ -1262,6 +1399,23 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeGet
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeFlush(
+    _env: JNIEnv,
+    _tree: JObject,
+)
+{
+    let tree = {
+
+        let t =_env.get_field(_tree, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut GingerSMT)
+    };
+
+    flush_ginger_smt(tree)
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeFreeMerkleTree(
     _env: JNIEnv,
     _class: JClass,
@@ -1513,6 +1667,23 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativ
     _env.new_object(path_class, "(J)V", &[JValue::Long(path_ptr)])
         .expect("Cannot create MerklePath object.")
         .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeFlush(
+    _env: JNIEnv,
+    _tree: JObject,
+)
+{
+    let tree = {
+
+        let t =_env.get_field(_tree, "lazyMerkleTreePointer", "J")
+            .expect("Should be able to get field lazyMerkleTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut LazyGingerSMT)
+    };
+
+    flush_lazy_ginger_smt(tree)
 }
 
 #[no_mangle]

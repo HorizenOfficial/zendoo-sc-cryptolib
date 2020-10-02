@@ -17,53 +17,31 @@ import static org.junit.Assert.*;
 
 public class MerkleTreeTest {
 
-    static long[] positions = { 256L, 46L, 373L, 261L, 360L, 462L, 409L, 245L };
-    static int height = 9;
+    static long[] positions = { 458L, 478L, 161L, 0L, 291L, 666L, 313L, 532L };
+    static int height = 10;
     static int numLeaves = 8;
     List<FieldElement> leaves;
 
     static byte[] expectedRootBytes = {
-        118, -113, -72, 105, 101, -50, 88, 52, -117, -107, -71, -27, -41, -44, 72, -90, 28, -51, 78, 16, -118, -20, 7,
-        -33, -122, 118, 54, -2, -17, 26, 97, 122, -19, -111, 76, 10, 98, -60, -85, 22, -114, -93, -22, 104, -39, -11,
-        91, 101, -97, 64, -23, 55, -84, -49, 61, 22, -34, -77, 89, 16, -50, -120, 9, -34, -32, 38, -98, 25, -68, -73,
-        -8, 69, 97, 114, -102, -5, 103, -93, 85, -34, -46, 40, -103, 63, 102, 2, -55, -3, -9, -14, -53, 4, -116, -82,
-        1, 0
+            98, 17, 48, -16, 78, -116, -101, -33, -30, -122, -126, -83, -120, 106, -53, 30, -96, -119, 102, -25, 33, -27, -114, -13, -4, -33, 54, 49, -20, 53, 42, 83, 75, 17, -19, -95, -10, 22, -116, -35, 83, -91, -3, -1, 109, 27, -90, 120, 109, 59, 53, -115, -115, 71, -53, -80, 51, -118, 119, 49, -28, -3, -49, 27, -113, -120, 55, 114, -83, 98, -7, 109, 41, 46, -68, -40, -12, 75, -37, -121, 71, -98, 124, -87, -105, -45, 5, -88, 47, -55, -51, -49, -127, 77, 0, 0,
     };
     FieldElement expectedRoot;
 
-    private List<FieldElement> buildLeavesFromHardcodedValues(){
+    private List<FieldElement> buildLeaves(long initialSeed){
         List<FieldElement> leaves = new ArrayList<>();
-        byte[] leaf = new byte[FieldElement.FIELD_ELEMENT_LENGTH];
-        int numLeaves = 8;
-        int readBytes;
 
-        try {
-            ClassLoader classLoader = getClass().getClassLoader();
-            File file = new File(classLoader.getResource("testLeaves").getFile());
-            file.createNewFile();
-            FileInputStream in = new FileInputStream(file);
-
-            int i = 1;
-
-            while ((readBytes = in.read(leaf)) != -1) {
-                FieldElement leafDeserialized = FieldElement.deserialize(leaf);
-                assertNotNull("Leaf " + i + " deserialization must be successfull", leafDeserialized);
-                leaves.add(leafDeserialized);
-                i++;
-            }
-            in.close();
-        } catch (Exception e) {
-            e.printStackTrace();
+        for (int i = 0; i < numLeaves; i++) {
+            FieldElement leaf = FieldElement.createRandom(initialSeed);
+            leaves.add(leaf);
+            initialSeed += 1;
         }
-
-        assertEquals("Must read " + numLeaves + " leaves", numLeaves, leaves.size());
 
         return leaves;
     }
 
     @Before
     public void initTestParams() {
-        leaves = buildLeavesFromHardcodedValues();
+        leaves = buildLeaves(1234567890L);
         expectedRoot = FieldElement.deserialize(expectedRootBytes);
     }
 
@@ -80,15 +58,6 @@ public class MerkleTreeTest {
             smt.addLeaf(leaf, position);
             i++;
         }
-
-        // Verify Merkle paths for each leaf
-        FieldElement tempSmtRoot = smt.root();
-        for (FieldElement leaf: leaves) {
-            MerklePath path = smt.getMerklePath(smt.getPosition(leaf));
-            assertTrue("Merkle Path must be verified", path.verify(height, leaf, tempSmtRoot));
-            path.freeMerklePath();
-        }
-        tempSmtRoot.freeFieldElement();
 
         smt.removeLeaf(positions[0]);
         smt.removeLeaf(positions[numLeaves - 1]);
@@ -107,16 +76,8 @@ public class MerkleTreeTest {
         //Add leaves to BigLazyMerkleTree
         smtLazy.addLeaves(leaves);
 
-        // Verify Merkle paths for each leaf
-        FieldElement tempLazySmtRoot = smtLazy.root();
-        for (FieldElement leaf: leaves) {
-            MerklePath path = smtLazy.getMerklePath(smtLazy.getPosition(leaf));
-            assertTrue("Merkle Path must be verified", path.verify(height, leaf, tempLazySmtRoot));
-            path.freeMerklePath();
-        }
-        tempLazySmtRoot.freeFieldElement();
-
-        long[] leavesToRemove = { 256L, 245L };
+        //Remove leaves from BigLazyMerkleTree
+        long[] leavesToRemove = { 458L, 532L };
         smtLazy.removeLeaves(leavesToRemove);
 
         //Compute root and assert equality with the expected one
@@ -134,7 +95,7 @@ public class MerkleTreeTest {
         List<FieldElement> mhtLeaves = new ArrayList<>();
         //Initialize all leaves to zero
         FieldElement zero = FieldElement.createFromLong(0L);
-        for(int j = 0; j < 512; j++)
+        for(int j = 0; j < 1024; j++)
             mhtLeaves.add(zero);
         //Substitute at positions the correct leaves
         for (int j = 1; j < numLeaves - 1; j++) {
@@ -149,15 +110,8 @@ public class MerkleTreeTest {
         //Finalize the tree
         mht.finalizeTreeInPlace();
 
-        // Verify Merkle paths for each leaf
-        FieldElement mhtRoot = mht.root();
-        for (int j = 1; j < numLeaves - 1; j++) {
-            MerklePath path = mht.getMerklePath((int)positions[j]);
-            assertTrue("Merkle Path must be verified", path.verify(height, leaves.get(j), mhtRoot));
-            path.freeMerklePath();
-        }
-
         //Compute root and assert equality with the expected one
+        FieldElement mhtRoot = mht.root();
         assertEquals("InMemoryOptimizedMerkleTree root is not as expected", mhtRoot, expectedRoot);
 
         //It is the same with finalizeTree()
@@ -171,6 +125,57 @@ public class MerkleTreeTest {
         mhtCopy.freeInMemoryOptimizedMerkleTree();
         mhtRoot.freeFieldElement();
         mhtRootCopy.freeFieldElement();
+    }
+
+    @Test
+    public void testMerklePaths() {
+        List<FieldElement> testLeaves = new ArrayList<>();
+        InMemoryOptimizedMerkleTree mht = InMemoryOptimizedMerkleTree.init(6, numLeaves);
+        int numLeaves = 64;
+
+        // Append leaves to the tree
+        for (int i = 0; i < numLeaves; i ++) {
+            FieldElement leaf = FieldElement.createRandom(i);
+            testLeaves.add(leaf);
+            mht.append(leaf);
+        }
+
+        //Finalize the tree and get the root
+        mht.finalizeTreeInPlace();
+        FieldElement mhtRoot = mht.root();
+
+        for (int i = 0; i < numLeaves; i ++) {
+
+            // Get/Verify Merkle Path
+            MerklePath path = mht.getMerklePath((long)i);
+            assertTrue("Merkle Path must be verified", path.verify(testLeaves.get(i), mhtRoot));
+
+            // Serialization/Deserialization test
+            byte[] merklePathBytes = path.serialize();
+            MerklePath pathDeserialized = MerklePath.deserialize(merklePathBytes);
+            assertTrue("Deserialized Merkle Path must be verified", pathDeserialized.verify(testLeaves.get(i), mhtRoot));
+
+            // isLeftmost() / isRightmost() / leafIndex() test
+            if (i == 0) { assertTrue("Path must be the leftmost", path.isLeftmost()); }
+            else if (i == numLeaves - 1) { assertTrue("Path must be the rightmost", path.isRightmost()); }
+            else {
+                assertFalse("Path must not be the leftmost", path.isLeftmost());
+                assertFalse("Path must not be the rightmost", path.isRightmost());
+            }
+
+            assertEquals("Leaf index computed from path must be correct", i, path.leafIndex());
+
+            // Free paths
+            path.freeMerklePath();
+            pathDeserialized.freeMerklePath();
+        }
+
+        // Free memory
+        mht.freeInMemoryOptimizedMerkleTree();
+        mhtRoot.freeFieldElement();
+        for (FieldElement leaf: testLeaves)
+            leaf.freeFieldElement();
+
     }
 
     @Test

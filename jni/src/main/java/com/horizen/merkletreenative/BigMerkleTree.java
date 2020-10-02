@@ -72,6 +72,15 @@ public class BigMerkleTree implements AutoCloseable {
         return nativeGetMerklePath(leafPosition);
     }
 
+    private native void nativeFlush();
+
+    // Triggers the saving on disk of tree's info
+    public void flush() {
+        if (merkleTreePointer == 0)
+            throw new IllegalStateException("LazyBigMerkleTree instance was freed.");
+        nativeFlush();
+    }
+
     private static native void nativeFreeMerkleTree(long merkleTreePointer);
 
     // Free Rust memory from MerkleTree
