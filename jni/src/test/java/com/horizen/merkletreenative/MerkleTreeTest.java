@@ -54,6 +54,7 @@ public class MerkleTreeTest {
         for (FieldElement leaf: leaves) {
             long position = smt.getPosition(leaf);
             assertEquals("Computed position for leaf " + i + " is not the expected one", positions[i], position);
+            assertEquals("Positions must be the same", position, BigMerkleTree.getPosition(leaf, height));
             assertTrue("Position must be empty", smt.isPositionEmpty(position));
             smt.addLeaf(leaf, position);
             i++;
@@ -72,6 +73,16 @@ public class MerkleTreeTest {
 
         //Get BigLazyMerkleTree
         BigLazyMerkleTree smtLazy = BigLazyMerkleTree.init(height, "./state_big_lazy", "./db_big_lazy", "./cache_big_lazy");
+
+        //Check leaves position also for BigLazyMerkleTree
+        i = 0;
+        for (FieldElement leaf: leaves) {
+            long position = smtLazy.getPosition(leaf);
+            assertEquals("Computed position for leaf " + i + " is not the expected one", positions[i], position);
+            assertEquals("Positions must be the same", position, BigLazyMerkleTree.getPosition(leaf, height));
+            assertTrue("Position must be empty", smtLazy.isPositionEmpty(position));
+            i++;
+        }
 
         //Add leaves to BigLazyMerkleTree
         smtLazy.addLeaves(leaves);

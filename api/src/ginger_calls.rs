@@ -502,7 +502,7 @@ pub type GingerSMT = BigMerkleTree<GingerMerkleTreeParameters>;
 // parameter that allows to re-compute a new position for it, possibly multiple times.
 // Therefore, it is advisable to minimize the risk of having collisions,or to handle
 // them
-fn leaf_to_index(leaf: &FieldElement, height: usize) -> u64 {
+pub fn leaf_to_index(leaf: &FieldElement, height: usize) -> u64 {
 
     // Convert field element to bits
     let bits = leaf.write_bits();
