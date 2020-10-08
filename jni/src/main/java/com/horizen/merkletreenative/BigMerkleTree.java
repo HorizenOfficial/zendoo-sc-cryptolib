@@ -25,11 +25,18 @@ public class BigMerkleTree implements AutoCloseable {
 
     private native long nativeGetPosition(FieldElement leaf);
 
-    // Returns the position to which insert the leaf
+    // Returns the position to which insert the leaf given the leaf and the tree
     public long getPosition(FieldElement leaf) {
         if (merkleTreePointer == 0)
             throw new IllegalStateException("BigMerkleTree instance was freed.");
         return nativeGetPosition(leaf);
+    }
+
+    private static native long nativeGetAbsolutePosition(FieldElement leaf, int height);
+
+    // Returns the position to which insert the leaf given the leaf and the height of the tree
+    public static long getPosition(FieldElement leaf, int height) {
+        return nativeGetAbsolutePosition(leaf, height);
     }
 
     private native boolean nativeIsPositionEmpty(long position);

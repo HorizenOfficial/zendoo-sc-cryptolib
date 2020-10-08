@@ -34,6 +34,13 @@ public class BigLazyMerkleTree implements AutoCloseable {
         return nativeGetPosition(leaf);
     }
 
+    private static native long nativeGetAbsolutePosition(FieldElement leaf, int height);
+
+    // Returns the position to which insert the leaf given the leaf and the height of the tree
+    public static long getPosition(FieldElement leaf, int height) {
+        return nativeGetAbsolutePosition(leaf, height);
+    }
+
     private native boolean nativeIsPositionEmpty(long position);
 
     public boolean isPositionEmpty(long position){
