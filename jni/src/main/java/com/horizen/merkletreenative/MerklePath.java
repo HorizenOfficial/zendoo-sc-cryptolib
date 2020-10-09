@@ -33,6 +33,15 @@ public class MerklePath implements AutoCloseable {
         return nativeVerifyWithoutLengthCheck(leaf, root);
     }
 
+    private native FieldElement nativeApply(FieldElement leaf);
+
+    // TEMPORARY: Use this Merkle Path and the leaf to compute the root.
+    public FieldElement apply(FieldElement leaf) {
+        if (merklePathPointer == 0)
+            throw new IllegalStateException("MerklePath instance was freed.");
+        return nativeApply(leaf);
+    }
+
     private native boolean nativeIsLeftmost();
 
     public boolean isLeftmost() {

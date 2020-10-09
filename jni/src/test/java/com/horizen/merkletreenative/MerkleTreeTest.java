@@ -176,6 +176,11 @@ public class MerkleTreeTest {
 
             assertEquals("Leaf index computed from path must be correct", i, path.leafIndex());
 
+            // apply() test
+            FieldElement rootComputed = path.apply(testLeaves.get(i));
+            assertEquals("Root computed out of Merkle Path must be the same", rootComputed, mhtRoot);
+            rootComputed.freeFieldElement();
+
             // Free paths
             path.freeMerklePath();
             pathDeserialized.freeMerklePath();

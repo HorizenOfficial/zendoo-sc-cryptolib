@@ -443,6 +443,30 @@ pub fn get_path_size_in_bytes(path: &GingerMHTPath) -> usize {
     ((1 + FIELD_SIZE) * path.get_length()) + 1
 }
 
+pub fn apply(path: &GingerMHTPath, leaf: &FieldElement) -> FieldElement
+{
+    let mut digest = FieldHash::init(None);
+    let mut prev_node = *leaf;
+    for &(sibling, direction) in path.get_raw_path().as_slice() {
+
+        // Choose left and right hash according to direction
+        let (left, right) = if !direction {
+            (prev_node, sibling)
+        } else {
+            (sibling, prev_node)
+        };
+
+        // Compute the parent node
+        prev_node = digest
+            .update(left)
+            .update(right)
+            .finalize();
+
+        digest.reset(None);
+    }
+    prev_node
+}
+
 ////////////OPTIMIZED MERKLE TREE
 
 #[derive(Debug, Clone)]
