@@ -932,6 +932,41 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeApply(
+    _env: JNIEnv,
+    _path: JObject,
+    _leaf: JObject,
+) -> jobject
+{
+    let path = {
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    let leaf = {
+
+        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let root = apply(path, leaf);
+
+    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(root)) as i64);
+
+    let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Should be able to find FieldElement class");
+
+    let result = _env.new_object(field_class, "(J)V", &[
+        JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+    *result
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsLeftmost(
     _env: JNIEnv,
     _path: JObject,
