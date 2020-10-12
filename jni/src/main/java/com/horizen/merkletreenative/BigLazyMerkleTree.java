@@ -19,10 +19,10 @@ public class BigLazyMerkleTree implements AutoCloseable {
         this.lazyMerkleTreePointer = lazyMerkleTreePointer;
     }
 
-    private static native BigLazyMerkleTree nativeInit(int height, String statePath, String dbPath, String cachePath);
+    private static native BigLazyMerkleTree nativeInit(int height, String dbPath);
 
-    public static BigLazyMerkleTree init(int height, String statePath, String dbPath, String cachePath) {
-        return nativeInit(height, statePath, dbPath, cachePath);
+    public static BigLazyMerkleTree init(int height, String dbPath) {
+        return nativeInit(height, dbPath);
     }
 
     private native long nativeGetPosition(FieldElement leaf);

@@ -5,7 +5,7 @@ authors = ["DanieleDiBenedetto <daniele@horizenlabs.io>"]
 edition = "2018"
 
 [dependencies]
-algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", rev = "b9280b2f13fd8694475de66da67160bb15d7d555"}
-primitives = {version = "0.1.0", features = ["vrf"], git = "https://github.com/ZencashOfficial/ginger-lib.git", rev = "b9280b2f13fd8694475de66da67160bb15d7d555"}
+algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
+primitives = {version = "0.1.0", features = ["vrf"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
 rand = { version = "0.7" }
 

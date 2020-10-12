@@ -17,10 +17,10 @@ public class BigMerkleTree implements AutoCloseable {
         this.merkleTreePointer = merkleTreePointer;
     }
 
-    private static native BigMerkleTree nativeInit(int height, String statePath, String dbPath, String cachePath);
+    private static native BigMerkleTree nativeInit(int height, String dbPath);
 
-    public static BigMerkleTree init(int height, String statePath, String dbPath, String cachePath) {
-        return nativeInit(height, statePath, dbPath, cachePath);
+    public static BigMerkleTree init(int height, String dbPath) {
+        return nativeInit(height, dbPath);
     }
 
     private native long nativeGetPosition(FieldElement leaf);

@@ -1001,6 +1001,23 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsRigh
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsNonEmptyRightmost(
+    _env: JNIEnv,
+    _path: JObject,
+) -> jboolean
+{
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    is_path_non_empty_rightmost(path) as jboolean
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeLeafIndex(
     _env: JNIEnv,
     _path: JObject,
@@ -1257,29 +1274,17 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeIni
     _env: JNIEnv,
     _class: JClass,
     _height: jint,
-    _state_path: JString,
     _db_path: JString,
-    _cache_path: JString
 ) -> jobject
 {
-    // Read state_path
-    let state_path = _env.get_string(_state_path)
-        .expect("Should be able to read jstring as Rust String");
-
     // Read db_path
     let db_path = _env.get_string(_db_path)
-        .expect("Should be able to read jstring as Rust String");
-
-    // Read cache_path
-    let cache_path =_env.get_string(_cache_path)
         .expect("Should be able to read jstring as Rust String");
 
     // Create new BigMerkleTree Rust side
     let mt = get_ginger_smt(
         _height as usize,
-        state_path.to_str().unwrap(),
         db_path.to_str().unwrap(),
-        cache_path.to_str().unwrap()
     ).expect("Should be able to create new BigMerkleTree");
 
     // Create and return new BigMerkleTree Java side
@@ -1501,29 +1506,17 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativ
     _env: JNIEnv,
     _class: JClass,
     _height: jint,
-    _state_path: JString,
     _db_path: JString,
-    _cache_path: JString
 ) -> jobject
 {
-    // Read state_path
-    let state_path = _env.get_string(_state_path)
-        .expect("Should be able to read jstring as Rust String");
-
     // Read db_path
     let db_path = _env.get_string(_db_path)
-        .expect("Should be able to read jstring as Rust String");
-
-    // Read cache_path
-    let cache_path =_env.get_string(_cache_path)
         .expect("Should be able to read jstring as Rust String");
 
     // Create new BigLazyMerkleTree Rust side
     let mt = get_lazy_ginger_smt(
         _height as usize,
-        state_path.to_str().unwrap(),
         db_path.to_str().unwrap(),
-        cache_path.to_str().unwrap()
     ).expect("Should be able to create new BigLazyMerkleTree");
 
     // Create and return new BigLazyMerkleTree Java side

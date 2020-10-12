@@ -49,7 +49,7 @@ public class MerkleTreeTest {
     public void testMerkleTrees() {
 
         //Get BigMerkleTree
-        BigMerkleTree smt = BigMerkleTree.init(height, "./state_big", "./db_big", "./cache_big");
+        BigMerkleTree smt = BigMerkleTree.init(height, "./db_big");
         int i = 0;
         for (FieldElement leaf: leaves) {
             long position = smt.getPosition(leaf);
@@ -72,7 +72,7 @@ public class MerkleTreeTest {
         smtRoot.freeFieldElement();
 
         //Get BigLazyMerkleTree
-        BigLazyMerkleTree smtLazy = BigLazyMerkleTree.init(height, "./state_big_lazy", "./db_big_lazy", "./cache_big_lazy");
+        BigLazyMerkleTree smtLazy = BigLazyMerkleTree.init(height, "./db_big_lazy");
 
         //Check leaves position also for BigLazyMerkleTree
         i = 0;
@@ -145,10 +145,14 @@ public class MerkleTreeTest {
         int numLeaves = 64;
 
         // Append leaves to the tree
-        for (int i = 0; i < numLeaves; i ++) {
+        for (int i = 0; i < numLeaves/2; i ++) {
             FieldElement leaf = FieldElement.createRandom(i);
             testLeaves.add(leaf);
             mht.append(leaf);
+        }
+        for (int i = numLeaves/2; i < numLeaves; i ++) {
+            FieldElement leaf = FieldElement.createFromLong(0L);
+            testLeaves.add(leaf);
         }
 
         //Finalize the tree and get the root
@@ -166,12 +170,22 @@ public class MerkleTreeTest {
             MerklePath pathDeserialized = MerklePath.deserialize(merklePathBytes);
             assertTrue("Deserialized Merkle Path must be verified", pathDeserialized.verify(testLeaves.get(i), mhtRoot));
 
-            // isLeftmost() / isRightmost() / leafIndex() test
-            if (i == 0) { assertTrue("Path must be the leftmost", path.isLeftmost()); }
-            else if (i == numLeaves - 1) { assertTrue("Path must be the rightmost", path.isRightmost()); }
-            else {
+            if (i == 0) { // leftmost check
+                assertTrue("Path must be the leftmost", path.isLeftmost());
+            }
+            else if (i == (numLeaves / 2) - 1) { // non-empty rightmost check
+                assertTrue("Path must be the non-empty rightmost", path.isNonEmptyRightmost());
+            }
+            else if (i == numLeaves - 1) { //rightmost check
+                assertTrue("Path must be the rightmost", path.isRightmost());
+            }
+            else { // Other cases check
                 assertFalse("Path must not be the leftmost", path.isLeftmost());
                 assertFalse("Path must not be the rightmost", path.isRightmost());
+
+                if (i < (numLeaves / 2) - 1) {
+                    assertFalse("Path must not be the non-empty rightmost", path.isNonEmptyRightmost());
+                }
             }
 
             assertEquals("Leaf index computed from path must be correct", i, path.leafIndex());
@@ -195,10 +209,30 @@ public class MerkleTreeTest {
     }
 
     @Test
+    public void testNonEmptyRightmost() {
+        InMemoryOptimizedMerkleTree mht = InMemoryOptimizedMerkleTree.init(6, numLeaves);
+        int numLeaves = 64;
+
+        // Generate random leaves
+        for (int i = 0; i < numLeaves; i ++) {
+            FieldElement leaf = FieldElement.createRandom(i);
+            mht.append(leaf);
+
+            InMemoryOptimizedMerkleTree mhtCopy = mht.finalizeTree();
+            MerklePath path = mhtCopy.getMerklePath((long)i);
+            assertTrue(path.isNonEmptyRightmost());
+
+            leaf.freeFieldElement();
+            path.freeMerklePath();
+            mhtCopy.freeInMemoryOptimizedMerkleTree();
+        }
+    }
+
+    @Test
     public void testBigMerkleTreePersistency() {
 
         //Create a BigMerkleTree
-        BigMerkleTree smt = BigMerkleTree.init(height, "./state_big_persistency", "./db_big_persistency", "./cache_big_persistency");
+        BigMerkleTree smt = BigMerkleTree.init(height, "./db_big_persistency");
         for(int i = 0; i < leaves.size(); i++){
             smt.addLeaf(leaves.get(i), positions[i]);
         }
@@ -207,17 +241,12 @@ public class MerkleTreeTest {
         smt.freeMerkleTree();
 
         // Check data have been saved
-        File f = new File("./state_big_persistency");
-        assertTrue("State has not been saved", f.exists());
 
-        f = new File("./db_big_persistency");
+        File f = new File("./db_big_persistency");
         assertTrue("DB has not been saved", f.exists());
 
-        f = new File("./cache_big_persistency");
-        assertTrue("Cache has not been saved", f.exists());
-
         //Restore Merkle Tree
-        smt = BigMerkleTree.init(height, "./state_big_persistency", "./db_big_persistency", "./cache_big_persistency");
+        smt = BigMerkleTree.init(height, "./db_big_persistency");
 
         //Remove some leaves
         smt.removeLeaf(positions[0]);
@@ -233,21 +262,16 @@ public class MerkleTreeTest {
         smtRoot.freeFieldElement();
 
         // Check data have been destroyed
-        f = new File("./state_big_persistency");
-        assertTrue("State has not been destroyed", !f.exists());
 
         f = new File("./db_big_persistency");
         assertTrue("DB has not been destroyed", !f.exists());
-
-        f = new File("./cache_big_persistency");
-        assertTrue("Cache has not been destroyed", !f.exists());
     }
 
     @Test
     public void testBigLazyMerkleTreePersistency() {
 
         //Create a BigLazyMerkleTree
-        BigLazyMerkleTree lazySmt = BigLazyMerkleTree.init(height, "./state_big_lazy_persistency", "./db_big_lazy_persistency", "./cache_big_lazy_persistency");
+        BigLazyMerkleTree lazySmt = BigLazyMerkleTree.init(height, "./db_big_lazy_persistency");
 
         // Add some leaves
         lazySmt.addLeaves(leaves);
@@ -256,17 +280,12 @@ public class MerkleTreeTest {
         lazySmt.freeLazyMerkleTree();
 
         // Check data have been saved
-        File f = new File("./state_big_lazy_persistency");
-        assertTrue("State has not been saved", f.exists());
 
-        f = new File("./db_big_lazy_persistency");
+        File f = new File("./db_big_lazy_persistency");
         assertTrue("DB has not been saved", f.exists());
 
-        f = new File("./cache_big_lazy_persistency");
-        assertTrue("Cache has not been saved", f.exists());
-
         //Restore Merkle Tree
-        lazySmt = BigLazyMerkleTree.init(height, "./state_big_lazy_persistency", "./db_big_lazy_persistency", "./cache_big_lazy_persistency");
+        lazySmt = BigLazyMerkleTree.init(height, "./db_big_lazy_persistency");
 
         //Remove some leaves
         long[] toRemove = { positions[0], positions[numLeaves - 1] };
@@ -282,14 +301,8 @@ public class MerkleTreeTest {
         lazySmtRoot.freeFieldElement();
 
         // Check data have been destroyed
-        f = new File("./state_big_lazy_persistency");
-        assertTrue("State has not been destroyed", !f.exists());
-
         f = new File("./db_big_lazy_persistency");
         assertTrue("DB has not been destroyed", !f.exists());
-
-        f = new File("./cache_big_lazy_persistency");
-        assertTrue("Cache has not been destroyed", !f.exists());
     }
 
     @After

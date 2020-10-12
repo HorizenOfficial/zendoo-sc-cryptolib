@@ -435,6 +435,8 @@ pub fn is_path_rightmost(path: &GingerMHTPath) -> bool {
     path.is_rightmost()
 }
 
+pub fn is_path_non_empty_rightmost(path: &GingerMHTPath) -> bool { path.is_non_empty_rightmost() }
+
 pub fn get_leaf_index_from_path(path: &GingerMHTPath) -> u64 {
     path.leaf_index() as u64
 }
@@ -539,37 +541,33 @@ pub fn leaf_to_index(leaf: &FieldElement, height: usize) -> u64 {
     position
 }
 
-pub fn get_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error>{
+pub fn get_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>{
 
     // If at least the leaves database is available, we can restore the tree
     if Path::new(db_path).exists() {
-        restore_ginger_smt(height, state_path, db_path, cache_path)
+        restore_ginger_smt(height, db_path)
     } else { // Otherwise we need to create a new tree
-        new_ginger_smt(height, state_path, db_path, cache_path)
+        new_ginger_smt(height, db_path)
     }
 }
 
-fn new_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error> {
+fn new_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error> {
     match GingerSMT::new(
         height,
         true,
-        Some(state_path.to_owned()),
         db_path.to_owned(),
-        cache_path.to_owned()
     ) {
         Ok(tree) => Ok(tree),
         Err(e) => Err(Box::new(e))
     }
 }
 
-fn restore_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<GingerSMT, Error>
+fn restore_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>
 {
-    match GingerSMT::load(
+    match GingerSMT::load_batch::<GingerMerkleTreeParameters>(
         height,
         true,
-        state_path.to_owned(),
         db_path.to_owned(),
-        cache_path.to_owned()
     ) {
         Ok(tree) => Ok(tree),
         Err(e) => Err(Box::new(e))
@@ -614,37 +612,33 @@ pub fn get_ginger_smt_path(tree: &mut GingerSMT, leaf_position: u64) -> GingerMH
 pub type LazyGingerSMT = LazyBigMerkleTree<GingerMerkleTreeParameters>;
 type GingerLeaf = OperationLeaf<FieldElement>;
 
-pub fn get_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error>{
+pub fn get_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error>{
 
     // If at least the leaves database is available, we can restore the tree
     if Path::new(db_path).exists() {
-        restore_lazy_ginger_smt(height, state_path, db_path, cache_path)
+        restore_lazy_ginger_smt(height, db_path)
     } else { // Otherwise we need to create a new tree
-        new_lazy_ginger_smt(height, state_path, db_path, cache_path)
+        new_lazy_ginger_smt(height, db_path)
     }
 }
 
-fn new_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error> {
+fn new_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error> {
     match LazyGingerSMT::new(
         height,
         true,
-        Some(state_path.to_owned()),
         db_path.to_owned(),
-        cache_path.to_owned()
     ) {
         Ok(tree) => Ok(tree),
         Err(e) => Err(Box::new(e))
     }
 }
 
-fn restore_lazy_ginger_smt(height: usize, state_path: &str, db_path: &str, cache_path: &str) -> Result<LazyGingerSMT, Error>
+fn restore_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error>
 {
     match LazyGingerSMT::load(
         height,
         true,
-        state_path.to_owned(),
         db_path.to_owned(),
-        cache_path.to_owned()
     ) {
         Ok(tree) => Ok(tree),
         Err(e) => Err(Box::new(e))
@@ -913,9 +907,7 @@ mod test {
         // Get GingerSMT
         let mut smt = get_ginger_smt(
             height,
-            "./temp_state",
             "./temp_db",
-            "./temp_cache",
         ).unwrap();
 
         // Add leaves to GingerSMT in different positions
@@ -945,9 +937,7 @@ mod test {
         // Get LazyGingerSMT
         let mut lazy_smt = get_lazy_ginger_smt(
             height,
-            "./temp_state_lazy",
             "./temp_db_lazy",
-            "./temp_cache_lazy",
         ).unwrap();
 
         // No conflicts here because we ensured each leaf to fall in a different position
@@ -981,7 +971,7 @@ mod test {
 
     #[test]
     fn sample_calls_merkle_path() {
-        let height = 5;
+        let height = 6;
         let leaves_num = 2usize.pow(height as u32);
 
         // Get GingerMHT
@@ -989,10 +979,13 @@ mod test {
 
         // Add leaves
         let mut mht_leaves = Vec::with_capacity(leaves_num);
-        for i in 0..leaves_num {
+        for i in 0..leaves_num/2 {
             let leaf = get_random_field_element(i as u64);
             mht_leaves.push(leaf);
             append_leaf_to_ginger_mht(&mut mht, &leaf);
+        }
+        for _ in leaves_num/2..leaves_num {
+            mht_leaves.push(FieldElement::zero());
         }
 
         // Compute the root
@@ -1008,9 +1001,23 @@ mod test {
             // Check leaf index is the correct one
             assert_eq!(i as u64, get_leaf_index_from_path(&path));
 
-            if i == 0 { assert!(is_path_leftmost(&path)); } // leftmost check
-            else if i == leaves_num - 1 { assert!(is_path_rightmost(&path)) }  //rightmost check
-            else { assert!(!is_path_leftmost(&path)); assert!(!is_path_rightmost(&path)); } // other cases check
+            if i == 0 { // leftmost check
+                assert!(is_path_leftmost(&path));
+            }
+            else if i == (leaves_num / 2) - 1 { // non-empty rightmost check
+                assert!(is_path_non_empty_rightmost(&path));
+            }
+            else if i == leaves_num - 1 { //rightmost check
+                assert!(is_path_rightmost(&path));
+            }
+            else { // Other cases check
+                assert!(!is_path_leftmost(&path));
+                assert!(!is_path_rightmost(&path));
+
+                if i < (leaves_num / 2) - 1 {
+                    assert!(!is_path_non_empty_rightmost(&path));
+                }
+            }
 
             // Serialization/deserialization test
             let path_size = get_path_size_in_bytes(&path);
@@ -1045,9 +1052,7 @@ mod test {
         {
             let mut smt = get_ginger_smt(
                 height,
-                "./persistency_test_info",
                 "./db_leaves_persistency_test_info",
-                "./db_cache_persistency_test_info"
             ).unwrap();
 
             //Insert some leaves in the tree
@@ -1060,17 +1065,13 @@ mod test {
         }
 
         // files and directories should have been created
-        assert!(Path::new("./persistency_test_info").exists());
         assert!(Path::new("./db_leaves_persistency_test_info").exists());
-        assert!(Path::new("./db_cache_persistency_test_info").exists());
 
         // create a non-persistent smt in another scope by restoring the previous one
         {
             let mut smt = get_ginger_smt(
                 height,
-                "./persistency_test_info",
                 "./db_leaves_persistency_test_info",
-                "./db_cache_persistency_test_info"
             ).unwrap();
 
             // insert other leaves
@@ -1090,9 +1091,7 @@ mod test {
         }
 
         // files and directories should have been deleted
-        assert!(!Path::new("./persistency_test_info").exists());
         assert!(!Path::new("./db_leaves_persistency_test_info").exists());
-        assert!(!Path::new("./db_cache_persistency_test_info").exists());
     }
 
     #[test]
