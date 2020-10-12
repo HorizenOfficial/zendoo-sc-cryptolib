@@ -6,12 +6,12 @@ edition = "2018"
 include = ["Cargo.toml", "src"]
 
 [dependencies]
-algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-primitives = {version = "0.1.0", features = ["signature"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-r1cs-crypto = {version = "0.1.0", features = ["signature"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-r1cs-core = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-r1cs-std = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
+algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", rev = "b9280b2f13fd8694475de66da67160bb15d7d555"}
+primitives = {version = "0.1.0", features = ["signature"], git = "https://github.com/ZencashOfficial/ginger-lib.git", rev = "b9280b2f13fd8694475de66da67160bb15d7d555"}
+r1cs-crypto = {version = "0.1.0", features = ["signature"], git = "https://github.com/ZencashOfficial/ginger-lib.git", rev = "b9280b2f13fd8694475de66da67160bb15d7d555"}
+r1cs-core = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", rev = "b9280b2f13fd8694475de66da67160bb15d7d555"}
+r1cs-std = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", rev = "b9280b2f13fd8694475de66da67160bb15d7d555"}
+proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/ZencashOfficial/ginger-lib.git", rev = "b9280b2f13fd8694475de66da67160bb15d7d555"}
 
 derivative = "1"
 lazy_static = "1"

@@ -7,9 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-primitives = {version = "0.1.0", features = ["smt", "signature", "vrf"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
+algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", rev = "b9280b2f13fd8694475de66da67160bb15d7d555"}
+primitives = {version = "0.1.0", features = ["smt", "signature", "vrf"], git = "https://github.com/ZencashOfficial/ginger-lib.git", rev = "b9280b2f13fd8694475de66da67160bb15d7d555"}
+proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/ZencashOfficial/ginger-lib.git", rev = "b9280b2f13fd8694475de66da67160bb15d7d555"}
 
 ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
