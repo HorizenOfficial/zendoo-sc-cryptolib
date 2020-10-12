@@ -58,6 +58,24 @@ public class MerklePath implements AutoCloseable {
         return nativeIsRightmost();
     }
 
+    private native boolean nativeIsNonEmptyRightmost();
+
+    /*
+     * Returns true if `self` is a Merkle Path for the righmost non-empty leaf of the Merkle Tree
+     * (e.g. the leaf which is not physically in the rightmost position of the tree, but it's
+     * followed by all empty leaves).
+     * Assumptions:
+     * 1) Append-only Merkle Tree;
+     * 2) Precomputed empty nodes are specified;
+     * 3) Not to be called on Merkle Path corresponding to an empty leaf.
+     *
+     */
+    public boolean isNonEmptyRightmost() {
+        if (merklePathPointer == 0)
+            throw new IllegalStateException("MerklePath instance was freed.");
+        return nativeIsNonEmptyRightmost();
+    }
+
     private native long nativeLeafIndex();
 
     public long leafIndex() {
