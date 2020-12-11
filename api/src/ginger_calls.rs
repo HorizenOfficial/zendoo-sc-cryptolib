@@ -5,7 +5,7 @@ use algebra::{fields::{
     mnt6753::{
         G1Projective as GroupProjective, G1Affine as GroupAffine
     },
-}, FromBytes, ToBytes, BigInteger768, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits, Field};
+}, FromBytes, ToBytes, BigInteger768, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits};
 use primitives::{crh::{
     poseidon::{
         MNT4PoseidonHash,
@@ -46,8 +46,6 @@ use std::{
     fs::File, io::Result as IoResult, path::Path
 };
 use lazy_static::*;
-use jni::descriptors::Desc;
-use std::borrow::{Borrow, BorrowMut};
 
 pub type FieldElement = Fr;
 
