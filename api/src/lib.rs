@@ -9,6 +9,8 @@ use std::panic;
 mod ginger_calls;
 use ginger_calls::*;
 
+mod zenbox_smt;
+use zenbox_smt::*;
 
 fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
     assert!(!input.is_null());
