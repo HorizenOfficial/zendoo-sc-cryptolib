@@ -4,6 +4,7 @@ use algebra::UniformRand;
 use rand::rngs::OsRng;
 
 pub mod bitvector_smt;
+pub mod jni_calls;
 
 pub struct ZenBoxSMT{
     state_smt: GingerSMT,
@@ -14,16 +15,19 @@ pub struct ZenBoxSMT{
 const BVT_PATH_SUFFIX: &str = "_bvt";
 
 pub fn get_zenbox_smt(state_height: usize, db_path: &str) -> Result<ZenBoxSMT, Error> {
-    assert!(state_height > BVT_LEAF_SIZE_LOG2);
-    // Bitvector needs BVT_LEAF_SIZE times lesser capacity of MT than State
-    let bvt_height = state_height - BVT_LEAF_SIZE_LOG2;
-    Ok(
-        ZenBoxSMT{
-            state_smt: get_ginger_smt(state_height, db_path)?,
-            bitvector_smt: get_bvt(bvt_height, &(db_path.to_owned() + BVT_PATH_SUFFIX))?,
-            base_path: db_path.to_owned()
-        }
-    )
+    if state_height > BVT_LEAF_SIZE_LOG2 {
+        // Bitvector needs BVT_LEAF_SIZE times lesser capacity of MT than State
+        let bvt_height = state_height - BVT_LEAF_SIZE_LOG2;
+        Ok(
+            ZenBoxSMT{
+                state_smt: get_ginger_smt(state_height, db_path)?,
+                bitvector_smt: get_bvt(bvt_height, &(db_path.to_owned() + BVT_PATH_SUFFIX))?,
+                base_path: db_path.to_owned()
+            }
+        )
+    } else {
+        Err("Height should be bigger than BVT_LEAF_SIZE_LOG2".into())
+    }
 }
 
 // Just removing existing BVT and creating the new empty one at the same filesystem location
