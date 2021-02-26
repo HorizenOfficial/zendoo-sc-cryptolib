@@ -172,17 +172,18 @@ pub fn compress_bitvector(bitvector: &Vec<u8>) -> BitVector
             }
             if list_pos.len() > ((1 << LEAF_BIT_COUNTER_LEN) - 2)
             {
-                //invece dell'RLE encoding, aggiungo le posizioni con un terminator a 255
+                //add position list with terminator "255"
                 if list_pos.len() < 32
                 {
                     n_stats_code_listval+=1;
                     //write code 
                     bitvect_compressed.append_bits((1 << LEAF_BIT_COUNTER_LEN) - 2, LEAF_BIT_COUNTER_LEN as u32);
-                    //write out all the rle counts, 8 bits per count
+                    //write out all the positions, 8 bits per position
                     for i in 0..list_pos.len()
                     {
                         bitvect_compressed.append_bits(list_pos[i] as u32, 8);
                     }
+                    //write out the terminator code
                     bitvect_compressed.append_bits(255, 8);
                 }
                 else //write 32 bytes bitmask
