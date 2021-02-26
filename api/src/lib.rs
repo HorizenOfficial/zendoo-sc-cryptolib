@@ -8,6 +8,8 @@ use std::panic;
 
 mod ginger_calls;
 use ginger_calls::*;
+mod zip_bitvector;
+//use zip_bitvector::*;
 
 
 fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
