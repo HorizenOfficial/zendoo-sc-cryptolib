@@ -1,10 +1,11 @@
 pub const BITVECTOR_SIZE:usize = 4000000;
-pub const BTV_LEAF_SIZE:usize =  253;
+pub const BTV_LEAF_SIZE:usize =  253;   //n.b. current leaf size limit is 254 bits
 pub const BTV_TREE_DEPTH:usize =  14;
 pub const LEAF_BIT_COUNTER_LEN:usize =  2;
 
 use std::fs;
 use std::io::Read;
+//use std::io::Write; 
 
 #[derive(Default)]
 pub struct BitVector {
@@ -107,6 +108,7 @@ pub fn compress_bitvector(bitvector: &Vec<u8>) -> BitVector
     let mut mask:i32;
     let n_bv_size:usize=bitvector.len();
     assert!(n_bv_size*8==BITVECTOR_SIZE);
+    assert!(BITVECTOR_SIZE<(usize::pow(2,BTV_TREE_DEPTH as u32)*BTV_LEAF_SIZE));
     while n_curr_pos_byte < n_bv_size
     {
         //looking for the first active bit
@@ -260,7 +262,7 @@ pub fn decompress_bitvector(bitvector: &Vec<u8>) -> BitVector
     while n_curr_pos < ((n_bv_size-1) * 8)
     {
 
-        assert!((bitvect_decompressed.get_current_bits_size() % 253) == 0);
+        assert!((bitvect_decompressed.get_current_bits_size() % BTV_LEAF_SIZE as u32) == 0);
 
         //check the first bit
         if ((bitvector[n_curr_pos / 8] << (n_curr_pos % 8)) & 0b10000000) == 0
@@ -275,7 +277,7 @@ pub fn decompress_bitvector(bitvector: &Vec<u8>) -> BitVector
             mask = ((1 << BTV_TREE_DEPTH) - 1) << (24 - BTV_TREE_DEPTH - (n_curr_pos % 8));
             assert!(n_curr_pos/8<n_bv_size-2);
             n_curr_leaf_num = ((((bitvector[(n_curr_pos / 8)] as i32) << 16) | ((bitvector[(n_curr_pos / 8) + 1] as i32) << 8) | ((bitvector[(n_curr_pos / 8) + 2] as i32))) & (mask as i32)) >> (24 - BTV_TREE_DEPTH - (n_curr_pos % 8));
-            n_curr_pos += 14;
+            n_curr_pos += BTV_TREE_DEPTH;
             for _i in n_last_leaf_num+1..n_curr_leaf_num
             {
                 num_bits_to_append = BTV_LEAF_SIZE as i32;
@@ -482,9 +484,9 @@ mod test
         let bitvector:Vec<u8>;
         //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_10_10.dat"));
         //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_100_100.dat"));   
-        bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_1000_1000.dat"));
+        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_1000_1000.dat"));
         //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_10000_9990.dat"));   
-        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_100000_98810.dat"));  
+        bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_100000_98810.dat"));  
         //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_1000000_884643.dat"));  
         //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_4000000_2525522.dat"));
         
@@ -506,13 +508,12 @@ mod test
                 {
                     if bitvector[i]!=bitvector_uncompressed.bitstream[i]
                     {
-                        println!("first difference found at position {}, leaf {}, values orig:{}, decom: {}",i,i*8/253, bitvector[i],bitvector_uncompressed.bitstream[i]);
+                        println!("first difference found at position {}, leaf {}, values orig:{}, decom: {}",i,i*8/BTV_LEAF_SIZE, bitvector[i],bitvector_uncompressed.bitstream[i]);
                         break;
                     }
                     i+=1;
                 }
             }
-
         }
         else
         {
