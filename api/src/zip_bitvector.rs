@@ -7,6 +7,14 @@ use std::fs;
 use std::io::Read;
 //use std::io::Write; 
 
+use bzip2::Compression;
+use bzip2::read::{BzEncoder, BzDecoder};
+use flate2::Compression as GzipCompression;
+use flate2::write::ZlibEncoder;
+use std::io;
+use std::io::prelude::*;
+
+
 #[derive(Default)]
 pub struct BitVector {
     pub c_last_byte: u8,
@@ -483,10 +491,10 @@ mod test
     {
         let bitvector:Vec<u8>;
         //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_10_10.dat"));
-        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_100_100.dat"));   
+        bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_100_100.dat"));   
         //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_1000_1000.dat"));
         //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_10000_9990.dat"));   
-        bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_100000_98810.dat"));  
+        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_100000_98810.dat"));  
         //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_1000000_884643.dat"));  
         //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_4000000_2525522.dat"));
         
@@ -494,6 +502,7 @@ mod test
         {
             let bitvect_compressed= compress_bitvector(&bitvector);
             println!("Compressed bitvector len: {}",bitvect_compressed.get_size());
+
             let bitvector_uncompressed= decompress_bitvector(&bitvect_compressed.bitstream);
             if bitvector==bitvector_uncompressed.bitstream
             {
@@ -514,6 +523,23 @@ mod test
                     i+=1;
                 }
             }
+
+            let mut compressor= BzEncoder::new(bitvector.as_slice(), bzip2::Compression::best());
+            let mut bzip_compressed=Vec::new();
+            compressor.read_to_end(&mut bzip_compressed);
+            println!("Compressed by bzip2 library, size: {}",bzip_compressed.len());
+
+            let mut e:ZlibEncoder<Vec<u8>> = ZlibEncoder::new(Vec::new(), GzipCompression::default());
+            e.write_all(b"foo");
+            e.write_all(bitvector.as_slice());
+            let compressed_bytes = e.finish();
+            match compressed_bytes {
+                Ok(v) => println!("Compressed by gzip library, size: {}",v.len()),
+                Err(e) => println!("Error during gzip compression: {:?}", e),
+            }
+            
+            
+
         }
         else
         {
