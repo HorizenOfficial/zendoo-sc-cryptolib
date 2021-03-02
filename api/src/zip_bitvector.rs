@@ -3,16 +3,15 @@ pub const BTV_LEAF_SIZE:usize =  253;   //n.b. current leaf size limit is 254 bi
 pub const BTV_TREE_DEPTH:usize =  14;
 pub const LEAF_BIT_COUNTER_LEN:usize =  2;
 
-use std::fs;
+use std::{fs, str::FromStr};
 use std::io::Read;
-//use std::io::Write; 
+use std::io::Write; 
 
 use bzip2::Compression;
 use bzip2::read::{BzEncoder, BzDecoder};
 use flate2::Compression as GzipCompression;
-use flate2::write::ZlibEncoder;
-use std::io;
-use std::io::prelude::*;
+use flate2::write::GzEncoder;
+use flate2::read::GzDecoder;
 
 
 #[derive(Default)]
@@ -29,7 +28,7 @@ impl BitVector {
         if self.b_finalized==true
         { 
             assert!(false);
-            return;
+            return
         }
         let mask:u32;
         mask = (1 << n_bits_to_append) - 1;
@@ -55,15 +54,15 @@ impl BitVector {
             }
         }
     }
-    pub fn get_size(&self) -> i32 {
+    pub fn get_size(&self) -> Result<i32,String> {
         if self.b_finalized == false
         {
             assert!(false);
-            -1
+            Err(String::from("Error: stream must be finalized"))
         }
         else
         {
-            self.bitstream.len() as i32
+            Ok(self.bitstream.len() as i32)
         }
     }
     pub fn get_current_bits_size(&self) -> u32 {
@@ -80,17 +79,17 @@ impl BitVector {
             self.b_finalized = true;
         }
     }
-    pub fn truncate(&mut self,n_max_bit_length: i32) -> bool
+    pub fn truncate(&mut self,n_max_bit_length: i32) -> Result<bool,String>
     {
         if self.b_finalized == false
         {
             assert!(false);
-            false
+            Err(String::from("Error: stream must be finalized"))
         }
         else
         {
             self.bitstream.truncate((n_max_bit_length / 8) as usize);
-            true
+            Ok(true)
         }
     }
 
@@ -243,7 +242,16 @@ pub fn compress_bitvector(bitvector: &Vec<u8>) -> BitVector
     //add last bits and close the compression
     bitvect_compressed.finalize();
     print!("Original size: {}; ", n_bv_size);
-    print!("final size: {}; ", bitvect_compressed.get_size());
+    let final_size;
+    match bitvect_compressed.get_size(){
+        Ok(len) => {
+            final_size=len;
+        },
+        Err(_e) => {
+            final_size=-1;
+        }
+    }
+    print!("final size: {}; ", final_size);
     print!("num active bits: {}; ", n_num_active_bits);
     print!("num empty leaves: {}; ", n_empty_leaves);
     print!("leaves with N fixed values: {}; ", n_stats_code_nval);
@@ -468,6 +476,66 @@ pub fn decompress_bitvector(bitvector: &Vec<u8>) -> BitVector
     return bitvect_decompressed;
 }
 
+pub fn bitvector_get_best_compression(bitvector: &Vec<u8>) -> Vec<u8>
+{
+    let mut bitvector_best_len=-1;
+    let mut bitvector_best_algorithm:i8=-1; //-1 not set
+    let mut best_bitvector_stream:Vec<u8>=Vec::new();
+    let bitvect_compressed= compress_bitvector(&bitvector);
+    let len_hzip=bitvect_compressed.get_size();
+    match len_hzip {
+        Ok(len_hzip)=>{
+            bitvector_best_len=len_hzip as i32;
+            bitvector_best_algorithm=0; //0=Hzip  
+            best_bitvector_stream=bitvect_compressed.bitstream;
+            println!("Compressed bitvector len using hzip: {}",len_hzip);
+        },
+        Err(s)=>{
+            println!("{}", s);
+        }
+    }
+
+
+    let mut compressor= BzEncoder::new(bitvector.as_slice(), Compression::best());
+    let mut bzip2_compressed=Vec::new();
+    let final_size=compressor.read_to_end(&mut bzip2_compressed);
+    match final_size {
+        Ok(len_bzip2)=>{
+            if (bitvector_best_len==-1) || ((len_bzip2 as i32)<bitvector_best_len)
+            {
+                bitvector_best_len=len_bzip2 as i32;
+                bitvector_best_algorithm=1; //1=Bzip2  
+                best_bitvector_stream=bzip2_compressed;    
+            }
+            println!("Compressed by bzip2 library, size: {}",len_bzip2);
+        },
+        Err(_e)=>{
+            println!("Error compressing with bzip2");
+        }
+    }
+
+    let mut e= GzEncoder::new(Vec::new(), GzipCompression::best());
+    e.write_all(bitvector.as_slice());
+    let compressed_bytes = e.finish();
+    match compressed_bytes {
+        Ok(v) => {
+            let len_gzip:i32;
+            len_gzip=(v.len()) as i32;
+            if (bitvector_best_len==-1) || ((len_gzip as i32)<bitvector_best_len)
+            {
+                bitvector_best_len=len_gzip;
+                bitvector_best_algorithm=2; //2=Gzip  
+                best_bitvector_stream=v;
+            }
+            println!("Compressed by gzip library, size: {}",len_gzip);
+        },
+        Err(_e) => {
+            println!("Error compressing by gzip library");
+        }
+    }
+    best_bitvector_stream.insert(0, bitvector_best_algorithm as u8);
+    best_bitvector_stream
+}
 
 pub fn load_uncompressed_bitvector(str_filename:String) -> Vec<u8>
 {
@@ -481,6 +549,30 @@ pub fn load_uncompressed_bitvector(str_filename:String) -> Vec<u8>
     bitvector
 }
 
+pub fn bitvector_get_decompressed_stream(bitvector_compressed: &mut Vec<u8>) -> Vec<u8> 
+{
+    let mut bitvector_uncompressed=Vec::new();
+    let alg_type=bitvector_compressed.remove(0);
+    match alg_type {
+        0 => {
+            bitvector_uncompressed = decompress_bitvector(&bitvector_compressed).bitstream;
+            },
+        1 => {
+            let mut decompressor= BzDecoder::new(bitvector_compressed.as_slice());
+            decompressor.read_to_end(&mut bitvector_uncompressed).unwrap();        
+        },
+        2 => {
+            let mut e = GzDecoder::new(bitvector_compressed.as_slice());
+            e.read_to_end(&mut bitvector_uncompressed).unwrap();
+        
+        },
+        _ => {
+            println!("Error: algorithm not supported")
+            }
+    }
+    bitvector_uncompressed
+}
+
 #[cfg(test)]
 mod test
 {
@@ -490,56 +582,48 @@ mod test
     fn bitvector_compression_test() 
     {
         let bitvector:Vec<u8>;
-        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_10_10.dat"));
-        bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_100_100.dat"));   
-        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_1000_1000.dat"));
-        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_10000_9990.dat"));   
-        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_100000_98810.dat"));  
-        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_1000000_884643.dat"));  
-        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_4000000_2525522.dat"));
+        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_10_10.dat"));                      //Best: Hzip
+        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_100_100.dat"));                    //Best: Hzip
+        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_1000_1000.dat"));                  //Best: Bzip2
+        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_10000_9990.dat"));                 //Best: Bzip2
+        bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_100000_98810.dat"));     //Best: Bzip2
+        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_1000000_884643.dat"));             //Best: Gzip
+        //bitvector = load_uncompressed_bitvector(String::from("/home/carlo/bitvectors/bitvector_4000000_2525522.dat"));            //Best: Gzip
         
         if bitvector.len()>0
         {
-            let bitvect_compressed= compress_bitvector(&bitvector);
-            println!("Compressed bitvector len: {}",bitvect_compressed.get_size());
+            let mut bitvector_compressed= bitvector_get_best_compression(&bitvector);
+            println!("Compressed bitvector len: {}",bitvector_compressed.len());
+            let alg_description: String;
+            match bitvector_compressed[0] {
+                0 => alg_description=String::from("Hzip"),
+                1 => alg_description=String::from("Bzip2"),
+                2 => alg_description=String::from("Gzip"),
+                _ => alg_description=String::from("Error: not supported")
+            }
+            println!("Algorithm used: {} - {}",bitvector_compressed[0], alg_description);
 
-            let bitvector_uncompressed= decompress_bitvector(&bitvect_compressed.bitstream);
-            if bitvector==bitvector_uncompressed.bitstream
+            let bitvector_uncompressed= bitvector_get_decompressed_stream(&mut bitvector_compressed);
+            
+            if bitvector==bitvector_uncompressed
             {
-                println!("test ok");
+                println!("test matching ok");
             }
             else
             {
-                println!("test ko");
+                println!("test matching ko");
                 //detect the position of the difference
                 let mut i=0;
                 while i<bitvector.len()
                 {
-                    if bitvector[i]!=bitvector_uncompressed.bitstream[i]
+                    if bitvector[i]!=bitvector_uncompressed[i]
                     {
-                        println!("first difference found at position {}, leaf {}, values orig:{}, decom: {}",i,i*8/BTV_LEAF_SIZE, bitvector[i],bitvector_uncompressed.bitstream[i]);
+                        println!("first difference found at position {}, leaf {}, values orig:{}, decom: {}",i,i*8/BTV_LEAF_SIZE, bitvector[i],bitvector_uncompressed[i]);
                         break;
                     }
                     i+=1;
                 }
-            }
-
-            let mut compressor= BzEncoder::new(bitvector.as_slice(), bzip2::Compression::best());
-            let mut bzip_compressed=Vec::new();
-            compressor.read_to_end(&mut bzip_compressed);
-            println!("Compressed by bzip2 library, size: {}",bzip_compressed.len());
-
-            let mut e:ZlibEncoder<Vec<u8>> = ZlibEncoder::new(Vec::new(), GzipCompression::default());
-            e.write_all(b"foo");
-            e.write_all(bitvector.as_slice());
-            let compressed_bytes = e.finish();
-            match compressed_bytes {
-                Ok(v) => println!("Compressed by gzip library, size: {}",v.len()),
-                Err(e) => println!("Error during gzip compression: {:?}", e),
-            }
-            
-            
-
+            }        
         }
         else
         {
