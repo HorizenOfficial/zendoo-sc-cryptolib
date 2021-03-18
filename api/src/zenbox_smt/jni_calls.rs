@@ -1,12 +1,11 @@
 use jni::JNIEnv;
 use jni::objects::{JClass, JString, JObject, JValue};
-use jni::sys::{jbyteArray, jboolean, jint, jlong, jlongArray, jobject, jobjectArray};
+use jni::sys::{jboolean, jint, jlong, jobject};
 use crate::{read_raw_pointer, read_mut_raw_pointer};
 use crate::ginger_calls::{FieldElement, leaf_to_index, GingerMHTPath, Error};
 use crate::zenbox_smt::*;
 use std::any::TypeId;
 use std::ptr::null_mut;
-use jni::strings::JavaStr;
 
 fn get_field_name<'a, T: 'static>() -> &'a str {
     if TypeId::of::<T>() == TypeId::of::<ZenBoxSMT>(){

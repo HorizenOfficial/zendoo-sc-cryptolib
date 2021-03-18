@@ -1,7 +1,7 @@
 ////////////BITVECTOR SPARSE MERKLE TREE
 
 use primitives::{BigMerkleTree, Coord};
-use crate::ginger_calls::{GingerMerkleTreeParameters, Error, FieldElement, GingerMHTPath, GingerSMT, restore_ginger_smt, new_ginger_smt};
+use crate::ginger_calls::{GingerMerkleTreeParameters, Error, FieldElement, GingerMHTPath, restore_ginger_smt, new_ginger_smt};
 use algebra::fields::mnt6753::FqParameters;
 use algebra::{FpParameters, ToBits};
 use std::path::Path;
@@ -97,96 +97,102 @@ fn modify_bit_in_bvt(tree: &mut BitvectorSMT, bit_position: u64, bit_value: bool
     }
 }
 
-#[test]
-fn sample_calls_bitvector_tree(){
-    // This test is specified for a 752-bit bitvectors, that corresponds to a 753-bit field elements
-    // Here a bitvector is a sequential chunk of bits, that corresponds to one leaf of a field based SMT with 753-bit leafs.
+#[cfg(test)]
+mod test {
+    use crate::zenbox_smt::bitvector_smt::{BVT_LEAF_SIZE, get_bvt, set_bvt_bit, get_bvt_bit, reset_bvt_bit, get_bvt_leaf_by_index, get_bvt_leaf, get_bvt_path, set_bvt_persistency};
+    use algebra::ToBits;
 
-    assert_eq!(BVT_LEAF_SIZE, 752);
+    #[test]
+    fn sample_calls_bitvector_tree(){
+        // This test is specified for a 752-bit bitvectors, that corresponds to a 753-bit field elements
+        // Here a bitvector is a sequential chunk of bits, that corresponds to one leaf of a field based SMT with 753-bit leafs.
 
-    // Get BitvectorTree of height 4 to decrease time of the test run
-    let mut bvt = get_bvt(4, "./temp_bvt_db").unwrap();
+        assert_eq!(BVT_LEAF_SIZE, 752);
 
-    // To make test run not too long the number of tested bits per leaf is at step = 47 times lesser
-    let step = (BVT_LEAF_SIZE / 16) as usize;
-    // Minimal step is 2. The fully filled leafs will be tested with such a step but it takes around 12 minutes to run this test
-    // let step = 2;
-    assert!(step >= 2);
+        // Get BitvectorTree of height 4 to decrease time of the test run
+        let mut bvt = get_bvt(4, "/tmp/temp_bvt_db").unwrap();
 
-    let bv_msb_offset = step as u64 - 1;
+        // To make test run not too long the number of tested bits per leaf is at step = 47 times lesser
+        let step = (BVT_LEAF_SIZE / 16) as usize;
+        // Minimal step is 2. The fully filled leafs will be tested with such a step but it takes around 12 minutes to run this test
+        // let step = 2;
+        assert!(step >= 2);
 
-    // Maps position inside of a bitvector to a bit value
-    let bit_by_position = |pos: u64| -> bool {
-        (pos % step as u64 == 0) |                                                 // LSB of a bitvector
-            ((pos >= bv_msb_offset) && ((pos - bv_msb_offset) % step as u64 == 0)) // MSB of a bitvector
-    };
+        let bv_msb_offset = step as u64 - 1;
 
-    // Setting bits in the first bitvector
-    for pos in 0..BVT_LEAF_SIZE {
-        if bit_by_position(pos) {
-            set_bvt_bit(&mut bvt, pos);
+        // Maps position inside of a bitvector to a bit value
+        let bit_by_position = |pos: u64| -> bool {
+            (pos % step as u64 == 0) |                                                 // LSB of a bitvector
+                ((pos >= bv_msb_offset) && ((pos - bv_msb_offset) % step as u64 == 0)) // MSB of a bitvector
+        };
+
+        // Setting bits in the first bitvector
+        for pos in 0..BVT_LEAF_SIZE {
+            if bit_by_position(pos) {
+                set_bvt_bit(&mut bvt, pos);
+            }
         }
-    }
-    // Checking that corresponding bits in the first bitvector are set, while all the other bits are not set
-    for pos in 0..BVT_LEAF_SIZE {
-        assert_eq!(get_bvt_bit(&bvt, pos as u64), bit_by_position(pos));
-    }
-
-    // Setting bits in the second bitvector
-    for pos in 0..BVT_LEAF_SIZE {
-        if bit_by_position(pos) {
-            set_bvt_bit(&mut bvt, BVT_LEAF_SIZE + pos);
+        // Checking that corresponding bits in the first bitvector are set, while all the other bits are not set
+        for pos in 0..BVT_LEAF_SIZE {
+            assert_eq!(get_bvt_bit(&bvt, pos as u64), bit_by_position(pos));
         }
-    }
 
-    // Reseting the previously set bits in the first bitvector
-    for pos in 0..BVT_LEAF_SIZE {
-        if bit_by_position(pos) {
-            reset_bvt_bit(&mut bvt, pos);
+        // Setting bits in the second bitvector
+        for pos in 0..BVT_LEAF_SIZE {
+            if bit_by_position(pos) {
+                set_bvt_bit(&mut bvt, BVT_LEAF_SIZE + pos);
+            }
         }
+
+        // Reseting the previously set bits in the first bitvector
+        for pos in 0..BVT_LEAF_SIZE {
+            if bit_by_position(pos) {
+                reset_bvt_bit(&mut bvt, pos);
+            }
+        }
+
+        //-------------------------------------
+        // Checking the first bitvector
+        //-------------------------------------
+        // All bits in the first bitvector should be reset
+        for pos in 0..BVT_LEAF_SIZE {
+            assert_eq!(get_bvt_bit(&bvt, pos), false);
+        }
+        // Low-level check: First leaf should be absent due to a stored bitvector is empty
+        assert_eq!(get_bvt_leaf_by_index(&bvt, 0), None);
+
+        //-------------------------------------
+        // Checking the second bitvector
+        //-------------------------------------
+        // Checking that corresponding bits in the second bitvector are set, while all the other bits are not set
+        for pos in 0..BVT_LEAF_SIZE {
+            assert_eq!(get_bvt_bit(&bvt, BVT_LEAF_SIZE + pos), bit_by_position(pos));
+        }
+        // Low-level check: parsing directly the leaf containing the second bitvector
+        let second_leaf_bits = get_bvt_leaf_by_index(&bvt, 1).unwrap().write_bits();
+        // Reversing bits due to a FieldElement is deserialized in the BigEndian format
+        let second_bitvector: Vec<bool> = second_leaf_bits.iter().rev().take(BVT_LEAF_SIZE as usize).map(|b|*b).collect();
+        for pos in 0..BVT_LEAF_SIZE {
+            assert_eq!(second_bitvector[pos as usize], bit_by_position(pos));
+        }
+
+        let second_leaf_lsb_pos = BVT_LEAF_SIZE;
+
+        // Checking that the bit position is correctly mapped to a BVT leaf position
+        assert_eq!(get_bvt_leaf(&bvt, second_leaf_lsb_pos).unwrap(),
+                   get_bvt_leaf_by_index(&bvt, 1).unwrap());
+
+        // Checking that Merkle Paths are the same for bits from the same leafs
+        assert_eq!(get_bvt_path(&mut bvt, 0),
+                   get_bvt_path(&mut bvt, BVT_LEAF_SIZE - 1));
+        assert_eq!(get_bvt_path(&mut bvt, second_leaf_lsb_pos),
+                   get_bvt_path(&mut bvt, second_leaf_lsb_pos + BVT_LEAF_SIZE - 1));
+
+        // Checking that Merkle Paths are different for bits from different leafs
+        assert_ne!(get_bvt_path(&mut bvt, BVT_LEAF_SIZE - 1),
+                   get_bvt_path(&mut bvt, BVT_LEAF_SIZE));
+
+        //Deleting BVTs data
+        set_bvt_persistency(&mut bvt, false);
     }
-
-    //-------------------------------------
-    // Checking the first bitvector
-    //-------------------------------------
-    // All bits in the first bitvector should be reset
-    for pos in 0..BVT_LEAF_SIZE {
-        assert_eq!(get_bvt_bit(&bvt, pos), false);
-    }
-    // Low-level check: First leaf should be absent due to a stored bitvector is empty
-    assert_eq!(get_bvt_leaf_by_index(&bvt, 0), None);
-
-    //-------------------------------------
-    // Checking the second bitvector
-    //-------------------------------------
-    // Checking that corresponding bits in the second bitvector are set, while all the other bits are not set
-    for pos in 0..BVT_LEAF_SIZE {
-        assert_eq!(get_bvt_bit(&bvt, BVT_LEAF_SIZE + pos), bit_by_position(pos));
-    }
-    // Low-level check: parsing directly the leaf containing the second bitvector
-    let second_leaf_bits = get_bvt_leaf_by_index(&bvt, 1).unwrap().write_bits();
-    // Reversing bits due to a FieldElement is deserialized in the BigEndian format
-    let second_bitvector: Vec<bool> = second_leaf_bits.iter().rev().take(BVT_LEAF_SIZE as usize).map(|b|*b).collect();
-    for pos in 0..BVT_LEAF_SIZE {
-        assert_eq!(second_bitvector[pos as usize], bit_by_position(pos));
-    }
-
-    let second_leaf_lsb_pos = BVT_LEAF_SIZE;
-
-    // Checking that the bit position is correctly mapped to a BVT leaf position
-    assert_eq!(get_bvt_leaf(&bvt, second_leaf_lsb_pos).unwrap(),
-               get_bvt_leaf_by_index(&bvt, 1).unwrap());
-
-    // Checking that Merkle Paths are the same for bits from the same leafs
-    assert_eq!(get_bvt_path(&mut bvt, 0),
-               get_bvt_path(&mut bvt, BVT_LEAF_SIZE - 1));
-    assert_eq!(get_bvt_path(&mut bvt, second_leaf_lsb_pos),
-               get_bvt_path(&mut bvt, second_leaf_lsb_pos + BVT_LEAF_SIZE - 1));
-
-    // Checking that Merkle Paths are different for bits from different leafs
-    assert_ne!(get_bvt_path(&mut bvt, BVT_LEAF_SIZE - 1),
-               get_bvt_path(&mut bvt, BVT_LEAF_SIZE));
-
-    //Deleting BVTs data
-    set_bvt_persistency(&mut bvt, false);
 }
