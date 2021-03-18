@@ -9,6 +9,7 @@ use std::panic;
 mod ginger_calls;
 use ginger_calls::*;
 
+use cctp_primitives::commitment_tree::{CommitmentTree, hashers};
 
 fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
     assert!(!input.is_null());
@@ -43,6 +44,8 @@ use jni::JNIEnv;
 use jni::objects::{JClass, JString, JObject, JValue};
 use jni::sys::{jbyteArray, jboolean, jint, jlong, jlongArray, jobject, jobjectArray};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
+use std::convert::TryInto;
+use algebra::BigInteger768;
 
 //Field element related functions
 #[no_mangle]
@@ -2472,5 +2475,905 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     ) {
         Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
         Err(_) => JNI_FALSE // CRYPTO_ERROR
+    }
+}
+
+
+
+///////// COMMITMENT TREE
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeInit(
+    _env: JNIEnv,
+    _class: JClass,
+    _db_path: JString
+) -> jobject
+{
+    // Read db_path
+    let db_path = _env.get_string(_db_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Create new CommitmentTree Rust side
+    let commitment_tree = CommitmentTree::create(
+        db_path.to_str().unwrap()
+    ).expect("Should be able to create new CommitmentTree");
+
+    // Create and return new CommitmentTree Java side
+    let commitment_tree_ptr: jlong = jlong::from(Box::into_raw(Box::new(commitment_tree)) as i64);
+
+    _env.new_object(_class, "(J)V", &[JValue::Long(commitment_tree_ptr)])
+        .expect("Should be able to create new CommitmentTree object")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeFreeCommitmentTree(
+    _env: JNIEnv,
+    _class: JClass,
+    _commitment_tree: *mut CommitmentTree
+)
+{
+    if _commitment_tree.is_null()  { return }
+    drop(unsafe { Box::from_raw(_commitment_tree) });
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddScCr(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray,
+    _amount: jlong,
+    _pub_key: jbyteArray,
+    _withdrawal_epoch_length: jint,
+    _custom_data: jbyteArray,
+    _constant: jbyteArray,
+    _cert_verification_key: jbyteArray,
+    _btr_verification_key_nullable: jbyteArray, // can be null if there is no key for BTRs
+    _csw_verification_key_nullable: jbyteArray, // can be null if there is no key for CSWs
+    _tx_hash: jbyteArray,
+    _out_idx: jint
+) -> jboolean
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let amount = _amount as u64;
+
+    let pub_key = {
+        let t = _env.convert_byte_array(_pub_key)
+            .expect("Should be able to convert to Rust array");
+
+        let mut pub_key_bytes = [0u8; 32];
+
+        t.write(&mut pub_key_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        pub_key_bytes
+    };
+
+    let withdrawal_epoch_length = _withdrawal_epoch_length as u32;
+
+    let custom_data = _env.convert_byte_array(_custom_data)
+        .expect("Should be able to convert to Rust byte array");
+
+    let constant = _env.convert_byte_array(_custom_data)
+        .expect("Should be able to convert to Rust byte array");
+
+    let cert_verification_key = _env.convert_byte_array(_cert_verification_key)
+        .expect("Should be able to convert to Rust byte array");
+
+    let btr_verification_key = if _btr_verification_key_nullable.is_null() {
+        Option::None
+    } else {
+        Some(_env.convert_byte_array(_btr_verification_key_nullable)
+            .expect("Should be able to convert to Rust byte array"))
+    };
+
+    let csw_verification_key = if _csw_verification_key_nullable.is_null() {
+        Option::None
+    } else {
+        Some(_env.convert_byte_array(_csw_verification_key_nullable)
+            .expect("Should be able to convert to Rust byte array"))
+    };
+
+    let tx_hash = _env.convert_byte_array(_tx_hash)
+        .expect("Should be able to convert to Rust byte array");
+
+    let out_idx = _out_idx as u32;
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    if commitment_tree.add_scc(&sc_id,
+                            amount,
+                            &pub_key,
+                            withdrawal_epoch_length,
+                            custom_data.as_slice(),
+                            constant.as_slice(),
+                            cert_verification_key.as_slice(),
+                            &btr_verification_key.unwrap_or_default(),
+                            &csw_verification_key.unwrap_or_default(),
+                            &tx_hash,
+                            out_idx) {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddFwt(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray,
+    _amount: jlong,
+    _pub_key: jbyteArray,
+    _tx_hash: jbyteArray,
+    _out_idx: jint
+) -> jboolean
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let amount = _amount as u64;
+
+    let pub_key = {
+        let t = _env.convert_byte_array(_pub_key)
+            .expect("Should be able to convert to Rust array");
+
+        let mut pub_key_bytes = [0u8; 32];
+
+        t.write(&mut pub_key_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        pub_key_bytes
+    };
+
+    let tx_hash = _env.convert_byte_array(_tx_hash)
+        .expect("Should be able to convert to Rust byte array");
+
+    let out_idx = _out_idx as u32;
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+
+    if commitment_tree.add_fwt(&sc_id,
+                            amount,
+                            &pub_key,
+                            &tx_hash,
+                            out_idx) {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddBtr(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray,
+    _sc_fee: jlong,
+    _pub_key_hash: jbyteArray,
+    _sc_request_data: jbyteArray,
+    _tx_hash: jbyteArray,
+    _out_idx: jint
+) -> jboolean
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let sc_fee = _sc_fee as u64;
+
+    let pub_key_hash = {
+        let t = _env.convert_byte_array(_pub_key_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut pub_key_hash_bytes = [0u8; 20];
+
+        t.write(&mut pub_key_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        pub_key_hash_bytes
+    };
+
+    let sc_request_data = {
+        let t = _env.convert_byte_array(_sc_request_data)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_request_data_bytes = [0u8; FIELD_SIZE];
+
+        t.write(&mut sc_request_data_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_request_data_bytes
+    };
+
+    let tx_hash = _env.convert_byte_array(_tx_hash)
+        .expect("Should be able to convert to Rust byte array");
+
+    let out_idx = _out_idx as u32;
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    // TODO: update with `sc_request_data`
+    if commitment_tree.add_bwtr(&sc_id,
+                            sc_fee,
+                            &pub_key_hash,
+                            &tx_hash,
+                            out_idx) {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddCert(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray,
+    _epoch_number: jint,
+    _quality: jlong,
+    _cert_data_hash: jbyteArray,
+    _bt_list: jobjectArray,
+    _custom_fields_merkle_root: jbyteArray,
+    _end_cumulative_sc_tx_commitment_tree_root: jbyteArray
+) -> jboolean
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let epoch_number = _epoch_number as u32;
+
+    let quality = _quality as u64;
+
+    let cert_data_hash = {
+        let t = _env.convert_byte_array(_cert_data_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut cert_data_hash_bytes = [0u8; FIELD_SIZE];
+
+        t.write(&mut cert_data_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        cert_data_hash_bytes
+    };
+
+    //Extract backward transfers
+    let mut bt_list = vec![];
+
+    let bt_list_size = _env.get_array_length(_bt_list)
+        .expect("Should be able to get bt_list size");
+
+    if bt_list_size > 0 {
+        for i in 0..bt_list_size {
+            let o = _env.get_object_array_element(_bt_list, i)
+                .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+
+            // TODO: replace with [0u8; 20];
+            let pk: [u8; 32] = {
+                let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                    .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+
+                // TODO: replace with [0u8; 20];
+                let mut pk_bytes = [0u8; 32];
+
+                _env.convert_byte_array(p)
+                    .expect("Should be able to convert to Rust byte array")
+                    .write(&mut pk_bytes[..])
+                    .expect("Should be able to write into byte array of fixed size");
+
+                pk_bytes
+            };
+
+            // TODO: replace with u64;
+            let a = _env.call_method(o, "getAmount", "()J", &[])
+                .expect("Should be able to call getAmount method").j().unwrap() as i64;
+
+            // TODO: replace with `bt_list.push(BackwardTransfer::new(pk, a));`
+            bt_list.push((a, pk));
+        }
+    }
+
+    let custom_fields_merkle_root = {
+        let t = _env.convert_byte_array(_custom_fields_merkle_root)
+            .expect("Should be able to convert to Rust array");
+
+        let mut custom_fields_merkle_root_bytes = [0u8; FIELD_SIZE];
+
+        t.write(&mut custom_fields_merkle_root_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        custom_fields_merkle_root_bytes
+    };
+
+    let end_cumulative_sc_tx_commitment_tree_root = {
+        let t = _env.convert_byte_array(_end_cumulative_sc_tx_commitment_tree_root)
+            .expect("Should be able to convert to Rust array");
+
+        let mut end_cumulative_sc_tx_commitment_tree_root_bytes = [0u8; FIELD_SIZE];
+
+        t.write(&mut end_cumulative_sc_tx_commitment_tree_root_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        end_cumulative_sc_tx_commitment_tree_root_bytes
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    if commitment_tree.add_cert(&sc_id,
+                             epoch_number,
+                             quality,
+                             &cert_data_hash,
+                             bt_list.as_slice(),
+                             &custom_fields_merkle_root,
+                             &end_cumulative_sc_tx_commitment_tree_root) {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddCertLeaf(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray,
+    _leaf: jbyteArray
+) -> jboolean
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let leaf = {
+        let t = _env.convert_byte_array(_leaf)
+            .expect("Should be able to convert to Rust array");
+
+        let mut leaf_bytes = [0u8; FIELD_SIZE];
+
+        t.write(&mut leaf_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        leaf_bytes
+    };
+
+    let leaf_ptr: *const FieldElement = deserialize_to_raw_pointer(&leaf);
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+
+    // TODO: we need a func that takes to byte arrays instead of field elements
+    // NOTE: issue with FieldElement versions on cctplib and gingerlib dependencies
+    let res = false; // commitment_tree.add_cert_leaf(&hashers::hash_id(&sc_id), &*leaf_ptr);
+    drop(leaf_ptr);
+
+    if res {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCrtLeaves(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+    let empty_res = _env.call_static_method(cls_optional, "empty", "()", &[])
+        .expect("Should be able to create new long for Optional.empty()");
+    *empty_res.l().unwrap()
+    // Todo return the list of Optional<List<FieldElement>>
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddCsw(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray,
+    _amount: jlong,
+    _nullifier: jbyteArray,
+    _pub_key_hash: jbyteArray,
+    _active_cert_data_hash: jbyteArray
+) -> jboolean
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let amount = _amount as u64;
+
+    let nullifier = {
+        let t = _env.convert_byte_array(_nullifier)
+            .expect("Should be able to convert to Rust array");
+
+        let mut nullifier_bytes = [0u8; FIELD_SIZE];
+
+        t.write(&mut nullifier_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        nullifier_bytes
+    };
+
+    let pub_key_hash = {
+        let t = _env.convert_byte_array(_pub_key_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut pub_key_hash_bytes = [0u8; 20];
+
+        t.write(&mut pub_key_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        pub_key_hash_bytes
+    };
+
+    let active_cert_data_hash = {
+        let t = _env.convert_byte_array(_active_cert_data_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut active_cert_data_hash_bytes = [0u8; FIELD_SIZE];
+
+        t.write(&mut active_cert_data_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        active_cert_data_hash_bytes
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    if commitment_tree.add_csw(&sc_id,
+                               amount,
+                               &nullifier,
+                               &pub_key_hash,
+                               &active_cert_data_hash) {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScCrCommitment(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+    // TODO: change with get_sc_cr_commitment
+    // TODO: check sc_id fe calculation
+    match commitment_tree.get_fwt_commitment(&hashers::hash_id(&sc_id)) {
+        Some(sc_cr_commitment_fe) => {
+            let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let jfe = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+                                              &[JValue::Object(jfe)]).unwrap();
+            *res.l().unwrap()
+        },
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            *empty_res.l().unwrap()
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetFwtCommitment(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+    // TODO: check sc_id fe calculation
+    match commitment_tree.get_fwt_commitment(&hashers::hash_id(&sc_id)) {
+        Some(sc_cr_commitment_fe) => {
+            let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let jfe = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+                                              &[JValue::Object(jfe)]).unwrap();
+            *res.l().unwrap()
+        },
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            *empty_res.l().unwrap()
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeBtrCommitment(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+    // TODO: check sc_id fe calculation
+    match commitment_tree.get_bwtr_commitment(&hashers::hash_id(&sc_id)) {
+        Some(sc_cr_commitment_fe) => {
+            let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let jfe = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+                                              &[JValue::Object(jfe)]).unwrap();
+            *res.l().unwrap()
+        },
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            *empty_res.l().unwrap()
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCertCommitment(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+    // TODO: check sc_id fe calculation
+    match commitment_tree.get_cert_commitment(&hashers::hash_id(&sc_id)) {
+        Some(sc_cr_commitment_fe) => {
+            let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let jfe = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+                                              &[JValue::Object(jfe)]).unwrap();
+            *res.l().unwrap()
+        },
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            *empty_res.l().unwrap()
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCswCommitment(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+    // TODO: check sc_id fe calculation
+    match commitment_tree.get_csw_commitment(&hashers::hash_id(&sc_id)) {
+        Some(sc_cr_commitment_fe) => {
+            let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let jfe = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+                                              &[JValue::Object(jfe)]).unwrap();
+            *res.l().unwrap()
+        },
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            *empty_res.l().unwrap()
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScCommitment(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+    // TODO: check sc_id fe calculation
+    match commitment_tree.get_sc_commitment(&hashers::hash_id(&sc_id)) {
+        Some(sc_cr_commitment_fe) => {
+            let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let jfe = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+                                              &[JValue::Object(jfe)]).unwrap();
+            *res.l().unwrap()
+        },
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            *empty_res.l().unwrap()
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCommitment(
+    _env: JNIEnv,
+    _commitment_tree: JObject
+) -> jobject
+{
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+    
+    match commitment_tree.get_commitment() {
+        Some(sc_cr_commitment_fe) => {
+            let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let jfe = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+                                              &[JValue::Object(jfe)]).unwrap();
+            *res.l().unwrap()
+        },
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            *empty_res.l().unwrap()
+        }
     }
 }

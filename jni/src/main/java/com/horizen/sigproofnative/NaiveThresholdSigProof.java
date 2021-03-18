@@ -40,6 +40,7 @@ public class NaiveThresholdSigProof {
                                       byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
                                       FieldElement constant, long quality, byte[] proof, String verificationKeyPath);
 
+    // TODO: check type of `constant`. Why not a byte[]?
     public static boolean verifyProof(List<BackwardTransfer> btList,
                                       byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
                                       FieldElement constant, long quality, byte[] proof, String verificationKeyPath){

@@ -10,7 +10,7 @@ edition = "2018"
 algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
 primitives = {version = "0.1.0", features = ["smt", "signature", "vrf"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
 proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-
+#cctp = {version = "0.1.0", features = ["commitment_tree"], git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "initial_implementation"}
 ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
 
@@ -20,6 +20,25 @@ lazy_static = "1"
 radix_trie = "0.1"
 rand = { version = "0.7" }
 rand_xorshift = { version = "0.2" }
+
+#[dependencies.algebra]
+#git = "https://github.com/HorizenOfficial/ginger-lib.git"
+#branch = "algebra_ocl"
+#features = ["tweedle"]
+#version = "0.1.0"
+#
+#[dependencies.primitives]
+#git = "https://github.com/HorizenOfficial/ginger-lib.git"
+#branch = "algebra_ocl"
+#features = ["merkle_tree", "tweedle"]
+#version = "0.1.0"
+
+[dependencies.cctp_primitives]
+git = "ssh://git@github.com:22/HorizenOfficial/zendoo-cctp-lib.git"
+rev = "89552f2d6afef86a9be84f00cee62fb556c859b2" #crypto_lib_integration 15.03.2021
+#branch = "initial_implementation"
+version = "0.1.0"
+
 
 [lib]
 name = "zendoo_sc"

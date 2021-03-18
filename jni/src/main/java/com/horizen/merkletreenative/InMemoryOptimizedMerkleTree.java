@@ -35,7 +35,7 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
         return nativeInit(height, processingStep);
     }
 
-    private native void nativeAppend(FieldElement input);
+            private native void nativeAppend(FieldElement input);
 
     public void append(FieldElement input) {
         if (inMemoryOptimizedMerkleTreePointer == 0)
