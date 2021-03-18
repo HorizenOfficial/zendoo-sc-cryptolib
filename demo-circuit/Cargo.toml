@@ -6,12 +6,12 @@ edition = "2018"
 include = ["Cargo.toml", "src"]
 
 [dependencies]
-algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-primitives = {version = "0.1.0", features = ["signature"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-r1cs-crypto = {version = "0.1.0", features = ["signature"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-r1cs-core = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-r1cs-std = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
+algebra = {version = "0.1.0", features = ["mnt4_753", "mnt6_753", "tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl"}
+primitives = {version = "0.1.0", features = ["mnt4_753", "mnt6_753", "tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl"}
+proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl"}
+r1cs-crypto = {version = "0.1.0", features = ["mnt4_753", "mnt6_753", "tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl"}
+r1cs-core = {version = "0.1.0", git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl"}
+r1cs-std = {version = "0.1.0", features = ["mnt4_753", "mnt6_753", "tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl"}
 
 derivative = "1"
 lazy_static = "1"

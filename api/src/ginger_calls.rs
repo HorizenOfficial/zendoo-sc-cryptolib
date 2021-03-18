@@ -1,16 +1,14 @@
 use algebra::{fields::{
-    mnt4753::{Fr, Fq as ScalarFieldElement}, PrimeField
+    tweedle::{Fq as Fr, Fr as ScalarFieldElement}, PrimeField
 }, curves::{
-    mnt4753::MNT4 as PairingCurve,
-    mnt6753::{
-        G1Projective as GroupProjective, G1Affine as GroupAffine
+    // mnt4753::MNT4 as PairingCurve,
+    tweedle::{
+        dee::Projective as GroupProjective, dee::Affine as GroupAffine
     },
-}, FromBytes, ToBytes, BigInteger768, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits};
+}, FromBytes, FromBytesChecked, validity::SemanticallyValid,
+   ToBytes, BigInteger256, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits};
 use primitives::{crh::{
-    poseidon::{
-        MNT4PoseidonHash,
-        batched_crh::MNT4BatchPoseidonHash as BatchFieldHash,
-    },
+    poseidon::parameters::tweedle::{TweedleFqPoseidonHash, TweedleFqBatchPoseidonHash as BatchFieldHash},
     FieldBasedHash,
     bowe_hopwood::{
         BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters
@@ -18,19 +16,21 @@ use primitives::{crh::{
 }, merkle_tree::field_based_mht::{
     smt::{BigMerkleTree, LazyBigMerkleTree, Coord, OperationLeaf},
     optimized::FieldBasedOptimizedMHT,
-    poseidon::{MNT4753_PHANTOM_MERKLE_ROOT as PHANTOM_MERKLE_ROOT, MNT4753_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS},
+    parameters::tweedle_fq::TWEEDLE_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS,
+    // parameters::mnt4753::{MNT4753_PHANTOM_MERKLE_ROOT as PHANTOM_MERKLE_ROOT, MNT4753_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS},
     FieldBasedMerkleTree, FieldBasedMerkleTreePrecomputedEmptyConstants,
     FieldBasedMerkleTreeParameters, BatchFieldBasedMerkleTreeParameters,
     FieldBasedMerkleTreePath, FieldBasedBinaryMHTPath,
 }, signature::{
     FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
-        FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature
+        FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature,
+        FieldBasedSchnorrPk,
     },
 }, vrf::{FieldBasedVrf, ecvrf::*}, ActionLeaf};
-use proof_systems::groth16::{
-    Proof, create_random_proof,
-    prepare_verifying_key, verify_proof,
-};
+// use proof_systems::groth16::{
+//     Proof, create_random_proof,
+//     prepare_verifying_key, verify_proof,
+// };
 use demo_circuit::{
     constants::{
         VRFParams, VRFWindow,
@@ -65,11 +65,15 @@ pub const VRF_PROOF_SIZE: usize = G1_SIZE + 2 * FIELD_SIZE; // 192
 pub const ZK_PROOF_SIZE: usize = 2 * G1_SIZE + G2_SIZE;  // 771
 pub type Error = Box<dyn std::error::Error>;
 
-//*******************************Generic I/O functions**********************************************
+//*******************************Generic functions**********************************************
 // Note: Should decide if panicking or handling IO errors
 
 pub fn deserialize_from_buffer<T: FromBytes>(buffer: &[u8]) ->  IoResult<T> {
     T::read(buffer)
+}
+
+pub fn deserialize_from_buffer_checked<T: FromBytesChecked>(buffer: &[u8]) ->  IoResult<T> {
+    T::read_checked(buffer)
 }
 
 pub fn serialize_to_buffer<T: ToBytes>(to_write: &T, buffer: &mut [u8]) -> IoResult<()> {
@@ -78,8 +82,16 @@ pub fn serialize_to_buffer<T: ToBytes>(to_write: &T, buffer: &mut [u8]) -> IoRes
 
 pub fn read_from_file<T: FromBytes>(file_path: &str) -> IoResult<T>{
     let mut fs = File::open(file_path)?;
-    let t = T::read(&mut fs)?;
-    Ok(t)
+    T::read(&mut fs)
+}
+
+pub fn read_from_file_checked<T: FromBytesChecked>(file_path: &str) -> IoResult<T>{
+    let mut fs = File::open(file_path)?;
+    T::read_checked(&mut fs)
+}
+
+pub fn is_valid<T: SemanticallyValid>(to_check: &T) -> bool {
+    T::is_valid(to_check)
 }
 
 // NOTE: This function relies on a non-cryptographically safe RNG, therefore it
@@ -92,36 +104,36 @@ pub fn get_random_field_element(seed: u64) -> FieldElement {
 //***************************Schnorr types and functions********************************************
 
 pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, GroupProjective, FieldHash>;
-pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement>;
+pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement, GroupProjective>;
 pub type SchnorrPk = GroupAffine;
 pub type SchnorrSk = ScalarFieldElement;
 
 pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
     let mut rng = OsRng;
     let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
-    (pk.into_affine(), sk)
+    (pk.0.into_affine(), sk)
 }
 
 pub fn schnorr_get_public_key(sk: &SchnorrSk) -> SchnorrPk {
-    SchnorrSigScheme::get_public_key(sk).into_affine()
+    SchnorrSigScheme::get_public_key(sk).0.into_affine()
 }
 
 pub fn schnorr_verify_public_key(pk: &SchnorrPk) -> bool {
-    SchnorrSigScheme::keyverify(&pk.into_projective())
+    SchnorrSigScheme::keyverify(&FieldBasedSchnorrPk(pk.into_projective()))
 }
 
 pub fn schnorr_sign(msg: &FieldElement, sk: &SchnorrSk, pk: &SchnorrPk) -> Result<SchnorrSig, Error> {
     let mut rng = OsRng;
-    SchnorrSigScheme::sign(&mut rng, &pk.into_projective(), sk, &[*msg])
+    SchnorrSigScheme::sign(&mut rng, &FieldBasedSchnorrPk(pk.into_projective()), sk, &[*msg])
 }
 
 pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &SchnorrSig) -> Result<bool, Error> {
-    SchnorrSigScheme::verify(&pk.into_projective(), &[*msg], signature)
+    SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), &[*msg], signature)
 }
 
 //************************************Poseidon Hash functions****************************************
 
-pub type FieldHash = MNT4PoseidonHash;
+pub type FieldHash = TweedleFqPoseidonHash;
 
 pub fn get_poseidon_hash(personalization: Option<&[FieldElement]>) -> FieldHash {
     FieldHash::init(personalization)
@@ -141,7 +153,7 @@ pub fn finalize_poseidon_hash(hash: &FieldHash) -> FieldElement{
 
 //*****************************Naive threshold sig circuit related functions************************
 
-pub type SCProof = Proof<PairingCurve>;
+// pub type SCProof = Proof<PairingCurve>;
 
 #[derive(Clone, Default)]
 pub struct BackwardTransfer {
@@ -178,7 +190,7 @@ pub fn read_field_element_from_buffer_with_padding(buffer: &[u8]) -> IoResult<Fi
 }
 
 pub fn read_field_element_from_u64(num: u64) -> FieldElement {
-    FieldElement::from_repr(BigInteger768::from(num))
+    FieldElement::from_repr(BigInteger256::from(num))
 }
 
 // Computes H(H(pks), threshold): used to generate the constant value needed to be declared
@@ -208,34 +220,34 @@ fn compute_bt_root(bts: &[FieldElement]) -> Result<FieldElement, Error> {
 }
 
 //Compute and return (MR(bt_list), H(MR(bt_list), H(bi-1), H(bi))
-pub fn compute_msg_to_sign(
-    end_epoch_mc_b_hash:      &FieldElement,
-    prev_end_epoch_mc_b_hash: &FieldElement,
-    bt_list:                  &[BackwardTransfer],
-) -> Result<(FieldElement, FieldElement), Error> {
-
-    let mr_bt = if bt_list.is_empty() {
-        PHANTOM_MERKLE_ROOT //Note: Can actually be taken from MHT_PARAMETERS::nodes[BT_MERKLE_TREE_HEIGHT]
-    } else {
-        let mut bt_field_list = vec![];
-        for bt in bt_list.iter() {
-            let bt_f = bt.to_field_element()?;
-            bt_field_list.push(bt_f);
-        }
-
-        //Compute bt_list merkle_root
-        compute_bt_root(bt_field_list.as_slice())?
-    };
-
-    //Compute message to be verified
-    let msg = FieldHash::init(None)
-        .update(mr_bt)
-        .update(*prev_end_epoch_mc_b_hash)
-        .update(*end_epoch_mc_b_hash)
-        .finalize();
-
-    Ok((mr_bt, msg))
-}
+// pub fn compute_msg_to_sign(
+//     end_epoch_mc_b_hash:      &FieldElement,
+//     prev_end_epoch_mc_b_hash: &FieldElement,
+//     bt_list:                  &[BackwardTransfer],
+// ) -> Result<(FieldElement, FieldElement), Error> {
+//
+//     let mr_bt = if bt_list.is_empty() {
+//         PHANTOM_MERKLE_ROOT //Note: Can actually be taken from MHT_PARAMETERS::nodes[BT_MERKLE_TREE_HEIGHT]
+//     } else {
+//         let mut bt_field_list = vec![];
+//         for bt in bt_list.iter() {
+//             let bt_f = bt.to_field_element()?;
+//             bt_field_list.push(bt_f);
+//         }
+//
+//         //Compute bt_list merkle_root
+//         compute_bt_root(bt_field_list.as_slice())?
+//     };
+//
+//     //Compute message to be verified
+//     let msg = FieldHash::init(None)
+//         .update(mr_bt)
+//         .update(*prev_end_epoch_mc_b_hash)
+//         .update(*end_epoch_mc_b_hash)
+//         .finalize();
+//
+//     Ok((mr_bt, msg))
+// }
 
 pub fn compute_wcert_sysdata_hash(
     valid_sigs:               u64,
@@ -255,92 +267,102 @@ pub fn compute_wcert_sysdata_hash(
     Ok(wcert_sysdata_hash)
 }
 
-pub fn create_naive_threshold_sig_proof(
-    pks:                      &[SchnorrPk],
-    mut sigs:                 Vec<Option<SchnorrSig>>,
-    end_epoch_mc_b_hash:      &[u8; 32],
-    prev_end_epoch_mc_b_hash: &[u8; 32],
-    bt_list:                  &[BackwardTransfer],
-    threshold:                u64,
-    proving_key_path:         &str
-) -> Result<(SCProof, u64), Error> {
+// pub fn create_naive_threshold_sig_proof(
+//     pks:                      &[SchnorrPk],
+//     mut sigs:                 Vec<Option<SchnorrSig>>,
+//     end_epoch_mc_b_hash:      &[u8; 32],
+//     prev_end_epoch_mc_b_hash: &[u8; 32],
+//     bt_list:                  &[BackwardTransfer],
+//     threshold:                u64,
+//     proving_key_path:         &str,
+//     enforce_membership:       bool,
+// ) -> Result<(SCProof, u64), Error> {
+// 
+//     //Get max pks
+//     let max_pks = pks.len();
+//     assert_eq!(sigs.len(), max_pks);
+// 
+//     //Read end_epoch_mc_b_hash, prev_end_epoch_mc_b_hash and bt_list as field elements
+//     let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
+//     let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
+//     let (mr_bt, msg) = compute_msg_to_sign(
+//         &end_epoch_mc_b_hash,
+//         &prev_end_epoch_mc_b_hash,
+//         bt_list,
+//     )?;
+// 
+//     // Iterate over sigs, check and count number of valid signatures,
+//     // and replace with NULL_CONST.null_sig the None ones
+//     let mut valid_signatures = 0;
+//     for i in 0..max_pks {
+//         if sigs[i].is_some(){
+//             let is_verified = schnorr_verify_signature(&msg, &pks[i], &sigs[i].unwrap())?;
+//             if is_verified { valid_signatures += 1; }
+//         }
+//         else {
+//             sigs[i] = Some(NULL_CONST.null_sig)
+//         }
+//     }
+// 
+//     //Compute b as v-t and convert it to field element
+//     let b = read_field_element_from_u64(valid_signatures - threshold);
+// 
+//     //Convert affine pks to projective
+//     let pks = pks.iter().map(|&pk| FieldBasedSchnorrPk(pk.into_projective())).collect::<Vec<_>>();
+// 
+//     //Convert needed variables into field elements
+//     let threshold = read_field_element_from_u64(threshold);
+// 
+//     let c = NaiveTresholdSignature::<FieldElement>::new(
+//         pks, sigs, threshold, b, end_epoch_mc_b_hash,
+//         prev_end_epoch_mc_b_hash, mr_bt, max_pks,
+//     );
+// 
+//     //Read proving key
+//     let params = if enforce_membership {
+//         read_from_file_checked(proving_key_path)
+//     } else {
+//         read_from_file(proving_key_path)
+//     }?;
+// 
+//     //Create and return proof
+//     let mut rng = OsRng;
+//     let proof = create_random_proof(c, &params, &mut rng)?;
+//     Ok((proof, valid_signatures))
+// }
 
-    //Get max pks
-    let max_pks = pks.len();
-    assert_eq!(sigs.len(), max_pks);
-
-    //Read end_epoch_mc_b_hash, prev_end_epoch_mc_b_hash and bt_list as field elements
-    let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
-    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
-    let (mr_bt, msg) = compute_msg_to_sign(
-        &end_epoch_mc_b_hash,
-        &prev_end_epoch_mc_b_hash,
-        bt_list,
-    )?;
-
-    // Iterate over sigs, check and count number of valid signatures,
-    // and replace with NULL_CONST.null_sig the None ones
-    let mut valid_signatures = 0;
-    for i in 0..max_pks {
-        if sigs[i].is_some(){
-            let is_verified = schnorr_verify_signature(&msg, &pks[i], &sigs[i].unwrap())?;
-            if is_verified { valid_signatures += 1; }
-        }
-        else {
-            sigs[i] = Some(NULL_CONST.null_sig)
-        }
-    }
-
-    //Compute b as v-t and convert it to field element
-    let b = read_field_element_from_u64(valid_signatures - threshold);
-
-    //Convert affine pks to projective
-    let pks = pks.iter().map(|&pk| pk.into_projective()).collect::<Vec<_>>();
-
-    //Convert needed variables into field elements
-    let threshold = read_field_element_from_u64(threshold);
-
-    let c = NaiveTresholdSignature::<FieldElement>::new(
-        pks, sigs, threshold, b, end_epoch_mc_b_hash,
-        prev_end_epoch_mc_b_hash, mr_bt, max_pks,
-    );
-
-    //Read proving key
-    let params = read_from_file(proving_key_path)?;
-
-    //Create and return proof
-    let mut rng = OsRng;
-    let proof = create_random_proof(c, &params, &mut rng)?;
-    Ok((proof, valid_signatures))
-}
-
-pub fn verify_naive_threshold_sig_proof(
-    constant:                 &FieldElement,
-    end_epoch_mc_b_hash:      &[u8; 32],
-    prev_end_epoch_mc_b_hash: &[u8; 32],
-    bt_list:                  &[BackwardTransfer],
-    valid_sigs:               u64,
-    proof:                    &SCProof,
-    vk_path:                  &str,
-) -> Result<bool, Error>
-{
-    //Compute wcert_sysdata_hash
-    let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
-    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
-    let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
-    let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
-    let aggregated_input = FieldHash::init(None)
-        .update(*constant)
-        .update(wcert_sysdata_hash)
-        .finalize();
-
-    //Verify proof
-    let vk = read_from_file(vk_path)?;
-    let pvk = prepare_verifying_key(&vk); //Get verifying key
-    let is_verified = verify_proof(&pvk, &proof, &[aggregated_input])?;
-
-    Ok(is_verified)
-}
+// pub fn verify_naive_threshold_sig_proof(
+//     constant:                 &FieldElement,
+//     end_epoch_mc_b_hash:      &[u8; 32],
+//     prev_end_epoch_mc_b_hash: &[u8; 32],
+//     bt_list:                  &[BackwardTransfer],
+//     valid_sigs:               u64,
+//     proof:                    &SCProof,
+//     vk_path:                  &str,
+//     enforce_membership:       bool
+// ) -> Result<bool, Error>
+// {
+//     //Compute wcert_sysdata_hash
+//     let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
+//     let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
+//     let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
+//     let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
+//     let aggregated_input = FieldHash::init(None)
+//         .update(*constant)
+//         .update(wcert_sysdata_hash)
+//         .finalize();
+// 
+//     //Verify proof
+//     let vk = if enforce_membership {
+//         read_from_file_checked(vk_path)
+//     } else {
+//         read_from_file(vk_path)
+//     }?;
+//     let pvk = prepare_verifying_key(&vk); //Get verifying key
+//     let is_verified = verify_proof(&pvk, &proof, &[aggregated_input])?;
+// 
+//     Ok(is_verified)
+// }
 
 //VRF types and functions
 
@@ -361,15 +383,15 @@ pub type VRFSk = ScalarFieldElement;
 pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
     let mut rng = OsRng;
     let (pk, sk) = VRFScheme::keygen(&mut rng);
-    (pk.into_affine(), sk)
+    (pk.0.into_affine(), sk)
 }
 
 pub fn vrf_get_public_key(sk: &VRFSk) -> VRFPk {
-    SchnorrSigScheme::get_public_key(sk).into_affine()
+    VRFScheme::get_public_key(sk).0.into_affine()
 }
 
 pub fn vrf_verify_public_key(pk: &VRFPk) -> bool {
-    SchnorrSigScheme::keyverify(&pk.into_projective())
+    VRFScheme::keyverify(&FieldBasedEcVrfPk(pk.into_projective()))
 }
 
 pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof, FieldElement), Error> {
@@ -379,7 +401,7 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
     let proof = VRFScheme::prove(
         &mut rng,
         &VRF_GH_PARAMS,
-        &pk.into_projective(),
+        &FieldBasedEcVrfPk(pk.into_projective()),
         sk,
         &[*msg]
     )?;
@@ -402,7 +424,7 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
 }
 
 pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Result<FieldElement, Error> {
-    VRFScheme::proof_to_hash(&VRF_GH_PARAMS,&pk.into_projective(), &[*msg], proof)
+    VRFScheme::proof_to_hash(&VRF_GH_PARAMS,&FieldBasedEcVrfPk(pk.into_projective()), &[*msg], proof)
 }
 
 //************Merkle Tree functions******************
@@ -755,6 +777,7 @@ mod test {
             let keypair = schnorr_generate_key();
             pks.push(keypair.0);
             sks.push(keypair.1);
+            println!("sk: {:?}", into_i8(to_bytes!(keypair.1).unwrap()).to_vec());
         }
 
         let mut sigs = vec![];
@@ -780,7 +803,8 @@ mod test {
             &prev_end_epoch_mc_b_hash,
             bt_list.as_slice(),
             threshold,
-            proving_key_path
+            proving_key_path,
+            false,
         ).unwrap();
         let proof_path = if bt_num != 0 {"./sample_proof"} else {"./sample_proof_no_bwt"};
         write_to_file(&proof, proof_path).unwrap();
@@ -794,6 +818,7 @@ mod test {
             quality,
             &proof,
             verifying_key_path,
+            true,
         ).unwrap());
 
 
@@ -806,6 +831,7 @@ mod test {
             quality - 1,
             &proof,
             verifying_key_path,
+            true,
         ).unwrap());
     }
 
@@ -829,7 +855,7 @@ mod test {
         //Serialize/deserialize pk
         let mut pk_serialized = vec![0u8; SCHNORR_PK_SIZE];
         serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
-        let pk_deserialized = deserialize_from_buffer(&pk_serialized).unwrap();
+        let pk_deserialized: SchnorrPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
@@ -839,6 +865,7 @@ mod test {
         assert_eq!(sk, sk_deserialized);
 
         let sig = schnorr_sign(&msg, &sk, &pk).unwrap(); //Sign msg
+        assert!(is_valid(&sig));
 
         //Serialize/deserialize sig
         let mut sig_serialized = vec![0u8; SCHNORR_SIG_SIZE];
@@ -865,7 +892,7 @@ mod test {
         //Serialize/deserialize pk
         let mut pk_serialized = vec![0u8; VRF_PK_SIZE];
         serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
-        let pk_deserialized = deserialize_from_buffer(&pk_serialized).unwrap();
+        let pk_deserialized: VRFPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
@@ -875,11 +902,12 @@ mod test {
         assert_eq!(sk, sk_deserialized);
 
         let (vrf_proof, vrf_out) = vrf_prove(&msg, &sk, &pk).unwrap(); //Create vrf proof for msg
+        assert!(is_valid(&vrf_proof));
 
         //Serialize/deserialize vrf proof
         let mut proof_serialized = vec![0u8; VRF_PROOF_SIZE];
         serialize_to_buffer(&vrf_proof, &mut proof_serialized).unwrap();
-        let proof_deserialized = deserialize_from_buffer(&proof_serialized).unwrap();
+        let proof_deserialized = deserialize_from_buffer_checked(&proof_serialized).unwrap();
         assert_eq!(vrf_proof, proof_deserialized);
 
         //Serialize/deserialize vrf out (i.e. a field element)
@@ -1031,7 +1059,7 @@ mod test {
     #[test]
     fn sample_restore_merkle_tree() {
         let expected_root = FieldElement::new(
-            BigInteger768([
+            BigInteger256([
                 1174313500572535251,
                 11989340445607088007,
                 12453165802583165309,
