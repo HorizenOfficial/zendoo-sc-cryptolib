@@ -14,7 +14,8 @@ use primitives::{crh::{
         BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters
     },
 }, merkle_tree::field_based_mht::{
-    smt::{BigMerkleTree, LazyBigMerkleTree, Coord, OperationLeaf},
+    // smt::{BigMerkleTree, LazyBigMerkleTree, Coord, OperationLeaf},
+    smt::{Coord, OperationLeaf},
     optimized::FieldBasedOptimizedMHT,
     parameters::tweedle_fq::TWEEDLE_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS,
     // parameters::mnt4753::{MNT4753_PHANTOM_MERKLE_ROOT as PHANTOM_MERKLE_ROOT, MNT4753_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS},
@@ -220,34 +221,34 @@ fn compute_bt_root(bts: &[FieldElement]) -> Result<FieldElement, Error> {
 }
 
 //Compute and return (MR(bt_list), H(MR(bt_list), H(bi-1), H(bi))
-// pub fn compute_msg_to_sign(
-//     end_epoch_mc_b_hash:      &FieldElement,
-//     prev_end_epoch_mc_b_hash: &FieldElement,
-//     bt_list:                  &[BackwardTransfer],
-// ) -> Result<(FieldElement, FieldElement), Error> {
-//
-//     let mr_bt = if bt_list.is_empty() {
-//         PHANTOM_MERKLE_ROOT //Note: Can actually be taken from MHT_PARAMETERS::nodes[BT_MERKLE_TREE_HEIGHT]
-//     } else {
-//         let mut bt_field_list = vec![];
-//         for bt in bt_list.iter() {
-//             let bt_f = bt.to_field_element()?;
-//             bt_field_list.push(bt_f);
-//         }
-//
-//         //Compute bt_list merkle_root
-//         compute_bt_root(bt_field_list.as_slice())?
-//     };
-//
-//     //Compute message to be verified
-//     let msg = FieldHash::init(None)
-//         .update(mr_bt)
-//         .update(*prev_end_epoch_mc_b_hash)
-//         .update(*end_epoch_mc_b_hash)
-//         .finalize();
-//
-//     Ok((mr_bt, msg))
-// }
+pub fn compute_msg_to_sign(
+    end_epoch_mc_b_hash:      &FieldElement,
+    prev_end_epoch_mc_b_hash: &FieldElement,
+    bt_list:                  &[BackwardTransfer],
+) -> Result<(FieldElement, FieldElement), Error> {
+
+    let mr_bt = if bt_list.is_empty() {
+        MHT_PARAMETERS.nodes[BT_MERKLE_TREE_HEIGHT].clone()
+    } else {
+        let mut bt_field_list = vec![];
+        for bt in bt_list.iter() {
+            let bt_f = bt.to_field_element()?;
+            bt_field_list.push(bt_f);
+        }
+
+        //Compute bt_list merkle_root
+        compute_bt_root(bt_field_list.as_slice())?
+    };
+
+    //Compute message to be verified
+    let msg = FieldHash::init(None)
+        .update(mr_bt)
+        .update(*prev_end_epoch_mc_b_hash)
+        .update(*end_epoch_mc_b_hash)
+        .finalize();
+
+    Ok((mr_bt, msg))
+}
 
 pub fn compute_wcert_sysdata_hash(
     valid_sigs:               u64,
@@ -543,7 +544,7 @@ pub fn reset_ginger_mht(tree: &mut GingerMHT){
 
 ////////////SPARSE MERKLE TREE
 
-pub type GingerSMT = BigMerkleTree<GingerMerkleTreeParameters>;
+// pub type GingerSMT = BigMerkleTree<GingerMerkleTreeParameters>;
 
 // Note: If position is non empty in the SMTs the old leaf will be overwritten.
 // If that's not the desired behaviour, then leaf should depend on some tweakable
@@ -563,148 +564,148 @@ pub fn leaf_to_index(leaf: &FieldElement, height: usize) -> u64 {
     position
 }
 
-pub fn get_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>{
-
-    // If at least the leaves database is available, we can restore the tree
-    if Path::new(db_path).exists() {
-        restore_ginger_smt(height, db_path)
-    } else { // Otherwise we need to create a new tree
-        new_ginger_smt(height, db_path)
-    }
-}
-
-fn new_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error> {
-    match GingerSMT::new(
-        height,
-        true,
-        db_path.to_owned(),
-    ) {
-        Ok(tree) => Ok(tree),
-        Err(e) => Err(Box::new(e))
-    }
-}
-
-fn restore_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>
-{
-    match GingerSMT::load_batch::<GingerMerkleTreeParameters>(
-        height,
-        true,
-        db_path.to_owned(),
-    ) {
-        Ok(tree) => Ok(tree),
-        Err(e) => Err(Box::new(e))
-    }
-}
-
-pub fn flush_ginger_smt(tree: &mut GingerSMT) {
-    tree.flush()
-}
-
-pub fn set_ginger_smt_persistency(tree: &mut GingerSMT, persistency: bool) {
-    tree.set_persistency(persistency);
-}
-
-pub fn get_position_in_ginger_smt(tree: &GingerSMT, leaf: &FieldElement) -> u64
-{
-    leaf_to_index(leaf, tree.height())
-}
-
-pub fn is_position_empty_in_ginger_smt(tree: &GingerSMT, position: u64) -> bool {
-    tree.is_leaf_empty(Coord::new(0, position as usize))
-}
-
-pub fn add_leaf_to_ginger_smt(tree: &mut GingerSMT, leaf: &FieldElement, position: u64){
-    tree.insert_leaf(Coord::new(0, position as usize), *leaf);
-}
-
-pub fn remove_leaf_from_ginger_smt(tree: &mut GingerSMT, position: u64){
-    tree.remove_leaf(Coord::new(0, position as usize));
-}
-
-pub fn get_ginger_smt_root(tree: &GingerSMT) -> FieldElement {
-    tree.get_root()
-}
-
-pub fn get_ginger_smt_path(tree: &mut GingerSMT, leaf_position: u64) -> GingerMHTPath {
-    tree.get_merkle_path(Coord::new(0, leaf_position as usize))
-}
+// pub fn get_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>{
+//
+//     // If at least the leaves database is available, we can restore the tree
+//     if Path::new(db_path).exists() {
+//         restore_ginger_smt(height, db_path)
+//     } else { // Otherwise we need to create a new tree
+//         new_ginger_smt(height, db_path)
+//     }
+// }
+//
+// fn new_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error> {
+//     match GingerSMT::new(
+//         height,
+//         true,
+//         db_path.to_owned(),
+//     ) {
+//         Ok(tree) => Ok(tree),
+//         Err(e) => Err(Box::new(e))
+//     }
+// }
+//
+// fn restore_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>
+// {
+//     match GingerSMT::load_batch::<GingerMerkleTreeParameters>(
+//         height,
+//         true,
+//         db_path.to_owned(),
+//     ) {
+//         Ok(tree) => Ok(tree),
+//         Err(e) => Err(Box::new(e))
+//     }
+// }
+//
+// pub fn flush_ginger_smt(tree: &mut GingerSMT) {
+//     tree.flush()
+// }
+//
+// pub fn set_ginger_smt_persistency(tree: &mut GingerSMT, persistency: bool) {
+//     tree.set_persistency(persistency);
+// }
+//
+// pub fn get_position_in_ginger_smt(tree: &GingerSMT, leaf: &FieldElement) -> u64
+// {
+//     leaf_to_index(leaf, tree.height())
+// }
+//
+// pub fn is_position_empty_in_ginger_smt(tree: &GingerSMT, position: u64) -> bool {
+//     tree.is_leaf_empty(Coord::new(0, position as usize))
+// }
+//
+// pub fn add_leaf_to_ginger_smt(tree: &mut GingerSMT, leaf: &FieldElement, position: u64){
+//     tree.insert_leaf(Coord::new(0, position as usize), *leaf);
+// }
+//
+// pub fn remove_leaf_from_ginger_smt(tree: &mut GingerSMT, position: u64){
+//     tree.remove_leaf(Coord::new(0, position as usize));
+// }
+//
+// pub fn get_ginger_smt_root(tree: &GingerSMT) -> FieldElement {
+//     tree.get_root()
+// }
+//
+// pub fn get_ginger_smt_path(tree: &mut GingerSMT, leaf_position: u64) -> GingerMHTPath {
+//     tree.get_merkle_path(Coord::new(0, leaf_position as usize))
+// }
 
 ////////////LAZY SPARSE MERKLE TREE
 
-pub type LazyGingerSMT = LazyBigMerkleTree<GingerMerkleTreeParameters>;
+// pub type LazyGingerSMT = LazyBigMerkleTree<GingerMerkleTreeParameters>;
 type GingerLeaf = OperationLeaf<FieldElement>;
 
-pub fn get_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error>{
-
-    // If at least the leaves database is available, we can restore the tree
-    if Path::new(db_path).exists() {
-        restore_lazy_ginger_smt(height, db_path)
-    } else { // Otherwise we need to create a new tree
-        new_lazy_ginger_smt(height, db_path)
-    }
-}
-
-fn new_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error> {
-    match LazyGingerSMT::new(
-        height,
-        true,
-        db_path.to_owned(),
-    ) {
-        Ok(tree) => Ok(tree),
-        Err(e) => Err(Box::new(e))
-    }
-}
-
-fn restore_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error>
-{
-    match LazyGingerSMT::load(
-        height,
-        true,
-        db_path.to_owned(),
-    ) {
-        Ok(tree) => Ok(tree),
-        Err(e) => Err(Box::new(e))
-    }
-}
-
-pub fn flush_lazy_ginger_smt(tree: &mut LazyGingerSMT){
-    tree.flush()
-}
-
-pub fn set_ginger_lazy_smt_persistency(tree: &mut LazyGingerSMT, persistency: bool) {
-    tree.set_persistency(persistency);
-}
-
-pub fn get_position_in_lazy_ginger_smt(tree: &LazyGingerSMT, leaf: &FieldElement) -> u64
-{
-    leaf_to_index(leaf, tree.height())
-}
-
-pub fn is_position_empty_in_lazy_ginger_smt(tree: &LazyGingerSMT, position: u64) -> bool {
-    tree.is_leaf_empty(Coord::new(0, position as usize))
-}
-
-pub fn add_leaves_to_ginger_lazy_smt(tree: &mut LazyGingerSMT, leaves: &[FieldElement]) -> FieldElement{
-    let leaves = leaves.iter().map(|leaf| {
-        GingerLeaf::new(0, leaf_to_index(leaf, tree.height()) as usize, ActionLeaf::Insert, Some(*leaf))
-    }).collect::<Vec<_>>();
-    tree.process_leaves(leaves.as_slice())
-}
-
-pub fn remove_leaves_from_ginger_lazy_smt(tree: &mut LazyGingerSMT, positions: &[i64]) -> FieldElement{
-    let leaves = positions.iter().map(|&position| {
-        GingerLeaf::new(0, position as usize, ActionLeaf::Remove, None)
-    }).collect::<Vec<_>>();
-    tree.process_leaves(leaves.as_slice())
-}
-
-pub fn get_lazy_ginger_smt_root(tree: &LazyGingerSMT) -> FieldElement {
-    tree.get_root()
-}
-
-pub fn get_lazy_ginger_smt_path(tree: &mut LazyGingerSMT, leaf_position: u64) -> GingerMHTPath {
-    tree.get_merkle_path(Coord::new(0, leaf_position as usize))
-}
+// pub fn get_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error>{
+//
+//     // If at least the leaves database is available, we can restore the tree
+//     if Path::new(db_path).exists() {
+//         restore_lazy_ginger_smt(height, db_path)
+//     } else { // Otherwise we need to create a new tree
+//         new_lazy_ginger_smt(height, db_path)
+//     }
+// }
+//
+// fn new_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error> {
+//     match LazyGingerSMT::new(
+//         height,
+//         true,
+//         db_path.to_owned(),
+//     ) {
+//         Ok(tree) => Ok(tree),
+//         Err(e) => Err(Box::new(e))
+//     }
+// }
+//
+// fn restore_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error>
+// {
+//     match LazyGingerSMT::load(
+//         height,
+//         true,
+//         db_path.to_owned(),
+//     ) {
+//         Ok(tree) => Ok(tree),
+//         Err(e) => Err(Box::new(e))
+//     }
+// }
+//
+// pub fn flush_lazy_ginger_smt(tree: &mut LazyGingerSMT){
+//     tree.flush()
+// }
+//
+// pub fn set_ginger_lazy_smt_persistency(tree: &mut LazyGingerSMT, persistency: bool) {
+//     tree.set_persistency(persistency);
+// }
+//
+// pub fn get_position_in_lazy_ginger_smt(tree: &LazyGingerSMT, leaf: &FieldElement) -> u64
+// {
+//     leaf_to_index(leaf, tree.height())
+// }
+//
+// pub fn is_position_empty_in_lazy_ginger_smt(tree: &LazyGingerSMT, position: u64) -> bool {
+//     tree.is_leaf_empty(Coord::new(0, position as usize))
+// }
+//
+// pub fn add_leaves_to_ginger_lazy_smt(tree: &mut LazyGingerSMT, leaves: &[FieldElement]) -> FieldElement{
+//     let leaves = leaves.iter().map(|leaf| {
+//         GingerLeaf::new(0, leaf_to_index(leaf, tree.height()) as usize, ActionLeaf::Insert, Some(*leaf))
+//     }).collect::<Vec<_>>();
+//     tree.process_leaves(leaves.as_slice())
+// }
+//
+// pub fn remove_leaves_from_ginger_lazy_smt(tree: &mut LazyGingerSMT, positions: &[i64]) -> FieldElement{
+//     let leaves = positions.iter().map(|&position| {
+//         GingerLeaf::new(0, position as usize, ActionLeaf::Remove, None)
+//     }).collect::<Vec<_>>();
+//     tree.process_leaves(leaves.as_slice())
+// }
+//
+// pub fn get_lazy_ginger_smt_root(tree: &LazyGingerSMT) -> FieldElement {
+//     tree.get_root()
+// }
+//
+// pub fn get_lazy_ginger_smt_path(tree: &mut LazyGingerSMT, leaf_position: u64) -> GingerMHTPath {
+//     tree.get_merkle_path(Coord::new(0, leaf_position as usize))
+// }
 
 #[cfg(test)]
 mod test {
