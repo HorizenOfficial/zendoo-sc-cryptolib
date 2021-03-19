@@ -13,10 +13,14 @@ r1cs-crypto = {version = "0.1.0", features = ["mnt4_753", "mnt6_753", "tweedle",
 r1cs-core = {version = "0.1.0", git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl"}
 r1cs-std = {version = "0.1.0", features = ["mnt4_753", "mnt6_753", "tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl"}
 
+poly-commit = { git = "https://github.com/HorizenLabs/poly-commit", branch = "dlog_segmentation" }
+marlin = {version = "0.1.0", git = "https://github.com/HorizenLabs/marlin", branch = "sync_with_pc", features = [ "asm", "parallel" ] }
+
 derivative = "1"
 lazy_static = "1"
 radix_trie = "0.1"
 rand = { version = "0.7" }
+blake2 = { version = "0.8", default-features = false }
 
 [dev-dependencies]
 digest = "0.7"

@@ -1,7 +1,12 @@
 #[cfg(test)]
 pub mod tests;
 
-use algebra::{fields::tweedle::Fq as Fr, curves::tweedle::dee::Projective as Projective, Field, PrimeField, ToBits};
+use algebra::{
+    fields::tweedle::Fq as Fr,
+    curves::tweedle::dee::Projective as DeeProjective,
+    curves::tweedle::dum::Affine as DumAffine,
+    Field, PrimeField, ToBits
+};
 use primitives::{
     signature::schnorr::field_based_schnorr::{
         FieldBasedSchnorrSignature, FieldBasedSchnorrPk,
@@ -27,7 +32,7 @@ use r1cs_core::{ConstraintSystem, ConstraintSynthesizer, SynthesisError};
 use crate::constants::NaiveThresholdSigParams;
 
 use std::marker::PhantomData;
-// use rand::rngs::OsRng;
+use rand::rngs::OsRng;
 use lazy_static::*;
 
 lazy_static! {
@@ -35,12 +40,12 @@ lazy_static! {
 }
 
 //Sig types
-type SchnorrSigGadget = FieldBasedSchnorrSigGadget<Fr, Projective>;
+type SchnorrSigGadget = FieldBasedSchnorrSigGadget<Fr, DeeProjective>;
 type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
-    Fr, Projective, TweedleDeeGadget, TweedleFqPoseidonHash, TweedleFqPoseidonHashGadget
+    Fr, DeeProjective, TweedleDeeGadget, TweedleFqPoseidonHash, TweedleFqPoseidonHashGadget
 >;
-type SchnorrPk = FieldBasedSchnorrPk<Projective>;
-type SchnorrPkGadget = FieldBasedSchnorrPkGadget<Fr, Projective, TweedleDeeGadget>;
+type SchnorrPk = FieldBasedSchnorrPk<DeeProjective>;
+type SchnorrPkGadget = FieldBasedSchnorrPkGadget<Fr, DeeProjective, TweedleDeeGadget>;
 
 //Field types
 type FrGadget = FpGadget<Fr>;
@@ -49,7 +54,7 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 
     //Witnesses
     pks:                      Vec<Option<SchnorrPk>>, //pk_n = g^sk_n
-    sigs:                     Vec<Option<FieldBasedSchnorrSignature<Fr, Projective>>>, //sig_n = sign(sk_n, H(MR(BT), BH(Bi-1), BH(Bi)))
+    sigs:                     Vec<Option<FieldBasedSchnorrSignature<Fr, DeeProjective>>>, //sig_n = sign(sk_n, H(MR(BT), BH(Bi-1), BH(Bi)))
     threshold:                Option<Fr>,
     b:                        Vec<Option<bool>>,
     end_epoch_mc_b_hash:      Option<Fr>,
@@ -64,7 +69,7 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 impl<F: PrimeField>NaiveTresholdSignature<F> {
     pub fn new(
         pks:                      Vec<SchnorrPk>,
-        sigs:                     Vec<Option<FieldBasedSchnorrSignature<Fr, Projective>>>,
+        sigs:                     Vec<Option<FieldBasedSchnorrSignature<Fr, DeeProjective>>>,
         threshold:                Fr,
         b:                        Fr,
         end_epoch_mc_b_hash:      Fr,
@@ -246,190 +251,205 @@ impl<F: PrimeField> ConstraintSynthesizer<Fr> for NaiveTresholdSignature<F> {
     }
 }
 
-// use algebra::curves::mnt4753::MNT4;
-// use proof_systems::groth16::{Parameters, generator::generate_random_parameters};
 use r1cs_crypto::signature::schnorr::field_based_schnorr::FieldBasedSchnorrPkGadget;
-//
-// #[allow(dead_code)]
-// pub fn generate_parameters(max_pks: usize) -> Result<Parameters<MNT4>, SynthesisError> {
-//
-//     //Istantiating rng
-//     let mut rng = OsRng::default();
-//
-//     //Istantiating supported number of pks and sigs
-//     let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
-//
-//     // Create parameters for our circuit
-//     let c = NaiveTresholdSignature::<Fr> {
-//         pks:                      vec![None; max_pks],
-//         sigs:                     vec![None; max_pks],
-//         threshold:                None,
-//         b:                        vec![None; log_max_pks + 1],
-//         end_epoch_mc_b_hash:      None,
-//         prev_end_epoch_mc_b_hash: None,
-//         mr_bt:                    None,
-//         max_pks,
-//         _field:                   PhantomData
-//     };
-//
-//     let params = generate_random_parameters::<MNT4, _, _>(c, &mut rng);
-//     params
-// }
 
-// #[cfg(test)]
-// mod test {
-//     use super::*;
-//     use algebra::{curves::mnt4753::MNT4, BigInteger768, ProjectiveCurve};
-//     use primitives::{
-//         crh::FieldBasedHash,
-//         signature::{
-//             FieldBasedSignatureScheme, schnorr::field_based_schnorr::FieldBasedSchnorrSignatureScheme,
-//         },
-//     };
-//     use proof_systems::groth16::{
-//         Parameters,
-//         Proof, create_random_proof,
-//         prepare_verifying_key, verify_proof,
-//     };
-//     use rand::{
-//         Rng, rngs::OsRng
-//     };
-//
-//     type SchnorrSig = FieldBasedSchnorrSignatureScheme<Fr, Projective, TweedleFqPoseidonHash>;
-//
-//     fn generate_test_proof(
-//         max_pks:                  usize,
-//         valid_sigs:               usize,
-//         threshold:                usize,
-//         wrong_pks_threshold_hash: bool,
-//         wrong_wcert_sysdata_hash: bool,
-//         params:                   Parameters<MNT4>,
-//     ) -> Result<(Proof<MNT4>, Vec<Fr>), SynthesisError> {
-//
-//         //Istantiate rng
-//         let mut rng = OsRng::default();
-//         let mut h = TweedleFqPoseidonHash::init(None);
-//
-//         //Generate message to sign
-//         let mr_bt: Fr = rng.gen();
-//         let prev_end_epoch_mc_b_hash: Fr = rng.gen();
-//         let end_epoch_mc_b_hash: Fr = rng.gen();
-//         let message = h
-//             .update(mr_bt)
-//             .update(prev_end_epoch_mc_b_hash)
-//             .update(end_epoch_mc_b_hash)
-//             .finalize();
-//
-//         //Generate another random message used to simulate a non-valid signature
-//         let invalid_message: Fr = rng.gen();
-//
-//         let mut pks = vec![];
-//         let mut sigs = vec![];
-//
-//         for _ in 0..valid_sigs {
-//             let (pk, sk) = SchnorrSig::keygen(&mut rng);
-//             let sig = SchnorrSig::sign(&mut rng, &pk, &sk, &[message]).unwrap();
-//             pks.push(pk);
-//             sigs.push(Some(sig));
-//         }
-//
-//         for _ in 0..(max_pks-valid_sigs){
-//             //Sample a random boolean and decide if generating a non valid signature or a null one
-//             let generate_null: bool = rng.gen();
-//             let (pk, sig) = if generate_null {
-//                 (NULL_CONST.null_pk, NULL_CONST.null_sig)
-//             } else {
-//
-//                 let (pk, sk) = SchnorrSig::keygen(&mut rng);
-//                 let sig = SchnorrSig::sign(&mut rng, &pk, &sk, &[invalid_message]).unwrap();
-//                 (pk, sig)
-//             };
-//             pks.push(pk);
-//             sigs.push(Some(sig));
-//         }
-//
-//         //Generate b
-//         let t_field = Fr::from_repr(BigInteger768::from(threshold as u64));
-//         let valid_field = Fr::from_repr(BigInteger768::from(valid_sigs as u64));
-//         let b_field = valid_field - &t_field;
-//
-//         //Compute pks_threshold_hash
-//         h.reset(None);
-//         pks.iter().for_each(|pk| { h.update(pk.0.into_affine().x); });
-//         let pks_hash = h.finalize();
-//         let pks_threshold_hash = if !wrong_pks_threshold_hash {
-//             h
-//                 .reset(None)
-//                 .update(pks_hash)
-//                 .update(t_field)
-//                 .finalize()
-//         } else {
-//             rng.gen()
-//         };
-//
-//         //Compute wcert_sysdata_hash
-//         let wcert_sysdata_hash = if !wrong_wcert_sysdata_hash {
-//             h
-//                 .reset(None)
-//                 .update(valid_field)
-//                 .update(mr_bt)
-//                 .update(prev_end_epoch_mc_b_hash)
-//                 .update(end_epoch_mc_b_hash)
-//                 .finalize()
-//         } else {
-//             rng.gen()
-//         };
-//
-//         // Compute aggregated input
-//         let aggregated_input = h
-//             .reset(None)
-//             .update(pks_threshold_hash)
-//             .update(wcert_sysdata_hash)
-//             .finalize();
-//
-//         //Create proof for our circuit
-//         let c = NaiveTresholdSignature::<Fr>::new(
-//             pks, sigs, t_field, b_field, end_epoch_mc_b_hash,
-//             prev_end_epoch_mc_b_hash, mr_bt, max_pks,
-//         );
-//
-//         //Return proof and public inputs if success
-//         let start = std::time::Instant::now();
-//         let proof = match create_random_proof(c, &params, &mut rng) {
-//             Ok(proof) => {
-//                 let public_inputs = vec![aggregated_input];
-//                 Ok((proof, public_inputs))
-//             }
-//             Err(e) => Err(e)
-//         };
-//         println!("Proof creation time: {:?}", start.elapsed());
-//         proof
-//     }
-//
-//     #[test]
-//     fn test_naive_threshold_circuit() {
-//         let n = 6;
-//         let params = generate_parameters(n).unwrap();
-//         let pvk = prepare_verifying_key(&params.vk);
-//
-//         //Generate proof with correct witnesses and v > t
-//         let (proof, public_inputs) =
-//             generate_test_proof(n, 5, 4, false, false, params.clone()).unwrap();
-//         assert!(verify_proof(&pvk, &proof, public_inputs.as_slice()).unwrap());
-//
-//         /*//Generate proof with insufficient valid signatures
-//         let (proof, public_inputs) =
-//             generate_test_proof(n, 4, 5, false, false, params.clone()).unwrap();
-//         assert!(!verify_proof(&pvk, &proof, public_inputs.as_slice()).unwrap());
-//
-//         //Generate proof with bad pks_threshold_hash
-//         let (proof, public_inputs) =
-//             generate_test_proof(n, 5, 4, true, false, params.clone()).unwrap();
-//         assert!(!verify_proof(&pvk, &proof, public_inputs.as_slice()).unwrap());
-//
-//         //Generate proof with bad wcert_sysdata_hash
-//         let (proof, public_inputs) =
-//             generate_test_proof(n, 5, 4, false, true, params.clone()).unwrap();
-//         assert!(!verify_proof(&pvk, &proof, public_inputs.as_slice()).unwrap());*/
-//     }
-// }
+use marlin::*;
+use blake2::Blake2s;
+use poly_commit::ipa_pc::InnerProductArgPC;
+
+#[derive(Clone)]
+struct MarlinNoLCNoZk;
+
+impl MarlinConfig for MarlinNoLCNoZk {
+    const LC_OPT: bool = false;
+    const ZK: bool = false;
+}
+
+type IPAPC = InnerProductArgPC<DumAffine, Blake2s>;
+type MarlinInst = Marlin<Fr, IPAPC, Blake2s, MarlinNoLCNoZk>;
+
+#[allow(dead_code)]
+pub fn generate_parameters(max_pks: usize) -> Result<(IndexProverKey<Fr, IPAPC>, IndexVerifierKey<Fr, IPAPC>), SynthesisError> {
+
+    //Istantiating rng
+    let mut rng = OsRng::default();
+
+    //Istantiating supported number of pks and sigs
+    let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
+
+    // Create parameters for our circuit
+    let c = NaiveTresholdSignature::<Fr> {
+        pks:                      vec![None; max_pks],
+        sigs:                     vec![None; max_pks],
+        threshold:                None,
+        b:                        vec![None; log_max_pks + 1],
+        end_epoch_mc_b_hash:      None,
+        prev_end_epoch_mc_b_hash: None,
+        mr_bt:                    None,
+        max_pks,
+        _field:                   PhantomData
+    };
+
+    let universal_srs = MarlinInst::universal_setup(max_pks, max_pks, max_pks, &mut rng).unwrap();
+
+    Ok(MarlinInst::index(
+        &universal_srs,
+        c,
+    ).unwrap())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use algebra::{BigInteger256, ProjectiveCurve};
+    use primitives::{
+        crh::FieldBasedHash,
+        signature::{
+            FieldBasedSignatureScheme, schnorr::field_based_schnorr::FieldBasedSchnorrSignatureScheme,
+        },
+    };
+    use poly_commit::Error as PCError;
+    use marlin::{Proof, Error as MarlinError};
+    use rand::{
+        Rng, rngs::OsRng, thread_rng
+    };
+
+    type SchnorrSig = FieldBasedSchnorrSignatureScheme<Fr, DeeProjective, TweedleFqPoseidonHash>;
+
+    fn generate_test_proof(
+        max_pks:                  usize,
+        valid_sigs:               usize,
+        threshold:                usize,
+        wrong_pks_threshold_hash: bool,
+        wrong_wcert_sysdata_hash: bool,
+        params:                   (IndexProverKey<Fr, IPAPC>, IndexVerifierKey<Fr, IPAPC>),
+    ) -> Result<(Proof<Fr, IPAPC>, Vec<Fr>), MarlinError<PCError>> {
+
+        //Istantiate rng
+        let mut rng = OsRng::default();
+        let mut h = TweedleFqPoseidonHash::init(None);
+
+        //Generate message to sign
+        let mr_bt: Fr = rng.gen();
+        let prev_end_epoch_mc_b_hash: Fr = rng.gen();
+        let end_epoch_mc_b_hash: Fr = rng.gen();
+        let message = h
+            .update(mr_bt)
+            .update(prev_end_epoch_mc_b_hash)
+            .update(end_epoch_mc_b_hash)
+            .finalize();
+
+        //Generate another random message used to simulate a non-valid signature
+        let invalid_message: Fr = rng.gen();
+
+        let mut pks = vec![];
+        let mut sigs = vec![];
+
+        for _ in 0..valid_sigs {
+            let (pk, sk) = SchnorrSig::keygen(&mut rng);
+            let sig = SchnorrSig::sign(&mut rng, &pk, &sk, &[message]).unwrap();
+            pks.push(pk);
+            sigs.push(Some(sig));
+        }
+
+        for _ in 0..(max_pks-valid_sigs){
+            //Sample a random boolean and decide if generating a non valid signature or a null one
+            let generate_null: bool = rng.gen();
+            let (pk, sig) = if generate_null {
+                (NULL_CONST.null_pk, NULL_CONST.null_sig)
+            } else {
+
+                let (pk, sk) = SchnorrSig::keygen(&mut rng);
+                let sig = SchnorrSig::sign(&mut rng, &pk, &sk, &[invalid_message]).unwrap();
+                (pk, sig)
+            };
+            pks.push(pk);
+            sigs.push(Some(sig));
+        }
+
+        //Generate b
+        let t_field = Fr::from_repr(BigInteger256::from(threshold as u64));
+        let valid_field = Fr::from_repr(BigInteger256::from(valid_sigs as u64));
+        let b_field = valid_field - &t_field;
+
+        //Compute pks_threshold_hash
+        h.reset(None);
+        pks.iter().for_each(|pk| { h.update(pk.0.into_affine().x); });
+        let pks_hash = h.finalize();
+        let pks_threshold_hash = if !wrong_pks_threshold_hash {
+            h
+                .reset(None)
+                .update(pks_hash)
+                .update(t_field)
+                .finalize()
+        } else {
+            rng.gen()
+        };
+
+        //Compute wcert_sysdata_hash
+        let wcert_sysdata_hash = if !wrong_wcert_sysdata_hash {
+            h
+                .reset(None)
+                .update(valid_field)
+                .update(mr_bt)
+                .update(prev_end_epoch_mc_b_hash)
+                .update(end_epoch_mc_b_hash)
+                .finalize()
+        } else {
+            rng.gen()
+        };
+
+        // Compute aggregated input
+        let aggregated_input = h
+            .reset(None)
+            .update(pks_threshold_hash)
+            .update(wcert_sysdata_hash)
+            .finalize();
+
+        //Create proof for our circuit
+        let c = NaiveTresholdSignature::<Fr>::new(
+            pks, sigs, t_field, b_field, end_epoch_mc_b_hash,
+            prev_end_epoch_mc_b_hash, mr_bt, max_pks,
+        );
+
+        //Return proof and public inputs if success
+        let start = std::time::Instant::now();
+
+        let proof = match MarlinInst::prove::<_, OsRng>(&params.0, c, &mut None) {
+            Ok(proof) => {
+                let public_inputs = vec![aggregated_input];
+                Ok((proof, public_inputs))
+            }
+            Err(e) => Err(e)
+        };
+        println!("Proof creation time: {:?}", start.elapsed());
+        proof
+    }
+
+    #[test]
+    fn test_naive_threshold_circuit() {
+        let rng = &mut thread_rng();
+        let n = 6;
+        let params = generate_parameters(n).unwrap();
+
+        //Generate proof with correct witnesses and v > t
+        let (proof, public_inputs) =
+            generate_test_proof(n, 5, 4, false, false, params.clone()).unwrap();
+        assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+
+        //Generate proof with insufficient valid signatures
+        let (proof, public_inputs) =
+            generate_test_proof(n, 4, 5, false, false, params.clone()).unwrap();
+        assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+
+        //Generate proof with bad pks_threshold_hash
+        let (proof, public_inputs) =
+            generate_test_proof(n, 5, 4, true, false, params.clone()).unwrap();
+        assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+
+        //Generate proof with bad wcert_sysdata_hash
+        let (proof, public_inputs) =
+            generate_test_proof(n, 5, 4, false, true, params.clone()).unwrap();
+        assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+    }
+}

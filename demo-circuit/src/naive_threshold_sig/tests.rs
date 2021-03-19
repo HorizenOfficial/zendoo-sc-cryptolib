@@ -27,7 +27,7 @@ use r1cs_crypto::{
 };
 
 use r1cs_std::{
-    instantiated::tweedle::TweedleDeeGadget as DeeGadget,
+    instantiated::tweedle::TweedleDeeGadget,
     fields::{
         fp::FpGadget, FieldGadget,
     },
