@@ -3,7 +3,11 @@ use algebra::{fields::{
 }, curves::{
     // mnt4753::MNT4 as PairingCurve,
     tweedle::{
-        dee::Projective as GroupProjective, dee::Affine as GroupAffine
+        dee::{
+            Projective as DeeProjective,
+            Affine as DeeAffine
+        },
+        dum::Affine as DumAffine
     },
 }, FromBytes, FromBytesChecked, validity::SemanticallyValid,
    ToBytes, BigInteger256, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits};
@@ -27,8 +31,12 @@ use primitives::{crh::{
         FieldBasedSchnorrPk,
     },
 }, vrf::{FieldBasedVrf, ecvrf::*}, ActionLeaf};
+
+use marlin::*;
+use blake2::Blake2s;
+use poly_commit::ipa_pc::InnerProductArgPC;
 // use proof_systems::groth16::{
-//     Proof, create_random_proof,
+//     create_random_proof,
 //     prepare_verifying_key, verify_proof,
 // };
 use demo_circuit::{
@@ -38,7 +46,7 @@ use demo_circuit::{
     naive_threshold_sig::*
 };
 use rand::{
-    SeedableRng, rngs::OsRng
+    SeedableRng, rngs::OsRng, thread_rng
 };
 use rand_xorshift::XorShiftRng;
 
@@ -48,6 +56,17 @@ use std::{
 use lazy_static::*;
 
 pub type FieldElement = Fr;
+
+#[derive(Clone)]
+struct MarlinNoLCNoZk;
+
+impl MarlinConfig for MarlinNoLCNoZk {
+    const LC_OPT: bool = false;
+    const ZK: bool = false;
+}
+
+type IPAPC = InnerProductArgPC<DumAffine, Blake2s>;
+type MarlinInst = Marlin<Fr, IPAPC, Blake2s, MarlinNoLCNoZk>;
 
 pub const FIELD_SIZE: usize = 96; //Field size in bytes
 pub const SCALAR_FIELD_SIZE: usize = FIELD_SIZE;// 96
@@ -103,9 +122,9 @@ pub fn get_random_field_element(seed: u64) -> FieldElement {
 
 //***************************Schnorr types and functions********************************************
 
-pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, GroupProjective, FieldHash>;
-pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement, GroupProjective>;
-pub type SchnorrPk = GroupAffine;
+pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, DeeProjective, FieldHash>;
+pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement, DeeProjective>;
+pub type SchnorrPk = DeeAffine;
 pub type SchnorrSk = ScalarFieldElement;
 
 pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
@@ -153,7 +172,7 @@ pub fn finalize_poseidon_hash(hash: &FieldHash) -> FieldElement{
 
 //*****************************Naive threshold sig circuit related functions************************
 
-// pub type SCProof = Proof<PairingCurve>;
+pub type SCProof = Proof<Fr, IPAPC>;
 
 #[derive(Clone, Default)]
 pub struct BackwardTransfer {
@@ -267,117 +286,120 @@ pub fn compute_wcert_sysdata_hash(
     Ok(wcert_sysdata_hash)
 }
 
-// pub fn create_naive_threshold_sig_proof(
-//     pks:                      &[SchnorrPk],
-//     mut sigs:                 Vec<Option<SchnorrSig>>,
-//     end_epoch_mc_b_hash:      &[u8; 32],
-//     prev_end_epoch_mc_b_hash: &[u8; 32],
-//     bt_list:                  &[BackwardTransfer],
-//     threshold:                u64,
-//     proving_key_path:         &str,
-//     enforce_membership:       bool,
-// ) -> Result<(SCProof, u64), Error> {
-// 
-//     //Get max pks
-//     let max_pks = pks.len();
-//     assert_eq!(sigs.len(), max_pks);
-// 
-//     //Read end_epoch_mc_b_hash, prev_end_epoch_mc_b_hash and bt_list as field elements
-//     let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
-//     let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
-//     let (mr_bt, msg) = compute_msg_to_sign(
-//         &end_epoch_mc_b_hash,
-//         &prev_end_epoch_mc_b_hash,
-//         bt_list,
-//     )?;
-// 
-//     // Iterate over sigs, check and count number of valid signatures,
-//     // and replace with NULL_CONST.null_sig the None ones
-//     let mut valid_signatures = 0;
-//     for i in 0..max_pks {
-//         if sigs[i].is_some(){
-//             let is_verified = schnorr_verify_signature(&msg, &pks[i], &sigs[i].unwrap())?;
-//             if is_verified { valid_signatures += 1; }
-//         }
-//         else {
-//             sigs[i] = Some(NULL_CONST.null_sig)
-//         }
-//     }
-// 
-//     //Compute b as v-t and convert it to field element
-//     let b = read_field_element_from_u64(valid_signatures - threshold);
-// 
-//     //Convert affine pks to projective
-//     let pks = pks.iter().map(|&pk| FieldBasedSchnorrPk(pk.into_projective())).collect::<Vec<_>>();
-// 
-//     //Convert needed variables into field elements
-//     let threshold = read_field_element_from_u64(threshold);
-// 
-//     let c = NaiveTresholdSignature::<FieldElement>::new(
-//         pks, sigs, threshold, b, end_epoch_mc_b_hash,
-//         prev_end_epoch_mc_b_hash, mr_bt, max_pks,
-//     );
-// 
-//     //Read proving key
-//     let params = if enforce_membership {
-//         read_from_file_checked(proving_key_path)
-//     } else {
-//         read_from_file(proving_key_path)
-//     }?;
-// 
-//     //Create and return proof
-//     let mut rng = OsRng;
-//     let proof = create_random_proof(c, &params, &mut rng)?;
-//     Ok((proof, valid_signatures))
-// }
+pub fn create_naive_threshold_sig_proof(
+    pks:                      &[SchnorrPk],
+    mut sigs:                 Vec<Option<SchnorrSig>>,
+    end_epoch_mc_b_hash:      &[u8; 16],
+    prev_end_epoch_mc_b_hash: &[u8; 16],
+    bt_list:                  &[BackwardTransfer],
+    threshold:                u64,
+    proving_key_path:         &str,
+    enforce_membership:       bool,
+) -> Result<(SCProof, u64), Error> {
 
-// pub fn verify_naive_threshold_sig_proof(
-//     constant:                 &FieldElement,
-//     end_epoch_mc_b_hash:      &[u8; 32],
-//     prev_end_epoch_mc_b_hash: &[u8; 32],
-//     bt_list:                  &[BackwardTransfer],
-//     valid_sigs:               u64,
-//     proof:                    &SCProof,
-//     vk_path:                  &str,
-//     enforce_membership:       bool
-// ) -> Result<bool, Error>
-// {
-//     //Compute wcert_sysdata_hash
-//     let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
-//     let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
-//     let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
-//     let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
-//     let aggregated_input = FieldHash::init(None)
-//         .update(*constant)
-//         .update(wcert_sysdata_hash)
-//         .finalize();
-// 
-//     //Verify proof
-//     let vk = if enforce_membership {
-//         read_from_file_checked(vk_path)
-//     } else {
-//         read_from_file(vk_path)
-//     }?;
-//     let pvk = prepare_verifying_key(&vk); //Get verifying key
-//     let is_verified = verify_proof(&pvk, &proof, &[aggregated_input])?;
-// 
-//     Ok(is_verified)
-// }
+    //Get max pks
+    let max_pks = pks.len();
+    assert_eq!(sigs.len(), max_pks);
+
+    //Read end_epoch_mc_b_hash, prev_end_epoch_mc_b_hash and bt_list as field elements
+    let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
+    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
+    let (mr_bt, msg) = compute_msg_to_sign(
+        &end_epoch_mc_b_hash,
+        &prev_end_epoch_mc_b_hash,
+        bt_list,
+    )?;
+
+    // Iterate over sigs, check and count number of valid signatures,
+    // and replace with NULL_CONST.null_sig the None ones
+    let mut valid_signatures = 0;
+    for i in 0..max_pks {
+        if sigs[i].is_some(){
+            let is_verified = schnorr_verify_signature(&msg, &pks[i], &sigs[i].unwrap())?;
+            if is_verified { valid_signatures += 1; }
+        }
+        else {
+            sigs[i] = Some(NULL_CONST.null_sig)
+        }
+    }
+
+    //Compute b as v-t and convert it to field element
+    let b = read_field_element_from_u64(valid_signatures - threshold);
+
+    //Convert affine pks to projective
+    let pks = pks.iter().map(|&pk| FieldBasedSchnorrPk(pk.into_projective())).collect::<Vec<_>>();
+
+    //Convert needed variables into field elements
+    let threshold = read_field_element_from_u64(threshold);
+
+    let c = NaiveTresholdSignature::<FieldElement>::new(
+        pks, sigs, threshold, b, end_epoch_mc_b_hash,
+        prev_end_epoch_mc_b_hash, mr_bt, max_pks,
+    );
+
+    //Read proving key
+    let pk: IndexProverKey<Fr, IPAPC> = if enforce_membership {
+        read_from_file_checked(proving_key_path)
+    } else {
+        read_from_file(proving_key_path)
+    }?;
+
+    //Create and return proof
+    let mut rng = OsRng;
+    let proof = MarlinInst::prove::<_, OsRng>(&pk, c, &mut Some(rng)).unwrap();
+
+    Ok((proof, valid_signatures))
+}
+
+pub fn verify_naive_threshold_sig_proof(
+    constant:                 &FieldElement,
+    end_epoch_mc_b_hash:      &[u8; 16],
+    prev_end_epoch_mc_b_hash: &[u8; 16],
+    bt_list:                  &[BackwardTransfer],
+    valid_sigs:               u64,
+    proof:                    &SCProof,
+    vk_path:                  &str,
+    enforce_membership:       bool
+) -> Result<bool, Error>
+{
+    //Compute wcert_sysdata_hash
+    let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
+    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
+    let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
+    let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
+    let aggregated_input = FieldHash::init(None)
+        .update(*constant)
+        .update(wcert_sysdata_hash)
+        .finalize();
+
+    let rng = &mut thread_rng();
+
+    //Verify proof
+    let vk: IndexVerifierKey<Fr, IPAPC> = if enforce_membership {
+        read_from_file_checked(vk_path)
+    } else {
+        read_from_file(vk_path)
+    }?;
+
+    let is_verified = MarlinInst::verify(&vk, &[aggregated_input], &proof, rng).unwrap();
+
+    Ok(is_verified)
+}
 
 //VRF types and functions
 
 lazy_static! {
-    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<GroupProjective> = {
+    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<DeeProjective> = {
         let params = VRFParams::new();
-        BoweHopwoodPedersenParameters::<GroupProjective>{generators: params.group_hash_generators}
+        BoweHopwoodPedersenParameters::<DeeProjective>{generators: params.group_hash_generators}
     };
 }
 
-type GroupHash = BoweHopwoodPedersenCRH<GroupProjective, VRFWindow>;
+type GroupHash = BoweHopwoodPedersenCRH<DeeProjective, VRFWindow>;
 
-pub type VRFScheme = FieldBasedEcVrf<FieldElement, GroupProjective, FieldHash, GroupHash>;
-pub type VRFProof = FieldBasedEcVrfProof<FieldElement, GroupProjective>;
-pub type VRFPk = GroupAffine;
+pub type VRFScheme = FieldBasedEcVrf<FieldElement, DeeProjective, FieldHash, GroupHash>;
+pub type VRFProof = FieldBasedEcVrfProof<FieldElement, DeeProjective>;
+pub type VRFPk = DeeAffine;
 pub type VRFSk = ScalarFieldElement;
 
 pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
@@ -738,8 +760,8 @@ mod test {
         let mut rng = OsRng;
 
         //Generate random mc block hashes and bt list
-        let mut end_epoch_mc_b_hash = [0u8; 32];
-        let mut prev_end_epoch_mc_b_hash = [0u8; 32];
+        let mut end_epoch_mc_b_hash = [0u8; 16];
+        let mut prev_end_epoch_mc_b_hash = [0u8; 16];
         rng.fill_bytes(&mut end_epoch_mc_b_hash);
         rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
         println!("end epoch u8: {:?}", end_epoch_mc_b_hash);
@@ -753,6 +775,7 @@ mod test {
         for _ in 0..bt_num {
             bt_list.push(BackwardTransfer::default());
         }
+        println!("bt_list finished");
 
         //Compute msg to sign
         let (_, msg) = compute_msg_to_sign(
@@ -760,14 +783,18 @@ mod test {
             &prev_end_epoch_mc_b_hash_f,
             bt_list.as_slice()
         ).unwrap();
+        println!("compute_msg_to_sign finished");
 
         //Generate params and write them to file
         let params = generate_parameters(3).unwrap();
-        let proving_key_path = if bt_num != 0 {"./sample_params"} else {"./sample_params_no_bwt"};
-        write_to_file(&params, proving_key_path).unwrap();
+        println!("generate_parameters finished");
+        let proving_key_path = if bt_num != 0 {"./sample_pk"} else {"./sample_pl_no_bwt"};
+        write_to_file(&params.0, proving_key_path).unwrap();
+        println!("generate_parameters write_to_file finished");
 
         let verifying_key_path = if bt_num != 0 {"./sample_vk"} else {"./sample_vk_no_bwt"};
-        write_to_file(&(params.vk), verifying_key_path).unwrap();
+        write_to_file(&params.1, verifying_key_path).unwrap();
+        println!("verifying_key write_to_file finished");
 
         //Generate sample pks and sigs vec
         let threshold: u64 = 2;
@@ -779,6 +806,7 @@ mod test {
             sks.push(keypair.1);
             println!("sk: {:?}", into_i8(to_bytes!(keypair.1).unwrap()).to_vec());
         }
+        println!("pks / sks finished");
 
         let mut sigs = vec![];
         sigs.push(Some(schnorr_sign(&msg, &sks[0], &pks[0]).unwrap()));
@@ -806,8 +834,8 @@ mod test {
             proving_key_path,
             false,
         ).unwrap();
-        let proof_path = if bt_num != 0 {"./sample_proof"} else {"./sample_proof_no_bwt"};
-        write_to_file(&proof, proof_path).unwrap();
+        // let proof_path = if bt_num != 0 {"./sample_proof"} else {"./sample_proof_no_bwt"};
+        // write_to_file(&proof, proof_path).unwrap();
 
         //Verify proof
         assert!(verify_naive_threshold_sig_proof(
