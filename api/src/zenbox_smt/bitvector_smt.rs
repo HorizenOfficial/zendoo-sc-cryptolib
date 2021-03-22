@@ -1,11 +1,10 @@
-////////////BITVECTOR SPARSE MERKLE TREE
-
 use primitives::{BigMerkleTree, Coord};
 use crate::ginger_calls::{GingerMerkleTreeParameters, Error, FieldElement, GingerMHTPath, restore_ginger_smt, new_ginger_smt};
 use algebra::fields::mnt6753::FqParameters;
-use algebra::{FpParameters, ToBits};
+use algebra::{FpParameters, ToBits, FromBits};
 use std::path::Path;
 
+// Bitvector Sparse Merkle Tree
 pub type BitvectorSMT = BigMerkleTree<GingerMerkleTreeParameters>;
 
 // Computes floor(log2(x))
@@ -13,9 +12,15 @@ const fn log2(x: u64) -> usize {
     std::mem::size_of::<u64>() * 8 - x.leading_zeros() as usize - 1usize
 }
 
+// Computes a power of 2
+fn pow2(power: usize) -> usize {
+    1 << power
+}
+
 // Size of a BVT leaf in bits
 pub const BVT_LEAF_SIZE: u64 = FqParameters::CAPACITY as u64;
 pub const BVT_LEAF_SIZE_LOG2: usize = log2(BVT_LEAF_SIZE);
+const FIELD_ELEMENT_SIZE: u64 = FqParameters::MODULUS_BITS as u64;
 
 pub fn get_bvt(height: usize, db_path: &str) -> Result<BitvectorSMT, Error>{
     // If at least the leaves database is available, we can restore the tree
@@ -58,8 +63,9 @@ pub fn get_bvt_bit(tree: &BitvectorSMT, bit_position: u64) -> bool {
     if let Some(leaf) = get_bvt_leaf(tree, bit_position) {
         let leaf_bits= leaf.write_bits();
         assert_eq!(BVT_LEAF_SIZE, (leaf_bits.len() - 1) as u64);
-        // The LSB bits are at the MSB positions
-        leaf_bits[(BVT_LEAF_SIZE - (bit_position % BVT_LEAF_SIZE)) as usize]
+        // BV bits are contained in reverse order: the MSB bits of a BV are at the LSB positions of a FieldElement-leaf
+        // This is to avoid usage of the bits which are over the (MODULUS_BITS - 1) size
+        leaf_bits[((FIELD_ELEMENT_SIZE - 1) - (bit_position % BVT_LEAF_SIZE)) as usize]
     } else { // leaf doesn't even exist, so the bit isn't set
         false
     }
@@ -70,7 +76,7 @@ fn get_bvt_leaf_by_index(tree: &BitvectorSMT, leaf_index: u64) -> Option<FieldEl
 }
 
 fn modify_bit_in_bvt(tree: &mut BitvectorSMT, bit_position: u64, bit_value: bool){
-    use algebra::{Field, FromBits};
+    use algebra::Field;
 
     let updated_leaf = FieldElement::read_bits(
         {
@@ -81,8 +87,9 @@ fn modify_bit_in_bvt(tree: &mut BitvectorSMT, bit_position: u64, bit_value: bool
                     FieldElement::zero().write_bits()
                 };
             assert_eq!(BVT_LEAF_SIZE, (leaf_bits.len() - 1) as u64);
-            // The LSB bits are at the MSB positions
-            leaf_bits[(BVT_LEAF_SIZE - (bit_position % BVT_LEAF_SIZE)) as usize] = bit_value;
+            // BV bits are contained in reverse order: the MSB bits of a BV are at the LSB positions of a FieldElement-leaf
+            // This is to avoid usage of the bits which are over the (MODULUS_BITS - 1) size
+            leaf_bits[((FIELD_ELEMENT_SIZE - 1) - (bit_position % BVT_LEAF_SIZE)) as usize] = bit_value;
             leaf_bits
         }
     ).unwrap();
@@ -97,20 +104,145 @@ fn modify_bit_in_bvt(tree: &mut BitvectorSMT, bit_position: u64, bit_value: bool
     }
 }
 
+fn serialize_bvt(tree: &BitvectorSMT) -> Vec<u8> {
+    let mut bits = Vec::<bool>::new();
+    let leaves_num = 1usize << tree.height();
+
+    // Read sequentially all bits from BVT in BigEndian ordering
+    for pos in 0.. leaves_num {
+        if let Some(leaf) = tree.get_leaf(Coord::new(0, pos)){
+            leaf.write_bits().iter() // the LSB bits of a BV are at the MSB positions of the leaf_bits
+                .rev()// re-ordering into BigEndian
+                .take(BVT_LEAF_SIZE as usize) // take only the BV-related bits of a current leaf
+                .for_each(|bit|bits.push(*bit));
+        } else { // if a leaf doesn't exist assume it contains all zero bits
+            bits.extend(&vec![false; BVT_LEAF_SIZE as usize])
+        }
+    }
+    // Builds a byte from a BigEndian-ordered sequence of bits
+    fn byte_from_bits(bits: &[bool]) -> u8 {
+        let mut byte = 0u8;
+        bits.iter().enumerate().for_each(|(i, bit)| if *bit {byte |= 0x80 >> i});
+        byte
+    }
+    // Splitting a whole bits-sequence into bytes
+    bits.chunks(8).map(
+        |bits_chunk| byte_from_bits(bits_chunk)
+    ).collect()
+}
+
+fn initialize_bvt(tree: &mut BitvectorSMT, bvt_bytes: Vec<u8>) -> Result<(), Error>{
+    // Converts byte-array into a sequence of FieldElement-leaves
+    fn bytes_to_leaves(bytes: &[u8], bvt_bit_len: usize) -> Result<Vec<FieldElement>, Error> {
+        fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
+            let mut bits = Vec::new();
+            for byte in bytes {
+                for i in 0..8 {
+                    bits.push(((0x80 >> i) & *byte) != 0)
+                }
+            }
+            bits
+        }
+        fn bits_to_leaves(bits: &Vec<bool>) -> Result<Vec<FieldElement>, Error> {
+            if bits.len() % BVT_LEAF_SIZE as usize == 0 {
+                let leaves: Vec<FieldElement> = bits.chunks(BVT_LEAF_SIZE as usize)
+                    .flat_map(|leaf_bits|{ // using flat_map to handle possible Error returned by FieldElement::read_bits
+                        // Initializing FieldElement-leaf with re-ordered into LittleEndian bits of BV
+                        FieldElement::read_bits(leaf_bits.to_vec().into_iter().rev().collect())
+                    }).collect();
+                // Checking that all leaves are built successfully
+                if leaves.len() == bits.len() / BVT_LEAF_SIZE as usize {
+                    Ok(leaves)
+                } else {
+                    Err("Insufficient number of leaves are built from the given bits".into())
+                }
+            } else {
+                Err("bits.len() should be a multiple of BVT_LEAF_SIZE".into())
+            }
+        }
+        // Removing padding zeroes by taking bvt_bit_len bits
+        bits_to_leaves(&bytes_to_bits(bytes).into_iter().take(bvt_bit_len).collect())
+    }
+
+    // Number of leaves in a tree of corresponding to its height
+    let leaves_num = pow2(tree.height());
+    // Bit-size of a BV which is contained in a given tree
+    let bvt_bit_len = BVT_LEAF_SIZE as usize * leaves_num;
+    // Padding to a full byte length
+    let padding = if bvt_bit_len % 8 != 0 { 8 - bvt_bit_len % 8 } else { 0 };
+
+    // Checking size of a given byte-array
+    if bvt_bytes.len() * 8 == (bvt_bit_len + padding) as usize {
+        // Converting byte-array into a sequence of FieldElement-leaves
+        let bvt_leaves = bytes_to_leaves(bvt_bytes.as_slice(), bvt_bit_len)?;
+        // Sequentially inserting leaves into a tree
+        for i in 0.. leaves_num {
+            tree.insert_leaf(Coord::new(0, i), bvt_leaves[i]);
+        }
+        Ok(())
+    } else {
+        Err("Number of bytes is inconsistent with height of a tree".into())
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use crate::zenbox_smt::bitvector_smt::{BVT_LEAF_SIZE, get_bvt, set_bvt_bit, get_bvt_bit, reset_bvt_bit, get_bvt_leaf_by_index, get_bvt_leaf, get_bvt_path, set_bvt_persistency};
+    use crate::zenbox_smt::bitvector_smt::{BVT_LEAF_SIZE, get_bvt, set_bvt_bit, get_bvt_bit, reset_bvt_bit, get_bvt_leaf_by_index, get_bvt_leaf, get_bvt_path, set_bvt_persistency, serialize_bvt, initialize_bvt, pow2};
     use algebra::ToBits;
+
+    #[test]
+    fn bitvector_tree_serialization(){
+        let height = 2; // 4 leaves
+        let mut bvt = get_bvt(height, "/tmp/bvt_db_serialization").unwrap();
+
+        let mut bvt_bytes = serialize_bvt(&bvt);
+        // Initially empty bvt should consist of zeroes
+        bvt_bytes.iter().for_each(|byte| assert_eq!(*byte, 0u8));
+
+        let bvt_leaves_num = pow2(height) as u64;
+        let bvt_bit_len = BVT_LEAF_SIZE * bvt_leaves_num;
+        let padding = if bvt_bit_len % 8 != 0 { 8 - bvt_bit_len % 8 } else { 0 }; // padding to a full byte length
+        // Checking a length of a serialized bvt considering possible padding
+        assert_eq!(bvt_bytes.len() * 8, (bvt_bit_len + padding) as usize);
+
+        // The first bit of a first BVT-leaf
+        set_bvt_bit(&mut bvt, (BVT_LEAF_SIZE * 0) + 0);
+        // The last bit of a first BVT-leaf
+        set_bvt_bit(&mut bvt, (BVT_LEAF_SIZE * 0) + (BVT_LEAF_SIZE - 1));
+        // The first bit of a second BVT-leaf
+        set_bvt_bit(&mut bvt, (BVT_LEAF_SIZE * 1) + 0);
+        // The last bit of a second BVT-leaf
+        set_bvt_bit(&mut bvt, (BVT_LEAF_SIZE * 1) + (BVT_LEAF_SIZE - 1));
+        // The first bit of a last BVT-leaf
+        set_bvt_bit(&mut bvt, (BVT_LEAF_SIZE * (bvt_leaves_num - 1)) + 0);
+        // The last bit of a last BVT-leaf
+        set_bvt_bit(&mut bvt, (BVT_LEAF_SIZE * (bvt_leaves_num - 1)) + (BVT_LEAF_SIZE - 1));
+
+        bvt_bytes = serialize_bvt(&bvt);
+        // bvt_bytes.iter().for_each(|byte| print!("{:#04x}, ", byte));
+        let serialized_bvt = vec![0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01];
+        assert_eq!(bvt_bytes, serialized_bvt);
+
+        let mut bvt2 = get_bvt(height, "/tmp/bvt_db_serialization2").unwrap();
+        // Checking that BVT initialization from serialization bytes is successful
+        assert!(initialize_bvt(&mut bvt2, bvt_bytes).is_ok());
+        // Checking that BVT built from serialization bytes is the same as the initial one
+        assert_eq!(bvt.get_root(), bvt2.get_root());
+
+        // Deleting BVTs data
+        set_bvt_persistency(&mut bvt2, false);
+        set_bvt_persistency(&mut bvt, false);
+    }
 
     #[test]
     fn sample_calls_bitvector_tree(){
         // This test is specified for a 752-bit bitvectors, that corresponds to a 753-bit field elements
-        // Here a bitvector is a sequential chunk of bits, that corresponds to one leaf of a field based SMT with 753-bit leafs.
+        // Here a bitvector is a sequential chunk of bits, that corresponds to one leaf of a FieldElement-based SMT with 753-bit leaves.
 
         assert_eq!(BVT_LEAF_SIZE, 752);
 
         // Get BitvectorTree of height 4 to decrease time of the test run
-        let mut bvt = get_bvt(4, "/tmp/temp_bvt_db").unwrap();
+        let mut bvt = get_bvt(4, "/tmp/bvt_db").unwrap();
 
         // To make test run not too long the number of tested bits per leaf is at step = 47 times lesser
         let step = (BVT_LEAF_SIZE / 16) as usize;
