@@ -170,6 +170,33 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetCommitment();
     }
 
-    // TODO: get_sc_existence_proof, get_sc_absence_proof, verify_sc_commitment, verify_sc_absence
+    private static native Optional<ScExistanceProof> nativeGetScExistenceProof(byte[] scId);
 
+    public Optional<ScExistanceProof> getScExistenceProof(byte[] scId) {
+        if (commitmentTreePointer == 0)
+            throw new IllegalStateException("CommitmentTree instance was freed.");
+        return nativeGetScExistenceProof(scId);
+    }
+
+    private static native bool nativeVerifyScCommitment(FieldElement scCommitment, ScExistanceProof existanceProof, FieldElement commitment);
+
+    public static bool verifyScCommitment(FieldElement scCommitment, ScExistanceProof existanceProof, FieldElement commitment) {
+        return nativeVerifyScCommitment(scCommitment, existanceProof, commitment);
+    }
+
+    private static native Optional<ScExistanceProof> nativeGetScAbsenceProof(byte[] scId);
+
+    public Optional<ScAbsenceProof> getScAbsenceProof(byte[] scId) {
+        if (commitmentTreePointer == 0)
+            throw new IllegalStateException("CommitmentTree instance was freed.");
+        return nativeGetScAbsenceProof(scId);
+    }
+
+    private native bool nativeVerifyScAbsence(byte[] scid, ScExistanceProof existanceProof, FieldElement commitment);
+
+    public bool verifyScAbsence(byte[] scid, ScExistanceProof existanceProof, FieldElement commitment) {
+        if (commitmentTreePointer == 0)
+            throw new IllegalStateException("CommitmentTree instance was freed.");
+        return nativeVerifyScAbsence(scCommitment, existanceProof, commitment);
+    }
 }

@@ -9,7 +9,7 @@ use std::panic;
 mod ginger_calls;
 use ginger_calls::*;
 
-use cctp_primitives::commitment_tree::{CommitmentTree, hashers};
+use cctp_primitives::commitment_tree::{CommitmentTree, hashers, ScExistenceProof, ScAbsenceProof};
 
 fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
     assert!(!input.is_null());
@@ -3376,4 +3376,211 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
             *empty_res.l().unwrap()
         }
     }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_ScExistanceProof_nativeFreeScExistanceProof(
+    _env: JNIEnv,
+    _class: JClass,
+    _sc_existance_proof: *mut ScExistenceProof
+)
+{
+    if _sc_existance_proof.is_null()  { return }
+    drop(unsafe { Box::from_raw(_sc_existance_proof) });
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_ScExistanceProof_nativeFreeScAbsenceProof(
+    _env: JNIEnv,
+    _class: JClass,
+    _sc_absence_proof: *mut ScAbsenceProof
+)
+{
+    if _sc_absence_proof.is_null()  { return }
+    drop(unsafe { Box::from_raw(_sc_absence_proof) });
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetExistanceProof(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+    match commitment_tree.get_sc_existence_proof(&hashers::hash_id(&sc_id)) {
+        Some(sc_existance_proof) => {
+            let proof_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_existance_proof)) as i64);
+
+            let existance_proof_class = _env.find_class("com/horizen/commitmenttree/ScExistanceProof")
+                .expect("Should be able to find ScExistanceProof class");
+
+            let jep = _env.new_object(existance_proof_class, "(J)V", &[
+                JValue::Long(proof_ptr)]).expect("Should be able to create new long for ScExistanceProof");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/commitmenttree/ScExistanceProof)V",
+                                              &[JValue::Object(jep)]).unwrap();
+            *res.l().unwrap()
+        },
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            *empty_res.l().unwrap()
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetAbsenceProof(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+    match commitment_tree.get_sc_absence_proof(&hashers::hash_id(&sc_id)) {
+        Some(sc_absence_proof) => {
+            let proof_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_absence_proof)) as i64);
+
+            let absence_proof_class = _env.find_class("com/horizen/commitmenttree/ScAbsenceProof")
+                .expect("Should be able to find ScAbsenceProof class");
+
+            let jep = _env.new_object(absence_proof_class, "(J)V", &[
+                JValue::Long(proof_ptr)]).expect("Should be able to create new long for ScAbsenceProof");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/commitmenttree/ScAbsenceProof)V",
+                                              &[JValue::Object(jep)]).unwrap();
+            *res.l().unwrap()
+        }
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            *empty_res.l().unwrap()
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyCommitmentProof(
+    _env: JNIEnv,
+    _sc_commitment: JObject,
+    _sc_commitment_proof: JObject,
+    _commitment: JObject
+) -> bool
+{
+
+    //Read sidechain commitment
+    let sc_commitment_fe = {
+        let i =_env.get_field(_sc_commitment, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer from scCommitment");
+
+        read_raw_pointer(i.j().unwrap() as *const cctp_primitives::commitment_tree::FieldElement)
+    };
+
+    //Read commitment proof
+    let sc_commitment_proof = {
+        let i =_env.get_field(_sc_commitment_proof, "existanceProofPointer", "J")
+            .expect("Should be able to get field existanceProofPointer frfromom scCommitmentProof");
+
+        read_raw_pointer(i.j().unwrap() as *const ScExistenceProof)
+    };
+
+    //Read commitment
+    let commitment_fe = {
+        let i =_env.get_field(_commitment, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer from commitment");
+
+        read_raw_pointer(i.j().unwrap() as *const cctp_primitives::commitment_tree::FieldElement)
+    };
+
+    CommitmentTree::verify_sc_commitment(sc_commitment_fe, sc_commitment_proof, commitment_fe)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyAbsenceProof(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray,
+    _sc_absence_proof: JObject,
+    _commitment: JObject
+) -> bool
+{
+    // Read sidechain id
+    let sc_id = {
+        let t = _env.convert_byte_array(_sc_id)
+            .expect("Should be able to convert to Rust array");
+
+        let mut sc_id_bytes = [0u8; 32];
+
+        t.write(&mut sc_id_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        sc_id_bytes
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    //Read commitment proof
+    let sc_absence_proof = {
+        let i =_env.get_field(_sc_absence_proof, "absenceProofPointer", "J")
+            .expect("Should be able to get field existanceProofPointer frfromom scAbsenceProof");
+
+        read_raw_pointer(i.j().unwrap() as *const ScAbsenceProof)
+    };
+
+    //Read commitment
+    let commitment_fe = {
+        let i =_env.get_field(_commitment, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer from commitment");
+
+        read_raw_pointer(i.j().unwrap() as *const cctp_primitives::commitment_tree::FieldElement)
+    };
+
+    commitment_tree.verify_sc_absence(&hashers::hash_id(&sc_id), sc_absence_proof, commitment_fe)
 }
