@@ -30,7 +30,7 @@ use primitives::{crh::{
         FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature,
         FieldBasedSchnorrPk,
     },
-}, vrf::{FieldBasedVrf, ecvrf::*}, ActionLeaf};
+}, vrf::{FieldBasedVrf, ecvrf::*}/*, ActionLeaf*/};
 
 use marlin::*;
 use blake2::Blake2s;
@@ -51,34 +51,35 @@ use rand::{
 use rand_xorshift::XorShiftRng;
 
 use std::{
-    fs::File, io::Result as IoResult, path::Path
+    fs::File, io::Result as IoResult/*, path::Path*/
 };
 use lazy_static::*;
 
 pub type FieldElement = Fr;
 
-#[derive(Clone)]
-struct MarlinNoLCNoZk;
-
-impl MarlinConfig for MarlinNoLCNoZk {
-    const LC_OPT: bool = false;
-    const ZK: bool = false;
-}
+// #[derive(Clone)]
+// struct MarlinNoLCNoZk;
+//
+// impl MarlinConfig for MarlinNoLCNoZk {
+//     const LC_OPT: bool = false;
+//     const ZK: bool = false;
+// }
 
 type IPAPC = InnerProductArgPC<DumAffine, Blake2s>;
-type MarlinInst = Marlin<Fr, IPAPC, Blake2s, MarlinNoLCNoZk>;
+// type MarlinInst = Marlin<Fr, IPAPC, Blake2s, MarlinNoLCNoZk>;
+type MarlinInst = Marlin<Fr, IPAPC, Blake2s>;
 
-pub const FIELD_SIZE: usize = 96; //Field size in bytes
-pub const SCALAR_FIELD_SIZE: usize = FIELD_SIZE;// 96
+pub const FIELD_SIZE: usize = 32; //Field size in bytes
+pub const SCALAR_FIELD_SIZE: usize = FIELD_SIZE;// 32
 pub const G1_SIZE: usize = 193;
 pub const G2_SIZE: usize = 385;
 
 pub const SCHNORR_PK_SIZE: usize = G1_SIZE; // 193
-pub const SCHNORR_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 96
+pub const SCHNORR_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 32
 pub const SCHNORR_SIG_SIZE: usize = 2 * FIELD_SIZE; // 192
 
 pub const VRF_PK_SIZE: usize = G1_SIZE; // 193
-pub const VRF_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 96
+pub const VRF_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 32
 pub const VRF_PROOF_SIZE: usize = G1_SIZE + 2 * FIELD_SIZE; // 192
 
 pub const ZK_PROOF_SIZE: usize = 2 * G1_SIZE + G2_SIZE;  // 771
@@ -346,7 +347,7 @@ pub fn create_naive_threshold_sig_proof(
 
     //Create and return proof
     let mut rng = OsRng;
-    let proof = MarlinInst::prove::<_, OsRng>(&pk, c, &mut Some(rng)).unwrap();
+    let proof = MarlinInst::prove::<_, OsRng>(&pk, c, &mut rng).unwrap();
 
     Ok((proof, valid_signatures))
 }
@@ -834,8 +835,8 @@ mod test {
             proving_key_path,
             false,
         ).unwrap();
-        // let proof_path = if bt_num != 0 {"./sample_proof"} else {"./sample_proof_no_bwt"};
-        // write_to_file(&proof, proof_path).unwrap();
+        let proof_path = if bt_num != 0 {"./sample_proof"} else {"./sample_proof_no_bwt"};
+        write_to_file(&proof, proof_path).unwrap();
 
         //Verify proof
         assert!(verify_naive_threshold_sig_proof(

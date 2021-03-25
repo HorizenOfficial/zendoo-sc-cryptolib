@@ -4,7 +4,7 @@ use algebra::bytes::{FromBytes, FromBytesChecked, ToBytes};
 
 use std::{ptr::null_mut, any::type_name};
 
-use std::panic;
+// use std::panic;
 
 mod ginger_calls;
 use ginger_calls::*;
@@ -48,7 +48,7 @@ fn serialize_from_raw_pointer<T: ToBytes>(
 
 use jni::JNIEnv;
 use jni::objects::{JClass, JString, JObject, JValue};
-use jni::sys::{jbyteArray, jboolean, jint, jlong, jlongArray, jobject, jobjectArray};
+use jni::sys::{jbyteArray, jboolean, jint, jlong, /*jlongArray, */jobject, jobjectArray};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
 
 //Field element related functions
@@ -67,7 +67,7 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeSer
     let fe_pointer = _env.get_field(_field_element, "fieldElementPointer", "J")
         .expect("Cannot get field element pointer.");
 
-    let fe = read_raw_pointer({fe_pointer.j().unwrap() as *const FieldElement});
+    let fe = read_raw_pointer(fe_pointer.j().unwrap() as *const FieldElement);
 
     let mut fe_bytes = [0u8; FIELD_SIZE];
     serialize_from_raw_pointer(fe, &mut fe_bytes[..]);
@@ -214,7 +214,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSer
     let public_key_pointer = _env.get_field(_schnorr_public_key, "publicKeyPointer", "J")
         .expect("Cannot get public key pointer.");
 
-    let public_key = read_raw_pointer({public_key_pointer.j().unwrap() as *const SchnorrPk});
+    let public_key = read_raw_pointer(public_key_pointer.j().unwrap() as *const SchnorrPk);
 
     let mut pk = [0u8; SCHNORR_PK_SIZE];
     serialize_from_raw_pointer(public_key, &mut pk[..]);
@@ -283,7 +283,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSer
     let secret_key_pointer = _env.get_field(_schnorr_secret_key, "secretKeyPointer", "J")
         .expect("Cannot get secret key pointer.");
 
-    let secret_key = read_raw_pointer({secret_key_pointer.j().unwrap() as *const SchnorrSk});
+    let secret_key = read_raw_pointer(secret_key_pointer.j().unwrap() as *const SchnorrSk);
 
     let mut sk = [0u8; SCHNORR_SK_SIZE];
     serialize_from_raw_pointer(secret_key, &mut sk[..]);
@@ -347,7 +347,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePu
     let public_key_pointer = _env.get_field(_vrf_public_key, "publicKeyPointer", "J")
         .expect("Cannot get public key pointer.");
 
-    let public_key = read_raw_pointer({public_key_pointer.j().unwrap() as *const VRFPk});
+    let public_key = read_raw_pointer(public_key_pointer.j().unwrap() as *const VRFPk);
 
     let mut pk = [0u8; VRF_PK_SIZE];
     serialize_from_raw_pointer(public_key, &mut pk[..]);
@@ -417,7 +417,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSe
     let secret_key_pointer = _env.get_field(_vrf_secret_key, "secretKeyPointer", "J")
         .expect("Should be able to read field secretKeyPointer");
 
-    let secret_key = read_raw_pointer({secret_key_pointer.j().unwrap() as *const VRFSk});
+    let secret_key = read_raw_pointer(secret_key_pointer.j().unwrap() as *const VRFSk);
 
     let mut sk = [0u8; VRF_SK_SIZE];
     serialize_from_raw_pointer(secret_key, &mut sk[..]);
@@ -2163,383 +2163,383 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 }
 
 
-// #[no_mangle]
-// pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateMsgToSign(
-//     _env: JNIEnv,
-//     // this is the class that owns our
-//     // static method. Not going to be
-//     // used, but still needs to have
-//     // an argument slot
-//     _class: JClass,
-//     _bt_list: jobjectArray,
-//     _end_epoch_block_hash: jbyteArray,
-//     _prev_end_epoch_block_hash: jbyteArray,
-// ) -> jobject
-// {
-//     //Extract backward transfers
-//     let mut bt_list = vec![];
-//
-//     let bt_list_size = _env.get_array_length(_bt_list)
-//         .expect("Should be able to get bt_list size");
-//
-//     if bt_list_size > 0
-//     {
-//         for i in 0..bt_list_size {
-//             let o = _env.get_object_array_element(_bt_list, i)
-//                 .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
-//
-//             let pk: [u8; 20] = {
-//                 let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
-//                     .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
-//
-//                 let mut pk_bytes = [0u8; 20];
-//
-//                 _env.convert_byte_array(p)
-//                     .expect("Should be able to convert to Rust byte array")
-//                     .write(&mut pk_bytes[..])
-//                     .expect("Should be able to write into byte array of fixed size");
-//
-//                 pk_bytes
-//             };
-//
-//             let a = _env.call_method(o, "getAmount", "()J", &[])
-//                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
-//
-//             bt_list.push(BackwardTransfer::new(pk, a));
-//         }
-//     }
-//
-//     //Extract block hashes
-//     let end_epoch_block_hash = {
-//         let t = _env.convert_byte_array(_end_epoch_block_hash)
-//             .expect("Should be able to convert to Rust array");
-//
-//         let mut end_epoch_block_hash_bytes = [0u8; 32];
-//
-//         t.write(&mut end_epoch_block_hash_bytes[..])
-//             .expect("Should be able to write into byte array of fixed size");
-//
-//         read_field_element_from_buffer_with_padding(&end_epoch_block_hash_bytes)
-//             .expect("Should be able to read a FieldElement from a 32 byte array")
-//
-//     };
-//
-//     let prev_end_epoch_block_hash = {
-//         let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
-//             .expect("Should be able to convert to Rust array");
-//
-//         let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
-//
-//         t.write(&mut prev_end_epoch_block_hash_bytes[..])
-//             .expect("Should be able to write into byte array of fixed size");
-//
-//         read_field_element_from_buffer_with_padding(&prev_end_epoch_block_hash_bytes)
-//             .expect("Should be able to read a FieldElement from a 32 byte array")
-//     };
-//
-//     //Compute message to sign:
-//     let msg = match compute_msg_to_sign(
-//         &end_epoch_block_hash,
-//         &prev_end_epoch_block_hash,
-//         bt_list.as_slice()
-//     ){
-//         Ok((_, msg)) => msg,
-//         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
-//     };
-//
-//     //Return msg
-//     let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(msg)) as i64);
-//
-//     let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
-//         .expect("Should be able to find FieldElement class");
-//
-//     let result = _env.new_object(field_class, "(J)V", &[
-//         JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
-//
-//     *result
-// }
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateMsgToSign(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _bt_list: jobjectArray,
+    _end_epoch_block_hash: jbyteArray,
+    _prev_end_epoch_block_hash: jbyteArray,
+) -> jobject
+{
+    //Extract backward transfers
+    let mut bt_list = vec![];
 
-// #[no_mangle]
-// pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateProof(
-//     _env: JNIEnv,
-//     // this is the class that owns our
-//     // static method. Not going to be
-//     // used, but still needs to have
-//     // an argument slot
-//     _class: JClass,
-//     _bt_list: jobjectArray,
-//     _end_epoch_block_hash: jbyteArray,
-//     _prev_end_epoch_block_hash: jbyteArray,
-//     _schnorr_sigs_list: jobjectArray,
-//     _schnorr_pks_list:  jobjectArray,
-//     _threshold: jlong,
-//     _proving_key_path: JString,
-//     _check_proving_key: jboolean, //WARNING: Very expensive check
-// ) -> jobject
-// {
-//     //Extract backward transfers
-//     let mut bt_list = vec![];
-//
-//     let bt_list_size = _env.get_array_length(_bt_list)
-//         .expect("Should be able to get bt_list size");
-//
-//     if bt_list_size > 0 {
-//         for i in 0..bt_list_size {
-//             let o = _env.get_object_array_element(_bt_list, i)
-//                 .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
-//
-//
-//             let pk: [u8; 20] = {
-//                 let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
-//                     .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
-//
-//                 let mut pk_bytes = [0u8; 20];
-//
-//                 _env.convert_byte_array(p)
-//                     .expect("Should be able to convert to Rust byte array")
-//                     .write(&mut pk_bytes[..])
-//                     .expect("Should be able to write into byte array of fixed size");
-//
-//                 pk_bytes
-//             };
-//
-//             let a = _env.call_method(o, "getAmount", "()J", &[])
-//                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
-//
-//             bt_list.push(BackwardTransfer::new(pk, a));
-//         }
-//     }
-//
-//     //Extract Schnorr signatures and the corresponding Schnorr pks
-//     let mut sigs = vec![];
-//     let mut pks = vec![];
-//
-//     let sigs_list_size = _env.get_array_length(_schnorr_sigs_list)
-//         .expect("Should be able to get schnorr_sigs_list size");
-//
-//     let pks_list_size = _env.get_array_length(_schnorr_pks_list)
-//         .expect("Should be able to get schnorr_pks_list size");
-//
-//     assert_eq!(sigs_list_size, pks_list_size);
-//
-//     for i in 0..sigs_list_size {
-//         //Get i-th sig
-//         let sig_object = _env.get_object_array_element(_schnorr_sigs_list, i)
-//             .expect(format!("Should be able to get elem {} of schnorr_sigs_list", i).as_str());
-//
-//         let pk_object = _env.get_object_array_element(_schnorr_pks_list, i)
-//             .expect(format!("Should be able to get elem {} of schnorr_pks_list", i).as_str());
-//
-//         let signature = {
-//             let sig = _env.get_field(sig_object, "signaturePointer", "J")
-//                 .expect("Should be able to get field signaturePointer");
-//
-//             match read_nullable_raw_pointer(sig.j().unwrap() as *const SchnorrSig) {
-//                 Some(sig) => Some(*sig),
-//                 None => None,
-//             }
-//         };
-//
-//         let public_key = {
-//             let pk = _env.get_field(pk_object, "publicKeyPointer", "J")
-//                 .expect("Should be able to get field publicKeyPointer");
-//
-//             read_raw_pointer(pk.j().unwrap() as *const SchnorrPk)
-//         };
-//
-//         sigs.push(signature);
-//         pks.push(*public_key);
-//     }
-//
-//     //Extract block hashes
-//     let end_epoch_block_hash = {
-//         let t = _env.convert_byte_array(_end_epoch_block_hash)
-//             .expect("Should be able to convert to Rust array");
-//
-//         let mut end_epoch_block_hash_bytes = [0u8; 32];
-//
-//         t.write(&mut end_epoch_block_hash_bytes[..])
-//             .expect("Should be able to write into byte array of fixed size");
-//
-//         end_epoch_block_hash_bytes
-//     };
-//
-//     let prev_end_epoch_block_hash = {
-//         let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
-//             .expect("Should be able to convert to Rust array");
-//
-//         let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
-//
-//         t.write(&mut prev_end_epoch_block_hash_bytes[..])
-//             .expect("Should be able to write into byte array of fixed size");
-//
-//         prev_end_epoch_block_hash_bytes
-//     };
-//
-//     //Extract threshold
-//     let threshold = _threshold as u64;
-//
-//     //Extract params_path str
-//     let proving_key_path = _env.get_string(_proving_key_path)
-//         .expect("Should be able to read jstring as Rust String");
-//
-//     //create proof
-//     let (proof, quality) = match create_naive_threshold_sig_proof(
-//         pks.as_slice(),
-//         sigs,
-//         &end_epoch_block_hash,
-//         &prev_end_epoch_block_hash,
-//         bt_list.as_slice(),
-//         threshold,
-//         proving_key_path.to_str().unwrap(),
-//         _check_proving_key == JNI_TRUE,
-//     ) {
-//         Ok(proof) => proof,
-//         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR or IO_ERROR
-//     };
-//
-//     //Serialize proof
-//     let mut proof_bytes = [0u8; ZK_PROOF_SIZE];
-//     proof.write(&mut proof_bytes[..])
-//         .expect("Should be able to write proof into proof_bytes");
-//
-//     //Return proof serialized
-//     let proof_serialized = _env.byte_array_from_slice(proof_bytes.as_ref())
-//         .expect("Should be able to convert Rust slice into jbytearray");
-//
-//     //Create new CreateProofResult object
-//     let proof_result_class = _env.find_class("com/horizen/sigproofnative/CreateProofResult")
-//         .expect("Should be able to find CreateProofResult class");
-//
-//     let result = _env.new_object(
-//         proof_result_class,
-//         "([BJ)V",
-//         &[JValue::Object(JObject::from(proof_serialized)), JValue::Long(jlong::from(quality as i64))]
-//     ).expect("Should be able to create new CreateProofResult:(long, byte[]) object");
-//
-//     *result
-// }
+    let bt_list_size = _env.get_array_length(_bt_list)
+        .expect("Should be able to get bt_list size");
 
-//Test functions
-// #[no_mangle]
-// pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeVerifyProof(
-//     _env: JNIEnv,
-//     // this is the class that owns our
-//     // static method. Not going to be
-//     // used, but still needs to have
-//     // an argument slot
-//     _class: JClass,
-//     _bt_list: jobjectArray,
-//     _end_epoch_block_hash: jbyteArray,
-//     _prev_end_epoch_block_hash: jbyteArray,
-//     _constant: JObject,
-//     _quality: jlong,
-//     _sc_proof_bytes: jbyteArray,
-//     _check_proof: jboolean,
-//     _verification_key_path: JString,
-//     _check_vk: jboolean,
-// ) -> jboolean {
-//
-//     //Extract backward transfers
-//     let mut bt_list = vec![];
-//
-//     let bt_list_size = _env.get_array_length(_bt_list)
-//         .expect("Should be able to get bt_list size");
-//
-//     if bt_list_size > 0 {
-//         for i in 0..bt_list_size {
-//             let o = _env.get_object_array_element(_bt_list, i)
-//                 .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
-//
-//
-//             let pk: [u8; 20] = {
-//                 let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
-//                     .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
-//
-//                 let mut pk_bytes = [0u8; 20];
-//
-//                 _env.convert_byte_array(p)
-//                     .expect("Should be able to convert to Rust byte array")
-//                     .write(&mut pk_bytes[..])
-//                     .expect("Should be able to write into byte array of fixed size");
-//
-//                 pk_bytes
-//             };
-//
-//             let a = _env.call_method(o, "getAmount", "()J", &[])
-//                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
-//
-//             bt_list.push(BackwardTransfer::new(pk, a));
-//         }
-//     }
-//
-//     //Extract block hashes
-//     let end_epoch_block_hash = {
-//         let t = _env.convert_byte_array(_end_epoch_block_hash)
-//             .expect("Should be able to convert to Rust array");
-//
-//         let mut end_epoch_block_hash_bytes = [0u8; 32];
-//
-//         t.write(&mut end_epoch_block_hash_bytes[..])
-//             .expect("Should be able to write into byte array of fixed size");
-//
-//         end_epoch_block_hash_bytes
-//     };
-//
-//     let prev_end_epoch_block_hash = {
-//         let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
-//             .expect("Should be able to convert to Rust array");
-//
-//         let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
-//
-//         t.write(&mut prev_end_epoch_block_hash_bytes[..])
-//             .expect("Should be able to write into byte array of fixed size");
-//
-//         prev_end_epoch_block_hash_bytes
-//     };
-//
-//     //Extract constant
-//     let constant = {
-//
-//         let c =_env.get_field(_constant, "fieldElementPointer", "J")
-//             .expect("Should be able to get field fieldElementPointer");
-//
-//         read_raw_pointer(c.j().unwrap() as *const FieldElement)
-//     };
-//
-//     //Extract quality
-//     let quality = _quality as u64;
-//
-//     //Extract proof
-//     let proof_bytes = _env.convert_byte_array(_sc_proof_bytes)
-//         .expect("Should be able to convert to Rust byte array");
-//     let result = if _check_proof == JNI_TRUE {
-//         deserialize_from_buffer_checked(proof_bytes.as_slice())
-//     } else {
-//         deserialize_from_buffer(proof_bytes.as_slice())
-//     };
-//     let proof = match result {
-//         Ok(proof) => proof,
-//         Err(_) => return JNI_FALSE // I/O ERROR
-//     };
-//
-//     //Extract vk path
-//     let vk_path = _env.get_string(_verification_key_path)
-//         .expect("Should be able to read jstring as Rust String");
-//
-//     //Verify proof
-//     match verify_naive_threshold_sig_proof(
-//         constant,
-//         &end_epoch_block_hash,
-//         &prev_end_epoch_block_hash,
-//         bt_list.as_slice(),
-//         quality,
-//         &proof,
-//         vk_path.to_str().unwrap(),
-//         _check_vk == JNI_TRUE,
-//
-//     ) {
-//         Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
-//         Err(_) => JNI_FALSE // CRYPTO_ERROR or IO_ERROR
-//     }
-// }
+    if bt_list_size > 0
+    {
+        for i in 0..bt_list_size {
+            let o = _env.get_object_array_element(_bt_list, i)
+                .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+
+            let pk: [u8; 20] = {
+                let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                    .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+
+                let mut pk_bytes = [0u8; 20];
+
+                _env.convert_byte_array(p)
+                    .expect("Should be able to convert to Rust byte array")
+                    .write(&mut pk_bytes[..])
+                    .expect("Should be able to write into byte array of fixed size");
+
+                pk_bytes
+            };
+
+            let a = _env.call_method(o, "getAmount", "()J", &[])
+                .expect("Should be able to call getAmount method").j().unwrap() as u64;
+
+            bt_list.push(BackwardTransfer::new(pk, a));
+        }
+    }
+
+    //Extract block hashes
+    let end_epoch_block_hash = {
+        let t = _env.convert_byte_array(_end_epoch_block_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut end_epoch_block_hash_bytes = [0u8; 32];
+
+        t.write(&mut end_epoch_block_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        read_field_element_from_buffer_with_padding(&end_epoch_block_hash_bytes)
+            .expect("Should be able to read a FieldElement from a 32 byte array")
+
+    };
+
+    let prev_end_epoch_block_hash = {
+        let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
+
+        t.write(&mut prev_end_epoch_block_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        read_field_element_from_buffer_with_padding(&prev_end_epoch_block_hash_bytes)
+            .expect("Should be able to read a FieldElement from a 32 byte array")
+    };
+
+    //Compute message to sign:
+    let msg = match compute_msg_to_sign(
+        &end_epoch_block_hash,
+        &prev_end_epoch_block_hash,
+        bt_list.as_slice()
+    ){
+        Ok((_, msg)) => msg,
+        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
+    };
+
+    //Return msg
+    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(msg)) as i64);
+
+    let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Should be able to find FieldElement class");
+
+    let result = _env.new_object(field_class, "(J)V", &[
+        JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+    *result
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateProof(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _bt_list: jobjectArray,
+    _end_epoch_block_hash: jbyteArray,
+    _prev_end_epoch_block_hash: jbyteArray,
+    _schnorr_sigs_list: jobjectArray,
+    _schnorr_pks_list:  jobjectArray,
+    _threshold: jlong,
+    _proving_key_path: JString,
+    _check_proving_key: jboolean, //WARNING: Very expensive check
+) -> jobject
+{
+    //Extract backward transfers
+    let mut bt_list = vec![];
+
+    let bt_list_size = _env.get_array_length(_bt_list)
+        .expect("Should be able to get bt_list size");
+
+    if bt_list_size > 0 {
+        for i in 0..bt_list_size {
+            let o = _env.get_object_array_element(_bt_list, i)
+                .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+
+
+            let pk: [u8; 20] = {
+                let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                    .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+
+                let mut pk_bytes = [0u8; 20];
+
+                _env.convert_byte_array(p)
+                    .expect("Should be able to convert to Rust byte array")
+                    .write(&mut pk_bytes[..])
+                    .expect("Should be able to write into byte array of fixed size");
+
+                pk_bytes
+            };
+
+            let a = _env.call_method(o, "getAmount", "()J", &[])
+                .expect("Should be able to call getAmount method").j().unwrap() as u64;
+
+            bt_list.push(BackwardTransfer::new(pk, a));
+        }
+    }
+
+    //Extract Schnorr signatures and the corresponding Schnorr pks
+    let mut sigs = vec![];
+    let mut pks = vec![];
+
+    let sigs_list_size = _env.get_array_length(_schnorr_sigs_list)
+        .expect("Should be able to get schnorr_sigs_list size");
+
+    let pks_list_size = _env.get_array_length(_schnorr_pks_list)
+        .expect("Should be able to get schnorr_pks_list size");
+
+    assert_eq!(sigs_list_size, pks_list_size);
+
+    for i in 0..sigs_list_size {
+        //Get i-th sig
+        let sig_object = _env.get_object_array_element(_schnorr_sigs_list, i)
+            .expect(format!("Should be able to get elem {} of schnorr_sigs_list", i).as_str());
+
+        let pk_object = _env.get_object_array_element(_schnorr_pks_list, i)
+            .expect(format!("Should be able to get elem {} of schnorr_pks_list", i).as_str());
+
+        let signature = {
+            let sig = _env.get_field(sig_object, "signaturePointer", "J")
+                .expect("Should be able to get field signaturePointer");
+
+            match read_nullable_raw_pointer(sig.j().unwrap() as *const SchnorrSig) {
+                Some(sig) => Some(*sig),
+                None => None,
+            }
+        };
+
+        let public_key = {
+            let pk = _env.get_field(pk_object, "publicKeyPointer", "J")
+                .expect("Should be able to get field publicKeyPointer");
+
+            read_raw_pointer(pk.j().unwrap() as *const SchnorrPk)
+        };
+
+        sigs.push(signature);
+        pks.push(*public_key);
+    }
+
+    //Extract block hashes
+    let end_epoch_block_hash = {
+        let t = _env.convert_byte_array(_end_epoch_block_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut end_epoch_block_hash_bytes = [0u8; 16];
+
+        t.write(&mut end_epoch_block_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        end_epoch_block_hash_bytes
+    };
+
+    let prev_end_epoch_block_hash = {
+        let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut prev_end_epoch_block_hash_bytes = [0u8; 16];
+
+        t.write(&mut prev_end_epoch_block_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        prev_end_epoch_block_hash_bytes
+    };
+
+    //Extract threshold
+    let threshold = _threshold as u64;
+
+    //Extract params_path str
+    let proving_key_path = _env.get_string(_proving_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    //create proof
+    let (proof, quality) = match create_naive_threshold_sig_proof(
+        pks.as_slice(),
+        sigs,
+        &end_epoch_block_hash,
+        &prev_end_epoch_block_hash,
+        bt_list.as_slice(),
+        threshold,
+        proving_key_path.to_str().unwrap(),
+        _check_proving_key == JNI_TRUE,
+    ) {
+        Ok(proof) => proof,
+        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR or IO_ERROR
+    };
+
+    //Serialize proof
+    let mut proof_bytes = [0u8; ZK_PROOF_SIZE];
+    proof.write(&mut proof_bytes[..])
+        .expect("Should be able to write proof into proof_bytes");
+
+    //Return proof serialized
+    let proof_serialized = _env.byte_array_from_slice(proof_bytes.as_ref())
+        .expect("Should be able to convert Rust slice into jbytearray");
+
+    //Create new CreateProofResult object
+    let proof_result_class = _env.find_class("com/horizen/sigproofnative/CreateProofResult")
+        .expect("Should be able to find CreateProofResult class");
+
+    let result = _env.new_object(
+        proof_result_class,
+        "([BJ)V",
+        &[JValue::Object(JObject::from(proof_serialized)), JValue::Long(jlong::from(quality as i64))]
+    ).expect("Should be able to create new CreateProofResult:(long, byte[]) object");
+
+    *result
+}
+
+// Test functions
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeVerifyProof(
+    _env: JNIEnv,
+    // this is the class that owns our
+    // static method. Not going to be
+    // used, but still needs to have
+    // an argument slot
+    _class: JClass,
+    _bt_list: jobjectArray,
+    _end_epoch_block_hash: jbyteArray,
+    _prev_end_epoch_block_hash: jbyteArray,
+    _constant: JObject,
+    _quality: jlong,
+    _sc_proof_bytes: jbyteArray,
+    _check_proof: jboolean,
+    _verification_key_path: JString,
+    _check_vk: jboolean,
+) -> jboolean {
+
+    //Extract backward transfers
+    let mut bt_list = vec![];
+
+    let bt_list_size = _env.get_array_length(_bt_list)
+        .expect("Should be able to get bt_list size");
+
+    if bt_list_size > 0 {
+        for i in 0..bt_list_size {
+            let o = _env.get_object_array_element(_bt_list, i)
+                .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+
+
+            let pk: [u8; 20] = {
+                let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                    .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+
+                let mut pk_bytes = [0u8; 20];
+
+                _env.convert_byte_array(p)
+                    .expect("Should be able to convert to Rust byte array")
+                    .write(&mut pk_bytes[..])
+                    .expect("Should be able to write into byte array of fixed size");
+
+                pk_bytes
+            };
+
+            let a = _env.call_method(o, "getAmount", "()J", &[])
+                .expect("Should be able to call getAmount method").j().unwrap() as u64;
+
+            bt_list.push(BackwardTransfer::new(pk, a));
+        }
+    }
+
+    //Extract block hashes
+    let end_epoch_block_hash = {
+        let t = _env.convert_byte_array(_end_epoch_block_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut end_epoch_block_hash_bytes = [0u8; 16];
+
+        t.write(&mut end_epoch_block_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        end_epoch_block_hash_bytes
+    };
+
+    let prev_end_epoch_block_hash = {
+        let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut prev_end_epoch_block_hash_bytes = [0u8; 16];
+
+        t.write(&mut prev_end_epoch_block_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        prev_end_epoch_block_hash_bytes
+    };
+
+    //Extract constant
+    let constant = {
+
+        let c =_env.get_field(_constant, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(c.j().unwrap() as *const FieldElement)
+    };
+
+    //Extract quality
+    let quality = _quality as u64;
+
+    //Extract proof
+    let proof_bytes = _env.convert_byte_array(_sc_proof_bytes)
+        .expect("Should be able to convert to Rust byte array");
+    let result = if _check_proof == JNI_TRUE {
+        deserialize_from_buffer_checked(proof_bytes.as_slice())
+    } else {
+        deserialize_from_buffer(proof_bytes.as_slice())
+    };
+    let proof = match result {
+        Ok(proof) => proof,
+        Err(_) => return JNI_FALSE // I/O ERROR
+    };
+
+    //Extract vk path
+    let vk_path = _env.get_string(_verification_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    //Verify proof
+    match verify_naive_threshold_sig_proof(
+        constant,
+        &end_epoch_block_hash,
+        &prev_end_epoch_block_hash,
+        bt_list.as_slice(),
+        quality,
+        &proof,
+        vk_path.to_str().unwrap(),
+        _check_vk == JNI_TRUE,
+
+    ) {
+        Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
+        Err(_) => JNI_FALSE // CRYPTO_ERROR or IO_ERROR
+    }
+}

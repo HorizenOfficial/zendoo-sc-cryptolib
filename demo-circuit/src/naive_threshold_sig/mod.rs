@@ -257,16 +257,17 @@ use marlin::*;
 use blake2::Blake2s;
 use poly_commit::ipa_pc::InnerProductArgPC;
 
-#[derive(Clone)]
-struct MarlinNoLCNoZk;
+// #[derive(Clone)]
+// struct MarlinNoLCNoZk;
 
-impl MarlinConfig for MarlinNoLCNoZk {
-    const LC_OPT: bool = false;
-    const ZK: bool = false;
-}
+// impl MarlinConfig for MarlinNoLCNoZk {
+//     const LC_OPT: bool = false;
+//     const ZK: bool = false;
+// }
 
 type IPAPC = InnerProductArgPC<DumAffine, Blake2s>;
-type MarlinInst = Marlin<Fr, IPAPC, Blake2s, MarlinNoLCNoZk>;
+// type MarlinInst = Marlin<Fr, IPAPC, Blake2s, MarlinNoLCNoZk>;
+type MarlinInst = Marlin<Fr, IPAPC, Blake2s>;
 
 #[allow(dead_code)]
 pub fn generate_parameters(max_pks: usize) -> Result<(IndexProverKey<Fr, IPAPC>, IndexVerifierKey<Fr, IPAPC>), SynthesisError> {
@@ -290,7 +291,7 @@ pub fn generate_parameters(max_pks: usize) -> Result<(IndexProverKey<Fr, IPAPC>,
         _field:                   PhantomData
     };
 
-    let universal_srs = MarlinInst::universal_setup(2usize.pow(22), 2usize.pow(22), 2usize.pow(22), &mut rng).unwrap();
+    let universal_srs = MarlinInst::universal_setup(2usize.pow(20), 2usize.pow(20), 2usize.pow(20), &mut rng).unwrap();
 
     Ok(MarlinInst::index(
         &universal_srs,
@@ -415,7 +416,7 @@ mod test {
         //Return proof and public inputs if success
         let start = std::time::Instant::now();
 
-        let proof = match MarlinInst::prove::<_, OsRng>(&params.0, c, &mut None) {
+        let proof = match MarlinInst::prove::<_, OsRng>(&params.0, c, &mut rng) {
             Ok(proof) => {
                 let public_inputs = vec![aggregated_input];
                 Ok((proof, public_inputs))
@@ -427,6 +428,7 @@ mod test {
     }
 
     #[test]
+    #[should_panic]
     fn test_naive_threshold_circuit() {
         let rng = &mut thread_rng();
         let n = 6;
@@ -438,21 +440,19 @@ mod test {
             generate_test_proof(n, 5, 4, false, false, params.clone()).unwrap();
         assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
 
-        // TODO: InvalidCoboundaryPolynomial exception
-
         //Generate proof with insufficient valid signatures
-        // let (proof, public_inputs) =
-        //     generate_test_proof(n, 4, 5, false, false, params.clone()).unwrap();
-        // assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+        let (proof, public_inputs) =
+            generate_test_proof(n, 4, 5, false, false, params.clone()).unwrap();
+        assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
 
         //Generate proof with bad pks_threshold_hash
-        // let (proof, public_inputs) =
-        //     generate_test_proof(n, 5, 4, true, false, params.clone()).unwrap();
-        // assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+        let (proof, public_inputs) =
+            generate_test_proof(n, 5, 4, true, false, params.clone()).unwrap();
+        assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
 
         //Generate proof with bad wcert_sysdata_hash
-        // let (proof, public_inputs) =
-        //     generate_test_proof(n, 5, 4, false, true, params.clone()).unwrap();
-        // assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+        let (proof, public_inputs) =
+            generate_test_proof(n, 5, 4, false, true, params.clone()).unwrap();
+        assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
     }
 }

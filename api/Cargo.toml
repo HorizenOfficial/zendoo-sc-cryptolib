@@ -7,11 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {version = "0.1.0", features = ["mnt4_753", "mnt6_753"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl"}
-primitives = {version = "0.1.0", features = ["mnt4_753", "mnt6_753", "merkle_tree", "smt"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl"}
-proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl"}
-poly-commit = { git = "https://github.com/HorizenLabs/poly-commit", branch = "dlog_segmentation" }
-marlin = {version = "0.1.0", git = "https://github.com/HorizenLabs/marlin", branch = "sync_with_pc", features = [ "asm", "parallel" ] }
+algebra = {version = "0.1.0", features = ["mnt4_753", "mnt6_753"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
+primitives = {version = "0.1.0", features = ["mnt4_753", "mnt6_753", "merkle_tree", "smt"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
+proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
+poly-commit = { git = "https://github.com/HorizenLabs/poly-commit", branch = "dev_serializations" }
+marlin = {version = "0.1.0", git = "https://github.com/HorizenLabs/marlin", branch = "dev_serializations", features = [ "asm", "parallel" ] }
 
 ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
