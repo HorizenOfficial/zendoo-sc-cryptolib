@@ -1,18 +1,18 @@
 use algebra::{fields::{
-    tweedle::{Fq as Fr, Fr as ScalarFieldElement}, PrimeField
+    tweedle::{Fq as ScalarFieldElement, Fr}, PrimeField
 }, curves::{
     // mnt4753::MNT4 as PairingCurve,
     tweedle::{
-        dee::{
-            Projective as DeeProjective,
-            Affine as DeeAffine
+        dum::{
+            Projective as Projective,
+            Affine as Affine
         },
-        dum::Affine as DumAffine
+        dee::Affine as PCAffine
     },
 }, FromBytes, FromBytesChecked, validity::SemanticallyValid,
    ToBytes, BigInteger256, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits};
 use primitives::{crh::{
-    poseidon::parameters::tweedle::{TweedleFqPoseidonHash, TweedleFqBatchPoseidonHash as BatchFieldHash},
+    poseidon::parameters::tweedle::{TweedleFrPoseidonHash as PoseidonHash, TweedleFrBatchPoseidonHash as BatchFieldHash},
     FieldBasedHash,
     bowe_hopwood::{
         BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters
@@ -20,7 +20,7 @@ use primitives::{crh::{
 }, merkle_tree::field_based_mht::{
     // smt::{BigMerkleTree, LazyBigMerkleTree, Coord, OperationLeaf},
     optimized::FieldBasedOptimizedMHT,
-    parameters::tweedle_fq::TWEEDLE_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS,
+    parameters::tweedle_fr::TWEEDLE_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS,
     // parameters::mnt4753::{MNT4753_PHANTOM_MERKLE_ROOT as PHANTOM_MERKLE_ROOT, MNT4753_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS},
     FieldBasedMerkleTree, FieldBasedMerkleTreePrecomputedEmptyConstants,
     FieldBasedMerkleTreeParameters, BatchFieldBasedMerkleTreeParameters,
@@ -65,7 +65,7 @@ pub type FieldElement = Fr;
 //     const ZK: bool = false;
 // }
 
-type IPAPC = InnerProductArgPC<DumAffine, Blake2s>;
+type IPAPC = InnerProductArgPC<PCAffine, Blake2s>;
 // type MarlinInst = Marlin<Fr, IPAPC, Blake2s, MarlinNoLCNoZk>;
 type MarlinInst = Marlin<Fr, IPAPC, Blake2s>;
 
@@ -123,9 +123,9 @@ pub fn get_random_field_element(seed: u64) -> FieldElement {
 
 //***************************Schnorr types and functions********************************************
 
-pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, DeeProjective, FieldHash>;
-pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement, DeeProjective>;
-pub type SchnorrPk = DeeAffine;
+pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, Projective, FieldHash>;
+pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement, Projective>;
+pub type SchnorrPk = Affine;
 pub type SchnorrSk = ScalarFieldElement;
 
 pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
@@ -153,7 +153,7 @@ pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &
 
 //************************************Poseidon Hash functions****************************************
 
-pub type FieldHash = TweedleFqPoseidonHash;
+pub type FieldHash = PoseidonHash;
 
 pub fn get_poseidon_hash(personalization: Option<&[FieldElement]>) -> FieldHash {
     FieldHash::init(personalization)
@@ -390,17 +390,17 @@ pub fn verify_naive_threshold_sig_proof(
 //VRF types and functions
 
 lazy_static! {
-    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<DeeProjective> = {
+    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<Projective> = {
         let params = VRFParams::new();
-        BoweHopwoodPedersenParameters::<DeeProjective>{generators: params.group_hash_generators}
+        BoweHopwoodPedersenParameters::<Projective>{generators: params.group_hash_generators}
     };
 }
 
-type GroupHash = BoweHopwoodPedersenCRH<DeeProjective, VRFWindow>;
+type GroupHash = BoweHopwoodPedersenCRH<Projective, VRFWindow>;
 
-pub type VRFScheme = FieldBasedEcVrf<FieldElement, DeeProjective, FieldHash, GroupHash>;
-pub type VRFProof = FieldBasedEcVrfProof<FieldElement, DeeProjective>;
-pub type VRFPk = DeeAffine;
+pub type VRFScheme = FieldBasedEcVrf<FieldElement, Projective, FieldHash, GroupHash>;
+pub type VRFProof = FieldBasedEcVrfProof<FieldElement, Projective>;
+pub type VRFPk = Affine;
 pub type VRFSk = ScalarFieldElement;
 
 pub fn vrf_generate_key() -> (VRFPk, VRFSk) {

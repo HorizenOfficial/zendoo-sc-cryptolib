@@ -1,6 +1,6 @@
 use algebra::{
-    fields::tweedle::Fq as Fr,
-    curves::tweedle::dee::Projective,
+    fields::tweedle::Fr,
+    curves::tweedle::dum::Projective,
     biginteger::BigInteger256 as BigInteger,
     Field, PrimeField, ProjectiveCurve,
 };
@@ -28,10 +28,10 @@ impl NaiveThresholdSigParams {
         let x = Fr::from_repr(
             BigInteger(
                 [
-                    12035525611691125070,
-                    2718616596026025238,
-                    9975628352372511576,
-                    2747295074563971616
+                    11459712384328161916,
+                    74331367249679002,
+                    15100906357746989564,
+                    884124067961527758,
                 ],
             )
         );
@@ -39,10 +39,10 @@ impl NaiveThresholdSigParams {
         let y = Fr::from_repr(
             BigInteger(
                 [
-                    5331171409760468070,
-                    16463677157546155673,
-                    17641414461844182447,
-                    494927661522368813,
+                    2310843056694237300,
+                    5782791099736303189,
+                    12630241105143989140,
+                    546084280382048576,
                 ],
             )
         );
@@ -81,17 +81,17 @@ impl VRFParams {
         let gen_1 = Projective::new(
         Fr::from_repr(
             BigInteger([
-                504967749112164170,
-                2872646935354280506,
-                5771540424607741856,
-                3532851791422854307,
+                15820103987692451840,
+                5627760773344132675,
+                7364856664427849490,
+                1197316833207718411,
             ])),
         Fr::from_repr(
             BigInteger([
-                11007759008187642280,
-                16116990241173382136,
-                17912031078731955885,
-                203584800139106297,
+                7042744174075706804,
+                9001263587917307341,
+                7557490353522824682,
+                3556537967756176456,
             ])),
         Fr::from_repr(
             BigInteger([
@@ -105,17 +105,17 @@ impl VRFParams {
         let gen_2 = Projective::new(
         Fr::from_repr(
             BigInteger([
-                3508597432913599250,
-                12328919698483580016,
-                11406370637118763643,
-                3802712649637469844,
+                9693056411755223777,
+                8217843995826230011,
+                15875927051736968843,
+                2105995703304102124,
             ])),
         Fr::from_repr(
             BigInteger([
-                11996917753320897860,
-                16716285440779602605,
-                14982255493126248028,
-                1533718642375758253,
+                8182239457751741736,
+                2544164131538935955,
+                6306721856759651939,
+                2475985172125608280,
             ])),
         Fr::from_repr(
             BigInteger([
@@ -153,7 +153,7 @@ impl VRFParams {
 #[cfg(test)]
 mod test
 {
-    use algebra::{curves::tweedle::dee::Affine, FpParameters, FromCompressedBits, AffineCurve};
+    use algebra::{curves::tweedle::dum::Affine, FpParameters, FromCompressedBits, AffineCurve};
     use super::*;
     use blake2s_simd::{
         Hash, Params

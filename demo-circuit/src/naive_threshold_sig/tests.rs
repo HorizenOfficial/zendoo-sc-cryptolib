@@ -1,7 +1,7 @@
 use algebra::{
     BigInteger256,
-    fields::tweedle::Fq as Fr,
-    curves::tweedle::dee::Projective,
+    fields::tweedle::Fr,
+    curves::tweedle::dum::Projective,
     Field, PrimeField, ToBits, ProjectiveCurve,
 };
 
@@ -13,7 +13,7 @@ use primitives::{
         },
         FieldBasedSignatureScheme,
     },
-    crh::{FieldBasedHash, TweedleFqPoseidonHash},
+    crh::{FieldBasedHash, TweedleFrPoseidonHash as PoseidonHash},
 };
 use r1cs_crypto::{
     signature::{
@@ -23,11 +23,11 @@ use r1cs_crypto::{
         },
         FieldBasedSigGadget,
     },
-    crh::{TweedleFqPoseidonHashGadget, FieldBasedHashGadget}
+    crh::{TweedleFrPoseidonHashGadget as PoseidonHashGadget, FieldBasedHashGadget}
 };
 
 use r1cs_std::{
-    instantiated::tweedle::TweedleDeeGadget,
+    instantiated::tweedle::TweedleDumGadget as CurveGadget,
     fields::{
         fp::FpGadget, FieldGadget,
     },
@@ -52,13 +52,13 @@ lazy_static! {
 }
 
 //Sig types
-type SchnorrSig = FieldBasedSchnorrSignatureScheme<Fr, Projective, TweedleFqPoseidonHash>;
+type SchnorrSig = FieldBasedSchnorrSignatureScheme<Fr, Projective, PoseidonHash>;
 type SchnorrSigGadget = FieldBasedSchnorrSigGadget<Fr, Projective>;
 type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
-    Fr, Projective, TweedleDeeGadget, TweedleFqPoseidonHash, TweedleFqPoseidonHashGadget
+    Fr, Projective, CurveGadget, PoseidonHash, PoseidonHashGadget
 >;
 type SchnorrPk = FieldBasedSchnorrPk<Projective>;
-type SchnorrPkGadget = FieldBasedSchnorrPkGadget<Fr, Projective, TweedleDeeGadget>;
+type SchnorrPkGadget = FieldBasedSchnorrPkGadget<Fr, Projective, CurveGadget>;
 
 //Field types
 type FrGadget = FpGadget<Fr>;
@@ -93,7 +93,7 @@ fn generate_inputs
 {
     //Istantiate rng
     let mut rng = OsRng::default();
-    let mut h = TweedleFqPoseidonHash::init(None);
+    let mut h = PoseidonHash::init(None);
 
     //Generate message to sign
     let mr_bt: Fr = rng.gen();
@@ -217,7 +217,7 @@ fn generate_constraints(
     }
 
     //Check pks
-    let mut pks_threshold_hash_g = TweedleFqPoseidonHashGadget::check_evaluation_gadget(
+    let mut pks_threshold_hash_g = PoseidonHashGadget::check_evaluation_gadget(
         cs.ns(|| "hash public keys"),
         pks_g.iter().map(|pk| pk.pk.x.clone()).collect::<Vec<_>>().as_slice(),
     ).unwrap();
@@ -229,7 +229,7 @@ fn generate_constraints(
     ).unwrap();
 
     //Check hash commitment
-    pks_threshold_hash_g = TweedleFqPoseidonHashGadget::check_evaluation_gadget(
+    pks_threshold_hash_g = PoseidonHashGadget::check_evaluation_gadget(
         cs.ns(|| "H(H(pks), threshold)"),
         &[pks_threshold_hash_g, t_g.clone()],
     ).unwrap();
@@ -253,7 +253,7 @@ fn generate_constraints(
         || Ok(c.end_epoch_mc_b_hash)
     ).unwrap();
 
-    let message_g = TweedleFqPoseidonHashGadget::check_evaluation_gadget(
+    let message_g = PoseidonHashGadget::check_evaluation_gadget(
         cs.ns(|| "H(MR(BT), H(Bi-1), H(Bi))"),
         &[mr_bt_g.clone(), prev_end_epoch_mc_block_hash_g.clone(), end_epoch_mc_block_hash_g.clone()],
     ).unwrap();
@@ -295,7 +295,7 @@ fn generate_constraints(
     }
 
     //Enforce correct wcert_sysdata_hash
-    let wcert_sysdata_hash_g = TweedleFqPoseidonHashGadget::check_evaluation_gadget(
+    let wcert_sysdata_hash_g = PoseidonHashGadget::check_evaluation_gadget(
         cs.ns(|| "H(valid_signatures, MR(BT), BH(Bi-1), BH(Bi))"),
         &[valid_signatures.clone(), mr_bt_g, prev_end_epoch_mc_block_hash_g, end_epoch_mc_block_hash_g]
     ).unwrap();
@@ -306,7 +306,7 @@ fn generate_constraints(
         || Ok(c.aggregated_input)
     ).unwrap();
 
-    let actual_aggregated_input = TweedleFqPoseidonHashGadget::check_evaluation_gadget(
+    let actual_aggregated_input = PoseidonHashGadget::check_evaluation_gadget(
         cs.ns(|| "H(pks_threshold_hash, wcert_sysdata_hash)"),
         &[pks_threshold_hash_g, wcert_sysdata_hash_g]
     ).unwrap();

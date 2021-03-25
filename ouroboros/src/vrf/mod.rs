@@ -1,7 +1,7 @@
-use algebra::curves::tweedle::dee::Projective as Projective;
-use algebra::fields::tweedle::{Fr as Fs, Fq as Fr};
+use algebra::curves::tweedle::dum::Projective;
+use algebra::fields::tweedle::{Fq as Fs, Fr};
 use primitives::{crh::{
-    TweedleFqPoseidonHash,
+    TweedleFrPoseidonHash as PoseidonHash,
     bowe_hopwood::{
         BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters,
     },
@@ -23,7 +23,7 @@ impl PedersenWindow for TestWindow {
 
 type GroupHash = BoweHopwoodPedersenCRH<Projective, TestWindow>;
 type GroupHashParameters = BoweHopwoodPedersenParameters<Projective>;
-type EcVrfScheme = FieldBasedEcVrf<Fr, Projective, TweedleFqPoseidonHash, GroupHash>;
+type EcVrfScheme = FieldBasedEcVrf<Fr, Projective, PoseidonHash, GroupHash>;
 type EcVrfProof = FieldBasedEcVrfProof<Fr, Projective>;
 type EcVrfPk = FieldBasedEcVrfPk<Projective>;
 

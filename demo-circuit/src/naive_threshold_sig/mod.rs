@@ -2,26 +2,26 @@
 pub mod tests;
 
 use algebra::{
-    fields::tweedle::Fq as Fr,
-    curves::tweedle::dee::Projective as DeeProjective,
-    curves::tweedle::dum::Affine as DumAffine,
+    fields::tweedle::Fr,
+    curves::tweedle::dum::Projective as Projective,
+    curves::tweedle::dee::Affine as Affine,
     Field, PrimeField, ToBits
 };
 use primitives::{
     signature::schnorr::field_based_schnorr::{
         FieldBasedSchnorrSignature, FieldBasedSchnorrPk,
     },
-    crh::TweedleFqPoseidonHash,
+    crh::TweedleFrPoseidonHash as PoseidonHash,
 };
 use r1cs_crypto::{
     signature::{
         schnorr::field_based_schnorr::{FieldBasedSchnorrSigGadget, FieldBasedSchnorrSigVerificationGadget},
         FieldBasedSigGadget,
     },
-    crh::{TweedleFqPoseidonHashGadget, FieldBasedHashGadget},
+    crh::{TweedleFrPoseidonHashGadget as PoseidonHashGadget, FieldBasedHashGadget},
 };
 
-use r1cs_std::{instantiated::tweedle::TweedleDeeGadget, fields::{
+use r1cs_std::{instantiated::tweedle::TweedleDumGadget as CurveGadget, fields::{
     fp::FpGadget, FieldGadget,
 }, alloc::AllocGadget, bits::{
     boolean::Boolean, FromBitsGadget,
@@ -40,12 +40,12 @@ lazy_static! {
 }
 
 //Sig types
-type SchnorrSigGadget = FieldBasedSchnorrSigGadget<Fr, DeeProjective>;
+type SchnorrSigGadget = FieldBasedSchnorrSigGadget<Fr, Projective>;
 type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
-    Fr, DeeProjective, TweedleDeeGadget, TweedleFqPoseidonHash, TweedleFqPoseidonHashGadget
+    Fr, Projective, CurveGadget, PoseidonHash, PoseidonHashGadget
 >;
-type SchnorrPk = FieldBasedSchnorrPk<DeeProjective>;
-type SchnorrPkGadget = FieldBasedSchnorrPkGadget<Fr, DeeProjective, TweedleDeeGadget>;
+type SchnorrPk = FieldBasedSchnorrPk<Projective>;
+type SchnorrPkGadget = FieldBasedSchnorrPkGadget<Fr, Projective, CurveGadget>;
 
 //Field types
 type FrGadget = FpGadget<Fr>;
@@ -54,7 +54,7 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 
     //Witnesses
     pks:                      Vec<Option<SchnorrPk>>, //pk_n = g^sk_n
-    sigs:                     Vec<Option<FieldBasedSchnorrSignature<Fr, DeeProjective>>>, //sig_n = sign(sk_n, H(MR(BT), BH(Bi-1), BH(Bi)))
+    sigs:                     Vec<Option<FieldBasedSchnorrSignature<Fr, Projective>>>, //sig_n = sign(sk_n, H(MR(BT), BH(Bi-1), BH(Bi)))
     threshold:                Option<Fr>,
     b:                        Vec<Option<bool>>,
     end_epoch_mc_b_hash:      Option<Fr>,
@@ -69,7 +69,7 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 impl<F: PrimeField>NaiveTresholdSignature<F> {
     pub fn new(
         pks:                      Vec<SchnorrPk>,
-        sigs:                     Vec<Option<FieldBasedSchnorrSignature<Fr, DeeProjective>>>,
+        sigs:                     Vec<Option<FieldBasedSchnorrSignature<Fr, Projective>>>,
         threshold:                Fr,
         b:                        Fr,
         end_epoch_mc_b_hash:      Fr,
@@ -125,7 +125,7 @@ impl<F: PrimeField> ConstraintSynthesizer<Fr> for NaiveTresholdSignature<F> {
         }
 
         //Enforce pks_threshold_hash
-        let mut pks_threshold_hash_g = TweedleFqPoseidonHashGadget::check_evaluation_gadget(
+        let mut pks_threshold_hash_g = PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "hash public keys"),
             pks_g.iter().map(|pk| pk.pk.x.clone()).collect::<Vec<_>>().as_slice(),
         )?;
@@ -136,7 +136,7 @@ impl<F: PrimeField> ConstraintSynthesizer<Fr> for NaiveTresholdSignature<F> {
             || self.threshold.ok_or(SynthesisError::AssignmentMissing)
         )?;
 
-        pks_threshold_hash_g = TweedleFqPoseidonHashGadget::check_evaluation_gadget(
+        pks_threshold_hash_g = PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "H(H(pks), threshold)"),
             &[pks_threshold_hash_g, t_g.clone()],
         )?;
@@ -159,7 +159,7 @@ impl<F: PrimeField> ConstraintSynthesizer<Fr> for NaiveTresholdSignature<F> {
             || self.end_epoch_mc_b_hash.ok_or(SynthesisError::AssignmentMissing)
         )?;
 
-        let message_g = TweedleFqPoseidonHashGadget::check_evaluation_gadget(
+        let message_g = PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "H(MR(BT), BH(i-1), BH(i))"),
             &[mr_bt_g.clone(), prev_end_epoch_mc_block_hash_g.clone(), end_epoch_mc_block_hash_g.clone()],
         )?;
@@ -201,14 +201,14 @@ impl<F: PrimeField> ConstraintSynthesizer<Fr> for NaiveTresholdSignature<F> {
         }
 
         //Enforce wcert_sysdata_hash
-        let wcert_sysdata_hash_g = TweedleFqPoseidonHashGadget::check_evaluation_gadget(
+        let wcert_sysdata_hash_g = PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "H(valid_signatures, MR(BT), BH(i-1), BH(i))"),
             &[valid_signatures.clone(), mr_bt_g, prev_end_epoch_mc_block_hash_g, end_epoch_mc_block_hash_g]
         )?;
 
         //Check pks_threshold_hash and wcert_sysdata_hash
 
-        let actual_aggregated_input = TweedleFqPoseidonHashGadget::check_evaluation_gadget(
+        let actual_aggregated_input = PoseidonHashGadget::check_evaluation_gadget(
             cs.ns(|| "H(pks_threshold_hash, wcert_sysdata_hash)"),
             &[pks_threshold_hash_g, wcert_sysdata_hash_g]
         )?;
@@ -265,7 +265,7 @@ use poly_commit::ipa_pc::InnerProductArgPC;
 //     const ZK: bool = false;
 // }
 
-type IPAPC = InnerProductArgPC<DumAffine, Blake2s>;
+type IPAPC = InnerProductArgPC<Affine, Blake2s>;
 // type MarlinInst = Marlin<Fr, IPAPC, Blake2s, MarlinNoLCNoZk>;
 type MarlinInst = Marlin<Fr, IPAPC, Blake2s>;
 
@@ -315,7 +315,7 @@ mod test {
         Rng, rngs::OsRng, thread_rng
     };
 
-    type SchnorrSig = FieldBasedSchnorrSignatureScheme<Fr, DeeProjective, TweedleFqPoseidonHash>;
+    type SchnorrSig = FieldBasedSchnorrSignatureScheme<Fr, Projective, PoseidonHash>;
 
     fn generate_test_proof(
         max_pks:                  usize,
@@ -328,7 +328,7 @@ mod test {
 
         //Istantiate rng
         let mut rng = OsRng::default();
-        let mut h = TweedleFqPoseidonHash::init(None);
+        let mut h = PoseidonHash::init(None);
 
         //Generate message to sign
         let mr_bt: Fr = rng.gen();
