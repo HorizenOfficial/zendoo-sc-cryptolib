@@ -1,36 +1,44 @@
 use algebra::{fields::{
-    mnt4753::{Fr, Fq as ScalarFieldElement}, PrimeField
+    tweedle::{Fq as ScalarFieldElement, Fr}, PrimeField
 }, curves::{
-    mnt4753::MNT4 as PairingCurve,
-    mnt6753::{
-        G1Projective as GroupProjective, G1Affine as GroupAffine
+    // mnt4753::MNT4 as PairingCurve,
+    tweedle::{
+        dum::{
+            Projective as Projective,
+            Affine as Affine
+        },
+        dee::Affine as PCAffine
     },
-}, FromBytes, ToBytes, BigInteger768, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits};
+}, FromBytes, FromBytesChecked, validity::SemanticallyValid,
+   ToBytes, BigInteger256, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits};
 use primitives::{crh::{
-    poseidon::{
-        MNT4PoseidonHash,
-        batched_crh::MNT4BatchPoseidonHash as BatchFieldHash,
-    },
+    poseidon::parameters::tweedle::{TweedleFrPoseidonHash as PoseidonHash, TweedleFrBatchPoseidonHash as BatchFieldHash},
     FieldBasedHash,
     bowe_hopwood::{
         BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters
     },
 }, merkle_tree::field_based_mht::{
-    smt::{BigMerkleTree, LazyBigMerkleTree, Coord, OperationLeaf},
+    // smt::{BigMerkleTree, LazyBigMerkleTree, Coord, OperationLeaf},
     optimized::FieldBasedOptimizedMHT,
-    poseidon::{MNT4753_PHANTOM_MERKLE_ROOT as PHANTOM_MERKLE_ROOT, MNT4753_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS},
+    parameters::tweedle_fr::TWEEDLE_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS,
+    // parameters::mnt4753::{MNT4753_PHANTOM_MERKLE_ROOT as PHANTOM_MERKLE_ROOT, MNT4753_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS},
     FieldBasedMerkleTree, FieldBasedMerkleTreePrecomputedEmptyConstants,
     FieldBasedMerkleTreeParameters, BatchFieldBasedMerkleTreeParameters,
     FieldBasedMerkleTreePath, FieldBasedBinaryMHTPath,
 }, signature::{
     FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
-        FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature
+        FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature,
+        FieldBasedSchnorrPk,
     },
-}, vrf::{FieldBasedVrf, ecvrf::*}, ActionLeaf};
-use proof_systems::groth16::{
-    Proof, create_random_proof,
-    prepare_verifying_key, verify_proof,
-};
+}, vrf::{FieldBasedVrf, ecvrf::*}/*, ActionLeaf*/};
+
+use marlin::*;
+use blake2::Blake2s;
+use poly_commit::ipa_pc::InnerProductArgPC;
+// use proof_systems::groth16::{
+//     create_random_proof,
+//     prepare_verifying_key, verify_proof,
+// };
 use demo_circuit::{
     constants::{
         VRFParams, VRFWindow,
@@ -38,38 +46,54 @@ use demo_circuit::{
     naive_threshold_sig::*
 };
 use rand::{
-    SeedableRng, rngs::OsRng
+    SeedableRng, rngs::OsRng, thread_rng
 };
 use rand_xorshift::XorShiftRng;
 
 use std::{
-    fs::File, io::Result as IoResult, path::Path
+    fs::File, io::Result as IoResult/*, path::Path*/
 };
 use lazy_static::*;
 
 pub type FieldElement = Fr;
 
-pub const FIELD_SIZE: usize = 96; //Field size in bytes
-pub const SCALAR_FIELD_SIZE: usize = FIELD_SIZE;// 96
+// #[derive(Clone)]
+// struct MarlinNoLCNoZk;
+//
+// impl MarlinConfig for MarlinNoLCNoZk {
+//     const LC_OPT: bool = false;
+//     const ZK: bool = false;
+// }
+
+type IPAPC = InnerProductArgPC<PCAffine, Blake2s>;
+// type MarlinInst = Marlin<Fr, IPAPC, Blake2s, MarlinNoLCNoZk>;
+type MarlinInst = Marlin<Fr, IPAPC, Blake2s>;
+
+pub const FIELD_SIZE: usize = 32; //Field size in bytes
+pub const SCALAR_FIELD_SIZE: usize = FIELD_SIZE;// 32
 pub const G1_SIZE: usize = 193;
 pub const G2_SIZE: usize = 385;
 
 pub const SCHNORR_PK_SIZE: usize = G1_SIZE; // 193
-pub const SCHNORR_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 96
+pub const SCHNORR_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 32
 pub const SCHNORR_SIG_SIZE: usize = 2 * FIELD_SIZE; // 192
 
 pub const VRF_PK_SIZE: usize = G1_SIZE; // 193
-pub const VRF_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 96
+pub const VRF_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 32
 pub const VRF_PROOF_SIZE: usize = G1_SIZE + 2 * FIELD_SIZE; // 192
 
 pub const ZK_PROOF_SIZE: usize = 2 * G1_SIZE + G2_SIZE;  // 771
 pub type Error = Box<dyn std::error::Error>;
 
-//*******************************Generic I/O functions**********************************************
+//*******************************Generic functions**********************************************
 // Note: Should decide if panicking or handling IO errors
 
 pub fn deserialize_from_buffer<T: FromBytes>(buffer: &[u8]) ->  IoResult<T> {
     T::read(buffer)
+}
+
+pub fn deserialize_from_buffer_checked<T: FromBytesChecked>(buffer: &[u8]) ->  IoResult<T> {
+    T::read_checked(buffer)
 }
 
 pub fn serialize_to_buffer<T: ToBytes>(to_write: &T, buffer: &mut [u8]) -> IoResult<()> {
@@ -78,8 +102,16 @@ pub fn serialize_to_buffer<T: ToBytes>(to_write: &T, buffer: &mut [u8]) -> IoRes
 
 pub fn read_from_file<T: FromBytes>(file_path: &str) -> IoResult<T>{
     let mut fs = File::open(file_path)?;
-    let t = T::read(&mut fs)?;
-    Ok(t)
+    T::read(&mut fs)
+}
+
+pub fn read_from_file_checked<T: FromBytesChecked>(file_path: &str) -> IoResult<T>{
+    let mut fs = File::open(file_path)?;
+    T::read_checked(&mut fs)
+}
+
+pub fn is_valid<T: SemanticallyValid>(to_check: &T) -> bool {
+    T::is_valid(to_check)
 }
 
 // NOTE: This function relies on a non-cryptographically safe RNG, therefore it
@@ -91,37 +123,37 @@ pub fn get_random_field_element(seed: u64) -> FieldElement {
 
 //***************************Schnorr types and functions********************************************
 
-pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, GroupProjective, FieldHash>;
-pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement>;
-pub type SchnorrPk = GroupAffine;
+pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, Projective, FieldHash>;
+pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement, Projective>;
+pub type SchnorrPk = Affine;
 pub type SchnorrSk = ScalarFieldElement;
 
 pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
     let mut rng = OsRng;
     let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
-    (pk.into_affine(), sk)
+    (pk.0.into_affine(), sk)
 }
 
 pub fn schnorr_get_public_key(sk: &SchnorrSk) -> SchnorrPk {
-    SchnorrSigScheme::get_public_key(sk).into_affine()
+    SchnorrSigScheme::get_public_key(sk).0.into_affine()
 }
 
 pub fn schnorr_verify_public_key(pk: &SchnorrPk) -> bool {
-    SchnorrSigScheme::keyverify(&pk.into_projective())
+    SchnorrSigScheme::keyverify(&FieldBasedSchnorrPk(pk.into_projective()))
 }
 
 pub fn schnorr_sign(msg: &FieldElement, sk: &SchnorrSk, pk: &SchnorrPk) -> Result<SchnorrSig, Error> {
     let mut rng = OsRng;
-    SchnorrSigScheme::sign(&mut rng, &pk.into_projective(), sk, &[*msg])
+    SchnorrSigScheme::sign(&mut rng, &FieldBasedSchnorrPk(pk.into_projective()), sk, &[*msg])
 }
 
 pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &SchnorrSig) -> Result<bool, Error> {
-    SchnorrSigScheme::verify(&pk.into_projective(), &[*msg], signature)
+    SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), &[*msg], signature)
 }
 
 //************************************Poseidon Hash functions****************************************
 
-pub type FieldHash = MNT4PoseidonHash;
+pub type FieldHash = PoseidonHash;
 
 pub fn get_poseidon_hash(personalization: Option<&[FieldElement]>) -> FieldHash {
     FieldHash::init(personalization)
@@ -141,7 +173,7 @@ pub fn finalize_poseidon_hash(hash: &FieldHash) -> FieldElement{
 
 //*****************************Naive threshold sig circuit related functions************************
 
-pub type SCProof = Proof<PairingCurve>;
+pub type SCProof = Proof<Fr, IPAPC>;
 
 #[derive(Clone, Default)]
 pub struct BackwardTransfer {
@@ -178,7 +210,7 @@ pub fn read_field_element_from_buffer_with_padding(buffer: &[u8]) -> IoResult<Fi
 }
 
 pub fn read_field_element_from_u64(num: u64) -> FieldElement {
-    FieldElement::from_repr(BigInteger768::from(num))
+    FieldElement::from_repr(BigInteger256::from(num))
 }
 
 // Computes H(H(pks), threshold): used to generate the constant value needed to be declared
@@ -215,7 +247,7 @@ pub fn compute_msg_to_sign(
 ) -> Result<(FieldElement, FieldElement), Error> {
 
     let mr_bt = if bt_list.is_empty() {
-        PHANTOM_MERKLE_ROOT //Note: Can actually be taken from MHT_PARAMETERS::nodes[BT_MERKLE_TREE_HEIGHT]
+        MHT_PARAMETERS.nodes[BT_MERKLE_TREE_HEIGHT].clone()
     } else {
         let mut bt_field_list = vec![];
         for bt in bt_list.iter() {
@@ -258,11 +290,12 @@ pub fn compute_wcert_sysdata_hash(
 pub fn create_naive_threshold_sig_proof(
     pks:                      &[SchnorrPk],
     mut sigs:                 Vec<Option<SchnorrSig>>,
-    end_epoch_mc_b_hash:      &[u8; 32],
-    prev_end_epoch_mc_b_hash: &[u8; 32],
+    end_epoch_mc_b_hash:      &[u8; 16],
+    prev_end_epoch_mc_b_hash: &[u8; 16],
     bt_list:                  &[BackwardTransfer],
     threshold:                u64,
-    proving_key_path:         &str
+    proving_key_path:         &str,
+    enforce_membership:       bool,
 ) -> Result<(SCProof, u64), Error> {
 
     //Get max pks
@@ -295,7 +328,7 @@ pub fn create_naive_threshold_sig_proof(
     let b = read_field_element_from_u64(valid_signatures - threshold);
 
     //Convert affine pks to projective
-    let pks = pks.iter().map(|&pk| pk.into_projective()).collect::<Vec<_>>();
+    let pks = pks.iter().map(|&pk| FieldBasedSchnorrPk(pk.into_projective())).collect::<Vec<_>>();
 
     //Convert needed variables into field elements
     let threshold = read_field_element_from_u64(threshold);
@@ -306,22 +339,28 @@ pub fn create_naive_threshold_sig_proof(
     );
 
     //Read proving key
-    let params = read_from_file(proving_key_path)?;
+    let pk: IndexProverKey<Fr, IPAPC> = if enforce_membership {
+        read_from_file_checked(proving_key_path)
+    } else {
+        read_from_file(proving_key_path)
+    }?;
 
     //Create and return proof
     let mut rng = OsRng;
-    let proof = create_random_proof(c, &params, &mut rng)?;
+    let proof = MarlinInst::prove::<_, OsRng>(&pk, c, &mut rng).unwrap();
+
     Ok((proof, valid_signatures))
 }
 
 pub fn verify_naive_threshold_sig_proof(
     constant:                 &FieldElement,
-    end_epoch_mc_b_hash:      &[u8; 32],
-    prev_end_epoch_mc_b_hash: &[u8; 32],
+    end_epoch_mc_b_hash:      &[u8; 16],
+    prev_end_epoch_mc_b_hash: &[u8; 16],
     bt_list:                  &[BackwardTransfer],
     valid_sigs:               u64,
     proof:                    &SCProof,
     vk_path:                  &str,
+    enforce_membership:       bool
 ) -> Result<bool, Error>
 {
     //Compute wcert_sysdata_hash
@@ -334,10 +373,16 @@ pub fn verify_naive_threshold_sig_proof(
         .update(wcert_sysdata_hash)
         .finalize();
 
+    let rng = &mut thread_rng();
+
     //Verify proof
-    let vk = read_from_file(vk_path)?;
-    let pvk = prepare_verifying_key(&vk); //Get verifying key
-    let is_verified = verify_proof(&pvk, &proof, &[aggregated_input])?;
+    let vk: IndexVerifierKey<Fr, IPAPC> = if enforce_membership {
+        read_from_file_checked(vk_path)
+    } else {
+        read_from_file(vk_path)
+    }?;
+
+    let is_verified = MarlinInst::verify(&vk, &[aggregated_input], &proof, rng).unwrap();
 
     Ok(is_verified)
 }
@@ -345,31 +390,31 @@ pub fn verify_naive_threshold_sig_proof(
 //VRF types and functions
 
 lazy_static! {
-    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<GroupProjective> = {
+    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<Projective> = {
         let params = VRFParams::new();
-        BoweHopwoodPedersenParameters::<GroupProjective>{generators: params.group_hash_generators}
+        BoweHopwoodPedersenParameters::<Projective>{generators: params.group_hash_generators}
     };
 }
 
-type GroupHash = BoweHopwoodPedersenCRH<GroupProjective, VRFWindow>;
+type GroupHash = BoweHopwoodPedersenCRH<Projective, VRFWindow>;
 
-pub type VRFScheme = FieldBasedEcVrf<FieldElement, GroupProjective, FieldHash, GroupHash>;
-pub type VRFProof = FieldBasedEcVrfProof<FieldElement, GroupProjective>;
-pub type VRFPk = GroupAffine;
+pub type VRFScheme = FieldBasedEcVrf<FieldElement, Projective, FieldHash, GroupHash>;
+pub type VRFProof = FieldBasedEcVrfProof<FieldElement, Projective>;
+pub type VRFPk = Affine;
 pub type VRFSk = ScalarFieldElement;
 
 pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
     let mut rng = OsRng;
     let (pk, sk) = VRFScheme::keygen(&mut rng);
-    (pk.into_affine(), sk)
+    (pk.0.into_affine(), sk)
 }
 
 pub fn vrf_get_public_key(sk: &VRFSk) -> VRFPk {
-    SchnorrSigScheme::get_public_key(sk).into_affine()
+    VRFScheme::get_public_key(sk).0.into_affine()
 }
 
 pub fn vrf_verify_public_key(pk: &VRFPk) -> bool {
-    SchnorrSigScheme::keyverify(&pk.into_projective())
+    VRFScheme::keyverify(&FieldBasedEcVrfPk(pk.into_projective()))
 }
 
 pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof, FieldElement), Error> {
@@ -379,7 +424,7 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
     let proof = VRFScheme::prove(
         &mut rng,
         &VRF_GH_PARAMS,
-        &pk.into_projective(),
+        &FieldBasedEcVrfPk(pk.into_projective()),
         sk,
         &[*msg]
     )?;
@@ -402,7 +447,7 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
 }
 
 pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Result<FieldElement, Error> {
-    VRFScheme::proof_to_hash(&VRF_GH_PARAMS,&pk.into_projective(), &[*msg], proof)
+    VRFScheme::proof_to_hash(&VRF_GH_PARAMS,&FieldBasedEcVrfPk(pk.into_projective()), &[*msg], proof)
 }
 
 //************Merkle Tree functions******************
@@ -521,7 +566,7 @@ pub fn reset_ginger_mht(tree: &mut GingerMHT){
 
 ////////////SPARSE MERKLE TREE
 
-pub type GingerSMT = BigMerkleTree<GingerMerkleTreeParameters>;
+// pub type GingerSMT = BigMerkleTree<GingerMerkleTreeParameters>;
 
 // Note: If position is non empty in the SMTs the old leaf will be overwritten.
 // If that's not the desired behaviour, then leaf should depend on some tweakable
@@ -541,148 +586,148 @@ pub fn leaf_to_index(leaf: &FieldElement, height: usize) -> u64 {
     position
 }
 
-pub fn get_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>{
-
-    // If at least the leaves database is available, we can restore the tree
-    if Path::new(db_path).exists() {
-        restore_ginger_smt(height, db_path)
-    } else { // Otherwise we need to create a new tree
-        new_ginger_smt(height, db_path)
-    }
-}
-
-fn new_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error> {
-    match GingerSMT::new(
-        height,
-        true,
-        db_path.to_owned(),
-    ) {
-        Ok(tree) => Ok(tree),
-        Err(e) => Err(Box::new(e))
-    }
-}
-
-fn restore_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>
-{
-    match GingerSMT::load_batch::<GingerMerkleTreeParameters>(
-        height,
-        true,
-        db_path.to_owned(),
-    ) {
-        Ok(tree) => Ok(tree),
-        Err(e) => Err(Box::new(e))
-    }
-}
-
-pub fn flush_ginger_smt(tree: &mut GingerSMT) {
-    tree.flush()
-}
-
-pub fn set_ginger_smt_persistency(tree: &mut GingerSMT, persistency: bool) {
-    tree.set_persistency(persistency);
-}
-
-pub fn get_position_in_ginger_smt(tree: &GingerSMT, leaf: &FieldElement) -> u64
-{
-    leaf_to_index(leaf, tree.height())
-}
-
-pub fn is_position_empty_in_ginger_smt(tree: &GingerSMT, position: u64) -> bool {
-    tree.is_leaf_empty(Coord::new(0, position as usize))
-}
-
-pub fn add_leaf_to_ginger_smt(tree: &mut GingerSMT, leaf: &FieldElement, position: u64){
-    tree.insert_leaf(Coord::new(0, position as usize), *leaf);
-}
-
-pub fn remove_leaf_from_ginger_smt(tree: &mut GingerSMT, position: u64){
-    tree.remove_leaf(Coord::new(0, position as usize));
-}
-
-pub fn get_ginger_smt_root(tree: &GingerSMT) -> FieldElement {
-    tree.get_root()
-}
-
-pub fn get_ginger_smt_path(tree: &mut GingerSMT, leaf_position: u64) -> GingerMHTPath {
-    tree.get_merkle_path(Coord::new(0, leaf_position as usize))
-}
+// pub fn get_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>{
+//
+//     // If at least the leaves database is available, we can restore the tree
+//     if Path::new(db_path).exists() {
+//         restore_ginger_smt(height, db_path)
+//     } else { // Otherwise we need to create a new tree
+//         new_ginger_smt(height, db_path)
+//     }
+// }
+//
+// fn new_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error> {
+//     match GingerSMT::new(
+//         height,
+//         true,
+//         db_path.to_owned(),
+//     ) {
+//         Ok(tree) => Ok(tree),
+//         Err(e) => Err(Box::new(e))
+//     }
+// }
+//
+// fn restore_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>
+// {
+//     match GingerSMT::load_batch::<GingerMerkleTreeParameters>(
+//         height,
+//         true,
+//         db_path.to_owned(),
+//     ) {
+//         Ok(tree) => Ok(tree),
+//         Err(e) => Err(Box::new(e))
+//     }
+// }
+//
+// pub fn flush_ginger_smt(tree: &mut GingerSMT) {
+//     tree.flush()
+// }
+//
+// pub fn set_ginger_smt_persistency(tree: &mut GingerSMT, persistency: bool) {
+//     tree.set_persistency(persistency);
+// }
+//
+// pub fn get_position_in_ginger_smt(tree: &GingerSMT, leaf: &FieldElement) -> u64
+// {
+//     leaf_to_index(leaf, tree.height())
+// }
+//
+// pub fn is_position_empty_in_ginger_smt(tree: &GingerSMT, position: u64) -> bool {
+//     tree.is_leaf_empty(Coord::new(0, position as usize))
+// }
+//
+// pub fn add_leaf_to_ginger_smt(tree: &mut GingerSMT, leaf: &FieldElement, position: u64){
+//     tree.insert_leaf(Coord::new(0, position as usize), *leaf);
+// }
+//
+// pub fn remove_leaf_from_ginger_smt(tree: &mut GingerSMT, position: u64){
+//     tree.remove_leaf(Coord::new(0, position as usize));
+// }
+//
+// pub fn get_ginger_smt_root(tree: &GingerSMT) -> FieldElement {
+//     tree.get_root()
+// }
+//
+// pub fn get_ginger_smt_path(tree: &mut GingerSMT, leaf_position: u64) -> GingerMHTPath {
+//     tree.get_merkle_path(Coord::new(0, leaf_position as usize))
+// }
 
 ////////////LAZY SPARSE MERKLE TREE
 
-pub type LazyGingerSMT = LazyBigMerkleTree<GingerMerkleTreeParameters>;
-type GingerLeaf = OperationLeaf<FieldElement>;
+// pub type LazyGingerSMT = LazyBigMerkleTree<GingerMerkleTreeParameters>;
+// type GingerLeaf = OperationLeaf<FieldElement>;
 
-pub fn get_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error>{
-
-    // If at least the leaves database is available, we can restore the tree
-    if Path::new(db_path).exists() {
-        restore_lazy_ginger_smt(height, db_path)
-    } else { // Otherwise we need to create a new tree
-        new_lazy_ginger_smt(height, db_path)
-    }
-}
-
-fn new_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error> {
-    match LazyGingerSMT::new(
-        height,
-        true,
-        db_path.to_owned(),
-    ) {
-        Ok(tree) => Ok(tree),
-        Err(e) => Err(Box::new(e))
-    }
-}
-
-fn restore_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error>
-{
-    match LazyGingerSMT::load(
-        height,
-        true,
-        db_path.to_owned(),
-    ) {
-        Ok(tree) => Ok(tree),
-        Err(e) => Err(Box::new(e))
-    }
-}
-
-pub fn flush_lazy_ginger_smt(tree: &mut LazyGingerSMT){
-    tree.flush()
-}
-
-pub fn set_ginger_lazy_smt_persistency(tree: &mut LazyGingerSMT, persistency: bool) {
-    tree.set_persistency(persistency);
-}
-
-pub fn get_position_in_lazy_ginger_smt(tree: &LazyGingerSMT, leaf: &FieldElement) -> u64
-{
-    leaf_to_index(leaf, tree.height())
-}
-
-pub fn is_position_empty_in_lazy_ginger_smt(tree: &LazyGingerSMT, position: u64) -> bool {
-    tree.is_leaf_empty(Coord::new(0, position as usize))
-}
-
-pub fn add_leaves_to_ginger_lazy_smt(tree: &mut LazyGingerSMT, leaves: &[FieldElement]) -> FieldElement{
-    let leaves = leaves.iter().map(|leaf| {
-        GingerLeaf::new(0, leaf_to_index(leaf, tree.height()) as usize, ActionLeaf::Insert, Some(*leaf))
-    }).collect::<Vec<_>>();
-    tree.process_leaves(leaves.as_slice())
-}
-
-pub fn remove_leaves_from_ginger_lazy_smt(tree: &mut LazyGingerSMT, positions: &[i64]) -> FieldElement{
-    let leaves = positions.iter().map(|&position| {
-        GingerLeaf::new(0, position as usize, ActionLeaf::Remove, None)
-    }).collect::<Vec<_>>();
-    tree.process_leaves(leaves.as_slice())
-}
-
-pub fn get_lazy_ginger_smt_root(tree: &LazyGingerSMT) -> FieldElement {
-    tree.get_root()
-}
-
-pub fn get_lazy_ginger_smt_path(tree: &mut LazyGingerSMT, leaf_position: u64) -> GingerMHTPath {
-    tree.get_merkle_path(Coord::new(0, leaf_position as usize))
-}
+// pub fn get_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error>{
+//
+//     // If at least the leaves database is available, we can restore the tree
+//     if Path::new(db_path).exists() {
+//         restore_lazy_ginger_smt(height, db_path)
+//     } else { // Otherwise we need to create a new tree
+//         new_lazy_ginger_smt(height, db_path)
+//     }
+// }
+//
+// fn new_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error> {
+//     match LazyGingerSMT::new(
+//         height,
+//         true,
+//         db_path.to_owned(),
+//     ) {
+//         Ok(tree) => Ok(tree),
+//         Err(e) => Err(Box::new(e))
+//     }
+// }
+//
+// fn restore_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error>
+// {
+//     match LazyGingerSMT::load(
+//         height,
+//         true,
+//         db_path.to_owned(),
+//     ) {
+//         Ok(tree) => Ok(tree),
+//         Err(e) => Err(Box::new(e))
+//     }
+// }
+//
+// pub fn flush_lazy_ginger_smt(tree: &mut LazyGingerSMT){
+//     tree.flush()
+// }
+//
+// pub fn set_ginger_lazy_smt_persistency(tree: &mut LazyGingerSMT, persistency: bool) {
+//     tree.set_persistency(persistency);
+// }
+//
+// pub fn get_position_in_lazy_ginger_smt(tree: &LazyGingerSMT, leaf: &FieldElement) -> u64
+// {
+//     leaf_to_index(leaf, tree.height())
+// }
+//
+// pub fn is_position_empty_in_lazy_ginger_smt(tree: &LazyGingerSMT, position: u64) -> bool {
+//     tree.is_leaf_empty(Coord::new(0, position as usize))
+// }
+//
+// pub fn add_leaves_to_ginger_lazy_smt(tree: &mut LazyGingerSMT, leaves: &[FieldElement]) -> FieldElement{
+//     let leaves = leaves.iter().map(|leaf| {
+//         GingerLeaf::new(0, leaf_to_index(leaf, tree.height()) as usize, ActionLeaf::Insert, Some(*leaf))
+//     }).collect::<Vec<_>>();
+//     tree.process_leaves(leaves.as_slice())
+// }
+//
+// pub fn remove_leaves_from_ginger_lazy_smt(tree: &mut LazyGingerSMT, positions: &[i64]) -> FieldElement{
+//     let leaves = positions.iter().map(|&position| {
+//         GingerLeaf::new(0, position as usize, ActionLeaf::Remove, None)
+//     }).collect::<Vec<_>>();
+//     tree.process_leaves(leaves.as_slice())
+// }
+//
+// pub fn get_lazy_ginger_smt_root(tree: &LazyGingerSMT) -> FieldElement {
+//     tree.get_root()
+// }
+//
+// pub fn get_lazy_ginger_smt_path(tree: &mut LazyGingerSMT, leaf_position: u64) -> GingerMHTPath {
+//     tree.get_merkle_path(Coord::new(0, leaf_position as usize))
+// }
 
 #[cfg(test)]
 mod test {
@@ -716,8 +761,8 @@ mod test {
         let mut rng = OsRng;
 
         //Generate random mc block hashes and bt list
-        let mut end_epoch_mc_b_hash = [0u8; 32];
-        let mut prev_end_epoch_mc_b_hash = [0u8; 32];
+        let mut end_epoch_mc_b_hash = [0u8; 16];
+        let mut prev_end_epoch_mc_b_hash = [0u8; 16];
         rng.fill_bytes(&mut end_epoch_mc_b_hash);
         rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
         println!("end epoch u8: {:?}", end_epoch_mc_b_hash);
@@ -731,6 +776,7 @@ mod test {
         for _ in 0..bt_num {
             bt_list.push(BackwardTransfer::default());
         }
+        println!("bt_list finished");
 
         //Compute msg to sign
         let (_, msg) = compute_msg_to_sign(
@@ -738,14 +784,18 @@ mod test {
             &prev_end_epoch_mc_b_hash_f,
             bt_list.as_slice()
         ).unwrap();
+        println!("compute_msg_to_sign finished");
 
         //Generate params and write them to file
         let params = generate_parameters(3).unwrap();
-        let proving_key_path = if bt_num != 0 {"./sample_params"} else {"./sample_params_no_bwt"};
-        write_to_file(&params, proving_key_path).unwrap();
+        println!("generate_parameters finished");
+        let proving_key_path = if bt_num != 0 {"./sample_pk"} else {"./sample_pl_no_bwt"};
+        write_to_file(&params.0, proving_key_path).unwrap();
+        println!("generate_parameters write_to_file finished");
 
         let verifying_key_path = if bt_num != 0 {"./sample_vk"} else {"./sample_vk_no_bwt"};
-        write_to_file(&(params.vk), verifying_key_path).unwrap();
+        write_to_file(&params.1, verifying_key_path).unwrap();
+        println!("verifying_key write_to_file finished");
 
         //Generate sample pks and sigs vec
         let threshold: u64 = 2;
@@ -755,7 +805,9 @@ mod test {
             let keypair = schnorr_generate_key();
             pks.push(keypair.0);
             sks.push(keypair.1);
+            println!("sk: {:?}", into_i8(to_bytes!(keypair.1).unwrap()).to_vec());
         }
+        println!("pks / sks finished");
 
         let mut sigs = vec![];
         sigs.push(Some(schnorr_sign(&msg, &sks[0], &pks[0]).unwrap()));
@@ -780,7 +832,8 @@ mod test {
             &prev_end_epoch_mc_b_hash,
             bt_list.as_slice(),
             threshold,
-            proving_key_path
+            proving_key_path,
+            false,
         ).unwrap();
         let proof_path = if bt_num != 0 {"./sample_proof"} else {"./sample_proof_no_bwt"};
         write_to_file(&proof, proof_path).unwrap();
@@ -794,6 +847,7 @@ mod test {
             quality,
             &proof,
             verifying_key_path,
+            true,
         ).unwrap());
 
 
@@ -806,6 +860,7 @@ mod test {
             quality - 1,
             &proof,
             verifying_key_path,
+            true,
         ).unwrap());
     }
 
@@ -829,7 +884,7 @@ mod test {
         //Serialize/deserialize pk
         let mut pk_serialized = vec![0u8; SCHNORR_PK_SIZE];
         serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
-        let pk_deserialized = deserialize_from_buffer(&pk_serialized).unwrap();
+        let pk_deserialized: SchnorrPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
@@ -839,6 +894,7 @@ mod test {
         assert_eq!(sk, sk_deserialized);
 
         let sig = schnorr_sign(&msg, &sk, &pk).unwrap(); //Sign msg
+        assert!(is_valid(&sig));
 
         //Serialize/deserialize sig
         let mut sig_serialized = vec![0u8; SCHNORR_SIG_SIZE];
@@ -865,7 +921,7 @@ mod test {
         //Serialize/deserialize pk
         let mut pk_serialized = vec![0u8; VRF_PK_SIZE];
         serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
-        let pk_deserialized = deserialize_from_buffer(&pk_serialized).unwrap();
+        let pk_deserialized: VRFPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
@@ -875,11 +931,12 @@ mod test {
         assert_eq!(sk, sk_deserialized);
 
         let (vrf_proof, vrf_out) = vrf_prove(&msg, &sk, &pk).unwrap(); //Create vrf proof for msg
+        assert!(is_valid(&vrf_proof));
 
         //Serialize/deserialize vrf proof
         let mut proof_serialized = vec![0u8; VRF_PROOF_SIZE];
         serialize_to_buffer(&vrf_proof, &mut proof_serialized).unwrap();
-        let proof_deserialized = deserialize_from_buffer(&proof_serialized).unwrap();
+        let proof_deserialized = deserialize_from_buffer_checked(&proof_serialized).unwrap();
         assert_eq!(vrf_proof, proof_deserialized);
 
         //Serialize/deserialize vrf out (i.e. a field element)
@@ -896,78 +953,78 @@ mod test {
         assert!(vrf_proof_to_hash(&wrong_msg, &pk, &vrf_proof).is_err());
     }
 
-    #[test]
-    fn sample_calls_merkle_tree(){
-        let height = 10;
-        let leaves_num = 2usize.pow(3 as u32);
-        let mut leaves = vec![];
-        let mut positions = vec![];
-        let mut rng = OsRng;
-
-        // Get GingerSMT
-        let mut smt = get_ginger_smt(
-            height,
-            "./temp_db",
-        ).unwrap();
-
-        // Add leaves to GingerSMT in different positions
-        for _ in 0..leaves_num {
-            loop {
-                let r = FieldElement::rand(&mut rng);
-                let position = get_position_in_ginger_smt(&smt, &r);
-                if is_position_empty_in_ginger_smt(&smt, position) { //Ensure that each leaf ends up in a different position
-                    leaves.push(r);
-                    positions.push(position);
-                    println!("Leaf: {:?}", into_i8(to_bytes!(r).unwrap()));
-                    println!("Position: {:?}", position);
-                    println!("__________________");
-                    add_leaf_to_ginger_smt(&mut smt, &r, position as u64);
-                    break;
-                }
-            }
-        }
-
-        //Remove first and last leaves
-        remove_leaf_from_ginger_smt(&mut smt, positions[0]);
-        remove_leaf_from_ginger_smt(&mut smt, positions[leaves_num - 1]);
-
-        //Get root of GingerSMT
-        let smt_root = get_ginger_smt_root(&smt);
-
-        // Get LazyGingerSMT
-        let mut lazy_smt = get_lazy_ginger_smt(
-            height,
-            "./temp_db_lazy",
-        ).unwrap();
-
-        // No conflicts here because we ensured each leaf to fall in a different position
-        add_leaves_to_ginger_lazy_smt(&mut lazy_smt, leaves.as_slice());
-
-        // Remove first and last leaves
-        let lazy_smt_root = remove_leaves_from_ginger_lazy_smt(&mut lazy_smt, &[positions[0] as i64, positions[(leaves_num - 1)] as i64]);
-
-        assert_eq!(smt_root, lazy_smt_root);
-
-        //Get GingerMHT
-        let mut mht = new_ginger_mht(height, leaves_num);
-
-        // Must place the leaves at the same positions of the previous trees
-        let mut mht_leaves = vec![FieldElement::zero(); 2usize.pow(height as u32)];
-        for i in 1..(leaves_num - 1){
-            mht_leaves[positions[i] as usize] = leaves[i];
-        }
-
-        // Append leaves to the tree and compute the root
-        mht_leaves.iter().for_each(|leaf| { append_leaf_to_ginger_mht(&mut mht, leaf) });
-        finalize_ginger_mht_in_place(&mut mht);
-        let mht_root = get_ginger_mht_root(&mht).expect("Tree must've been finalized");
-
-        assert_eq!(mht_root, lazy_smt_root);
-
-        //Delete SMTs data
-        set_ginger_smt_persistency(&mut smt, false);
-        set_ginger_lazy_smt_persistency(&mut lazy_smt, false);
-    }
+    // #[test]
+    // fn sample_calls_merkle_tree(){
+    //     let height = 10;
+    //     let leaves_num = 2usize.pow(3 as u32);
+    //     let mut leaves = vec![];
+    //     let mut positions = vec![];
+    //     let mut rng = OsRng;
+    //
+    //     // Get GingerSMT
+    //     let mut smt = get_ginger_smt(
+    //         height,
+    //         "./temp_db",
+    //     ).unwrap();
+    //
+    //     // Add leaves to GingerSMT in different positions
+    //     for _ in 0..leaves_num {
+    //         loop {
+    //             let r = FieldElement::rand(&mut rng);
+    //             let position = get_position_in_ginger_smt(&smt, &r);
+    //             if is_position_empty_in_ginger_smt(&smt, position) { //Ensure that each leaf ends up in a different position
+    //                 leaves.push(r);
+    //                 positions.push(position);
+    //                 println!("Leaf: {:?}", into_i8(to_bytes!(r).unwrap()));
+    //                 println!("Position: {:?}", position);
+    //                 println!("__________________");
+    //                 add_leaf_to_ginger_smt(&mut smt, &r, position as u64);
+    //                 break;
+    //             }
+    //         }
+    //     }
+    //
+    //     //Remove first and last leaves
+    //     remove_leaf_from_ginger_smt(&mut smt, positions[0]);
+    //     remove_leaf_from_ginger_smt(&mut smt, positions[leaves_num - 1]);
+    //
+    //     //Get root of GingerSMT
+    //     let smt_root = get_ginger_smt_root(&smt);
+    //
+    //     // Get LazyGingerSMT
+    //     let mut lazy_smt = get_lazy_ginger_smt(
+    //         height,
+    //         "./temp_db_lazy",
+    //     ).unwrap();
+    //
+    //     // No conflicts here because we ensured each leaf to fall in a different position
+    //     add_leaves_to_ginger_lazy_smt(&mut lazy_smt, leaves.as_slice());
+    //
+    //     // Remove first and last leaves
+    //     let lazy_smt_root = remove_leaves_from_ginger_lazy_smt(&mut lazy_smt, &[positions[0] as i64, positions[(leaves_num - 1)] as i64]);
+    //
+    //     assert_eq!(smt_root, lazy_smt_root);
+    //
+    //     //Get GingerMHT
+    //     let mut mht = new_ginger_mht(height, leaves_num);
+    //
+    //     // Must place the leaves at the same positions of the previous trees
+    //     let mut mht_leaves = vec![FieldElement::zero(); 2usize.pow(height as u32)];
+    //     for i in 1..(leaves_num - 1){
+    //         mht_leaves[positions[i] as usize] = leaves[i];
+    //     }
+    //
+    //     // Append leaves to the tree and compute the root
+    //     mht_leaves.iter().for_each(|leaf| { append_leaf_to_ginger_mht(&mut mht, leaf) });
+    //     finalize_ginger_mht_in_place(&mut mht);
+    //     let mht_root = get_ginger_mht_root(&mht).expect("Tree must've been finalized");
+    //
+    //     assert_eq!(mht_root, lazy_smt_root);
+    //
+    //     //Delete SMTs data
+    //     set_ginger_smt_persistency(&mut smt, false);
+    //     set_ginger_lazy_smt_persistency(&mut lazy_smt, false);
+    // }
 
     #[test]
     fn sample_calls_merkle_path() {
@@ -1028,71 +1085,71 @@ mod test {
         }
     }
 
-    #[test]
-    fn sample_restore_merkle_tree() {
-        let expected_root = FieldElement::new(
-            BigInteger768([
-                1174313500572535251,
-                11989340445607088007,
-                12453165802583165309,
-                6869334689845037123,
-                18071747287931669646,
-                10010741666663785511,
-                17335522832723564810,
-                8102968406317429938,
-                11258756029259070139,
-                11585029297630923139,
-                10229262840520193915,
-                10238382938508
-            ]));
-
-        let height = 5;
-
-        // create a persistent smt in a separate scope
-        {
-            let mut smt = get_ginger_smt(
-                height,
-                "./db_leaves_persistency_test_info",
-            ).unwrap();
-
-            //Insert some leaves in the tree
-            let leaves = vec![FieldElement::from(1u16), FieldElement::from(2u16)];
-            add_leaf_to_ginger_smt(&mut smt, &leaves[0], 0);
-            add_leaf_to_ginger_smt(&mut smt, &leaves[1], 9);
-            remove_leaf_from_ginger_smt(&mut smt, 0);
-
-            // smt gets dropped but its info should be saved
-        }
-
-        // files and directories should have been created
-        assert!(Path::new("./db_leaves_persistency_test_info").exists());
-
-        // create a non-persistent smt in another scope by restoring the previous one
-        {
-            let mut smt = get_ginger_smt(
-                height,
-                "./db_leaves_persistency_test_info",
-            ).unwrap();
-
-            // insert other leaves
-            let leaves = vec![FieldElement::from(10u16), FieldElement::from(3u16)];
-            add_leaf_to_ginger_smt(&mut smt, &leaves[0], 16);
-            add_leaf_to_ginger_smt(&mut smt, &leaves[1], 29);
-            remove_leaf_from_ginger_smt(&mut smt, 16);
-
-            // if truly state has been kept, then the equality below must pass, since `root` was
-            // computed in one go with another smt
-            assert_eq!(expected_root, get_ginger_smt_root(&smt));
-
-            //Set the persistency of the tree to false so that the tree gets dropped
-            set_ginger_smt_persistency(&mut smt, false);
-
-            // smt gets dropped and state and dbs are deleted
-        }
-
-        // files and directories should have been deleted
-        assert!(!Path::new("./db_leaves_persistency_test_info").exists());
-    }
+    // #[test]
+    // fn sample_restore_merkle_tree() {
+    //     let expected_root = FieldElement::new(
+    //         BigInteger256([
+    //             1174313500572535251,
+    //             11989340445607088007,
+    //             12453165802583165309,
+    //             6869334689845037123,
+    //             18071747287931669646,
+    //             10010741666663785511,
+    //             17335522832723564810,
+    //             8102968406317429938,
+    //             11258756029259070139,
+    //             11585029297630923139,
+    //             10229262840520193915,
+    //             10238382938508
+    //         ]));
+    //
+    //     let height = 5;
+    //
+    //     // create a persistent smt in a separate scope
+    //     {
+    //         let mut smt = get_ginger_smt(
+    //             height,
+    //             "./db_leaves_persistency_test_info",
+    //         ).unwrap();
+    //
+    //         //Insert some leaves in the tree
+    //         let leaves = vec![FieldElement::from(1u16), FieldElement::from(2u16)];
+    //         add_leaf_to_ginger_smt(&mut smt, &leaves[0], 0);
+    //         add_leaf_to_ginger_smt(&mut smt, &leaves[1], 9);
+    //         remove_leaf_from_ginger_smt(&mut smt, 0);
+    //
+    //         // smt gets dropped but its info should be saved
+    //     }
+    //
+    //     // files and directories should have been created
+    //     assert!(Path::new("./db_leaves_persistency_test_info").exists());
+    //
+    //     // create a non-persistent smt in another scope by restoring the previous one
+    //     {
+    //         let mut smt = get_ginger_smt(
+    //             height,
+    //             "./db_leaves_persistency_test_info",
+    //         ).unwrap();
+    //
+    //         // insert other leaves
+    //         let leaves = vec![FieldElement::from(10u16), FieldElement::from(3u16)];
+    //         add_leaf_to_ginger_smt(&mut smt, &leaves[0], 16);
+    //         add_leaf_to_ginger_smt(&mut smt, &leaves[1], 29);
+    //         remove_leaf_from_ginger_smt(&mut smt, 16);
+    //
+    //         // if truly state has been kept, then the equality below must pass, since `root` was
+    //         // computed in one go with another smt
+    //         assert_eq!(expected_root, get_ginger_smt_root(&smt));
+    //
+    //         //Set the persistency of the tree to false so that the tree gets dropped
+    //         set_ginger_smt_persistency(&mut smt, false);
+    //
+    //         // smt gets dropped and state and dbs are deleted
+    //     }
+    //
+    //     // files and directories should have been deleted
+    //     assert!(!Path::new("./db_leaves_persistency_test_info").exists());
+    // }
 
     #[test]
     fn sample_calls_poseidon_hash(){

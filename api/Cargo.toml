@@ -7,10 +7,12 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-primitives = {version = "0.1.0", features = ["smt", "signature", "vrf"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "smt"}
-#cctp = {version = "0.1.0", features = ["commitment_tree"], git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "initial_implementation"}
+algebra = {version = "0.1.0", features = ["mnt4_753", "mnt6_753"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
+primitives = {version = "0.1.0", features = ["mnt4_753", "mnt6_753", "merkle_tree", "smt"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
+proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
+poly-commit = { git = "https://github.com/HorizenLabs/poly-commit", branch = "dev_serializations" }
+marlin = {version = "0.1.0", git = "https://github.com/HorizenLabs/marlin", branch = "dev_serializations", features = [ "asm", "parallel" ] }
+
 ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
 
@@ -20,6 +22,7 @@ lazy_static = "1"
 radix_trie = "0.1"
 rand = { version = "0.7" }
 rand_xorshift = { version = "0.2" }
+blake2 = { version = "0.8", default-features = false }
 
 #[dependencies.algebra]
 #git = "https://github.com/HorizenOfficial/ginger-lib.git"
