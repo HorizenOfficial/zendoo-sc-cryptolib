@@ -170,21 +170,21 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetCommitment();
     }
 
-    private static native Optional<ScExistanceProof> nativeGetScExistenceProof(byte[] scId);
+    private static native Optional<ScExistenceProof> nativeGetScExistenceProof(byte[] scId);
 
-    public Optional<ScExistanceProof> getScExistenceProof(byte[] scId) {
+    public Optional<ScExistenceProof> getScExistenceProof(byte[] scId) {
         if (commitmentTreePointer == 0)
             throw new IllegalStateException("CommitmentTree instance was freed.");
         return nativeGetScExistenceProof(scId);
     }
 
-    private static native bool nativeVerifyScCommitment(FieldElement scCommitment, ScExistanceProof existanceProof, FieldElement commitment);
+    private static native boolean nativeVerifyScCommitment(FieldElement scCommitment, ScExistenceProof existanceProof, FieldElement commitment);
 
-    public static bool verifyScCommitment(FieldElement scCommitment, ScExistanceProof existanceProof, FieldElement commitment) {
+    public static boolean verifyScCommitment(FieldElement scCommitment, ScExistenceProof existanceProof, FieldElement commitment) {
         return nativeVerifyScCommitment(scCommitment, existanceProof, commitment);
     }
 
-    private static native Optional<ScExistanceProof> nativeGetScAbsenceProof(byte[] scId);
+    private static native Optional<ScAbsenceProof> nativeGetScAbsenceProof(byte[] scId);
 
     public Optional<ScAbsenceProof> getScAbsenceProof(byte[] scId) {
         if (commitmentTreePointer == 0)
@@ -192,11 +192,11 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetScAbsenceProof(scId);
     }
 
-    private native bool nativeVerifyScAbsence(byte[] scid, ScExistanceProof existanceProof, FieldElement commitment);
+    private native boolean nativeVerifyScAbsence(byte[] scid, ScExistenceProof existanceProof, FieldElement commitment);
 
-    public bool verifyScAbsence(byte[] scid, ScExistanceProof existanceProof, FieldElement commitment) {
+    public boolean verifyScAbsence(byte[] scid, ScExistenceProof existanceProof, FieldElement commitment) {
         if (commitmentTreePointer == 0)
             throw new IllegalStateException("CommitmentTree instance was freed.");
-        return nativeVerifyScAbsence(scCommitment, existanceProof, commitment);
+        return nativeVerifyScAbsence(scid, existanceProof, commitment);
     }
 }

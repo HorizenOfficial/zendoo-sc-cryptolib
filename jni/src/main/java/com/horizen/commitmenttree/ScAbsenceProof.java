@@ -1,5 +1,7 @@
 package com.horizen.commitmenttree;
 
+import com.horizen.librustsidechains.Library;
+
 public class ScAbsenceProof implements AutoCloseable {
     private long absenceProofPointer;
 
@@ -13,20 +15,9 @@ public class ScAbsenceProof implements AutoCloseable {
         this.absenceProofPointer = absenceProofPointer;
     }
 
-    @Override
-    public void close() throws Exception {
-        freeCommitmentTree();
-    }
-
-    private static native ScAbsenceProof nativeInit();
-
-    public static ScAbsenceProof init() {
-        return nativeInit();
-    }
-
     private static native void nativeFreeScAbsenceProof(long absenceProofPointer);
 
-    // Free Rust memory from CommitmentTree
+    // Free Rust memory
     public void freeScAbsenceProof() {
         if (absenceProofPointer != 0) {
             nativeFreeScAbsenceProof(this.absenceProofPointer);
