@@ -43,20 +43,21 @@ public class CommitmentTree implements AutoCloseable {
     }
 
     private static native boolean nativeAddScCr(byte[] scId, long amount, byte[] pubKey, int withdrawalEpochLength,
-                                                byte[] customData, byte[] constant, byte[] certVerificationKey,
+                                                byte[] customData, Optional<byte[]> constantOpt, byte[] certVerificationKey,
                                                 Optional<byte[]> btrVerificationKeyOpt,
                                                 Optional<byte[]> cswVerificationKeyOpt,
                                                 byte[] txHash, int outIdx);
     
     public boolean addScCr(byte[] scId, long amount, byte[] pubKey, int withdrawalEpochLength,
-                           byte[] customData, byte[] constant, byte[] certVerificationKey,
+                           byte[] customData, Optional<byte[]> constantOpt, byte[] certVerificationKey,
                            Optional<byte[]> btrVerificationKeyOpt,
                            Optional<byte[]> cswVerificationKeyOpt,
                            byte[] txHash, int outIdx) {
         if (commitmentTreePointer == 0)
             throw new IllegalStateException("CommitmentTree instance was freed.");
-        return nativeAddScCr(scId, amount, pubKey, withdrawalEpochLength, customData, constant, certVerificationKey,
-                btrVerificationKeyOpt, cswVerificationKeyOpt, txHash, outIdx);
+        return nativeAddScCr(scId, amount, pubKey, withdrawalEpochLength, customData, constantOpt.orElse(null),
+                certVerificationKey, btrVerificationKeyOpt.orElse(null), cswVerificationKeyOpt.orElse(null),
+                txHash, outIdx);
     }
     
     private static native boolean nativeAddFwt(byte[] scId, long amount, byte[] pubKey, byte[] txHash, int outIdx);

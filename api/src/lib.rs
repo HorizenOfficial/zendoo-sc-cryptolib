@@ -9,7 +9,7 @@ use std::{ptr::null_mut, any::type_name};
 mod ginger_calls;
 use ginger_calls::*;
 
-use cctp_primitives::commitment_tree::{CommitmentTree, hashers, ScExistenceProof, ScAbsenceProof};
+use cctp_primitives::commitment_tree::{CommitmentTree, ScExistenceProof, ScAbsenceProof};
 
 fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
     assert!(!input.is_null());
@@ -51,8 +51,6 @@ use jni::JNIEnv;
 use jni::objects::{JClass, JString, JObject, JValue};
 use jni::sys::{jbyteArray, jboolean, jint, jlong, /*jlongArray, */jobject, jobjectArray};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
-use std::convert::TryInto;
-use algebra::BigInteger768;
 
 //Field element related functions
 #[no_mangle]
@@ -2553,18 +2551,12 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeInit(
     _env: JNIEnv,
-    _class: JClass,
-    _db_path: JString
+    _class: JClass
 ) -> jobject
 {
-    // Read db_path
-    let db_path = _env.get_string(_db_path)
-        .expect("Should be able to read jstring as Rust String");
 
     // Create new CommitmentTree Rust side
-    let commitment_tree = CommitmentTree::create(
-        db_path.to_str().unwrap()
-    ).expect("Should be able to create new CommitmentTree");
+    let commitment_tree = CommitmentTree::create();
 
     // Create and return new CommitmentTree Java side
     let commitment_tree_ptr: jlong = jlong::from(Box::into_raw(Box::new(commitment_tree)) as i64);
@@ -2594,7 +2586,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
     _pub_key: jbyteArray,
     _withdrawal_epoch_length: jint,
     _custom_data: jbyteArray,
-    _constant: jbyteArray,
+    _constant_nullable: jbyteArray,
     _cert_verification_key: jbyteArray,
     _btr_verification_key_nullable: jbyteArray, // can be null if there is no key for BTRs
     _csw_verification_key_nullable: jbyteArray, // can be null if there is no key for CSWs
@@ -2614,7 +2606,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
         sc_id_bytes
     };
 
-    let amount = _amount as u64;
+    let amount = _amount as i64;
 
     let pub_key = {
         let t = _env.convert_byte_array(_pub_key)
@@ -2633,24 +2625,34 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
     let custom_data = _env.convert_byte_array(_custom_data)
         .expect("Should be able to convert to Rust byte array");
 
-    let constant = _env.convert_byte_array(_custom_data)
-        .expect("Should be able to convert to Rust byte array");
+    let mut _constant_nullable_vec;
+    let constant = if _constant_nullable.is_null() {
+        Option::None
+    } else {
+        _constant_nullable_vec = _env.convert_byte_array(_constant_nullable)
+            .expect("Should be able to convert to Rust byte array");
+        Some(_constant_nullable_vec.as_slice())
+    };
 
     let cert_verification_key = _env.convert_byte_array(_cert_verification_key)
         .expect("Should be able to convert to Rust byte array");
 
+    let mut _btr_verification_key_nullable_vec;
     let btr_verification_key = if _btr_verification_key_nullable.is_null() {
         Option::None
     } else {
-        Some(_env.convert_byte_array(_btr_verification_key_nullable)
-            .expect("Should be able to convert to Rust byte array"))
+        _btr_verification_key_nullable_vec = _env.convert_byte_array(_btr_verification_key_nullable)
+            .expect("Should be able to convert to Rust byte array");
+        Some(_btr_verification_key_nullable_vec.as_slice())
     };
 
+    let mut _csw_verification_key_nullable_vec;
     let csw_verification_key = if _csw_verification_key_nullable.is_null() {
         Option::None
     } else {
-        Some(_env.convert_byte_array(_csw_verification_key_nullable)
-            .expect("Should be able to convert to Rust byte array"))
+        _csw_verification_key_nullable_vec = _env.convert_byte_array(_csw_verification_key_nullable)
+            .expect("Should be able to convert to Rust byte array");
+        Some(_csw_verification_key_nullable_vec.as_slice())
     };
 
     let tx_hash = _env.convert_byte_array(_tx_hash)
@@ -2671,10 +2673,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
                             &pub_key,
                             withdrawal_epoch_length,
                             custom_data.as_slice(),
-                            constant.as_slice(),
+                            constant,
                             cert_verification_key.as_slice(),
-                            &btr_verification_key.unwrap_or_default(),
-                            &csw_verification_key.unwrap_or_default(),
+                            btr_verification_key,
+                            csw_verification_key,
                             &tx_hash,
                             out_idx) {
         JNI_TRUE
@@ -2706,7 +2708,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddF
         sc_id_bytes
     };
 
-    let amount = _amount as u64;
+    let amount = _amount as i64;
 
     let pub_key = {
         let t = _env.convert_byte_array(_pub_key)
@@ -2769,7 +2771,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddB
         sc_id_bytes
     };
 
-    let sc_fee = _sc_fee as u64;
+    let sc_fee = _sc_fee as i64;
 
     let pub_key_hash = {
         let t = _env.convert_byte_array(_pub_key_hash)
@@ -2811,6 +2813,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddB
     // TODO: update with `sc_request_data`
     if commitment_tree.add_bwtr(&sc_id,
                             sc_fee,
+                            &sc_request_data,
                             &pub_key_hash,
                             &tx_hash,
                             out_idx) {
@@ -2872,13 +2875,11 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
             let o = _env.get_object_array_element(_bt_list, i)
                 .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
 
-            // TODO: replace with [0u8; 20];
-            let pk: [u8; 32] = {
+            let pk: [u8; 20] = {
                 let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
                     .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-                // TODO: replace with [0u8; 20];
-                let mut pk_bytes = [0u8; 32];
+                let mut pk_bytes = [0u8; 20];
 
                 _env.convert_byte_array(p)
                     .expect("Should be able to convert to Rust byte array")
@@ -3132,9 +3133,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
-    // TODO: change with get_sc_cr_commitment
-    // TODO: check sc_id fe calculation
-    match commitment_tree.get_fwt_commitment(&hashers::hash_id(&sc_id)) {
+    match commitment_tree.get_scc(&sc_id) {
         Some(sc_cr_commitment_fe) => {
             let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
 
@@ -3184,8 +3183,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetF
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
-    // TODO: check sc_id fe calculation
-    match commitment_tree.get_fwt_commitment(&hashers::hash_id(&sc_id)) {
+    match commitment_tree.get_fwt_commitment(&sc_id) {
         Some(sc_cr_commitment_fe) => {
             let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
 
@@ -3235,8 +3233,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeBtrC
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
-    // TODO: check sc_id fe calculation
-    match commitment_tree.get_bwtr_commitment(&hashers::hash_id(&sc_id)) {
+    match commitment_tree.get_bwtr_commitment(&sc_id) {
         Some(sc_cr_commitment_fe) => {
             let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
 
@@ -3286,8 +3283,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
-    // TODO: check sc_id fe calculation
-    match commitment_tree.get_cert_commitment(&hashers::hash_id(&sc_id)) {
+    match commitment_tree.get_cert_commitment(&sc_id) {
         Some(sc_cr_commitment_fe) => {
             let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
 
@@ -3337,8 +3333,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
-    // TODO: check sc_id fe calculation
-    match commitment_tree.get_csw_commitment(&hashers::hash_id(&sc_id)) {
+    match commitment_tree.get_csw_commitment(&sc_id) {
         Some(sc_cr_commitment_fe) => {
             let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
 
@@ -3388,8 +3383,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
-    // TODO: check sc_id fe calculation
-    match commitment_tree.get_sc_commitment(&hashers::hash_id(&sc_id)) {
+    match commitment_tree.get_sc_commitment(&sc_id) {
         Some(sc_cr_commitment_fe) => {
             let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
 
@@ -3498,7 +3492,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetE
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
-    match commitment_tree.get_sc_existence_proof(&hashers::hash_id(&sc_id)) {
+    match commitment_tree.get_sc_existence_proof(&sc_id) {
         Some(sc_existance_proof) => {
             let proof_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_existance_proof)) as i64);
 
@@ -3548,7 +3542,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetA
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
-    match commitment_tree.get_sc_absence_proof(&hashers::hash_id(&sc_id)) {
+    match commitment_tree.get_sc_absence_proof(&sc_id) {
         Some(sc_absence_proof) => {
             let proof_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_absence_proof)) as i64);
 
@@ -3583,13 +3577,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
         let i =_env.get_field(_sc_commitment, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer from scCommitment");
 
-        read_raw_pointer(i.j().unwrap() as *const cctp_primitives::commitment_tree::FieldElement)
+        read_raw_pointer(i.j().unwrap() as *const FieldElement)
     };
 
     //Read commitment proof
     let sc_commitment_proof = {
         let i =_env.get_field(_sc_commitment_proof, "existanceProofPointer", "J")
-            .expect("Should be able to get field existanceProofPointer frfromom scCommitmentProof");
+            .expect("Should be able to get field existanceProofPointer from scCommitmentProof");
 
         read_raw_pointer(i.j().unwrap() as *const ScExistenceProof)
     };
@@ -3599,7 +3593,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
         let i =_env.get_field(_commitment, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer from commitment");
 
-        read_raw_pointer(i.j().unwrap() as *const cctp_primitives::commitment_tree::FieldElement)
+        read_raw_pointer(i.j().unwrap() as *const FieldElement)
     };
 
     CommitmentTree::verify_sc_commitment(sc_commitment_fe, sc_commitment_proof, commitment_fe)
@@ -3648,8 +3642,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
         let i =_env.get_field(_commitment, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer from commitment");
 
-        read_raw_pointer(i.j().unwrap() as *const cctp_primitives::commitment_tree::FieldElement)
+        read_raw_pointer(i.j().unwrap() as *const FieldElement)
     };
 
-    commitment_tree.verify_sc_absence(&hashers::hash_id(&sc_id), sc_absence_proof, commitment_fe)
+    commitment_tree.verify_sc_absence(&sc_id, sc_absence_proof, commitment_fe)
 }
