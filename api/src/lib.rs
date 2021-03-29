@@ -51,6 +51,7 @@ use jni::JNIEnv;
 use jni::objects::{JClass, JString, JObject, JValue};
 use jni::sys::{jbyteArray, jboolean, jint, jlong, /*jlongArray, */jobject, jobjectArray};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
+use cctp_primitives::commitment_tree::utils::fe_from_bytes;
 
 //Field element related functions
 #[no_mangle]
@@ -2586,7 +2587,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
     _pub_key: jbyteArray,
     _withdrawal_epoch_length: jint,
     _custom_data: jbyteArray,
-    _constant_nullable: jbyteArray,
+    _constant_nullable: jbyteArray,             // can be null if there is no constant
     _cert_verification_key: jbyteArray,
     _btr_verification_key_nullable: jbyteArray, // can be null if there is no key for BTRs
     _csw_verification_key_nullable: jbyteArray, // can be null if there is no key for CSWs
@@ -2598,7 +2599,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -2700,7 +2701,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddF
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -2763,7 +2764,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddB
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -2810,7 +2811,6 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddB
         read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
     };
 
-    // TODO: update with `sc_request_data`
     if commitment_tree.add_bwtr(&sc_id,
                             sc_fee,
                             &sc_request_data,
@@ -2840,7 +2840,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -2889,11 +2889,9 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
                 pk_bytes
             };
 
-            // TODO: replace with u64;
             let a = _env.call_method(o, "getAmount", "()J", &[])
                 .expect("Should be able to call getAmount method").j().unwrap() as i64;
 
-            // TODO: replace with `bt_list.push(BackwardTransfer::new(pk, a));`
             bt_list.push((a, pk));
         }
     }
@@ -2955,7 +2953,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -2963,7 +2961,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
         sc_id_bytes
     };
 
-    let leaf = {
+    let leaf_fe = {
         let t = _env.convert_byte_array(_leaf)
             .expect("Should be able to convert to Rust array");
 
@@ -2972,10 +2970,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
         t.write(&mut leaf_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
 
-        leaf_bytes
+        fe_from_bytes(&leaf_bytes).expect("Can't parse the input leaf_bytes into FieldElement")
     };
-
-    let leaf_ptr: *const FieldElement = deserialize_to_raw_pointer(&leaf);
 
     let commitment_tree = {
 
@@ -2985,13 +2981,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
         read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
     };
 
-
-    // TODO: we need a func that takes to byte arrays instead of field elements
-    // NOTE: issue with FieldElement versions on cctplib and gingerlib dependencies
-    let res = false; // commitment_tree.add_cert_leaf(&hashers::hash_id(&sc_id), &*leaf_ptr);
-    drop(leaf_ptr);
-
-    if res {
+    if commitment_tree.add_cert_leaf(&sc_id, &leaf_fe) {
         JNI_TRUE
     } else {
         JNI_FALSE
@@ -3009,7 +2999,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -3039,7 +3029,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -3115,7 +3105,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -3165,7 +3155,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetF
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -3215,7 +3205,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeBtrC
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -3265,7 +3255,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -3315,7 +3305,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -3365,7 +3355,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -3474,7 +3464,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetE
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -3524,7 +3514,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetA
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -3613,7 +3603,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
         let t = _env.convert_byte_array(_sc_id)
             .expect("Should be able to convert to Rust array");
 
-        let mut sc_id_bytes = [0u8; 32];
+        let mut sc_id_bytes = [0u8; FIELD_SIZE];
 
         t.write(&mut sc_id_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
