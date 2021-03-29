@@ -83,7 +83,7 @@ public class FieldElement implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         freeFieldElement();
     }
 }
