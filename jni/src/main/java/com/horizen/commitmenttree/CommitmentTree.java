@@ -4,6 +4,8 @@ import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 import com.horizen.sigproofnative.BackwardTransfer;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,9 +45,9 @@ public class CommitmentTree implements AutoCloseable {
     }
 
     private static native boolean nativeAddScCr(byte[] scId, long amount, byte[] pubKey, int withdrawalEpochLength,
-                                                byte[] customData, Optional<byte[]> constantOpt, byte[] certVerificationKey,
-                                                Optional<byte[]> btrVerificationKeyOpt,
-                                                Optional<byte[]> cswVerificationKeyOpt,
+                                                byte[] customData, byte[] constantOpt, byte[] certVerificationKey,
+                                                byte[] btrVerificationKeyOpt,
+                                                byte[] cswVerificationKeyOpt,
                                                 byte[] txHash, int outIdx);
     
     public boolean addScCr(byte[] scId, long amount, byte[] pubKey, int withdrawalEpochLength,
@@ -108,11 +110,11 @@ public class CommitmentTree implements AutoCloseable {
     }
 
 
-    private static native Optional<List<FieldElement>>  nativeGetCrtLeaves(byte[] scId);
+    private static native Optional<FieldElement[]>  nativeGetCrtLeaves(byte[] scId);
     public Optional<List<FieldElement>> getCrtLeaves(byte[] scId) {
         if (commitmentTreePointer == 0)
             throw new IllegalStateException("CommitmentTree instance was freed.");
-        return nativeGetCrtLeaves(scId);
+        return nativeGetCrtLeaves(scId).map(array -> new ArrayList<FieldElement>(Arrays.asList(array)));
     }
     
     private static native Optional<FieldElement> nativeGetScCrCommitment(byte[] scId);

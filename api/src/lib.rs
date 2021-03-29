@@ -3007,11 +3007,52 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
         sc_id_bytes
     };
 
-    let cls_optional = _env.find_class("java/util/Optional").unwrap();
-    let empty_res = _env.call_static_method(cls_optional, "empty", "()", &[])
-        .expect("Should be able to create new long for Optional.empty()");
-    *empty_res.l().unwrap()
-    // Todo return the list of Optional<List<FieldElement>>
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    match commitment_tree.get_cert_leaves(&sc_id) {
+        Some(leaves) => {
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let initial_element = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(0)]).expect("Should be able to create new long for FieldElement");
+
+            let leaf_fe_array = _env.new_object_array(leaves.len() as i32, field_class, initial_element)
+                .expect("Should be able to create array of FieldElements");
+
+            for (idx, leaf) in leaves.iter().enumerate() {
+                let leaf_field_ptr: jlong = jlong::from(Box::into_raw(Box::new(leaf)) as i64);
+
+                let leaf_element = _env.new_object(field_class, "(J)V", &[
+                    JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+                _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
+                    .expect("Should be able to add FieldElement leaf to an array");
+            }
+
+
+            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+            let empty_res = _env.call_static_method(cls_optional, "of", "([Lcom/horizen/librustsidechains/FieldElement)", &[JValue::from(JObject::from(leaf_fe_array))])
+                .expect("Should be able to create new value for Optional");
+
+            *empty_res.l().unwrap()
+        }
+        _ => {
+            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()", &[])
+                .expect("Should be able to create new value for Optional.empty()");
+
+            *empty_res.l().unwrap()
+        }
+    }
 }
 
 #[no_mangle]
