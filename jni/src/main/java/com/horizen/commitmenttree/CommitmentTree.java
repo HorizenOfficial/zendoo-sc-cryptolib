@@ -23,10 +23,10 @@ public class CommitmentTree implements AutoCloseable {
         this.commitmentTreePointer = commitmentTreePointer;
     }
 
-    private static native CommitmentTree nativeInit(String dbPath);
+    private static native CommitmentTree nativeInit();
 
-    public static CommitmentTree init(String dbPath) {
-        return nativeInit(dbPath);
+    public static CommitmentTree init() {
+        return nativeInit();
     }
 
     private static native void nativeFreeCommitmentTree(long commitmentTreePointer);
