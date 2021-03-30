@@ -1,6 +1,7 @@
 package com.horizen.commitmenttree;
 
 import org.junit.Test;
+import static org.junit.Assert.*;
 import com.horizen.commitmenttree.CommitmentTree;
 import com.horizen.sigproofnative.BackwardTransfer;
 import com.horizen.librustsidechains.FieldElement;
@@ -13,6 +14,37 @@ public class CommitmentTreeTest {
         try (FieldElement tmp = FieldElement.createRandom()) {
             return tmp.serializeFieldElement();
         }
+    }
+
+    @Test
+    public void createAndFree() {
+        CommitmentTree commTree = CommitmentTree.init();
+        commTree.freeCommitmentTree();
+    }
+
+    @Test
+    public void addScCreation() {
+        CommitmentTree commTree = CommitmentTree.init();
+
+        byte[] scId = generateFieldElementBytes();
+        long amount = 100;
+        byte[] pubKey = new byte[32]; // todo fill
+        int withdrawalEpochLength = 1000;
+        byte[] customData = new byte[1024];
+        Optional<byte[]> constant = Optional.of(generateFieldElementBytes());
+        byte[] certVk = new byte[1]; // todo
+        Optional<byte[]> btrVk = Optional.empty();
+        Optional<byte[]> cswVk = Optional.empty();
+        byte[] txHash = new byte[32]; // todo
+        int outIdx = 0;
+
+        assertTrue("Sidechain creation output expected to be added.",
+                commTree.addScCr(scId, amount, pubKey, withdrawalEpochLength,
+                        customData, constant, certVk, btrVk, cswVk, txHash, outIdx)
+        );
+
+
+        commTree.freeCommitmentTree();
     }
 
     @Test

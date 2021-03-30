@@ -18,8 +18,6 @@ public class CommitmentTree implements AutoCloseable {
     }
 
     private CommitmentTree(long commitmentTreePointer) {
-        if (commitmentTreePointer == 0)
-            throw new IllegalArgumentException("commitmentTreePointer must be not null.");
         this.commitmentTreePointer = commitmentTreePointer;
     }
 
@@ -29,7 +27,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeInit();
     }
 
-    private static native void nativeFreeCommitmentTree(long commitmentTreePointer);
+    private native void nativeFreeCommitmentTree(long commitmentTreePointer);
 
     // Free Rust memory from CommitmentTree
     public void freeCommitmentTree() {
@@ -44,7 +42,7 @@ public class CommitmentTree implements AutoCloseable {
         freeCommitmentTree();
     }
 
-    private static native boolean nativeAddScCr(byte[] scId, long amount, byte[] pubKey, int withdrawalEpochLength,
+    private native boolean nativeAddScCr(byte[] scId, long amount, byte[] pubKey, int withdrawalEpochLength,
                                                 byte[] customData, byte[] constantOpt, byte[] certVerificationKey,
                                                 byte[] btrVerificationKeyOpt,
                                                 byte[] cswVerificationKeyOpt,
@@ -62,7 +60,7 @@ public class CommitmentTree implements AutoCloseable {
                 txHash, outIdx);
     }
     
-    private static native boolean nativeAddFwt(byte[] scId, long amount, byte[] pubKey, byte[] txHash, int outIdx);
+    private native boolean nativeAddFwt(byte[] scId, long amount, byte[] pubKey, byte[] txHash, int outIdx);
     
     public boolean addFwt(byte[] scId, long amount, byte[] pubKey, byte[] txHash, int outIdx) {
         if (commitmentTreePointer == 0)
@@ -70,7 +68,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeAddFwt(scId, amount, pubKey, txHash, outIdx);
     }
 
-    private static native boolean nativeAddBtr(byte[] scId, long scFee, byte[] pubKeyHash,
+    private native boolean nativeAddBtr(byte[] scId, long scFee, byte[] pubKeyHash,
                                                byte[] scRequestData, byte[] txHash, int outIdx);
     
     public boolean addBtr(byte[] scId, long scFee, byte[] pubKeyHash, byte[] scRequestData, byte[] txHash, int outIdx) {
@@ -79,7 +77,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeAddBtr(scId, scFee, pubKeyHash, scRequestData, txHash, outIdx);
     }
     
-    private static native boolean nativeAddCert(byte[] scId, int epochNumber, long quality,
+    private native boolean nativeAddCert(byte[] scId, int epochNumber, long quality,
                                                 byte[] certDataHash, BackwardTransfer[] btList,
                                                 byte[] customFieldsMerkleRoot,
                                                 byte[] endCumulativeScTxCommitmentTreeRoot);
@@ -92,7 +90,7 @@ public class CommitmentTree implements AutoCloseable {
                 customFieldsMerkleRoot, endCumulativeScTxCommitmentTreeRoot);
     }
 
-    public static native boolean nativeAddCertLeaf(byte[] scId, byte[] leaf);
+    public native boolean nativeAddCertLeaf(byte[] scId, byte[] leaf);
 
     public boolean addCertLeaf(byte[] scId, byte[] leaf) {
         if (commitmentTreePointer == 0)
@@ -100,7 +98,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeAddCertLeaf(scId, leaf);
     }
     
-    private static native boolean nativeAddCsw(byte[] scId, long amount, byte[] nullifier,
+    private native boolean nativeAddCsw(byte[] scId, long amount, byte[] nullifier,
                                                byte[] pubKeyHash, byte[] activeCertDataHash);
     
     public boolean addCsw(byte[] scId, long amount, byte[] nullifier, byte[] pubKeyHash, byte[] activeCertDataHash) {
@@ -110,14 +108,14 @@ public class CommitmentTree implements AutoCloseable {
     }
 
 
-    private static native Optional<FieldElement[]>  nativeGetCrtLeaves(byte[] scId);
+    private native Optional<FieldElement[]>  nativeGetCrtLeaves(byte[] scId);
     public Optional<List<FieldElement>> getCrtLeaves(byte[] scId) {
         if (commitmentTreePointer == 0)
             throw new IllegalStateException("CommitmentTree instance was freed.");
         return nativeGetCrtLeaves(scId).map(array -> new ArrayList<FieldElement>(Arrays.asList(array)));
     }
     
-    private static native Optional<FieldElement> nativeGetScCrCommitment(byte[] scId);
+    private native Optional<FieldElement> nativeGetScCrCommitment(byte[] scId);
     
     public Optional<FieldElement> getScCrCommitment(byte[] scId) {
         if (commitmentTreePointer == 0)
@@ -125,7 +123,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetScCrCommitment(scId);
     }
 
-    private static native Optional<FieldElement> nativeGetFwtCommitment(byte[] scId);
+    private native Optional<FieldElement> nativeGetFwtCommitment(byte[] scId);
     
     public Optional<FieldElement> getFwtCommitment(byte[] scId) {
         if (commitmentTreePointer == 0)
@@ -133,7 +131,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetFwtCommitment(scId);
     }
 
-    private static native Optional<FieldElement> nativeBtrCommitment(byte[] scId);
+    private native Optional<FieldElement> nativeBtrCommitment(byte[] scId);
     
     public Optional<FieldElement> getBtrCommitment(byte[] scId) {
         if (commitmentTreePointer == 0)
@@ -141,7 +139,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeBtrCommitment(scId);
     }
 
-    private static native Optional<FieldElement> nativeGetCertCommitment(byte[] scId);
+    private native Optional<FieldElement> nativeGetCertCommitment(byte[] scId);
     
     public Optional<FieldElement> getCertCommitment(byte[] scId) {
         if (commitmentTreePointer == 0)
@@ -149,7 +147,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetCertCommitment(scId);
     }
 
-    private static native Optional<FieldElement> nativeGetCswCommitment(byte[] scId);
+    private native Optional<FieldElement> nativeGetCswCommitment(byte[] scId);
     
     public Optional<FieldElement> getCswCommitment(byte[] scId) {
         if (commitmentTreePointer == 0)
@@ -157,7 +155,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetCswCommitment(scId);
     }
 
-    private static native Optional<FieldElement> nativeGetScCommitment(byte[] scId);
+    private native Optional<FieldElement> nativeGetScCommitment(byte[] scId);
     
     public Optional<FieldElement> getScCommitment(byte[] scId) {
         if (commitmentTreePointer == 0)
@@ -165,7 +163,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetScCommitment(scId);
     }
 
-    private static native Optional<FieldElement> nativeGetCommitment();
+    private native Optional<FieldElement> nativeGetCommitment();
     
     public Optional<FieldElement> getCommitment() {
         if (commitmentTreePointer == 0)
@@ -173,7 +171,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetCommitment();
     }
 
-    private static native Optional<ScExistenceProof> nativeGetScExistenceProof(byte[] scId);
+    private native Optional<ScExistenceProof> nativeGetScExistenceProof(byte[] scId);
 
     public Optional<ScExistenceProof> getScExistenceProof(byte[] scId) {
         if (commitmentTreePointer == 0)
@@ -187,7 +185,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeVerifyScCommitment(scCommitment, existenceProof, commitment);
     }
 
-    private static native Optional<ScAbsenceProof> nativeGetScAbsenceProof(byte[] scId);
+    private native Optional<ScAbsenceProof> nativeGetScAbsenceProof(byte[] scId);
 
     public Optional<ScAbsenceProof> getScAbsenceProof(byte[] scId) {
         if (commitmentTreePointer == 0)
@@ -195,7 +193,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetScAbsenceProof(scId);
     }
 
-    private native boolean nativeVerifyScAbsence(byte[] scid, ScAbsenceProof absenceProof, FieldElement commitment);
+    private static native boolean nativeVerifyScAbsence(byte[] scid, ScAbsenceProof absenceProof, FieldElement commitment);
 
     public boolean verifyScAbsence(byte[] scid, ScAbsenceProof absenceProof, FieldElement commitment) {
         if (commitmentTreePointer == 0)
