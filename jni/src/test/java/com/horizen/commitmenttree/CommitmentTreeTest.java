@@ -6,6 +6,7 @@ import com.horizen.commitmenttree.CommitmentTree;
 import com.horizen.sigproofnative.BackwardTransfer;
 import com.horizen.librustsidechains.FieldElement;
 
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.Random;
 
@@ -25,10 +26,12 @@ public class CommitmentTreeTest {
     @Test
     public void addScCreation() {
         CommitmentTree commTree = CommitmentTree.init();
+        byte[] scId = Arrays.copyOfRange(generateFieldElementBytes(), 8, 32); // TODO: use 32 bytes
 
-        byte[] scId = generateFieldElementBytes();
+        assertFalse("ScCr commitment expected to be missed.", commTree.getScCrCommitment(scId).isPresent());
+
         long amount = 100;
-        byte[] pubKey = new byte[32]; // todo fill
+        byte[] pubKey = new byte[24]; // todo fill new byte[32];
         int withdrawalEpochLength = 1000;
         byte[] customData = new byte[1024];
         Optional<byte[]> constant = Optional.of(generateFieldElementBytes());
@@ -43,19 +46,20 @@ public class CommitmentTreeTest {
                         customData, constant, certVk, btrVk, cswVk, txHash, outIdx)
         );
 
-
+        Optional<FieldElement> commitmentOpt = commTree.getScCrCommitment(scId);
+        assertTrue("ScCr commitment expected to be missed.", commitmentOpt.isPresent());
         commTree.freeCommitmentTree();
     }
 
     @Test
     public void AddTreeDataTest() {
         CommitmentTree commTree = CommitmentTree.init();
-        assert(!commTree.getCommitment().isPresent());
+        assert(commTree.getCommitment().isPresent());
 
         byte[][] scid = new byte[6][];
 
         for (int i = 0 ; i < scid.length; i++) {
-            scid[i] = generateFieldElementBytes();
+            scid[i] = Arrays.copyOfRange(generateFieldElementBytes(), 8, 32); // TODO: use 32 bytes
         }
 
         assert(!commTree.getFwtCommitment(scid[0]).isPresent());

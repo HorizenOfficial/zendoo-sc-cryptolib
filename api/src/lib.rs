@@ -3039,7 +3039,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
 
             let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
-            let empty_res = _env.call_static_method(cls_optional, "of", "([Lcom/horizen/librustsidechains/FieldElement)", &[JValue::from(JObject::from(leaf_fe_array))])
+            let empty_res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::from(JObject::from(leaf_fe_array))])
                 .expect("Should be able to create new value for Optional");
 
             *empty_res.l().unwrap()
@@ -3047,7 +3047,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
         _ => {
             let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()", &[])
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
                 .expect("Should be able to create new value for Optional.empty()");
 
             *empty_res.l().unwrap()
@@ -3174,12 +3174,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
             let jfe = _env.new_object(field_class, "(J)V", &[
                 JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
 
-            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
                                               &[JValue::Object(jfe)]).unwrap();
             *res.l().unwrap()
         },
         _ => {
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
             *empty_res.l().unwrap()
         }
     }
@@ -3224,12 +3225,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetF
             let jfe = _env.new_object(field_class, "(J)V", &[
                 JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
 
-            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
                                               &[JValue::Object(jfe)]).unwrap();
             *res.l().unwrap()
         },
         _ => {
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
             *empty_res.l().unwrap()
         }
     }
@@ -3274,12 +3276,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeBtrC
             let jfe = _env.new_object(field_class, "(J)V", &[
                 JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
 
-            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
                                               &[JValue::Object(jfe)]).unwrap();
             *res.l().unwrap()
         },
         _ => {
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
             *empty_res.l().unwrap()
         }
     }
@@ -3324,12 +3327,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
             let jfe = _env.new_object(field_class, "(J)V", &[
                 JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
 
-            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
                                               &[JValue::Object(jfe)]).unwrap();
             *res.l().unwrap()
         },
         _ => {
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
             *empty_res.l().unwrap()
         }
     }
@@ -3374,12 +3378,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
             let jfe = _env.new_object(field_class, "(J)V", &[
                 JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
 
-            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
                                               &[JValue::Object(jfe)]).unwrap();
             *res.l().unwrap()
         },
         _ => {
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
             *empty_res.l().unwrap()
         }
     }
@@ -3424,12 +3429,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
             let jfe = _env.new_object(field_class, "(J)V", &[
                 JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
 
-            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
                                               &[JValue::Object(jfe)]).unwrap();
             *res.l().unwrap()
         },
         _ => {
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
             *empty_res.l().unwrap()
         }
     }
@@ -3461,12 +3467,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
             let jfe = _env.new_object(field_class, "(J)V", &[
                 JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
 
-            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/librustsidechains/FieldElement)V",
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
                                               &[JValue::Object(jfe)]).unwrap();
             *res.l().unwrap()
         },
         _ => {
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
             *empty_res.l().unwrap()
         }
     }
@@ -3533,12 +3540,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetE
             let jep = _env.new_object(existence_proof_class, "(J)V", &[
                 JValue::Long(proof_ptr)]).expect("Should be able to create new long for ScExistenceProof");
 
-            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/commitmenttree/ScExistenceProof)V",
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
                                               &[JValue::Object(jep)]).unwrap();
             *res.l().unwrap()
         },
         _ => {
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
             *empty_res.l().unwrap()
         }
     }
@@ -3583,12 +3591,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetA
             let jep = _env.new_object(absence_proof_class, "(J)V", &[
                 JValue::Long(proof_ptr)]).expect("Should be able to create new long for ScAbsenceProof");
 
-            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/commitmenttree/ScAbsenceProof)V",
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
                                               &[JValue::Object(jep)]).unwrap();
             *res.l().unwrap()
         }
         _ => {
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()V", &[]).unwrap();
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
             *empty_res.l().unwrap()
         }
     }
