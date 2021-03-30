@@ -25,8 +25,8 @@ public class NaiveThresholdSigProofTest {
     static long threshold = 2;
     static int backwardTransferCout = 10;
 
-    byte[] endEpochBlockHash = new byte[16];
-    byte[] prevEndEpochBlockHash = new byte[16];
+    byte[] endEpochBlockHash = new byte[32];
+    byte[] prevEndEpochBlockHash = new byte[32];
 
     List<SchnorrPublicKey> publicKeyList = new ArrayList<>();
     List<SchnorrSignature> signatureList = new ArrayList<>();

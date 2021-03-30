@@ -65,7 +65,7 @@ type MarlinInst = Marlin<Fr, IPAPC, Blake2s>;
 
 pub const FIELD_SIZE: usize = 32; //Field size in bytes
 pub const SCALAR_FIELD_SIZE: usize = FIELD_SIZE;// 32
-pub const G1_SIZE: usize = 193;
+pub const G1_SIZE: usize = 65;
 pub const G2_SIZE: usize = 385;
 
 pub const SCHNORR_PK_SIZE: usize = G1_SIZE; // 193
@@ -200,6 +200,9 @@ pub fn read_field_element_from_buffer_with_padding(buffer: &[u8]) -> IoResult<Fi
     new_buffer.extend_from_slice(buffer);
     for _ in buff_len..FIELD_SIZE { new_buffer.push(0u8) } //Add padding zeros to reach field size
 
+    //Truncate buffer to fit the MODULUS
+    new_buffer[FIELD_SIZE - 1] = new_buffer[FIELD_SIZE - 1] & 0b01111111;
+
     FieldElement::read(&new_buffer[..])
 }
 
@@ -284,8 +287,8 @@ pub fn compute_wcert_sysdata_hash(
 pub fn create_naive_threshold_sig_proof(
     pks:                      &[SchnorrPk],
     mut sigs:                 Vec<Option<SchnorrSig>>,
-    end_epoch_mc_b_hash:      &[u8; 16],
-    prev_end_epoch_mc_b_hash: &[u8; 16],
+    end_epoch_mc_b_hash:      &[u8; 32],
+    prev_end_epoch_mc_b_hash: &[u8; 32],
     bt_list:                  &[BackwardTransfer],
     threshold:                u64,
     proving_key_path:         &str,
@@ -348,8 +351,8 @@ pub fn create_naive_threshold_sig_proof(
 
 pub fn verify_naive_threshold_sig_proof(
     constant:                 &FieldElement,
-    end_epoch_mc_b_hash:      &[u8; 16],
-    prev_end_epoch_mc_b_hash: &[u8; 16],
+    end_epoch_mc_b_hash:      &[u8; 32],
+    prev_end_epoch_mc_b_hash: &[u8; 32],
     bt_list:                  &[BackwardTransfer],
     valid_sigs:               u64,
     proof:                    &SCProof,
@@ -755,8 +758,8 @@ mod test {
         let mut rng = OsRng;
 
         //Generate random mc block hashes and bt list
-        let mut end_epoch_mc_b_hash = [0u8; 16];
-        let mut prev_end_epoch_mc_b_hash = [0u8; 16];
+        let mut end_epoch_mc_b_hash = [0u8; 32];
+        let mut prev_end_epoch_mc_b_hash = [0u8; 32];
         rng.fill_bytes(&mut end_epoch_mc_b_hash);
         rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
         println!("end epoch u8: {:?}", end_epoch_mc_b_hash);
@@ -1165,5 +1168,34 @@ mod test {
 
         //finalize() is idempotent
         assert_eq!(h_output, finalize_poseidon_hash(&h));
+    }
+
+
+    #[test]
+    fn read_field_test(){
+        let mut rng = OsRng;
+
+        let mut end_epoch_mc_b_hash = [0u8; 32];
+        let mut prev_end_epoch_mc_b_hash = [0u8; 32];
+        rng.fill_bytes(&mut end_epoch_mc_b_hash);
+        rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
+
+        let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
+        let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
+
+        let bt_num = 10;
+
+        let mut bt_list = vec![];
+        for _ in 0..bt_num {
+            bt_list.push(BackwardTransfer::default());
+        }
+
+        let (_mr_bt, _msg) = compute_msg_to_sign(
+            &end_epoch_mc_b_hash,
+            &prev_end_epoch_mc_b_hash,
+            bt_list.as_slice(),
+        ).unwrap();
+
+        let _pk: IndexProverKey<Fr, IPAPC> = read_from_file("./sample_pk").unwrap();
     }
 }

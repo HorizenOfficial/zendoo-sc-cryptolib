@@ -2356,7 +2356,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let t = _env.convert_byte_array(_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
-        let mut end_epoch_block_hash_bytes = [0u8; 16];
+        let mut end_epoch_block_hash_bytes = [0u8; 32];
 
         t.write(&mut end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -2368,7 +2368,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
-        let mut prev_end_epoch_block_hash_bytes = [0u8; 16];
+        let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
 
         t.write(&mut prev_end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -2478,7 +2478,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let t = _env.convert_byte_array(_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
-        let mut end_epoch_block_hash_bytes = [0u8; 16];
+        let mut end_epoch_block_hash_bytes = [0u8; 32];
 
         t.write(&mut end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
@@ -2490,7 +2490,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
-        let mut prev_end_epoch_block_hash_bytes = [0u8; 16];
+        let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
 
         t.write(&mut prev_end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
