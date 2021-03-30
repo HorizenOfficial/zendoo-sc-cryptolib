@@ -1,24 +1,24 @@
-//package com.horizen.schnorrnative;
-//
-//import com.horizen.librustsidechains.FieldElement;
-//import org.junit.Test;
-//
-//import java.util.Arrays;
-//
-//import static org.junit.Assert.*;
-//
-//public class SchnorrKeyPairTest {
-//
-//    @Test
-//    public void testGenerate() throws Exception {
-//
-//        try(SchnorrKeyPair keyPair = SchnorrKeyPair.generate())
-//        {
-//            assertNotNull("Key pair generation was unsuccessful.", keyPair);
-//            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
-//        }
-//    }
-//
+package com.horizen.schnorrnative;
+
+import com.horizen.librustsidechains.FieldElement;
+import org.junit.Test;
+
+import java.util.Arrays;
+
+import static org.junit.Assert.*;
+
+public class SchnorrKeyPairTest {
+
+    @Test
+    public void testGenerate() throws Exception {
+
+        try(SchnorrKeyPair keyPair = SchnorrKeyPair.generate())
+        {
+            assertNotNull("Key pair generation was unsuccessful.", keyPair);
+            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
+        }
+    }
+
 //    @Test
 //    public void testSignVerify() throws Exception {
 //
@@ -64,30 +64,30 @@
 //        }
 //
 //    }
-//
-//    @Test
-//    public void testRandomSignVerify() throws Exception {
-//
-//        int samples = 100;
-//
-//        for (int i = 0; i < samples; i++) {
-//            try
-//            (
-//                SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
-//                FieldElement fieldElement = FieldElement.createRandom();
-//                FieldElement wrongFieldElement = FieldElement.createRandom()
-//            )
-//            {
-//                assertNotNull("Key pair generation was unsuccessful.", keyPair);
-//                assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
-//
-//                try(SchnorrSignature signature = keyPair.signMessage(fieldElement))
-//                {
-//                    assertNotNull("Attempt to sign message failed.", signature);
-//                    assertTrue("Signature must be verified", keyPair.getPublicKey().verifySignature(signature, fieldElement));
-//                    assertFalse("Signature must not be verified", keyPair.getPublicKey().verifySignature(signature, wrongFieldElement));
-//                }
-//            }
-//        }
-//    }
-//}
+
+    @Test
+    public void testRandomSignVerify() throws Exception {
+
+        int samples = 100;
+
+        for (int i = 0; i < samples; i++) {
+            try
+            (
+                SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
+                FieldElement fieldElement = FieldElement.createRandom();
+                FieldElement wrongFieldElement = FieldElement.createRandom()
+            )
+            {
+                assertNotNull("Key pair generation was unsuccessful.", keyPair);
+                assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
+
+                try(SchnorrSignature signature = keyPair.signMessage(fieldElement))
+                {
+                    assertNotNull("Attempt to sign message failed.", signature);
+                    assertTrue("Signature must be verified", keyPair.getPublicKey().verifySignature(signature, fieldElement));
+                    assertFalse("Signature must not be verified", keyPair.getPublicKey().verifySignature(signature, wrongFieldElement));
+                }
+            }
+        }
+    }
+}

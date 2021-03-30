@@ -1,37 +1,37 @@
-//package com.horizen.sigproofnative;
-//
-//import com.horizen.librustsidechains.FieldElement;
-//import com.horizen.schnorrnative.SchnorrKeyPair;
-//import com.horizen.schnorrnative.SchnorrPublicKey;
-//import com.horizen.schnorrnative.SchnorrSecretKey;
-//import com.horizen.schnorrnative.SchnorrSignature;
-//import org.junit.Before;
-//import org.junit.After;
-//import org.junit.Test;
-//
-//import java.io.File;
-//import java.io.FileReader;
-//import java.util.ArrayList;
-//import java.util.List;
-//import java.util.Random;
-//
-//import static org.junit.Assert.assertNotNull;
-//import static org.junit.Assert.assertTrue;
-//import static org.junit.Assert.assertFalse;
-//
-//public class NaiveThresholdSigProofTest {
-//
-//    static int keyCount = 3;
-//    static long threshold = 2;
-//    static int backwardTransferCout = 10;
-//
-//    byte[] endEpochBlockHash = new byte[16];
-//    byte[] prevEndEpochBlockHash = new byte[16];
-//
-//    List<SchnorrPublicKey> publicKeyList = new ArrayList<>();
-//    List<SchnorrSignature> signatureList = new ArrayList<>();
-//    List<BackwardTransfer> btList = new ArrayList<>();
-//
+package com.horizen.sigproofnative;
+
+import com.horizen.librustsidechains.FieldElement;
+import com.horizen.schnorrnative.SchnorrKeyPair;
+import com.horizen.schnorrnative.SchnorrPublicKey;
+import com.horizen.schnorrnative.SchnorrSecretKey;
+import com.horizen.schnorrnative.SchnorrSignature;
+import org.junit.Before;
+import org.junit.After;
+import org.junit.Test;
+
+import java.io.File;
+import java.io.FileReader;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
+
+public class NaiveThresholdSigProofTest {
+
+    static int keyCount = 3;
+    static long threshold = 2;
+    static int backwardTransferCout = 10;
+
+    byte[] endEpochBlockHash = new byte[16];
+    byte[] prevEndEpochBlockHash = new byte[16];
+
+    List<SchnorrPublicKey> publicKeyList = new ArrayList<>();
+    List<SchnorrSignature> signatureList = new ArrayList<>();
+    List<BackwardTransfer> btList = new ArrayList<>();
+
 //    @Test
 //    public void testcreateProof() throws Exception {
 //
@@ -131,7 +131,7 @@
 //
 //        createAndVerifyProof();
 //    }
-//
+
 //    @Test
 //    public void testcreateProofWithoutBWT() throws Exception {
 //
@@ -222,7 +222,7 @@
 //
 //        createAndVerifyProof();
 //    }
-//
+
 //    @Test
 //    public void testCreateRandomProof() throws Exception {
 //        Random r = new Random();
@@ -311,4 +311,4 @@
 //            sig.freeSignature();
 //        signatureList.clear();
 //    }
-//}
+}
