@@ -201,7 +201,7 @@ pub fn read_field_element_from_buffer_with_padding(buffer: &[u8]) -> IoResult<Fi
     for _ in buff_len..FIELD_SIZE { new_buffer.push(0u8) } //Add padding zeros to reach field size
 
     //Truncate buffer to fit the MODULUS
-    new_buffer[FIELD_SIZE - 1] = new_buffer[FIELD_SIZE - 1] & 0b01111111;
+    new_buffer[FIELD_SIZE - 1] = new_buffer[FIELD_SIZE - 1] & 0b00111111;
 
     FieldElement::read(&new_buffer[..])
 }
