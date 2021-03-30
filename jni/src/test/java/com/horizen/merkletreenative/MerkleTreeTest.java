@@ -1,50 +1,50 @@
-//package com.horizen.merkletreenative;
-//
-//import com.horizen.librustsidechains.FieldElement;
-//
-//import org.junit.Test;
-//import org.junit.Before;
-//import org.junit.After;
-//import org.junit.Test;
-//
-//import java.util.List;
-//import java.util.ArrayList;
-//
-//import java.io.File;
-//import java.io.FileInputStream;
-//
-//import static org.junit.Assert.*;
-//
-//public class MerkleTreeTest {
-//
-//    static long[] positions = { 458L, 478L, 161L, 0L, 291L, 666L, 313L, 532L };
-//    static int height = 10;
-//    static int numLeaves = 8;
-//    List<FieldElement> leaves;
-//
-//    static byte[] expectedRootBytes = {
-//            98, 17, 48, -16, 78, -116, -101, -33, -30, -122, -126, -83, -120, 106, -53, 30, -96, -119, 102, -25, 33, -27, -114, -13, -4, -33, 54, 49, -20, 53, 42, 83, 75, 17, -19, -95, -10, 22, -116, -35, 83, -91, -3, -1, 109, 27, -90, 120, 109, 59, 53, -115, -115, 71, -53, -80, 51, -118, 119, 49, -28, -3, -49, 27, -113, -120, 55, 114, -83, 98, -7, 109, 41, 46, -68, -40, -12, 75, -37, -121, 71, -98, 124, -87, -105, -45, 5, -88, 47, -55, -51, -49, -127, 77, 0, 0,
-//    };
-//    FieldElement expectedRoot;
-//
-//    private List<FieldElement> buildLeaves(long initialSeed){
-//        List<FieldElement> leaves = new ArrayList<>();
-//
-//        for (int i = 0; i < numLeaves; i++) {
-//            FieldElement leaf = FieldElement.createRandom(initialSeed);
-//            leaves.add(leaf);
-//            initialSeed += 1;
-//        }
-//
-//        return leaves;
-//    }
-//
-//    @Before
-//    public void initTestParams() {
-//        leaves = buildLeaves(1234567890L);
-//        expectedRoot = FieldElement.deserialize(expectedRootBytes);
-//    }
-//
+package com.horizen.merkletreenative;
+
+import com.horizen.librustsidechains.FieldElement;
+
+import org.junit.Test;
+import org.junit.Before;
+import org.junit.After;
+import org.junit.Test;
+
+import java.util.List;
+import java.util.ArrayList;
+
+import java.io.File;
+import java.io.FileInputStream;
+
+import static org.junit.Assert.*;
+
+public class MerkleTreeTest {
+
+    static long[] positions = { 458L, 478L, 161L, 0L, 291L, 666L, 313L, 532L };
+    static int height = 10;
+    static int numLeaves = 8;
+    List<FieldElement> leaves;
+
+    static byte[] expectedRootBytes = {
+            98, 17, 48, -16, 78, -116, -101, -33, -30, -122, -126, -83, -120, 106, -53, 30, -96, -119, 102, -25, 33, -27, -114, -13, -4, -33, 54, 49, -20, 53, 42, 83, 75, 17, -19, -95, -10, 22, -116, -35, 83, -91, -3, -1, 109, 27, -90, 120, 109, 59, 53, -115, -115, 71, -53, -80, 51, -118, 119, 49, -28, -3, -49, 27, -113, -120, 55, 114, -83, 98, -7, 109, 41, 46, -68, -40, -12, 75, -37, -121, 71, -98, 124, -87, -105, -45, 5, -88, 47, -55, -51, -49, -127, 77, 0, 0,
+    };
+    FieldElement expectedRoot;
+
+    private List<FieldElement> buildLeaves(long initialSeed){
+        List<FieldElement> leaves = new ArrayList<>();
+
+        for (int i = 0; i < numLeaves; i++) {
+            FieldElement leaf = FieldElement.createRandom(initialSeed);
+            leaves.add(leaf);
+            initialSeed += 1;
+        }
+
+        return leaves;
+    }
+
+    @Before
+    public void initTestParams() {
+        leaves = buildLeaves(1234567890L);
+        expectedRoot = FieldElement.deserialize(expectedRootBytes);
+    }
+
 //    @Test
 //    public void testMerkleTrees() {
 //
@@ -137,7 +137,7 @@
 //        mhtRoot.freeFieldElement();
 //        mhtRootCopy.freeFieldElement();
 //    }
-//
+
 //    @Test
 //    public void testMerklePaths() {
 //        List<FieldElement> testLeaves = new ArrayList<>();
@@ -205,9 +205,8 @@
 //        mhtRoot.freeFieldElement();
 //        for (FieldElement leaf: testLeaves)
 //            leaf.freeFieldElement();
-//
 //    }
-//
+
 //    @Test
 //    public void testNonEmptyRightmost() {
 //        InMemoryOptimizedMerkleTree mht = InMemoryOptimizedMerkleTree.init(6, numLeaves);
@@ -227,7 +226,7 @@
 //            mhtCopy.freeInMemoryOptimizedMerkleTree();
 //        }
 //    }
-//
+
 //    @Test
 //    public void testBigMerkleTreePersistency() {
 //
@@ -266,7 +265,7 @@
 //        f = new File("./db_big_persistency");
 //        assertTrue("DB has not been destroyed", !f.exists());
 //    }
-//
+
 //    @Test
 //    public void testBigLazyMerkleTreePersistency() {
 //
@@ -304,11 +303,11 @@
 //        f = new File("./db_big_lazy_persistency");
 //        assertTrue("DB has not been destroyed", !f.exists());
 //    }
-//
-//    @After
-//    public void freeTestParams(){
-//        for (FieldElement leaf: leaves)
-//            leaf.freeFieldElement();
-//        expectedRoot.freeFieldElement();
-//    }
-//}
+
+    @After
+    public void freeTestParams(){
+        for (FieldElement leaf: leaves)
+            leaf.freeFieldElement();
+        expectedRoot.freeFieldElement();
+    }
+}

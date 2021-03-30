@@ -1,7 +1,6 @@
 use algebra::{fields::{
     tweedle::{Fq as ScalarFieldElement, Fr}, PrimeField
 }, curves::{
-    // mnt4753::MNT4 as PairingCurve,
     tweedle::{
         dum::{
             Projective as Projective,
@@ -21,7 +20,6 @@ use primitives::{crh::{
     // smt::{BigMerkleTree, LazyBigMerkleTree, Coord, OperationLeaf},
     optimized::FieldBasedOptimizedMHT,
     parameters::tweedle_fr::TWEEDLE_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS,
-    // parameters::mnt4753::{MNT4753_PHANTOM_MERKLE_ROOT as PHANTOM_MERKLE_ROOT, MNT4753_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS},
     FieldBasedMerkleTree, FieldBasedMerkleTreePrecomputedEmptyConstants,
     FieldBasedMerkleTreeParameters, BatchFieldBasedMerkleTreeParameters,
     FieldBasedMerkleTreePath, FieldBasedBinaryMHTPath,
@@ -35,10 +33,6 @@ use primitives::{crh::{
 use marlin::*;
 use blake2::Blake2s;
 use poly_commit::ipa_pc::InnerProductArgPC;
-// use proof_systems::groth16::{
-//     create_random_proof,
-//     prepare_verifying_key, verify_proof,
-// };
 use demo_circuit::{
     constants::{
         VRFParams, VRFWindow,
