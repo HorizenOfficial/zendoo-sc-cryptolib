@@ -181,10 +181,10 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetScExistenceProof(scId);
     }
 
-    private static native boolean nativeVerifyScCommitment(FieldElement scCommitment, ScExistenceProof existanceProof, FieldElement commitment);
+    private static native boolean nativeVerifyScCommitment(FieldElement scCommitment, ScExistenceProof existenceProof, FieldElement commitment);
 
-    public static boolean verifyScCommitment(FieldElement scCommitment, ScExistenceProof existanceProof, FieldElement commitment) {
-        return nativeVerifyScCommitment(scCommitment, existanceProof, commitment);
+    public static boolean verifyScCommitment(FieldElement scCommitment, ScExistenceProof existenceProof, FieldElement commitment) {
+        return nativeVerifyScCommitment(scCommitment, existenceProof, commitment);
     }
 
     private static native Optional<ScAbsenceProof> nativeGetScAbsenceProof(byte[] scId);

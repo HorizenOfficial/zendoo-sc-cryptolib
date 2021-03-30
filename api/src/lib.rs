@@ -3473,18 +3473,18 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_ScExistanceProof_nativeFreeScExistanceProof(
+pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeFreeScExistenceProof(
     _env: JNIEnv,
     _class: JClass,
-    _sc_existance_proof: *mut ScExistenceProof
+    _sc_existence_proof: *mut ScExistenceProof
 )
 {
-    if _sc_existance_proof.is_null()  { return }
-    drop(unsafe { Box::from_raw(_sc_existance_proof) });
+    if _sc_existence_proof.is_null()  { return }
+    drop(unsafe { Box::from_raw(_sc_existence_proof) });
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_ScExistanceProof_nativeFreeScAbsenceProof(
+pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeFreeScAbsenceProof(
     _env: JNIEnv,
     _class: JClass,
     _sc_absence_proof: *mut ScAbsenceProof
@@ -3495,7 +3495,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScExistanceProof_nativeFr
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetExistanceProof(
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetExistenceProof(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray
@@ -3524,16 +3524,16 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetE
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
     match commitment_tree.get_sc_existence_proof(&sc_id) {
-        Some(sc_existance_proof) => {
-            let proof_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_existance_proof)) as i64);
+        Some(sc_existence_proof) => {
+            let proof_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_existence_proof)) as i64);
 
-            let existance_proof_class = _env.find_class("com/horizen/commitmenttree/ScExistanceProof")
-                .expect("Should be able to find ScExistanceProof class");
+            let existence_proof_class = _env.find_class("com/horizen/commitmenttree/ScExistenceProof")
+                .expect("Should be able to find ScExistenceProof class");
 
-            let jep = _env.new_object(existance_proof_class, "(J)V", &[
-                JValue::Long(proof_ptr)]).expect("Should be able to create new long for ScExistanceProof");
+            let jep = _env.new_object(existence_proof_class, "(J)V", &[
+                JValue::Long(proof_ptr)]).expect("Should be able to create new long for ScExistenceProof");
 
-            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/commitmenttree/ScExistanceProof)V",
+            let res = _env.call_static_method(cls_optional, "of", "(Lcom/horizen/commitmenttree/ScExistenceProof)V",
                                               &[JValue::Object(jep)]).unwrap();
             *res.l().unwrap()
         },
@@ -3613,8 +3613,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
 
     //Read commitment proof
     let sc_commitment_proof = {
-        let i =_env.get_field(_sc_commitment_proof, "existanceProofPointer", "J")
-            .expect("Should be able to get field existanceProofPointer from scCommitmentProof");
+        let i =_env.get_field(_sc_commitment_proof, "existenceProofPointer", "J")
+            .expect("Should be able to get field existenceProofPointer from scCommitmentProof");
 
         read_raw_pointer(i.j().unwrap() as *const ScExistenceProof)
     };
@@ -3663,7 +3663,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
     //Read commitment proof
     let sc_absence_proof = {
         let i =_env.get_field(_sc_absence_proof, "absenceProofPointer", "J")
-            .expect("Should be able to get field existanceProofPointer frfromom scAbsenceProof");
+            .expect("Should be able to get field absenceProofPointer from scAbsenceProof");
 
         read_raw_pointer(i.j().unwrap() as *const ScAbsenceProof)
     };
