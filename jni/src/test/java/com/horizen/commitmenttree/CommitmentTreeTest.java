@@ -17,6 +17,13 @@ public class CommitmentTreeTest {
         }
     }
 
+
+    byte[] generateRandomBytes(int len) {
+        byte[] bytes = new byte[len];
+        new Random().nextBytes(bytes);
+        return bytes;
+    }
+
     @Test
     public void createAndFree() {
         CommitmentTree commTree = CommitmentTree.init();
@@ -26,19 +33,19 @@ public class CommitmentTreeTest {
     @Test
     public void addScCreation() {
         CommitmentTree commTree = CommitmentTree.init();
-        byte[] scId = Arrays.copyOfRange(generateFieldElementBytes(), 8, 32); // TODO: use 32 bytes
+        byte[] scId = generateFieldElementBytes();
 
         assertFalse("ScCr commitment expected to be missed.", commTree.getScCrCommitment(scId).isPresent());
 
         long amount = 100;
-        byte[] pubKey = new byte[24]; // todo fill new byte[32];
+        byte[] pubKey = generateRandomBytes(32);
         int withdrawalEpochLength = 1000;
-        byte[] customData = new byte[1024];
+        byte[] customData = generateRandomBytes(1024);
         Optional<byte[]> constant = Optional.of(generateFieldElementBytes());
         byte[] certVk = new byte[1]; // todo
         Optional<byte[]> btrVk = Optional.empty();
         Optional<byte[]> cswVk = Optional.empty();
-        byte[] txHash = new byte[32]; // todo
+        byte[] txHash = generateRandomBytes(32);
         int outIdx = 0;
 
         assertTrue("Sidechain creation output expected to be added.",
