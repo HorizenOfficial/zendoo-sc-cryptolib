@@ -200,9 +200,6 @@ pub fn read_field_element_from_buffer_with_padding(buffer: &[u8]) -> IoResult<Fi
     new_buffer.extend_from_slice(buffer);
     for _ in buff_len..FIELD_SIZE { new_buffer.push(0u8) } //Add padding zeros to reach field size
 
-    //Truncate buffer to fit the MODULUS
-    new_buffer[FIELD_SIZE - 1] = new_buffer[FIELD_SIZE - 1] & 0b00111111;
-
     FieldElement::read(&new_buffer[..])
 }
 
@@ -766,6 +763,13 @@ mod test {
         println!("prev end epoch u8: {:?}", prev_end_epoch_mc_b_hash);
         println!("end epoch i8: {:?}", into_i8(end_epoch_mc_b_hash.to_vec()));
         println!("prev end epoch i8: {:?}", into_i8(prev_end_epoch_mc_b_hash.to_vec()));
+
+        let mut end_epoch_mc_b_hash = end_epoch_mc_b_hash;
+        end_epoch_mc_b_hash[FIELD_SIZE - 1] = end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
+
+        let mut prev_end_epoch_mc_b_hash = prev_end_epoch_mc_b_hash;
+        prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] = prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
+
         let end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
         let prev_end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
 
@@ -1179,6 +1183,12 @@ mod test {
         let mut prev_end_epoch_mc_b_hash = [0u8; 32];
         rng.fill_bytes(&mut end_epoch_mc_b_hash);
         rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
+
+        let mut end_epoch_mc_b_hash = end_epoch_mc_b_hash;
+        end_epoch_mc_b_hash[FIELD_SIZE - 1] = end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
+
+        let mut prev_end_epoch_mc_b_hash = prev_end_epoch_mc_b_hash;
+        prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] = prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
 
         let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
         let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
