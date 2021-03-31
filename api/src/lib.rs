@@ -2656,8 +2656,17 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
         Some(_csw_verification_key_nullable_vec.as_slice())
     };
 
-    let tx_hash = _env.convert_byte_array(_tx_hash)
-        .expect("Should be able to convert to Rust byte array");
+    let tx_hash = {
+        let t = _env.convert_byte_array(_tx_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut tx_hash_bytes = [0u8; 32];
+
+        t.write(&mut tx_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        tx_hash_bytes
+    };
 
     let out_idx = _out_idx as u32;
 
@@ -2723,8 +2732,17 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddF
         pub_key_bytes
     };
 
-    let tx_hash = _env.convert_byte_array(_tx_hash)
-        .expect("Should be able to convert to Rust byte array");
+    let tx_hash = {
+        let t = _env.convert_byte_array(_tx_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut tx_hash_bytes = [0u8; 32];
+
+        t.write(&mut tx_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        tx_hash_bytes
+    };
 
     let out_idx = _out_idx as u32;
 
@@ -2798,8 +2816,17 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddB
         sc_request_data_bytes
     };
 
-    let tx_hash = _env.convert_byte_array(_tx_hash)
-        .expect("Should be able to convert to Rust byte array");
+    let tx_hash = {
+        let t = _env.convert_byte_array(_tx_hash)
+            .expect("Should be able to convert to Rust array");
+
+        let mut tx_hash_bytes = [0u8; 32];
+
+        t.write(&mut tx_hash_bytes[..])
+            .expect("Should be able to write into byte array of fixed size");
+
+        tx_hash_bytes
+    };
 
     let out_idx = _out_idx as u32;
 
