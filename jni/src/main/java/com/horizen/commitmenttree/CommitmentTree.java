@@ -193,7 +193,7 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetScAbsenceProof(scId);
     }
 
-    private static native boolean nativeVerifyScAbsence(byte[] scid, ScAbsenceProof absenceProof, FieldElement commitment);
+    private native boolean nativeVerifyScAbsence(byte[] scid, ScAbsenceProof absenceProof, FieldElement commitment);
 
     public boolean verifyScAbsence(byte[] scid, ScAbsenceProof absenceProof, FieldElement commitment) {
         if (commitmentTreePointer == 0)

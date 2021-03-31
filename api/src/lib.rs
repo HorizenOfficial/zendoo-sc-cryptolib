@@ -3529,7 +3529,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeFr
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetExistenceProof(
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScExistenceProof(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray
@@ -3580,7 +3580,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetE
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetAbsenceProof(
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScAbsenceProof(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray
@@ -3631,8 +3631,9 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetA
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyCommitmentProof(
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyScCommitment(
     _env: JNIEnv,
+    _commitment_tree_class: JObject,
     _sc_commitment: JObject,
     _sc_commitment_proof: JObject,
     _commitment: JObject
@@ -3667,7 +3668,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyAbsenceProof(
+pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyScAbsence(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray,
