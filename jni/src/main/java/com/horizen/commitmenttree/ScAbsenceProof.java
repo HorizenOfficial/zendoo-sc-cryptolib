@@ -25,6 +25,21 @@ public class ScAbsenceProof implements AutoCloseable {
         }
     }
 
+    private native byte[] nativeSerialize();
+
+    public byte[] serialize() {
+        if (absenceProofPointer == 0)
+            throw new IllegalStateException("Absence proof was freed.");
+
+        return nativeSerialize();
+    }
+
+    private static native ScAbsenceProof nativeDeserialize(byte[] absenceProofBytes);
+
+    public static ScAbsenceProof deserialize(byte[] absenceProofBytes) {
+        return nativeDeserialize(absenceProofBytes);
+    }
+
     @Override
     public void close() throws Exception {
         freeScAbsenceProof();

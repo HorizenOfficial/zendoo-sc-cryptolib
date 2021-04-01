@@ -25,6 +25,21 @@ public class ScExistenceProof implements AutoCloseable {
         }
     }
 
+    private native byte[] nativeSerialize();
+
+    public byte[] serialize() {
+        if (existenceProofPointer == 0)
+            throw new IllegalStateException("Existence proof was freed.");
+
+        return nativeSerialize();
+    }
+
+    private static native ScExistenceProof nativeDeserialize(byte[] existanceProofBytes);
+
+    public static ScExistenceProof deserialize(byte[] existanceProofBytes) {
+        return nativeDeserialize(existanceProofBytes);
+    }
+
     @Override
     public void close() throws Exception {
         freeScExistenceProof();

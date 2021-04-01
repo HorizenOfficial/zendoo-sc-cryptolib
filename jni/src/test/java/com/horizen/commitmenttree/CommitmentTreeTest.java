@@ -181,6 +181,38 @@ public class CommitmentTreeTest {
     }
 
     @Test
+    public void existanceProofSerializationTest() {
+        CommitmentTree commTree = CommitmentTree.init();
+        byte[] scId = generateFieldElementBytes();
+
+        assertFalse("Forward transfer output expected to be missed.", commTree.getFwtCommitment(scId).isPresent());
+
+        long ftrAmount = 100;
+        byte[] ftrPublicKeyHash = generateFieldElementBytes();
+        byte[] ftrTransactionHash = generateFieldElementBytes();
+        int fwtOutId = 200;
+        assertTrue("Forward transfer output expected to be added.",
+                commTree.addFwt(scId, ftrAmount, ftrPublicKeyHash, ftrTransactionHash, fwtOutId));
+
+        Optional<FieldElement> commitmentOpt = commTree.getCommitment();
+        assertTrue("Tree commitment expected to be present.", commitmentOpt.isPresent());
+        Optional<ScExistenceProof> existenceOpt = commTree.getScExistenceProof(scId);
+        assertTrue("Existence proof expected to be present.", existenceOpt.isPresent());
+        Optional<FieldElement> scCommitmentOpt = commTree.getScCommitment(scId);
+        assertTrue("Sidechain commitment expected to be present.", scCommitmentOpt.isPresent());
+
+        byte[] existenceProofBytes = existenceOpt.get().serialize();
+        ScExistenceProof deserializedExistanceProof = ScExistenceProof.deserialize(existenceProofBytes);
+
+        assertTrue("Commitment verification expected to be successful", CommitmentTree.verifyScCommitment(scCommitmentOpt.get(), deserializedExistanceProof, commitmentOpt.get()));
+        commitmentOpt.get().freeFieldElement();
+        existenceOpt.get().freeScExistenceProof();
+        scCommitmentOpt.get().freeFieldElement();
+        deserializedExistanceProof.freeScExistenceProof();
+        commTree.freeCommitmentTree();
+    }
+
+    @Test
     public void absenceProofTest() {
         CommitmentTree commTree = CommitmentTree.init();
         byte[][] scId = new byte[5][];
@@ -192,7 +224,7 @@ public class CommitmentTreeTest {
         }
 
         Optional<FieldElement> commitmentOpt = commTree.getCommitment();
-        assertTrue("Forward transfer expected to be present.", commitmentOpt.isPresent());
+        assertTrue("Commitment expected to be present.", commitmentOpt.isPresent());
 
         // Get absence proof in empty CommitmentTree
         assertFalse("Existance proof should not be present", commTree.getScExistenceProof(scId[0]).isPresent());
@@ -240,6 +272,45 @@ public class CommitmentTreeTest {
         commitmentOpt = commTree.getCommitment();
         assertTrue("Absence proof expected to be present.", absenceOpt.isPresent());
         assertTrue("Absence verification expected to be successful", commTree.verifyScAbsence(scId[4], absenceOpt.get() ,commitmentOpt.get()));
+
+        commTree.freeCommitmentTree();
+    }
+
+    @Test
+    public void absenceProofSerializationTest() {
+        CommitmentTree commTree = CommitmentTree.init();
+        byte[][] scId = new byte[3][];
+
+        // Initialize array of consecutive Sidechain Ids
+        for (int i = 0 ; i < scId.length; i++) {
+            scId[i] = new byte[FieldElement.getFieldElementSize()];
+            scId[i][0] = (byte) i;
+        }
+
+        long ftrAmount = 100;
+        byte[] ftrPublicKey = generateFieldElementBytes();
+        byte[] ftrTransactionHash = generateFieldElementBytes();
+        int fwtOutId = 200;
+        assertTrue("Forward transfer output expected to be added.",
+                commTree.addFwt(scId[0], ftrAmount, ftrPublicKey, ftrTransactionHash, fwtOutId));
+
+        long bwtAmount = 120;
+        byte[] bwtPublicKeyHash = generateRandomBytes(20);
+        byte[] bwtRequestData = generateFieldElementBytes();
+        byte[] bwtTransactionHash = generateFieldElementBytes();;
+        int bwtOutId = 220;
+        assertTrue("Backward transfer output expected to be added.", commTree.addBtr(scId[2], bwtAmount, bwtPublicKeyHash, bwtRequestData, bwtTransactionHash, bwtOutId));
+
+        // Get absence proof with both neighbors
+        assertFalse("Existance proof should not be present", commTree.getScExistenceProof(scId[1]).isPresent());
+        Optional<ScAbsenceProof> absenceOpt = commTree.getScAbsenceProof(scId[1]);
+        Optional<FieldElement> commitmentOpt = commTree.getCommitment();
+        assertTrue("Absence proof expected to be present.", absenceOpt.isPresent());
+
+        byte[] absenceProofBytes = absenceOpt.get().serialize();
+        ScAbsenceProof deserializedAbsenceProof = ScAbsenceProof.deserialize(absenceProofBytes);
+
+        assertTrue("Absence verification expected to be successful", commTree.verifyScAbsence(scId[2], deserializedAbsenceProof ,commitmentOpt.get()));
 
         commTree.freeCommitmentTree();
     }
