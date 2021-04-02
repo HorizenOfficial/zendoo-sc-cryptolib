@@ -147,7 +147,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void existanceProofTest() {
+    public void existenceProofTest() {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -181,7 +181,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void existanceProofSerializationTest() {
+    public void existenceProofSerializationTest() {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -313,5 +313,26 @@ public class CommitmentTreeTest {
         assertTrue("Absence verification expected to be successful", commTree.verifyScAbsence(scId[2], deserializedAbsenceProof ,commitmentOpt.get()));
 
         commTree.freeCommitmentTree();
+    }
+
+    @Test
+    public void emptyTreeCommitmentRegressionTest() {
+        // Data was taken from zend_oo test file src/gtest/test_libzendoo.cpp
+        // Test case: NakedZendooFeatures_EmptyTreeCommitmentCalculation
+        CommitmentTree commTree = CommitmentTree.init();
+
+        byte[] expectedEmptyTreeCommitment = {
+                (byte)0xfe, 0x2e, (byte)0xe3, (byte)0x93, 0x61, (byte)0xdc, 0x29, (byte)0xcc,
+                0x54, (byte)0xbb, 0x6a, 0x1a, (byte)0x89, 0x3e, 0x66, (byte)0xbd,
+                (byte)0xc1, 0x15, 0x0f, (byte)0x8c, (byte)0xa6, 0x5e, 0x75, 0x7d,
+                (byte)0xf1, 0x42, (byte)0xb4, (byte)0xc4, 0x73, (byte)0x92, 0x41, 0x3b
+        };
+        Optional<FieldElement> commitmentOpt =  commTree.getCommitment();
+        assertTrue("Commitment expected to be present for the empty CommitmentTree", commitmentOpt.isPresent());
+
+        byte[] commitment = commitmentOpt.get().serializeFieldElement();
+
+        assertArrayEquals("Different empty tree commitment found. Regression failed.",
+                expectedEmptyTreeCommitment, commitment);
     }
 }
