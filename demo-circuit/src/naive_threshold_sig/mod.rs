@@ -291,7 +291,7 @@ pub fn generate_parameters(max_pks: usize) -> Result<(IndexProverKey<Fr, IPAPC>,
         _field:                   PhantomData
     };
 
-    let universal_srs = MarlinInst::universal_setup(2usize.pow(20), 2usize.pow(20), 2usize.pow(20), &mut rng).unwrap();
+    let universal_srs = MarlinInst::universal_setup(33254, 33254, 812307, &mut rng).unwrap();
 
     Ok(MarlinInst::index(
         &universal_srs,
