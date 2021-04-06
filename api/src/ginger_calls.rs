@@ -1,41 +1,30 @@
-use algebra::{fields::{
-    tweedle::{Fq as ScalarFieldElement, Fr}, PrimeField
-}, curves::{
-    tweedle::{
-        dum::{
-            Projective as Projective,
-            Affine as Affine
-        },
-        dee::Affine as PCAffine
+use algebra::{
+    curves::{
+        tweedle::dum::Projective as Projective
     },
-}, FromBytes, FromBytesChecked, validity::SemanticallyValid,
-   ToBytes, BigInteger256, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits};
+    PrimeField, ProjectiveCurve, AffineCurve,
+    FromBytes, FromBytesChecked, validity::SemanticallyValid, ToBytes, ToConstraintField, ToBits,
+    UniformRand,
+};
 use primitives::{crh::{
-    poseidon::parameters::tweedle::{TweedleFrPoseidonHash as PoseidonHash, TweedleFrBatchPoseidonHash as BatchFieldHash},
     FieldBasedHash,
     bowe_hopwood::{
-        BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters
+        BoweHopwoodPedersenParameters
     },
 }, merkle_tree::field_based_mht::{
     // smt::{BigMerkleTree, LazyBigMerkleTree, Coord, OperationLeaf},
-    optimized::FieldBasedOptimizedMHT,
     parameters::tweedle_fr::TWEEDLE_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS,
-    FieldBasedMerkleTree, FieldBasedMerkleTreePrecomputedEmptyConstants,
-    FieldBasedMerkleTreeParameters, BatchFieldBasedMerkleTreeParameters,
-    FieldBasedMerkleTreePath, FieldBasedBinaryMHTPath,
+    FieldBasedMerkleTree,
+    FieldBasedMerkleTreePath,
 }, signature::{
     FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
-        FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature,
         FieldBasedSchnorrPk,
     },
 }, vrf::{FieldBasedVrf, ecvrf::*}/*, ActionLeaf*/};
 
-use marlin::*;
-use blake2::Blake2s;
-use poly_commit::ipa_pc::InnerProductArgPC;
 use demo_circuit::{
     constants::{
-        VRFParams, VRFWindow,
+        VRFParams,
     },
     naive_threshold_sig::*
 };
@@ -43,41 +32,13 @@ use rand::{
     SeedableRng, rngs::OsRng, thread_rng
 };
 use rand_xorshift::XorShiftRng;
-
 use std::{
     fs::File, io::Result as IoResult/*, path::Path*/
 };
 use lazy_static::*;
 
-pub type FieldElement = Fr;
-
-// #[derive(Clone)]
-// struct MarlinNoLCNoZk;
-//
-// impl MarlinConfig for MarlinNoLCNoZk {
-//     const LC_OPT: bool = false;
-//     const ZK: bool = false;
-// }
-
-type IPAPC = InnerProductArgPC<PCAffine, Blake2s>;
-// type MarlinInst = Marlin<Fr, IPAPC, Blake2s, MarlinNoLCNoZk>;
-type MarlinInst = Marlin<Fr, IPAPC, Blake2s>;
-
-pub const FIELD_SIZE: usize = 32; //Field size in bytes
-pub const SCALAR_FIELD_SIZE: usize = FIELD_SIZE;// 32
-pub const G1_SIZE: usize = 65;
-pub const G2_SIZE: usize = 385;
-
-pub const SCHNORR_PK_SIZE: usize = G1_SIZE; // 193
-pub const SCHNORR_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 32
-pub const SCHNORR_SIG_SIZE: usize = 2 * FIELD_SIZE; // 192
-
-pub const VRF_PK_SIZE: usize = G1_SIZE; // 193
-pub const VRF_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 32
-pub const VRF_PROOF_SIZE: usize = G1_SIZE + 2 * FIELD_SIZE; // 192
-
-pub const ZK_PROOF_SIZE: usize = 2 * G1_SIZE + G2_SIZE;  // 771
-pub type Error = Box<dyn std::error::Error>;
+use crate::type_mapping::*;
+use marlin::{IndexProverKey, IndexVerifierKey};
 
 //*******************************Generic functions**********************************************
 // Note: Should decide if panicking or handling IO errors
@@ -117,11 +78,6 @@ pub fn get_random_field_element(seed: u64) -> FieldElement {
 
 //***************************Schnorr types and functions********************************************
 
-pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, Projective, FieldHash>;
-pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement, Projective>;
-pub type SchnorrPk = Affine;
-pub type SchnorrSk = ScalarFieldElement;
-
 pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
     let mut rng = OsRng;
     let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
@@ -147,8 +103,6 @@ pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &
 
 //************************************Poseidon Hash functions****************************************
 
-pub type FieldHash = PoseidonHash;
-
 pub fn get_poseidon_hash(personalization: Option<&[FieldElement]>) -> FieldHash {
     FieldHash::init(personalization)
 }
@@ -166,8 +120,6 @@ pub fn finalize_poseidon_hash(hash: &FieldHash) -> FieldElement{
 }
 
 //*****************************Naive threshold sig circuit related functions************************
-
-pub type SCProof = Proof<Fr, IPAPC>;
 
 #[derive(Clone, Default)]
 pub struct BackwardTransfer {
@@ -204,7 +156,7 @@ pub fn read_field_element_from_buffer_with_padding(buffer: &[u8]) -> IoResult<Fi
 }
 
 pub fn read_field_element_from_u64(num: u64) -> FieldElement {
-    FieldElement::from_repr(BigInteger256::from(num))
+    FieldElement::from_repr(FieldBigInteger::from(num))
 }
 
 // Computes H(H(pks), threshold): used to generate the constant value needed to be declared
@@ -333,7 +285,7 @@ pub fn create_naive_threshold_sig_proof(
     );
 
     //Read proving key
-    let pk: IndexProverKey<Fr, IPAPC> = if enforce_membership {
+    let pk: IndexProverKey<FieldElement, IPAPC> = if enforce_membership {
         read_from_file_checked(proving_key_path)
     } else {
         read_from_file(proving_key_path)
@@ -370,7 +322,7 @@ pub fn verify_naive_threshold_sig_proof(
     let rng = &mut thread_rng();
 
     //Verify proof
-    let vk: IndexVerifierKey<Fr, IPAPC> = if enforce_membership {
+    let vk: IndexVerifierKey<FieldElement, IPAPC> = if enforce_membership {
         read_from_file_checked(vk_path)
     } else {
         read_from_file(vk_path)
@@ -389,13 +341,6 @@ lazy_static! {
         BoweHopwoodPedersenParameters::<Projective>{generators: params.group_hash_generators}
     };
 }
-
-type GroupHash = BoweHopwoodPedersenCRH<Projective, VRFWindow>;
-
-pub type VRFScheme = FieldBasedEcVrf<FieldElement, Projective, FieldHash, GroupHash>;
-pub type VRFProof = FieldBasedEcVrfProof<FieldElement, Projective>;
-pub type VRFPk = Affine;
-pub type VRFSk = ScalarFieldElement;
 
 pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
     let mut rng = OsRng;
@@ -447,7 +392,6 @@ pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Re
 //************Merkle Tree functions******************
 
 ////////////MERKLE_PATH
-pub type GingerMHTPath = FieldBasedBinaryMHTPath<GingerMerkleTreeParameters>;
 
 pub fn verify_ginger_merkle_path(
     path: &GingerMHTPath,
@@ -509,23 +453,6 @@ pub fn apply(path: &GingerMHTPath, leaf: &FieldElement) -> FieldElement
 }
 
 ////////////OPTIMIZED MERKLE TREE
-
-#[derive(Debug, Clone)]
-pub struct GingerMerkleTreeParameters;
-
-impl FieldBasedMerkleTreeParameters for GingerMerkleTreeParameters {
-    type Data = FieldElement;
-    type H = FieldHash;
-    const MERKLE_ARITY: usize = 2;
-    const EMPTY_HASH_CST: Option<FieldBasedMerkleTreePrecomputedEmptyConstants<'static, Self::H>> =
-        Some(MHT_PARAMETERS);
-}
-
-impl BatchFieldBasedMerkleTreeParameters for GingerMerkleTreeParameters {
-    type BH = BatchFieldHash;
-}
-
-pub type GingerMHT = FieldBasedOptimizedMHT<GingerMerkleTreeParameters>;
 
 pub fn new_ginger_mht(height: usize, processing_step: usize) -> GingerMHT {
     GingerMHT::init(height, processing_step)
@@ -1089,7 +1016,7 @@ mod test {
     // #[test]
     // fn sample_restore_merkle_tree() {
     //     let expected_root = FieldElement::new(
-    //         BigInteger256([
+    //         FieldBigInteger([
     //             1174313500572535251,
     //             11989340445607088007,
     //             12453165802583165309,
@@ -1190,22 +1117,7 @@ mod test {
         let mut prev_end_epoch_mc_b_hash = prev_end_epoch_mc_b_hash;
         prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] = prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
 
-        let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
-        let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
-
-        let bt_num = 10;
-
-        let mut bt_list = vec![];
-        for _ in 0..bt_num {
-            bt_list.push(BackwardTransfer::default());
-        }
-
-        let (_mr_bt, _msg) = compute_msg_to_sign(
-            &end_epoch_mc_b_hash,
-            &prev_end_epoch_mc_b_hash,
-            bt_list.as_slice(),
-        ).unwrap();
-
-        let _pk: IndexProverKey<Fr, IPAPC> = read_from_file("./sample_pk").unwrap();
+        let _ = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
+        let _ = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
     }
 }

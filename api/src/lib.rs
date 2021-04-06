@@ -9,6 +9,8 @@ use std::{ptr::null_mut, any::type_name};
 mod ginger_calls;
 use ginger_calls::*;
 
+pub mod type_mapping;
+use type_mapping::*;
 
 fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
     assert!(!input.is_null());
@@ -515,21 +517,21 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDes
     *sig_object
 }
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeIsValidSignature(
-    _env: JNIEnv,
-    _sig: JObject,
-) -> jboolean
-{
-    let sig = _env.get_field(_sig, "signaturePointer", "J")
-        .expect("Should be able to get field signaturePointer").j().unwrap() as *const SchnorrSig;
-
-    if is_valid(read_raw_pointer(sig)) {
-        JNI_TRUE
-    } else {
-        JNI_FALSE
-    }
-}
+// #[no_mangle]
+// pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeIsValidSignature(
+//     _env: JNIEnv,
+//     _sig: JObject,
+// ) -> jboolean
+// {
+//     let sig = _env.get_field(_sig, "signaturePointer", "J")
+//         .expect("Should be able to get field signaturePointer").j().unwrap() as *const SchnorrSig;
+//
+//     if is_valid(read_raw_pointer(sig)) {
+//         JNI_TRUE
+//     } else {
+//         JNI_FALSE
+//     }
+// }
 
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativefreeSignature(
@@ -2219,6 +2221,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         t.write(&mut end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
 
+        end_epoch_block_hash_bytes[FIELD_SIZE - 1] = end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
+
         read_field_element_from_buffer_with_padding(&end_epoch_block_hash_bytes)
             .expect("Should be able to read a FieldElement from a 32 byte array")
 
@@ -2232,6 +2236,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
         t.write(&mut prev_end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
+
+        prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] = prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
 
         read_field_element_from_buffer_with_padding(&prev_end_epoch_block_hash_bytes)
             .expect("Should be able to read a FieldElement from a 32 byte array")
