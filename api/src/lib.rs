@@ -1362,24 +1362,24 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
 //     get_position_in_ginger_smt(tree, leaf) as jlong
 // }
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeGetAbsolutePosition(
-    _env: JNIEnv,
-    _class: JClass,
-    _leaf: JObject,
-    _height: jint,
-) -> jlong
-{
-    let leaf = {
-
-        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
-    };
-
-    leaf_to_index(leaf, _height as usize) as jlong
-}
+// #[no_mangle]
+// pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeGetAbsolutePosition(
+//     _env: JNIEnv,
+//     _class: JClass,
+//     _leaf: JObject,
+//     _height: jint,
+// ) -> jlong
+// {
+//     let leaf = {
+//
+//         let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+//             .expect("Should be able to get field fieldElementPointer");
+//
+//         read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+//     };
+//
+//     leaf_to_index(leaf, _height as usize) as jlong
+// }
 
 // #[no_mangle]
 // pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeIsPositionEmpty(
@@ -1594,24 +1594,24 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeGet
 //     get_position_in_lazy_ginger_smt(tree, leaf) as jlong
 // }
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeGetAbsolutePosition(
-    _env: JNIEnv,
-    _class: JClass,
-    _leaf: JObject,
-    _height: jint,
-) -> jlong
-{
-    let leaf = {
-
-        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
-    };
-
-    leaf_to_index(leaf, _height as usize) as jlong
-}
+// #[no_mangle]
+// pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeGetAbsolutePosition(
+//     _env: JNIEnv,
+//     _class: JClass,
+//     _leaf: JObject,
+//     _height: jint,
+// ) -> jlong
+// {
+//     let leaf = {
+//
+//         let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+//             .expect("Should be able to get field fieldElementPointer");
+//
+//         read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+//     };
+//
+//     leaf_to_index(leaf, _height as usize) as jlong
+// }
 
 // #[no_mangle]
 // pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeIsPositionEmpty(
@@ -2367,6 +2367,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         t.write(&mut end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
 
+        end_epoch_block_hash_bytes[FIELD_SIZE - 1] = end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
+
         end_epoch_block_hash_bytes
     };
 
@@ -2378,6 +2380,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
         t.write(&mut prev_end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
+
+        prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] = prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
 
         prev_end_epoch_block_hash_bytes
     };
