@@ -223,92 +223,92 @@ public class NaiveThresholdSigProofTest {
 //        createAndVerifyProof();
 //    }
 
-//    @Test
-//    public void testCreateRandomProof() throws Exception {
-//        Random r = new Random();
-//
-//        r.nextBytes(endEpochBlockHash);
-//
-//        r.nextBytes(prevEndEpochBlockHash);
-//
-//        backwardTransferCout = r.nextInt(backwardTransferCout + 1);
-//        // Create dummy Backward Transfers
-//        for(int i = 0; i < backwardTransferCout; i++) {
-//
-//            byte[] publicKeyHash = new byte[20];
-//            r.nextBytes(publicKeyHash);
-//            long amount = r.nextLong();
-//
-//            btList.add(new BackwardTransfer(publicKeyHash, amount));
-//        }
-//
-//        List<SchnorrKeyPair> keyPairList = new ArrayList<>();
-//
-//        for (int i = 0; i<keyCount; i++) {
-//            SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
-//
-//            assertNotNull("Key pair generation was unsuccessful.", keyPair);
-//            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
-//
-//            keyPairList.add(keyPair);
-//            publicKeyList.add(keyPair.getPublicKey());
-//        }
-//
-//        for (int i = 0; i<keyCount; i++) {
-//            if (i < threshold) {
-//                FieldElement msgToSign = NaiveThresholdSigProof.createMsgToSign(btList.toArray(new BackwardTransfer[0]),
-//                        endEpochBlockHash, prevEndEpochBlockHash);
-//                signatureList.add(keyPairList.get(i).signMessage(msgToSign));
-//            } else {
-//                signatureList.add(new SchnorrSignature());
-//            }
-//        }
-//
-//        //Free memory from the secret keys
-//        for (SchnorrKeyPair kp: keyPairList)
-//            kp.getSecretKey().freeSecretKey();
-//
-//        createAndVerifyProof();
-//    }
-//
-//    private void createAndVerifyProof() {
-//
-//        ClassLoader classLoader = getClass().getClassLoader();
-//
-//        String provingKeyPath = new File(classLoader.getResource("sample_params").getFile()).getAbsolutePath();
-//        CreateProofResult proofResult = NaiveThresholdSigProof.createProof(btList, endEpochBlockHash, prevEndEpochBlockHash,
-//                signatureList, publicKeyList, threshold, provingKeyPath);
-//
-//        assertNotNull("Proof creation must be successfull", proofResult);
-//
-//        String verificationKeyPath = new File(classLoader.getResource("sample_vk").getFile()).getAbsolutePath();
-//
-//        byte[] proof = proofResult.getProof();
-//        long quality = proofResult.getQuality();
-//
-//        FieldElement constant = NaiveThresholdSigProof.getConstant(publicKeyList, threshold);
-//        assertNotNull("Constant creation must be successfull", constant);
-//
-//        boolean isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
-//                prevEndEpochBlockHash, constant, quality, proof, verificationKeyPath);
-//
-//        assertTrue("Proof must be verified", isProofVerified);
-//
-//        quality = threshold - 1;
-//        isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
-//                prevEndEpochBlockHash, constant, quality, proof, verificationKeyPath);
-//
-//        assertFalse("Proof must not be verified", isProofVerified);
-//    }
-//
-//    @After
-//    public void testFree(){
-//        for (SchnorrPublicKey pk: publicKeyList)
-//            pk.freePublicKey();
-//        publicKeyList.clear();
-//
-//        for (SchnorrSignature sig: signatureList)
-//            sig.freeSignature();
-//        signatureList.clear();
-//    }
+    @Test
+    public void testCreateRandomProof() throws Exception {
+        Random r = new Random();
+
+        r.nextBytes(endEpochBlockHash);
+
+        r.nextBytes(prevEndEpochBlockHash);
+
+        backwardTransferCout = r.nextInt(backwardTransferCout + 1);
+        // Create dummy Backward Transfers
+        for(int i = 0; i < backwardTransferCout; i++) {
+
+            byte[] publicKeyHash = new byte[20];
+            r.nextBytes(publicKeyHash);
+            long amount = r.nextLong();
+
+            btList.add(new BackwardTransfer(publicKeyHash, amount));
+        }
+
+        List<SchnorrKeyPair> keyPairList = new ArrayList<>();
+
+        for (int i = 0; i<keyCount; i++) {
+            SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
+
+            assertNotNull("Key pair generation was unsuccessful.", keyPair);
+            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
+
+            keyPairList.add(keyPair);
+            publicKeyList.add(keyPair.getPublicKey());
+        }
+
+        for (int i = 0; i<keyCount; i++) {
+            if (i < threshold) {
+                FieldElement msgToSign = NaiveThresholdSigProof.createMsgToSign(btList.toArray(new BackwardTransfer[0]),
+                        endEpochBlockHash, prevEndEpochBlockHash);
+                signatureList.add(keyPairList.get(i).signMessage(msgToSign));
+            } else {
+                signatureList.add(new SchnorrSignature());
+            }
+        }
+
+        //Free memory from the secret keys
+        for (SchnorrKeyPair kp: keyPairList)
+            kp.getSecretKey().freeSecretKey();
+
+        createAndVerifyProof();
+    }
+
+    private void createAndVerifyProof() {
+
+        ClassLoader classLoader = getClass().getClassLoader();
+
+        String provingKeyPath = new File(classLoader.getResource("sample_params").getFile()).getAbsolutePath();
+        CreateProofResult proofResult = NaiveThresholdSigProof.createProof(btList, endEpochBlockHash, prevEndEpochBlockHash,
+                signatureList, publicKeyList, threshold, provingKeyPath);
+
+        assertNotNull("Proof creation must be successfull", proofResult);
+
+        String verificationKeyPath = new File(classLoader.getResource("sample_vk").getFile()).getAbsolutePath();
+
+        byte[] proof = proofResult.getProof();
+        long quality = proofResult.getQuality();
+
+        FieldElement constant = NaiveThresholdSigProof.getConstant(publicKeyList, threshold);
+        assertNotNull("Constant creation must be successfull", constant);
+
+        boolean isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
+                prevEndEpochBlockHash, constant, quality, proof, verificationKeyPath);
+
+        assertTrue("Proof must be verified", isProofVerified);
+
+        quality = threshold - 1;
+        isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
+                prevEndEpochBlockHash, constant, quality, proof, verificationKeyPath);
+
+        assertFalse("Proof must not be verified", isProofVerified);
+    }
+
+    @After
+    public void testFree(){
+        for (SchnorrPublicKey pk: publicKeyList)
+            pk.freePublicKey();
+        publicKeyList.clear();
+
+        for (SchnorrSignature sig: signatureList)
+            sig.freeSignature();
+        signatureList.clear();
+    }
 }
