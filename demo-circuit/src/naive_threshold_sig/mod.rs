@@ -332,7 +332,7 @@ mod test {
         threshold:                usize,
         wrong_pks_threshold_hash: bool,
         wrong_wcert_sysdata_hash: bool,
-        params:                   (IndexProverKey<Fr, IPAPC>, IndexVerifierKey<Fr, IPAPC>),
+        index_pk:                 IndexProverKey<Fr, IPAPC>,
     ) -> Result<(Proof<Fr, IPAPC>, Vec<Fr>), MarlinError<PCError>> {
 
         //Istantiate rng
@@ -425,7 +425,7 @@ mod test {
         //Return proof and public inputs if success
         let start = std::time::Instant::now();
 
-        let proof = match MarlinInst::prove::<_, OsRng>(&params.0, c, &mut rng) {
+        let proof = match MarlinInst::prove::<_, OsRng>(&index_pk, c, &mut rng) {
             Ok(proof) => {
                 let public_inputs = vec![aggregated_input];
                 Ok((proof, public_inputs))
@@ -446,22 +446,22 @@ mod test {
 
         //Generate proof with correct witnesses and v > t
         let (proof, public_inputs) =
-            generate_test_proof(n, 5, 4, false, false, params.clone()).unwrap();
+            generate_test_proof(n, 5, 4, false, false, params.0.clone()).unwrap();
         assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
 
         //Generate proof with insufficient valid signatures
         let (proof, public_inputs) =
-            generate_test_proof(n, 4, 5, false, false, params.clone()).unwrap();
+            generate_test_proof(n, 4, 5, false, false, params.0.clone()).unwrap();
         assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
 
         //Generate proof with bad pks_threshold_hash
         let (proof, public_inputs) =
-            generate_test_proof(n, 5, 4, true, false, params.clone()).unwrap();
+            generate_test_proof(n, 5, 4, true, false, params.0.clone()).unwrap();
         assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
 
         //Generate proof with bad wcert_sysdata_hash
         let (proof, public_inputs) =
-            generate_test_proof(n, 5, 4, false, true, params.clone()).unwrap();
+            generate_test_proof(n, 5, 4, false, true, params.0.clone()).unwrap();
         assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
     }
 }
