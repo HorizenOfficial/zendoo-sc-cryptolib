@@ -50,6 +50,7 @@ type SchnorrPkGadget = FieldBasedSchnorrPkGadget<Fr, Projective, CurveGadget>;
 //Field types
 type FrGadget = FpGadget<Fr>;
 
+#[derive(Clone)]
 pub struct NaiveTresholdSignature<F: PrimeField>{
 
     //Witnesses
@@ -291,7 +292,15 @@ pub fn generate_parameters(max_pks: usize) -> Result<(IndexProverKey<Fr, IPAPC>,
         _field:                   PhantomData
     };
 
-    let universal_srs = MarlinInst::universal_setup(33254, 33254, 812307, &mut rng).unwrap();
+    // Temporary workaround to get the sizes, in future we will only call the index function
+    // using the DLOG keys generated at bootstrap
+    let info = marlin::AHPForR1CS::<Fr>::index(c.clone()).unwrap().index_info;
+    let universal_srs = MarlinInst::universal_setup(
+        info.num_constraints,
+        info.num_variables,
+        info.num_non_zero,
+        &mut rng
+    ).unwrap();
 
     Ok(MarlinInst::index(
         &universal_srs,
