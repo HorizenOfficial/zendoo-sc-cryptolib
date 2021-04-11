@@ -3,7 +3,7 @@ use algebra::{
         tweedle::dum::Projective as Projective
     },
     PrimeField, ProjectiveCurve, AffineCurve,
-    FromBytes, FromBytesChecked, validity::SemanticallyValid, ToBytes, ToConstraintField, ToBits,
+    FromBytes, FromBytesChecked, validity::SemanticallyValid, ToBytes, ToConstraintField,/* ToBits,*/
     UniformRand,
 };
 use primitives::{crh::{
@@ -494,18 +494,18 @@ pub fn reset_ginger_mht(tree: &mut GingerMHT){
 // parameter that allows to re-compute a new position for it, possibly multiple times.
 // Therefore, it is advisable to minimize the risk of having collisions,or to handle
 // them
-pub fn leaf_to_index(leaf: &FieldElement, height: usize) -> u64 {
-
-    // Convert field element to bits
-    let bits = leaf.write_bits();
-    assert!(height <= bits.len());
-
-    // Use log_2(num_leaves) MSB of serialized FieldElement to estabilish leaf position inside
-    // the tree
-    let leaf_bits = &bits[..height];
-    let position = leaf_bits.iter().rev().fold(0, |acc, &b| acc*2 + b as u64);
-    position
-}
+// pub fn leaf_to_index(leaf: &FieldElement, height: usize) -> u64 {
+//
+//     // Convert field element to bits
+//     let bits = leaf.write_bits();
+//     assert!(height <= bits.len());
+//
+//     // Use log_2(num_leaves) MSB of serialized FieldElement to estabilish leaf position inside
+//     // the tree
+//     let leaf_bits = &bits[..height];
+//     let position = leaf_bits.iter().rev().fold(0, |acc, &b| acc*2 + b as u64);
+//     position
+// }
 
 // pub fn get_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>{
 //

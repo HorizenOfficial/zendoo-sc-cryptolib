@@ -3,8 +3,10 @@ extern crate jni;
 use algebra::bytes::{FromBytes, FromBytesChecked, ToBytes};
 
 use std::{ptr::null_mut, any::type_name};
+use std::{fs::File, io::Result as IoResult};
 
 // use std::panic;
+use demo_circuit::generate_parameters;
 
 mod ginger_calls;
 use ginger_calls::*;
@@ -2409,8 +2411,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     };
 
     //Serialize proof
-    let mut proof_bytes = [0u8; ZK_PROOF_SIZE];
-    proof.write(&mut proof_bytes[..])
+    let mut proof_bytes: Vec<u8> = vec![];
+    proof.write(&mut proof_bytes)
         .expect("Should be able to write proof into proof_bytes");
 
     //Return proof serialized
@@ -2431,6 +2433,37 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 }
 
 // Test functions
+fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
+    let mut fs = File::create(file_path)?;
+    to_write.write(&mut fs)?;
+    Ok(())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeSetup(
+    _env: JNIEnv,
+    _params: JObject,
+    _max_pks: jlong,
+    _proving_key_path: JString,
+    _verification_key_path: JString,
+) {
+
+    // Read paths
+    let proving_key_path = _env.get_string(_proving_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    let verification_key_path = _env.get_string(_verification_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    let max_pks = _max_pks as usize;
+
+    let (pk, vk) = generate_parameters(max_pks)
+        .expect("Unable to generate (pk, vk)");
+
+    write_to_file(&pk, proving_key_path.to_str().unwrap()).unwrap();
+    write_to_file(&vk, verification_key_path.to_str().unwrap()).unwrap();
+}
+
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeVerifyProof(
     _env: JNIEnv,
@@ -2493,6 +2526,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         t.write(&mut end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
 
+        end_epoch_block_hash_bytes[FIELD_SIZE - 1] = end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
+
         end_epoch_block_hash_bytes
     };
 
@@ -2504,6 +2539,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
         t.write(&mut prev_end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
+
+        prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] = prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
 
         prev_end_epoch_block_hash_bytes
     };

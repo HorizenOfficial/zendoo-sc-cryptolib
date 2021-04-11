@@ -275,13 +275,16 @@ public class NaiveThresholdSigProofTest {
 
         ClassLoader classLoader = getClass().getClassLoader();
 
-        String provingKeyPath = new File(classLoader.getResource("sample_params").getFile()).getAbsolutePath();
+        String provingKeyPath = "./proving_key";
+        String verificationKeyPath = "./verification_key";
+
+        // Generate proving key and verification key
+        NaiveThresholdSigProof.setup(keyCount, provingKeyPath, verificationKeyPath);
+
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(btList, endEpochBlockHash, prevEndEpochBlockHash,
                 signatureList, publicKeyList, threshold, provingKeyPath);
 
         assertNotNull("Proof creation must be successfull", proofResult);
-
-        String verificationKeyPath = new File(classLoader.getResource("sample_vk").getFile()).getAbsolutePath();
 
         byte[] proof = proofResult.getProof();
         long quality = proofResult.getQuality();
@@ -299,6 +302,10 @@ public class NaiveThresholdSigProofTest {
                 prevEndEpochBlockHash, constant, quality, proof, verificationKeyPath);
 
         assertFalse("Proof must not be verified", isProofVerified);
+
+        // Delete proving key and verification key
+        new File(provingKeyPath).delete();
+        new File(verificationKeyPath).delete();
     }
 
     @After

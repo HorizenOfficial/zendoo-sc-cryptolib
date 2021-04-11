@@ -68,7 +68,6 @@ pub const VRF_PK_SIZE: usize = G_SIZE; // 96
 pub const VRF_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 32
 pub const VRF_PROOF_SIZE: usize = G_SIZE + 2 * FIELD_SIZE; // 160
 
-pub const ZK_PROOF_SIZE: usize = 2 * G_SIZE + G_SIZE;  // 288
 pub type Error = Box<dyn std::error::Error>;
 
 pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, Projective, FieldHash>;
