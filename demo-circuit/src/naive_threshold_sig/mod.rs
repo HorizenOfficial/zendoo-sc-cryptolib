@@ -437,7 +437,6 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
     fn test_naive_threshold_circuit() {
         let rng = &mut thread_rng();
         let n = 6;
@@ -452,16 +451,16 @@ mod test {
         //Generate proof with insufficient valid signatures
         let (proof, public_inputs) =
             generate_test_proof(n, 4, 5, false, false, params.0.clone()).unwrap();
-        assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+        assert!(!MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
 
         //Generate proof with bad pks_threshold_hash
         let (proof, public_inputs) =
             generate_test_proof(n, 5, 4, true, false, params.0.clone()).unwrap();
-        assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+        assert!(!MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
 
         //Generate proof with bad wcert_sysdata_hash
         let (proof, public_inputs) =
             generate_test_proof(n, 5, 4, false, true, params.0.clone()).unwrap();
-        assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+        assert!(!MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
     }
 }
