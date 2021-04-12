@@ -193,11 +193,9 @@ public class CommitmentTree implements AutoCloseable {
         return nativeGetScAbsenceProof(scId);
     }
 
-    private native boolean nativeVerifyScAbsence(byte[] scid, ScAbsenceProof absenceProof, FieldElement commitment);
+    private static native boolean nativeVerifyScAbsence(byte[] scid, ScAbsenceProof absenceProof, FieldElement commitment);
 
-    public boolean verifyScAbsence(byte[] scid, ScAbsenceProof absenceProof, FieldElement commitment) {
-        if (commitmentTreePointer == 0)
-            throw new IllegalStateException("CommitmentTree instance was freed.");
+    public static boolean verifyScAbsence(byte[] scid, ScAbsenceProof absenceProof, FieldElement commitment) {
         return nativeVerifyScAbsence(scid, absenceProof, commitment);
     }
 }

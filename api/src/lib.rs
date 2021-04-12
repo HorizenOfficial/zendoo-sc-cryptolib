@@ -9,7 +9,8 @@ use std::{ptr::null_mut, any::type_name};
 mod ginger_calls;
 use ginger_calls::*;
 
-use cctp_primitives::commitment_tree::{CommitmentTree, ScExistenceProof, ScAbsenceProof};
+use cctp_primitives::commitment_tree::CommitmentTree;
+use cctp_primitives::commitment_tree::proofs::{ScExistenceProof, ScAbsenceProof};
 
 fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
     assert!(!input.is_null());
@@ -3105,7 +3106,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
         sc_id_bytes
     };
 
-    let amount = _amount as u64;
+    let amount = _amount as i64;
 
     let nullifier = {
         let t = _env.convert_byte_array(_nullifier)
@@ -3564,7 +3565,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeSe
     _path: JObject,
 ) -> jbyteArray
 {
-    let existanceProof = {
+    let existence_proof = {
 
         let t =_env.get_field(_path, "existenceProofPointer", "J")
             .expect("Should be able to get field existenceProofPointer");
@@ -3572,12 +3573,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeSe
         read_raw_pointer(t.j().unwrap() as *const ScExistenceProof)
     };
 
-    let proof_bytes_len = 0; // TODO Get expected serialized bytes len
-    let mut proof_bytes = vec![0u8; proof_bytes_len];
-    // TODO Write serialized bytes to buffer
+    let proof_bytes = existence_proof.to_bytes();
 
-    _env.byte_array_from_slice(proof_bytes.as_ref())
-        .expect("Cannot write Existance Proof to jbyteArray.")
+    _env.byte_array_from_slice(proof_bytes.as_slice())
+        .expect("Cannot write Existence Proof to jbyteArray.")
 }
 
 #[no_mangle]
@@ -3590,17 +3589,20 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeDe
     let proof_bytes = _env.convert_byte_array(_proof_bytes)
         .expect("Should be able to convert to Rust byte array");
 
-    //let proof_ptr: *const ScExistenceProof = ;// TODO deserialize to this pointer
+    match ScExistenceProof::from_bytes(proof_bytes.as_slice()) {
+        Ok(sc_existence_proof) => {
+            let proof_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_existence_proof)) as i64);
 
-    let existence_proof_class = _env.find_class("com/horizen/commitmenttree/ScExistenceProof")
-        .expect("Should be able to find ScExistenceProof class");
+            let existence_proof_class = _env.find_class("com/horizen/commitmenttree/ScExistenceProof")
+                .expect("Should be able to find ScExistenceProof class");
 
-    //let jep = _env.new_object(existence_proof_class, "(J)V", &[JValue::Long(proof_ptr)]) // TODO use it when existance proof will be generated
-    let jep = _env.new_object(existence_proof_class, "(J)V", &[JValue::Long(0x00AA)])
-        .expect("Should be able to create new long for ScExistenceProof");
+            let jep = _env.new_object(existence_proof_class, "(J)V", &[JValue::Long(proof_ptr)])
+                .expect("Should be able to create new long for ScExistenceProof");
 
-
-    *jep
+            *jep
+        },
+        Err(_) => {std::ptr::null::<jobject>() as jobject}
+    }
 }
 
 #[no_mangle]
@@ -3616,7 +3618,6 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeFr
 
 
 // Sc Absence proof functions
-
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScAbsenceProof(
     _env: JNIEnv,
@@ -3674,7 +3675,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeSeri
     _path: JObject,
 ) -> jbyteArray
 {
-    let absenceProof = {
+    let absence_proof = {
 
         let t =_env.get_field(_path, "absenceProofPointer", "J")
             .expect("Should be able to get field absenceProofPointer");
@@ -3682,12 +3683,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeSeri
         read_raw_pointer(t.j().unwrap() as *const ScAbsenceProof)
     };
 
-    let proof_bytes_len = 0; // TODO Get expected serialized bytes len
-    let mut proof_bytes = vec![0u8; proof_bytes_len];
-    // TODO Write serialized bytes to buffer
+    let proof_bytes = absence_proof.to_bytes();
 
-    _env.byte_array_from_slice(proof_bytes.as_ref())
-        .expect("Cannot write Existance Proof to jbyteArray.")
+    _env.byte_array_from_slice(proof_bytes.as_slice())
+        .expect("Cannot write Absence Proof to jbyteArray.")
 }
 
 #[no_mangle]
@@ -3700,16 +3699,20 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeDese
     let proof_bytes = _env.convert_byte_array(_proof_bytes)
         .expect("Should be able to convert to Rust byte array");
 
-    //let proof_ptr: *const ScAbsenceProof = 0;// TODO deserialize to this pointer
+    match ScAbsenceProof::from_bytes(proof_bytes.as_slice()) {
+        Ok(sc_absence_proof) => {
+            let proof_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_absence_proof)) as i64);
 
-    let absence_proof_class = _env.find_class("com/horizen/commitmenttree/ScAbsenceProof")
-        .expect("Should be able to find ScAbsenceProof class");
+            let absence_proof_class = _env.find_class("com/horizen/commitmenttree/ScAbsenceProof")
+                .expect("Should be able to find ScAbsenceProof class");
 
-    //let jep = _env.new_object(absence_proof_class, "(J)V", &[JValue::Long(proof_ptr)]) // TODO use it when absent proof will be generated
-    let jep = _env.new_object(absence_proof_class, "(J)V", &[JValue::Long(0x00AA)])
-        .expect("Should be able to create new long for ScAbsenceProof");
+            let jep = _env.new_object(absence_proof_class, "(J)V", &[JValue::Long(proof_ptr)])
+                .expect("Should be able to create new long for ScAbsenceProof");
 
-    *jep
+            *jep
+        },
+        Err(_) => { std::ptr::null::<jobject>() as jobject }
+    }
 }
 
 #[no_mangle]
@@ -3785,14 +3788,6 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
         sc_id_bytes
     };
 
-    let commitment_tree = {
-
-        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
-            .expect("Should be able to get field commitmentTreePointer");
-
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
-    };
-
     //Read commitment proof
     let sc_absence_proof = {
         let i =_env.get_field(_sc_absence_proof, "absenceProofPointer", "J")
@@ -3809,5 +3804,5 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
         read_raw_pointer(i.j().unwrap() as *const FieldElement)
     };
 
-    commitment_tree.verify_sc_absence(&sc_id, sc_absence_proof, commitment_fe)
+    CommitmentTree::verify_sc_absence(&sc_id, sc_absence_proof, commitment_fe)
 }

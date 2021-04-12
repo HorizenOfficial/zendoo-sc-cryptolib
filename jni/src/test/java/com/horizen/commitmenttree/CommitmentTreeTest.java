@@ -6,6 +6,7 @@ import com.horizen.commitmenttree.CommitmentTree;
 import com.horizen.sigproofnative.BackwardTransfer;
 import com.horizen.librustsidechains.FieldElement;
 
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.Random;
 
@@ -204,7 +205,9 @@ public class CommitmentTreeTest {
         byte[] existenceProofBytes = existenceOpt.get().serialize();
         ScExistenceProof deserializedExistanceProof = ScExistenceProof.deserialize(existenceProofBytes);
 
-        assertTrue("Commitment verification expected to be successful", CommitmentTree.verifyScCommitment(scCommitmentOpt.get(), deserializedExistanceProof, commitmentOpt.get()));
+        assertTrue("Deserialized existence proof should be serialized to same bytes", Arrays.equals(deserializedExistanceProof.serialize(), existenceProofBytes));
+        assertTrue("Commitment verification of original proof expected to be successful", CommitmentTree.verifyScCommitment(scCommitmentOpt.get(), existenceOpt.get(), commitmentOpt.get()));
+        assertTrue("Commitment verification of deserialized proof expected to be successful", CommitmentTree.verifyScCommitment(scCommitmentOpt.get(), deserializedExistanceProof, commitmentOpt.get()));
         commitmentOpt.get().freeFieldElement();
         existenceOpt.get().freeScExistenceProof();
         scCommitmentOpt.get().freeFieldElement();
@@ -230,8 +233,8 @@ public class CommitmentTreeTest {
         assertFalse("Existance proof should not be present", commTree.getScExistenceProof(scId[0]).isPresent());
         Optional<ScAbsenceProof> absenceOpt = commTree.getScAbsenceProof(scId[0]);
         // TODO Uncomment this code when rust library will be able to operate with absence proof on empty commitment tree.
-        //assertTrue("Absence proof expected to be present.", absenceOpt.isPresent());
-        //assertTrue("Absence verification expected to be successful", commTree.verifyScAbsence(scId[0], absenceOpt.get() ,commitmentOpt.get()));
+        assertTrue("Absence proof expected to be present.", absenceOpt.isPresent());
+        assertTrue("Absence verification expected to be successful", commTree.verifyScAbsence(scId[0], absenceOpt.get() ,commitmentOpt.get()));
 
         long ftrAmount = 100;
         byte[] ftrPublicKey = generateFieldElementBytes();
@@ -310,7 +313,9 @@ public class CommitmentTreeTest {
         byte[] absenceProofBytes = absenceOpt.get().serialize();
         ScAbsenceProof deserializedAbsenceProof = ScAbsenceProof.deserialize(absenceProofBytes);
 
-        assertTrue("Absence verification expected to be successful", commTree.verifyScAbsence(scId[2], deserializedAbsenceProof ,commitmentOpt.get()));
+        assertTrue("Deserialized absence proof should be serialized to same bytes", Arrays.equals(deserializedAbsenceProof.serialize(), absenceProofBytes));
+        assertTrue("Absence verification of original proof expected to be successful", commTree.verifyScAbsence(scId[1], absenceOpt.get() ,commitmentOpt.get()));
+        assertTrue("Absence verification of deserialized proof expected to be successful", commTree.verifyScAbsence(scId[1], deserializedAbsenceProof ,commitmentOpt.get()));
 
         commTree.freeCommitmentTree();
     }
