@@ -2442,7 +2442,7 @@ fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeSetup(
     _env: JNIEnv,
-    _params: JObject,
+    _class: JClass,
     _max_pks: jlong,
     _proving_key_path: JString,
     _verification_key_path: JString,
