@@ -7,9 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {version = "0.1.0", features = ["mnt4_753", "mnt6_753"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
-primitives = {version = "0.1.0", features = ["mnt4_753", "mnt6_753", "merkle_tree", "smt"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
-proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
+algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
+primitives = {version = "0.1.0", features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
 poly-commit = { git = "https://github.com/HorizenLabs/poly-commit", branch = "dev_serializations" }
 marlin = {version = "0.1.0", git = "https://github.com/HorizenLabs/marlin", branch = "dev_serializations", features = [ "asm", "parallel" ] }
 
@@ -38,9 +37,8 @@ blake2 = { version = "0.8", default-features = false }
 
 [dependencies.cctp_primitives]
 git = "ssh://git@github.com:22/HorizenOfficial/zendoo-cctp-lib.git"
-rev = "e3f1836a1e5616e1c740b68f8f62c5d3c0dba100" #crypto_lib_integration 06.04.2021
+rev = "cb6f3707cfd3a5d6e38ec947f28e1586e9a84b79" #initial_implementation 14.04.2021
 version = "0.1.0"
-branch = "initial_implementation"
 
 
 [lib]

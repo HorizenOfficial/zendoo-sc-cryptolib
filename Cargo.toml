@@ -29,7 +29,6 @@ primitives = { path = '../ginger-lib/primitives' }
 r1cs-core = { path = '../ginger-lib/r1cs/core' }
 r1cs-crypto = { path = '../ginger-lib/r1cs/gadgets/crypto' }
 r1cs-std = { path = '../ginger-lib/r1cs/gadgets/std' }
-proof-systems = { path = '../ginger-lib/proof-systems' }
 
 [patch.'https://github.com/HorizenLabs/marlin.git']
 marlin = { path = '../marlin' }

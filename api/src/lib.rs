@@ -3,14 +3,20 @@ extern crate jni;
 use algebra::bytes::{FromBytes, FromBytesChecked, ToBytes};
 
 use std::{ptr::null_mut, any::type_name};
+use std::{fs::File, io::Result as IoResult};
 
 // use std::panic;
+use demo_circuit::generate_parameters;
 
 mod ginger_calls;
 use ginger_calls::*;
 
 use cctp_primitives::commitment_tree::CommitmentTree;
 use cctp_primitives::commitment_tree::proofs::{ScExistenceProof, ScAbsenceProof};
+
+pub mod type_mapping;
+use type_mapping::*;
+
 
 fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
     assert!(!input.is_null());
@@ -518,21 +524,21 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDes
     *sig_object
 }
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeIsValidSignature(
-    _env: JNIEnv,
-    _sig: JObject,
-) -> jboolean
-{
-    let sig = _env.get_field(_sig, "signaturePointer", "J")
-        .expect("Should be able to get field signaturePointer").j().unwrap() as *const SchnorrSig;
-
-    if is_valid(read_raw_pointer(sig)) {
-        JNI_TRUE
-    } else {
-        JNI_FALSE
-    }
-}
+// #[no_mangle]
+// pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeIsValidSignature(
+//     _env: JNIEnv,
+//     _sig: JObject,
+// ) -> jboolean
+// {
+//     let sig = _env.get_field(_sig, "signaturePointer", "J")
+//         .expect("Should be able to get field signaturePointer").j().unwrap() as *const SchnorrSig;
+//
+//     if is_valid(read_raw_pointer(sig)) {
+//         JNI_TRUE
+//     } else {
+//         JNI_FALSE
+//     }
+// }
 
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativefreeSignature(
@@ -1363,24 +1369,24 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
 //     get_position_in_ginger_smt(tree, leaf) as jlong
 // }
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeGetAbsolutePosition(
-    _env: JNIEnv,
-    _class: JClass,
-    _leaf: JObject,
-    _height: jint,
-) -> jlong
-{
-    let leaf = {
-
-        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
-    };
-
-    leaf_to_index(leaf, _height as usize) as jlong
-}
+// #[no_mangle]
+// pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeGetAbsolutePosition(
+//     _env: JNIEnv,
+//     _class: JClass,
+//     _leaf: JObject,
+//     _height: jint,
+// ) -> jlong
+// {
+//     let leaf = {
+//
+//         let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+//             .expect("Should be able to get field fieldElementPointer");
+//
+//         read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+//     };
+//
+//     leaf_to_index(leaf, _height as usize) as jlong
+// }
 
 // #[no_mangle]
 // pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeIsPositionEmpty(
@@ -1595,24 +1601,24 @@ pub extern "system" fn Java_com_horizen_merkletreenative_BigMerkleTree_nativeGet
 //     get_position_in_lazy_ginger_smt(tree, leaf) as jlong
 // }
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeGetAbsolutePosition(
-    _env: JNIEnv,
-    _class: JClass,
-    _leaf: JObject,
-    _height: jint,
-) -> jlong
-{
-    let leaf = {
-
-        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
-    };
-
-    leaf_to_index(leaf, _height as usize) as jlong
-}
+// #[no_mangle]
+// pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeGetAbsolutePosition(
+//     _env: JNIEnv,
+//     _class: JClass,
+//     _leaf: JObject,
+//     _height: jint,
+// ) -> jlong
+// {
+//     let leaf = {
+//
+//         let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+//             .expect("Should be able to get field fieldElementPointer");
+//
+//         read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+//     };
+//
+//     leaf_to_index(leaf, _height as usize) as jlong
+// }
 
 // #[no_mangle]
 // pub extern "system" fn Java_com_horizen_merkletreenative_BigLazyMerkleTree_nativeIsPositionEmpty(
@@ -2222,6 +2228,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         t.write(&mut end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
 
+        end_epoch_block_hash_bytes[FIELD_SIZE - 1] = end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
+
         read_field_element_from_buffer_with_padding(&end_epoch_block_hash_bytes)
             .expect("Should be able to read a FieldElement from a 32 byte array")
 
@@ -2235,6 +2243,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
         t.write(&mut prev_end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
+
+        prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] = prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
 
         read_field_element_from_buffer_with_padding(&prev_end_epoch_block_hash_bytes)
             .expect("Should be able to read a FieldElement from a 32 byte array")
@@ -2359,10 +2369,12 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let t = _env.convert_byte_array(_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
-        let mut end_epoch_block_hash_bytes = [0u8; 16];
+        let mut end_epoch_block_hash_bytes = [0u8; 32];
 
         t.write(&mut end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
+
+        end_epoch_block_hash_bytes[FIELD_SIZE - 1] = end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
 
         end_epoch_block_hash_bytes
     };
@@ -2371,10 +2383,12 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
-        let mut prev_end_epoch_block_hash_bytes = [0u8; 16];
+        let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
 
         t.write(&mut prev_end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
+
+        prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] = prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
 
         prev_end_epoch_block_hash_bytes
     };
@@ -2402,8 +2416,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     };
 
     //Serialize proof
-    let mut proof_bytes = [0u8; ZK_PROOF_SIZE];
-    proof.write(&mut proof_bytes[..])
+    let mut proof_bytes: Vec<u8> = vec![];
+    proof.write(&mut proof_bytes)
         .expect("Should be able to write proof into proof_bytes");
 
     //Return proof serialized
@@ -2424,6 +2438,37 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 }
 
 // Test functions
+fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
+    let mut fs = File::create(file_path)?;
+    to_write.write(&mut fs)?;
+    Ok(())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeSetup(
+    _env: JNIEnv,
+    _class: JClass,
+    _max_pks: jlong,
+    _proving_key_path: JString,
+    _verification_key_path: JString,
+) {
+
+    // Read paths
+    let proving_key_path = _env.get_string(_proving_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    let verification_key_path = _env.get_string(_verification_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    let max_pks = _max_pks as usize;
+
+    let (pk, vk) = generate_parameters(max_pks)
+        .expect("Unable to generate (pk, vk)");
+
+    write_to_file(&pk, proving_key_path.to_str().unwrap()).unwrap();
+    write_to_file(&vk, verification_key_path.to_str().unwrap()).unwrap();
+}
+
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeVerifyProof(
     _env: JNIEnv,
@@ -2481,10 +2526,12 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let t = _env.convert_byte_array(_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
-        let mut end_epoch_block_hash_bytes = [0u8; 16];
+        let mut end_epoch_block_hash_bytes = [0u8; 32];
 
         t.write(&mut end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
+
+        end_epoch_block_hash_bytes[FIELD_SIZE - 1] = end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
 
         end_epoch_block_hash_bytes
     };
@@ -2493,10 +2540,12 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
-        let mut prev_end_epoch_block_hash_bytes = [0u8; 16];
+        let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
 
         t.write(&mut prev_end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
+
+        prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] = prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
 
         prev_end_epoch_block_hash_bytes
     };

@@ -38,15 +38,22 @@ public class NaiveThresholdSigProof {
 
     private static native boolean nativeVerifyProof(BackwardTransfer[] btList,
                                       byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
-                                      FieldElement constant, long quality, byte[] proof, String verificationKeyPath);
+                                      FieldElement constant, long quality, byte[] proof, boolean checkProof, String verificationKeyPath, boolean checkVk);
 
     // TODO: check type of `constant`. Why not a byte[]?
     public static boolean verifyProof(List<BackwardTransfer> btList,
                                       byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
                                       FieldElement constant, long quality, byte[] proof, String verificationKeyPath){
+
         return nativeVerifyProof(
                 btList.toArray(new BackwardTransfer[0]),
                 endEpochBlockHash, prevEndEpochBlockHash,
-                constant, quality, proof, verificationKeyPath);
+                constant, quality, proof, true, verificationKeyPath, true);
     }
+
+    public static void setup(long maxPks, String provingKeyPath, String verificationKeyPath) {
+        nativeSetup(maxPks, provingKeyPath, verificationKeyPath);
+    }
+
+    private static native void nativeSetup(long maxPks, String provingKeyPath, String verificationKeyPath);
 }
