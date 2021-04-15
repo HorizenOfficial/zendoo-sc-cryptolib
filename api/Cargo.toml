@@ -37,7 +37,7 @@ blake2 = { version = "0.8", default-features = false }
 
 [dependencies.cctp_primitives]
 git = "ssh://git@github.com:22/HorizenOfficial/zendoo-cctp-lib.git"
-rev = "cb6f3707cfd3a5d6e38ec947f28e1586e9a84b79" #initial_implementation 14.04.2021
+rev = "8ae302dba589a7d028723dc89afef1cfa8ef3d9d" #crypto_lib_integration 15.04.2021
 version = "0.1.0"
 
 
