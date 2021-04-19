@@ -2,7 +2,7 @@ package com.horizen.schnorrnative;
 
 import com.horizen.librustsidechains.Library;
 
-public class SchnorrSignature
+public class SchnorrSignature implements AutoCloseable
 {
 
   public static int SIGNATURE_LENGTH = 192;
@@ -45,6 +45,11 @@ public class SchnorrSignature
       nativefreeSignature(this.signaturePointer);
       signaturePointer = 0;
     }
+  }
+
+  @Override
+  public void close() throws Exception {
+    freeSignature();
   }
 }
 

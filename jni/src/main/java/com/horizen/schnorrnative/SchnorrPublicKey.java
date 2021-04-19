@@ -2,7 +2,7 @@ package com.horizen.schnorrnative;
 
 import com.horizen.librustsidechains.*;
 
-public class SchnorrPublicKey
+public class SchnorrPublicKey implements AutoCloseable
 {
 
   public static final int PUBLIC_KEY_LENGTH = 193;
@@ -64,6 +64,11 @@ public class SchnorrPublicKey
       throw new IllegalArgumentException("Public key was freed.");
 
     return nativeVerifyKey();
+  }
+
+  @Override
+  public void close() throws Exception {
+    freePublicKey();
   }
 }
 

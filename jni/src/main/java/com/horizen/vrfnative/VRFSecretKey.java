@@ -2,7 +2,7 @@ package com.horizen.vrfnative;
 
 import com.horizen.librustsidechains.Library;
 
-public class VRFSecretKey
+public class VRFSecretKey implements AutoCloseable
 {
     public static final int SECRET_KEY_LENGTH = 96;
 
@@ -54,5 +54,10 @@ public class VRFSecretKey
             throw new IllegalArgumentException("Secret key was freed.");
 
         return nativeGetPublicKey();
+    }
+
+    @Override
+    public void close() throws Exception {
+        freeSecretKey();
     }
 }

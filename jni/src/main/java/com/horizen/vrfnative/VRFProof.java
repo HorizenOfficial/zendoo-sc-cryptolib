@@ -2,7 +2,7 @@ package com.horizen.vrfnative;
 
 import com.horizen.librustsidechains.Library;
 
-public class VRFProof
+public class VRFProof implements AutoCloseable
 {
 
   public static int PROOF_LENGTH = 385;
@@ -41,6 +41,11 @@ public class VRFProof
       nativefreeProof(this.proofPointer);
       proofPointer = 0;
     }
+  }
+
+  @Override
+  public void close() throws Exception {
+    freeProof();
   }
 }
 
