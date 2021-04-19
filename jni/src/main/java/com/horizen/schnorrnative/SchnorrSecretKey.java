@@ -4,7 +4,7 @@ import com.horizen.librustsidechains.Library;
 
 import java.util.Arrays;
 
-public class SchnorrSecretKey
+public class SchnorrSecretKey implements AutoCloseable
 {
     public static final int SECRET_KEY_LENGTH = 96;
 
@@ -56,5 +56,10 @@ public class SchnorrSecretKey
             throw new IllegalArgumentException("Secret key was freed.");
 
         return nativeGetPublicKey();
+    }
+
+    @Override
+    public void close() throws Exception {
+        freeSecretKey();
     }
 }

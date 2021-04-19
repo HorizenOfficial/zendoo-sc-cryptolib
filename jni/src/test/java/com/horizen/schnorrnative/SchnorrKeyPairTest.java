@@ -10,23 +10,18 @@ import static org.junit.Assert.*;
 public class SchnorrKeyPairTest {
 
     @Test
-    public void testGenerate() {
+    public void testGenerate() throws Exception {
 
-        SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
-
-        assertNotNull("Key pair generation was unsuccessful.", keyPair);
-
-        assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
-
-        //Free memory
-        keyPair.getPublicKey().freePublicKey();
-        keyPair.getSecretKey().freeSecretKey();
+        try(SchnorrKeyPair keyPair = SchnorrKeyPair.generate())
+        {
+            assertNotNull("Key pair generation was unsuccessful.", keyPair);
+            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
+        }
     }
 
     @Test
-    public void testSignVerify() {
+    public void testSignVerify() throws Exception {
 
-        // Deserialize sk and compute keypair from it
         byte[] skBytes = {
             33, 52, -46, -50, -26, -102, 64, 31, -36, 90, 100, 49, -69, 79, -83, -53, 61, -35, -88, -48, -122, -120, 15,
             -117, -124, 83, 7, 4, 20, -46, -56, -68, -58, -16, -82, 51, -9, -59, -17, -97, -110, -55, 84, 114, -12, -32,
@@ -34,13 +29,7 @@ public class SchnorrKeyPairTest {
             -26, -31, 47, -103, 111, -86, -68, 39, 96, -124, -109, -64, -80, -116, -75, 90, 96, -118, 33, -39, -94, -28,
             121, 0, 1, 0
         };
-        SchnorrSecretKey sk = SchnorrSecretKey.deserialize(skBytes);
 
-        assertNotNull("sk deserialization must not fail", sk);
-
-        SchnorrKeyPair keyPair = new SchnorrKeyPair(sk);
-
-        //Deserialize message
         byte[] messageBytes = {
             99, 122, 4, 23, 113, 104, 61, 96, -63, 47, -51, -49, 88, -5, 42, 92, 32, 99, 58, 52, 83, 54, -96, -88, -99,
             56, -25, -98, 119, -39, 71, 118, 85, 109, 69, 74, 3, 45, -38, -103, -36, 70, 28, 110, -64, 90, 18, -107,
@@ -48,11 +37,7 @@ public class SchnorrKeyPairTest {
             -53, 100, 113, -86, -33, -121, 51, 65, -24, 27, -28, -69, 4, -97, -27, 72, -106, -118, 64, 87, 25, -83, -19,
             0, 0,
         };
-        FieldElement message = FieldElement.deserialize(messageBytes);
 
-        assertNotNull("message deserialization must not fail", message);
-
-        //Deserialize signature
         byte[] sigBytes = {
             -23, 15, -85, -115, -31, 70, 62, -23, -28, 32, 60, -90, 44, -89, -6, -37, 110, 119, 6, 10, 105, 27, 87, -75,
             -82, 105, 29, 75, 126, -62, -57, -26, 21, 22, 98, -106, 19, 58, 15, -12, -6, 123, -125, -41, -4, 82, -102,
@@ -64,56 +49,45 @@ public class SchnorrKeyPairTest {
             -22, 13, -91, 117, -100, -22, -103, -81, -118, -33, -76, -18, -100, -119, 11, -37, 12, -46, 28, -43, -105,
             66, -117, -100, 39, 0, 0
         };
-        SchnorrSignature sig = SchnorrSignature.deserialize(sigBytes, true);
-        assertNotNull("signature deserialization must not fail", message);
-        assertTrue("Schnorr signature must be valid", sig.isValidSignature());
 
-        //Verify signature
-        assertTrue("Signature must be verified", keyPair.getPublicKey().verifySignature(sig, message));
+        try
+        (
+            SchnorrSecretKey sk = SchnorrSecretKey.deserialize(skBytes);
+            SchnorrKeyPair keyPair = new SchnorrKeyPair(sk);
+            FieldElement message = FieldElement.deserialize(messageBytes);
+            SchnorrSignature sig = SchnorrSignature.deserialize(sigBytes)
+        )
+        {
+            assertNotNull("sk deserialization must not fail", sk);
+            assertNotNull("message deserialization must not fail", message);
+            assertTrue("Signature must be verified", keyPair.getPublicKey().verifySignature(sig, message));
+        }
 
-        //Free memory
-        keyPair.getPublicKey().freePublicKey();
-        keyPair.getSecretKey().freeSecretKey();
-
-        message.freeFieldElement();
-
-        sig.freeSignature();
     }
 
     @Test
-    public void testRandomSignVerify() {
+    public void testRandomSignVerify() throws Exception {
 
         int samples = 100;
 
         for (int i = 0; i < samples; i++) {
-            SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
+            try
+            (
+                SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
+                FieldElement fieldElement = FieldElement.createRandom();
+                FieldElement wrongFieldElement = FieldElement.createRandom()
+            )
+            {
+                assertNotNull("Key pair generation was unsuccessful.", keyPair);
+                assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
 
-            assertNotNull("Key pair generation was unsuccessful.", keyPair);
-            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
-
-            FieldElement fieldElement = FieldElement.createRandom();
-
-            SchnorrSignature signature = keyPair.signMessage(fieldElement);
-
-            assertTrue("Schnorr signature must be valid", signature.isValidSignature());
-
-            assertNotNull("Attempt to sign message failed.", signature);
-
-            assertTrue("Signature must be verified", keyPair.getPublicKey().verifySignature(signature, fieldElement));
-
-            FieldElement wrongFieldElement = FieldElement.createRandom();
-
-            assertFalse("Signature must not be verified", keyPair.getPublicKey().verifySignature(signature, wrongFieldElement));
-
-            //Free memory
-
-            keyPair.getPublicKey().freePublicKey();
-            keyPair.getSecretKey().freeSecretKey();
-
-            fieldElement.freeFieldElement();
-            wrongFieldElement.freeFieldElement();
-
-            signature.freeSignature();
+                try(SchnorrSignature signature = keyPair.signMessage(fieldElement))
+                {
+                    assertNotNull("Attempt to sign message failed.", signature);
+                    assertTrue("Signature must be verified", keyPair.getPublicKey().verifySignature(signature, fieldElement));
+                    assertFalse("Signature must not be verified", keyPair.getPublicKey().verifySignature(signature, wrongFieldElement));
+                }
+            }
         }
     }
 }

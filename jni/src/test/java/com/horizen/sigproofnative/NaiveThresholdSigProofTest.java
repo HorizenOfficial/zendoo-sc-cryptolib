@@ -33,7 +33,7 @@ public class NaiveThresholdSigProofTest {
     List<BackwardTransfer> btList = new ArrayList<>();
 
     @Test
-    public void testcreateProof() {
+    public void testcreateProof() throws Exception {
 
         endEpochBlockHash = new byte[] {
             -32, -64, -17, -49, 83, 109, -5, 40, 112, -121, 66, 4, -27, -81, -75, -44, -107, -40, 63, 56, -29, -15, 121,
@@ -106,14 +106,15 @@ public class NaiveThresholdSigProofTest {
         // Deserialize secret keys and get the corresponding public keys
         for (int i = 0; i<keyCount; i++) {
 
-            SchnorrSecretKey sk = SchnorrSecretKey.deserialize(secretKeyList[i]);
-            assertNotNull("sk" + i + "deserialization must not fail", sk);
+            try(SchnorrSecretKey sk = SchnorrSecretKey.deserialize(secretKeyList[i]))
+            {
+                assertNotNull("sk" + i + "deserialization must not fail", sk);
 
-            SchnorrPublicKey pk = new SchnorrKeyPair(sk).getPublicKey();
-            assertTrue("Public key verification failed.", pk.verifyKey());
+                SchnorrPublicKey pk = new SchnorrKeyPair(sk).getPublicKey();
+                assertTrue("Public key verification failed.", pk.verifyKey());
 
-            publicKeyList.add(pk);
-            sk.freeSecretKey();
+                publicKeyList.add(pk);
+            }
         }
 
         // Deserialize Schnorr Signatures
@@ -132,7 +133,7 @@ public class NaiveThresholdSigProofTest {
     }
 
     @Test
-    public void testcreateProofWithoutBWT() {
+    public void testcreateProofWithoutBWT() throws Exception {
 
         endEpochBlockHash = new byte[] {
             102, 107, 20, 22, -35, -54, 46, -67, 78, 65, 82, 95, 92, 39, 50, -28, 23, -89, 12, 103, 96, -28, 100, 68,
@@ -196,14 +197,15 @@ public class NaiveThresholdSigProofTest {
         // Deserialize secret keys and get the corresponding public keys
         for (int i = 0; i<keyCount; i++) {
 
-            SchnorrSecretKey sk = SchnorrSecretKey.deserialize(secretKeyList[i]);
-            assertNotNull("sk" + i + "deserialization must not fail", sk);
+            try(SchnorrSecretKey sk = SchnorrSecretKey.deserialize(secretKeyList[i]))
+            {
+                assertNotNull("sk" + i + "deserialization must not fail", sk);
 
-            SchnorrPublicKey pk = new SchnorrKeyPair(sk).getPublicKey();
-            assertTrue("Public key verification failed.", pk.verifyKey());
+                SchnorrPublicKey pk = new SchnorrKeyPair(sk).getPublicKey();
+                assertTrue("Public key verification failed.", pk.verifyKey());
 
-            publicKeyList.add(pk);
-            sk.freeSecretKey();
+                publicKeyList.add(pk);
+            }
         }
 
         // Deserialize Schnorr Signatures
@@ -222,7 +224,7 @@ public class NaiveThresholdSigProofTest {
     }
 
     @Test
-    public void testCreateRandomProof(){
+    public void testCreateRandomProof() throws Exception {
         Random r = new Random();
 
         r.nextBytes(endEpochBlockHash);
@@ -308,6 +310,5 @@ public class NaiveThresholdSigProofTest {
         for (SchnorrSignature sig: signatureList)
             sig.freeSignature();
         signatureList.clear();
-
     }
 }

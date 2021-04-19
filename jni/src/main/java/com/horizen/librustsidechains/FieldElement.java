@@ -1,6 +1,6 @@
 package com.horizen.librustsidechains;
 
-public class FieldElement {
+public class FieldElement implements AutoCloseable {
 
     public static int FIELD_ELEMENT_LENGTH = 96;
 
@@ -70,5 +70,10 @@ public class FieldElement {
         }
 
         return nativeEquals((FieldElement) o);
+    }
+
+    @Override
+    public void close() throws Exception {
+        freeFieldElement();
     }
 }

@@ -3,7 +3,7 @@ package com.horizen.vrfnative;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
-public class VRFPublicKey
+public class VRFPublicKey implements AutoCloseable
 {
 
   public static final int PUBLIC_KEY_LENGTH = 193;
@@ -65,6 +65,11 @@ public class VRFPublicKey
       throw new IllegalArgumentException("Public key was freed.");
 
     return nativeProofToHash(proof, message);
+  }
+
+  @Override
+  public void close() throws Exception {
+    freePublicKey();
   }
 }
 
