@@ -29,7 +29,7 @@ public class SchnorrSecretKeyTest {
                 try
                 (
                     SchnorrPublicKey recreatedPublicKey = keyPair.getSecretKey().getPublicKey();
-                    SchnorrPublicKey deserializedPublicKey = SchnorrPublicKey.deserialize(publicKeyBytes);
+                    SchnorrPublicKey deserializedPublicKey = SchnorrPublicKey.deserialize(publicKeyBytes, true);
                     SchnorrSecretKey deserializedSecretKey = SchnorrSecretKey.deserialize(secretKeyBytes)
                 )
                 {

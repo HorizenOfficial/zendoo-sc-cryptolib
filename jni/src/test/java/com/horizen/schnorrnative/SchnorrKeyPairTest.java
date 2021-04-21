@@ -55,7 +55,7 @@ public class SchnorrKeyPairTest {
             SchnorrSecretKey sk = SchnorrSecretKey.deserialize(skBytes);
             SchnorrKeyPair keyPair = new SchnorrKeyPair(sk);
             FieldElement message = FieldElement.deserialize(messageBytes);
-            SchnorrSignature sig = SchnorrSignature.deserialize(sigBytes)
+            SchnorrSignature sig = SchnorrSignature.deserialize(sigBytes, true)
         )
         {
             assertNotNull("sk deserialization must not fail", sk);
