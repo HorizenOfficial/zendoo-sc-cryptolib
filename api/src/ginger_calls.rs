@@ -8,7 +8,7 @@ use algebra::{
             G1Projective as MNT6G1Projective, G1Affine as MNT6G1Affine
         },
     },
-    FromBytes, ToBytes,
+    FromBytes, FromBytesChecked, SemanticallyValid, ToBytes,
     BigInteger768,
     ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand,
 };
@@ -25,9 +25,7 @@ use primitives::{
         FieldBasedMerkleTreePath, MNT4753_PHANTOM_MERKLE_ROOT,
     },
     signature::{
-        FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
-            FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature
-        },
+        FieldBasedSignatureScheme, schnorr::field_based_schnorr::*,
     },
     vrf::{FieldBasedVrf, ecvrf::*},
 };
@@ -65,11 +63,15 @@ pub const VRF_PROOF_SIZE: usize = G1_SIZE + 2 * FIELD_SIZE; // 192
 pub const ZK_PROOF_SIZE: usize = 2 * G1_SIZE + G2_SIZE;  // 771
 pub type Error = Box<dyn std::error::Error>;
 
-//*******************************Generic I/O functions**********************************************
+//*******************************Generic functions**********************************************
 // Note: Should decide if panicking or handling IO errors
 
 pub fn deserialize_from_buffer<T: FromBytes>(buffer: &[u8]) ->  IoResult<T> {
     T::read(buffer)
+}
+
+pub fn deserialize_from_buffer_checked<T: FromBytesChecked>(buffer: &[u8]) ->  IoResult<T> {
+    T::read_checked(buffer)
 }
 
 pub fn serialize_to_buffer<T: ToBytes>(to_write: &T, buffer: &mut [u8]) -> IoResult<()> {
@@ -78,8 +80,16 @@ pub fn serialize_to_buffer<T: ToBytes>(to_write: &T, buffer: &mut [u8]) -> IoRes
 
 pub fn read_from_file<T: FromBytes>(file_path: &str) -> IoResult<T>{
     let mut fs = File::open(file_path)?;
-    let t = T::read(&mut fs)?;
-    Ok(t)
+    T::read(&mut fs)
+}
+
+pub fn read_from_file_checked<T: FromBytesChecked>(file_path: &str) -> IoResult<T>{
+    let mut fs = File::open(file_path)?;
+    T::read_checked(&mut fs)
+}
+
+pub fn is_valid<T: SemanticallyValid>(to_check: &T) -> bool {
+    T::is_valid(to_check)
 }
 
 pub fn get_random_field_element() -> FieldElement {
@@ -90,31 +100,31 @@ pub fn get_random_field_element() -> FieldElement {
 //***************************Schnorr types and functions********************************************
 
 pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<MNT4Fr, MNT6G1Projective, MNT4PoseidonHash>;
-pub type SchnorrSig = FieldBasedSchnorrSignature<MNT4Fr>;
+pub type SchnorrSig = FieldBasedSchnorrSignature<MNT4Fr, MNT6G1Projective>;
 pub type SchnorrPk = MNT6G1Affine;
 pub type SchnorrSk = MNT4Fq;
 
 pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
     let mut rng = OsRng;
     let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
-    (pk.into_affine(), sk)
+    (pk.0.into_affine(), sk)
 }
 
 pub fn schnorr_get_public_key(sk: &SchnorrSk) -> SchnorrPk {
-    SchnorrSigScheme::get_public_key(sk).into_affine()
+    SchnorrSigScheme::get_public_key(sk).0.into_affine()
 }
 
 pub fn schnorr_verify_public_key(pk: &SchnorrPk) -> bool {
-    SchnorrSigScheme::keyverify(&pk.into_projective())
+    SchnorrSigScheme::keyverify(&FieldBasedSchnorrPk(pk.into_projective()))
 }
 
 pub fn schnorr_sign(msg: &FieldElement, sk: &SchnorrSk, pk: &SchnorrPk) -> Result<SchnorrSig, Error> {
     let mut rng = OsRng;
-    SchnorrSigScheme::sign(&mut rng, &pk.into_projective(), sk, &[*msg])
+    SchnorrSigScheme::sign(&mut rng, &FieldBasedSchnorrPk(pk.into_projective()), sk, &[*msg])
 }
 
 pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &SchnorrSig) -> Result<bool, Error> {
-    SchnorrSigScheme::verify(&pk.into_projective(), &[*msg], signature)
+    SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), &[*msg], signature)
 }
 
 //************************************Poseidon Hash function****************************************
@@ -221,7 +231,8 @@ pub fn create_naive_threshold_sig_proof(
     prev_end_epoch_mc_b_hash: &[u8; 32],
     bt_list:                  &[BackwardTransfer],
     threshold:                u64,
-    proving_key_path:         &str
+    proving_key_path:         &str,
+    enforce_membership:       bool,
 ) -> Result<(SCProof, u64), Error> {
 
     //Get max pks
@@ -254,7 +265,7 @@ pub fn create_naive_threshold_sig_proof(
     let b = read_field_element_from_u64(valid_signatures - threshold);
 
     //Convert affine pks to projective
-    let pks = pks.iter().map(|&pk| pk.into_projective()).collect::<Vec<_>>();
+    let pks = pks.iter().map(|&pk| FieldBasedSchnorrPk(pk.into_projective())).collect::<Vec<_>>();
 
     //Convert needed variables into field elements
     let threshold = read_field_element_from_u64(threshold);
@@ -265,7 +276,11 @@ pub fn create_naive_threshold_sig_proof(
     );
 
     //Read proving key
-    let params = read_from_file(proving_key_path)?;
+    let params = if enforce_membership {
+        read_from_file_checked(proving_key_path)
+    } else {
+        read_from_file(proving_key_path)
+    }?;
 
     //Create and return proof
     let mut rng = OsRng;
@@ -281,6 +296,7 @@ pub fn verify_naive_threshold_sig_proof(
     valid_sigs:               u64,
     proof:                    &SCProof,
     vk_path:                  &str,
+    enforce_membership:       bool
 ) -> Result<bool, Error>
 {
     //Compute wcert_sysdata_hash
@@ -291,7 +307,11 @@ pub fn verify_naive_threshold_sig_proof(
     let aggregated_input = compute_poseidon_hash(&[*constant, wcert_sysdata_hash])?;
 
     //Verify proof
-    let vk = read_from_file(vk_path)?;
+    let vk = if enforce_membership {
+        read_from_file_checked(vk_path)
+    } else {
+        read_from_file(vk_path)
+    }?;
     let pvk = prepare_verifying_key(&vk); //Get verifying key
     let is_verified = verify_proof(&pvk, &proof, &[aggregated_input])?;
 
@@ -317,15 +337,15 @@ pub type VRFSk = MNT4Fq;
 pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
     let mut rng = OsRng;
     let (pk, sk) = VRFScheme::keygen(&mut rng);
-    (pk.into_affine(), sk)
+    (pk.0.into_affine(), sk)
 }
 
 pub fn vrf_get_public_key(sk: &VRFSk) -> VRFPk {
-    SchnorrSigScheme::get_public_key(sk).into_affine()
+    SchnorrSigScheme::get_public_key(sk).0.into_affine()
 }
 
 pub fn vrf_verify_public_key(pk: &VRFPk) -> bool {
-    SchnorrSigScheme::keyverify(&pk.into_projective())
+    SchnorrSigScheme::keyverify(&FieldBasedSchnorrPk(pk.into_projective()))
 }
 
 pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof, FieldElement), Error> {
@@ -335,7 +355,7 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
     let proof = VRFScheme::prove(
         &mut rng,
         &VRF_GH_PARAMS,
-        &pk.into_projective(),
+        &FieldBasedEcVrfPk(pk.into_projective()),
         sk,
         &[*msg]
     )?;
@@ -353,7 +373,7 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
 }
 
 pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Result<FieldElement, Error> {
-    VRFScheme::proof_to_hash(&VRF_GH_PARAMS,&pk.into_projective(), &[*msg], proof)
+    VRFScheme::proof_to_hash(&VRF_GH_PARAMS,&FieldBasedEcVrfPk(pk.into_projective()), &[*msg], proof)
 }
 
 //************Merkle Tree functions******************
@@ -396,6 +416,7 @@ pub fn verify_ginger_merkle_path(path: GingerMerkleTreePath, merkle_root: &Field
 mod test {
     use super::*;
     use rand::RngCore;
+    use algebra::{ToBytes, to_bytes};
 
     fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
         let mut fs = File::create(file_path)?;
@@ -427,6 +448,10 @@ mod test {
         let mut prev_end_epoch_mc_b_hash = [0u8; 32];
         rng.fill_bytes(&mut end_epoch_mc_b_hash);
         rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
+        println!("embh {:?}", end_epoch_mc_b_hash);
+        println!("prev embh {:?}", prev_end_epoch_mc_b_hash);
+        println!("embh signed {:?}", into_i8(end_epoch_mc_b_hash.to_vec()));
+        println!("prev embh signed {:?}", into_i8(prev_end_epoch_mc_b_hash.to_vec()));
         let end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
         let prev_end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
 
@@ -458,14 +483,18 @@ mod test {
             let keypair = schnorr_generate_key();
             pks.push(keypair.0);
             sks.push(keypair.1);
+            println!("sk: {:?}", into_i8(to_bytes!(keypair.1).unwrap()).to_vec());
         }
 
         let mut sigs = vec![];
         sigs.push(Some(schnorr_sign(&msg, &sks[0], &pks[0]).unwrap()));
         sigs.push(None);
         sigs.push(Some(schnorr_sign(&msg, &sks[2], &pks[2]).unwrap()));
+        println!("sig: {:?}", into_i8(to_bytes!(sigs[0].unwrap()).unwrap()).to_vec());
+        println!("sig: {:?}", into_i8(to_bytes!(sigs[2].unwrap()).unwrap()).to_vec());
 
         let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
+        println!("constant: {:?}", to_bytes!(constant));
 
         //Create and serialize proof
         let (proof, quality) = create_naive_threshold_sig_proof(
@@ -475,7 +504,8 @@ mod test {
             &prev_end_epoch_mc_b_hash,
             bt_list.as_slice(),
             threshold,
-            proving_key_path
+            proving_key_path,
+            false,
         ).unwrap();
         let proof_path = "./sample_proof";
         write_to_file(&proof, proof_path).unwrap();
@@ -489,6 +519,7 @@ mod test {
             quality,
             &proof,
             "./sample_vk",
+            true,
         ).unwrap());
 
 
@@ -501,6 +532,7 @@ mod test {
             quality - 1,
             &proof,
             "./sample_vk",
+            true,
         ).unwrap());
     }
 
@@ -522,7 +554,7 @@ mod test {
         //Serialize/deserialize pk
         let mut pk_serialized = vec![0u8; SCHNORR_PK_SIZE];
         serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
-        let pk_deserialized = deserialize_from_buffer(&pk_serialized).unwrap();
+        let pk_deserialized = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
@@ -532,6 +564,7 @@ mod test {
         assert_eq!(sk, sk_deserialized);
 
         let sig = schnorr_sign(&msg, &sk, &pk).unwrap(); //Sign msg
+        assert!(is_valid(&sig));
 
         //Serialize/deserialize sig
         let mut sig_serialized = vec![0u8; SCHNORR_SIG_SIZE];
@@ -558,7 +591,7 @@ mod test {
         //Serialize/deserialize pk
         let mut pk_serialized = vec![0u8; VRF_PK_SIZE];
         serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
-        let pk_deserialized = deserialize_from_buffer(&pk_serialized).unwrap();
+        let pk_deserialized = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
@@ -568,11 +601,12 @@ mod test {
         assert_eq!(sk, sk_deserialized);
 
         let (vrf_proof, vrf_out) = vrf_prove(&msg, &sk, &pk).unwrap(); //Create vrf proof for msg
+        assert!(is_valid(&vrf_proof));
 
         //Serialize/deserialize vrf proof
         let mut proof_serialized = vec![0u8; VRF_PROOF_SIZE];
         serialize_to_buffer(&vrf_proof, &mut proof_serialized).unwrap();
-        let proof_deserialized = deserialize_from_buffer(&proof_serialized).unwrap();
+        let proof_deserialized = deserialize_from_buffer_checked(&proof_serialized).unwrap();
         assert_eq!(vrf_proof, proof_deserialized);
 
         //Serialize/deserialize vrf out (i.e. a field element)

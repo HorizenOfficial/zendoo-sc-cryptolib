@@ -12,7 +12,6 @@ import static org.junit.Assert.assertEquals;
 
 public class VRFKeyPairTest {
 
-
     @Test
     public void testGenerate() throws Exception {
 
@@ -76,7 +75,7 @@ public class VRFKeyPairTest {
             VRFSecretKey sk = VRFSecretKey.deserialize(skBytes);
             VRFKeyPair keyPair = new VRFKeyPair(sk);
             FieldElement message = FieldElement.deserialize(messageBytes);
-            VRFProof proof = VRFProof.deserialize(proofBytes);
+            VRFProof proof = VRFProof.deserialize(proofBytes, true);
             FieldElement expectedVrfOutput = FieldElement.deserialize(vrfOutputBytes)
         )
         {
