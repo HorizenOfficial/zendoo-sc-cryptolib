@@ -2,20 +2,19 @@
 pub mod tests;
 
 use algebra::{
-    fields::tweedle::Fr,
-    curves::tweedle::dum::Projective as Projective,
-    curves::tweedle::dee::Affine as Affine,
     Field, PrimeField, ToBits
 };
-use primitives::{
-    signature::schnorr::field_based_schnorr::{
+
+use primitives::signature::schnorr::field_based_schnorr::{
         FieldBasedSchnorrSignature, FieldBasedSchnorrPk,
-    },
-    crh::TweedleFrPoseidonHash as PoseidonHash,
 };
 use r1cs_crypto::{
     signature::{
-        schnorr::field_based_schnorr::{FieldBasedSchnorrSigGadget, FieldBasedSchnorrSigVerificationGadget},
+        schnorr::field_based_schnorr::{
+            FieldBasedSchnorrSigGadget,
+            FieldBasedSchnorrSigVerificationGadget,
+            FieldBasedSchnorrPkGadget
+        },
         FieldBasedSigGadget,
     },
     crh::{TweedleFrPoseidonHashGadget as PoseidonHashGadget, FieldBasedHashGadget},
@@ -29,38 +28,40 @@ use r1cs_std::{instantiated::tweedle::TweedleDumGadget as CurveGadget, fields::{
 
 use r1cs_core::{ConstraintSystem, ConstraintSynthesizer, SynthesisError};
 
-use crate::constants::NaiveThresholdSigParams;
+use crate::{
+    constants::NaiveThresholdSigParams, type_mapping::*,
+};
 
 use std::marker::PhantomData;
 use rand::rngs::OsRng;
 use lazy_static::*;
+use marlin::{IndexProverKey, IndexVerifierKey};
 
 lazy_static! {
     pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
 }
 
 //Sig types
-type SchnorrSigGadget = FieldBasedSchnorrSigGadget<Fr, Projective>;
-type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
-    Fr, Projective, CurveGadget, PoseidonHash, PoseidonHashGadget
+pub(crate) type SchnorrSigGadget = FieldBasedSchnorrSigGadget<FieldElement, Projective>;
+pub(crate) type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
+    FieldElement, Projective, CurveGadget, FieldHash, PoseidonHashGadget
 >;
-type SchnorrPk = FieldBasedSchnorrPk<Projective>;
-type SchnorrPkGadget = FieldBasedSchnorrPkGadget<Fr, Projective, CurveGadget>;
+pub(crate) type SchnorrPkGadget = FieldBasedSchnorrPkGadget<FieldElement, Projective, CurveGadget>;
 
 //Field types
-type FrGadget = FpGadget<Fr>;
+pub(crate) type FrGadget = FpGadget<FieldElement>;
 
 #[derive(Clone)]
 pub struct NaiveTresholdSignature<F: PrimeField>{
 
     //Witnesses
-    pks:                      Vec<Option<SchnorrPk>>, //pk_n = g^sk_n
-    sigs:                     Vec<Option<FieldBasedSchnorrSignature<Fr, Projective>>>, //sig_n = sign(sk_n, H(MR(BT), BH(Bi-1), BH(Bi)))
-    threshold:                Option<Fr>,
+    pks:                      Vec<Option<FieldBasedSchnorrPk<Projective>>>, //pk_n = g^sk_n
+    sigs:                     Vec<Option<FieldBasedSchnorrSignature<FieldElement, Projective>>>, //sig_n = sign(sk_n, H(MR(BT), BH(Bi-1), BH(Bi)))
+    threshold:                Option<FieldElement>,
     b:                        Vec<Option<bool>>,
-    end_epoch_mc_b_hash:      Option<Fr>,
-    prev_end_epoch_mc_b_hash: Option<Fr>,
-    mr_bt:                    Option<Fr>,
+    end_epoch_mc_b_hash:      Option<FieldElement>,
+    prev_end_epoch_mc_b_hash: Option<FieldElement>,
+    mr_bt:                    Option<FieldElement>,
 
     //Other
     max_pks:                  usize,
@@ -69,13 +70,13 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 
 impl<F: PrimeField>NaiveTresholdSignature<F> {
     pub fn new(
-        pks:                      Vec<SchnorrPk>,
-        sigs:                     Vec<Option<FieldBasedSchnorrSignature<Fr, Projective>>>,
-        threshold:                Fr,
-        b:                        Fr,
-        end_epoch_mc_b_hash:      Fr,
-        prev_end_epoch_mc_b_hash: Fr,
-        mr_bt:                    Fr,
+        pks:                      Vec<FieldBasedSchnorrPk<Projective>>,
+        sigs:                     Vec<Option<FieldBasedSchnorrSignature<FieldElement, Projective>>>,
+        threshold:                FieldElement,
+        b:                        FieldElement,
+        end_epoch_mc_b_hash:      FieldElement,
+        prev_end_epoch_mc_b_hash: FieldElement,
+        mr_bt:                    FieldElement,
         max_pks:                  usize,
     ) -> Self {
 
@@ -83,7 +84,7 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
         let b_bool = {
             let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
             let b_bits = b.write_bits();
-            let to_skip = Fr::size_in_bits() - (log_max_pks + 1);
+            let to_skip = FieldElement::size_in_bits() - (log_max_pks + 1);
             b_bits[to_skip..].to_vec().iter().map(|&b| Some(b)).collect::<Vec<_>>()
         };
         Self{
@@ -100,8 +101,8 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
     }
 }
 
-impl<F: PrimeField> ConstraintSynthesizer<Fr> for NaiveTresholdSignature<F> {
-    fn generate_constraints<CS: ConstraintSystem<Fr>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
+impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature<F> {
+    fn generate_constraints<CS: ConstraintSystem<FieldElement>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
 
         //Internal checks
         let log_max_pks = (self.max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
@@ -197,7 +198,7 @@ impl<F: PrimeField> ConstraintSynthesizer<Fr> for NaiveTresholdSignature<F> {
             valid_signatures = valid_signatures.conditionally_add_constant(
                 cs.ns(|| format!("add_verdict_{}", i)),
                 v,
-                Fr::one(),
+                FieldElement::one(),
             )?;
         }
 
@@ -252,26 +253,12 @@ impl<F: PrimeField> ConstraintSynthesizer<Fr> for NaiveTresholdSignature<F> {
     }
 }
 
-use r1cs_crypto::signature::schnorr::field_based_schnorr::FieldBasedSchnorrPkGadget;
-
-use marlin::*;
-use blake2::Blake2s;
-use poly_commit::ipa_pc::InnerProductArgPC;
-
-// #[derive(Clone)]
-// struct MarlinNoLCNoZk;
-
-// impl MarlinConfig for MarlinNoLCNoZk {
-//     const LC_OPT: bool = false;
-//     const ZK: bool = false;
-// }
-
-type IPAPC = InnerProductArgPC<Affine, Blake2s>;
-// type MarlinInst = Marlin<Fr, IPAPC, Blake2s, MarlinNoLCNoZk>;
-type MarlinInst = Marlin<Fr, IPAPC, Blake2s>;
-
 #[allow(dead_code)]
-pub fn generate_parameters(max_pks: usize) -> Result<(IndexProverKey<Fr, IPAPC>, IndexVerifierKey<Fr, IPAPC>), SynthesisError> {
+pub fn generate_parameters(max_pks: usize) -> Result<(
+    IndexProverKey<FieldElement, IPAPC>,
+    IndexVerifierKey<FieldElement, IPAPC>
+), SynthesisError>
+{
 
     //Istantiating rng
     let mut rng = OsRng::default();
@@ -280,7 +267,7 @@ pub fn generate_parameters(max_pks: usize) -> Result<(IndexProverKey<Fr, IPAPC>,
     let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
 
     // Create parameters for our circuit
-    let c = NaiveTresholdSignature::<Fr> {
+    let c = NaiveTresholdSignature::<FieldElement> {
         pks:                      vec![None; max_pks],
         sigs:                     vec![None; max_pks],
         threshold:                None,
@@ -294,7 +281,7 @@ pub fn generate_parameters(max_pks: usize) -> Result<(IndexProverKey<Fr, IPAPC>,
 
     // Temporary workaround to get the sizes, in future we will only call the index function
     // using the DLOG keys generated at bootstrap
-    let info = marlin::AHPForR1CS::<Fr>::index(c.clone()).unwrap().index_info;
+    let info = marlin::AHPForR1CS::<FieldElement>::index(c.clone()).unwrap().index_info;
     let universal_srs = MarlinInst::universal_setup(
         info.num_constraints,
         info.num_variables,
@@ -311,7 +298,7 @@ pub fn generate_parameters(max_pks: usize) -> Result<(IndexProverKey<Fr, IPAPC>,
 #[cfg(test)]
 mod test {
     use super::*;
-    use algebra::{BigInteger256, ProjectiveCurve};
+    use algebra::ProjectiveCurve;
     use primitives::{
         crh::FieldBasedHash,
         signature::{
@@ -324,7 +311,7 @@ mod test {
         Rng, rngs::OsRng, thread_rng
     };
 
-    type SchnorrSig = FieldBasedSchnorrSignatureScheme<Fr, Projective, PoseidonHash>;
+    type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, Projective, FieldHash>;
 
     fn generate_test_proof(
         max_pks:                  usize,
@@ -332,17 +319,17 @@ mod test {
         threshold:                usize,
         wrong_pks_threshold_hash: bool,
         wrong_wcert_sysdata_hash: bool,
-        index_pk:                 IndexProverKey<Fr, IPAPC>,
-    ) -> Result<(Proof<Fr, IPAPC>, Vec<Fr>), MarlinError<PCError>> {
+        index_pk:                 IndexProverKey<FieldElement, IPAPC>,
+    ) -> Result<(Proof<FieldElement, IPAPC>, Vec<FieldElement>), MarlinError<PCError>> {
 
         //Istantiate rng
         let mut rng = OsRng::default();
-        let mut h = PoseidonHash::init(None);
+        let mut h = FieldHash::init(None);
 
         //Generate message to sign
-        let mr_bt: Fr = rng.gen();
-        let prev_end_epoch_mc_b_hash: Fr = rng.gen();
-        let end_epoch_mc_b_hash: Fr = rng.gen();
+        let mr_bt: FieldElement = rng.gen();
+        let prev_end_epoch_mc_b_hash: FieldElement = rng.gen();
+        let end_epoch_mc_b_hash: FieldElement = rng.gen();
         let message = h
             .update(mr_bt)
             .update(prev_end_epoch_mc_b_hash)
@@ -350,14 +337,14 @@ mod test {
             .finalize();
 
         //Generate another random message used to simulate a non-valid signature
-        let invalid_message: Fr = rng.gen();
+        let invalid_message: FieldElement = rng.gen();
 
         let mut pks = vec![];
         let mut sigs = vec![];
 
         for _ in 0..valid_sigs {
-            let (pk, sk) = SchnorrSig::keygen(&mut rng);
-            let sig = SchnorrSig::sign(&mut rng, &pk, &sk, &[message]).unwrap();
+            let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
+            let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, &[message]).unwrap();
             pks.push(pk);
             sigs.push(Some(sig));
         }
@@ -369,8 +356,8 @@ mod test {
                 (NULL_CONST.null_pk, NULL_CONST.null_sig)
             } else {
 
-                let (pk, sk) = SchnorrSig::keygen(&mut rng);
-                let sig = SchnorrSig::sign(&mut rng, &pk, &sk, &[invalid_message]).unwrap();
+                let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
+                let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, &[invalid_message]).unwrap();
                 (pk, sig)
             };
             pks.push(pk);
@@ -378,8 +365,8 @@ mod test {
         }
 
         //Generate b
-        let t_field = Fr::from_repr(BigInteger256::from(threshold as u64));
-        let valid_field = Fr::from_repr(BigInteger256::from(valid_sigs as u64));
+        let t_field = FieldElement::from_repr(FieldBigInteger::from(threshold as u64));
+        let valid_field = FieldElement::from_repr(FieldBigInteger::from(valid_sigs as u64));
         let b_field = valid_field - &t_field;
 
         //Compute pks_threshold_hash
@@ -417,7 +404,7 @@ mod test {
             .finalize();
 
         //Create proof for our circuit
-        let c = NaiveTresholdSignature::<Fr>::new(
+        let c = NaiveTresholdSignature::<FieldElement>::new(
             pks, sigs, t_field, b_field, end_epoch_mc_b_hash,
             prev_end_epoch_mc_b_hash, mr_bt, max_pks,
         );
@@ -436,6 +423,7 @@ mod test {
         proof
     }
 
+    #[ignore]
     #[test]
     fn test_naive_threshold_circuit() {
         let rng = &mut thread_rng();

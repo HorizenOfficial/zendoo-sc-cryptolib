@@ -13,6 +13,7 @@ use primitives::{crh::{
     },
 }};
 use rand::rngs::OsRng;
+use primitives::vrf::ecvrf::FieldBasedEcVrfPk;
 
 #[derive(Clone)]
 struct TestWindow {}

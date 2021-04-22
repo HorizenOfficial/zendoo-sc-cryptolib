@@ -14,7 +14,7 @@ use primitives::{
 
 pub mod constants;
 
-pub struct NaiveThresholdSigParams{
+pub struct NaiveThresholdSigParams {
     pub null_sig:   FieldBasedSchnorrSignature<Fr, Projective>,
     pub null_pk:    FieldBasedSchnorrPk<Projective>,
 }

@@ -1,6 +1,10 @@
 [workspace]
 
-members = ["demo-circuit", "ouroboros", "api"]
+members = [
+    "demo-circuit",
+    #"ouroboros",
+    "api"
+]
 
 [profile.release]
 opt-level = 3
@@ -9,7 +13,7 @@ incremental = true
 panic = "unwind"
 
 [profile.dev]
-opt-level = 0
+opt-level = 3
 panic = "unwind"
 
 [profile.test]

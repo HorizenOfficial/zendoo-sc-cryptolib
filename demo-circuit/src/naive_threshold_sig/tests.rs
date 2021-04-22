@@ -1,36 +1,21 @@
 use algebra::{
-    BigInteger256,
-    fields::tweedle::Fr,
-    curves::tweedle::dum::Projective,
     Field, PrimeField, ToBits, ProjectiveCurve,
 };
 
 use primitives::{
     signature::{
-        schnorr::field_based_schnorr::{
-            FieldBasedSchnorrSignature, FieldBasedSchnorrSignatureScheme,
-            FieldBasedSchnorrPk,
-        },
+        schnorr::field_based_schnorr::{FieldBasedSchnorrSignature, FieldBasedSchnorrPk},
         FieldBasedSignatureScheme,
     },
-    crh::{FieldBasedHash, TweedleFrPoseidonHash as PoseidonHash},
+    crh::FieldBasedHash,
 };
 use r1cs_crypto::{
-    signature::{
-        schnorr::field_based_schnorr::{
-            FieldBasedSchnorrSigGadget, FieldBasedSchnorrSigVerificationGadget,
-            FieldBasedSchnorrPkGadget,
-        },
-        FieldBasedSigGadget,
-    },
+    signature::FieldBasedSigGadget,
     crh::{TweedleFrPoseidonHashGadget as PoseidonHashGadget, FieldBasedHashGadget}
 };
 
 use r1cs_std::{
-    instantiated::tweedle::TweedleDumGadget as CurveGadget,
-    fields::{
-        fp::FpGadget, FieldGadget,
-    },
+    fields::FieldGadget,
     alloc::AllocGadget,
     bits::{
         boolean::Boolean, FromBitsGadget,
@@ -39,7 +24,9 @@ use r1cs_std::{
 };
 
 use r1cs_core::ConstraintSystem;
-use crate::constants::NaiveThresholdSigParams;
+use crate::{
+    constants::NaiveThresholdSigParams, type_mapping::*, naive_threshold_sig::*,
+};
 
 use rand::{
     Rng, rngs::OsRng
@@ -51,36 +38,23 @@ lazy_static! {
     pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
 }
 
-//Sig types
-type SchnorrSig = FieldBasedSchnorrSignatureScheme<Fr, Projective, PoseidonHash>;
-type SchnorrSigGadget = FieldBasedSchnorrSigGadget<Fr, Projective>;
-type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
-    Fr, Projective, CurveGadget, PoseidonHash, PoseidonHashGadget
->;
-type SchnorrPk = FieldBasedSchnorrPk<Projective>;
-type SchnorrPkGadget = FieldBasedSchnorrPkGadget<Fr, Projective, CurveGadget>;
-
-//Field types
-type FrGadget = FpGadget<Fr>;
-
-struct NaiveTresholdSignatureTest{
+struct NaiveTresholdSignatureTest {
 
     //Witnesses
-    pks:                      Vec<SchnorrPk>,
-    sigs:                     Vec<FieldBasedSchnorrSignature<Fr, Projective>>,
-    threshold:                Fr,
+    pks:                      Vec<FieldBasedSchnorrPk<Projective>>,
+    sigs:                     Vec<FieldBasedSchnorrSignature<FieldElement, Projective>>,
+    threshold:                FieldElement,
     b:                        Vec<bool>,
-    end_epoch_mc_b_hash:      Fr,
-    prev_end_epoch_mc_b_hash: Fr,
-    mr_bt:                    Fr,
+    end_epoch_mc_b_hash:      FieldElement,
+    prev_end_epoch_mc_b_hash: FieldElement,
+    mr_bt:                    FieldElement,
 
     //Public inputs
-    aggregated_input:         Fr,
+    aggregated_input:         FieldElement,
 
     //Other
     max_pks:                  usize,
 }
-
 
 fn generate_inputs
 (
@@ -93,26 +67,26 @@ fn generate_inputs
 {
     //Istantiate rng
     let mut rng = OsRng::default();
-    let mut h = PoseidonHash::init(None);
+    let mut h = FieldHash::init(None);
 
     //Generate message to sign
-    let mr_bt: Fr = rng.gen();
-    let prev_end_epoch_mc_b_hash: Fr = rng.gen();
-    let end_epoch_mc_b_hash: Fr = rng.gen();
+    let mr_bt: FieldElement = rng.gen();
+    let prev_end_epoch_mc_b_hash: FieldElement = rng.gen();
+    let end_epoch_mc_b_hash: FieldElement = rng.gen();
     let message = h
         .update(mr_bt)
         .update(prev_end_epoch_mc_b_hash)
         .update(end_epoch_mc_b_hash)
         .finalize();
     //Generate another random message used to simulate a non-valid signature
-    let invalid_message: Fr = rng.gen();
+    let invalid_message: FieldElement = rng.gen();
 
     let mut pks = vec![];
     let mut sigs = vec![];
 
     for _ in 0..valid_sigs {
-        let (pk, sk) = SchnorrSig::keygen(&mut rng);
-        let sig = SchnorrSig::sign(&mut rng, &pk, &sk, &[message]).unwrap();
+        let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
+        let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, &[message]).unwrap();
         pks.push(pk);
         sigs.push(sig);
     }
@@ -123,8 +97,8 @@ fn generate_inputs
         let (pk, sig) = if generate_null {
             (NULL_CONST.null_pk, NULL_CONST.null_sig)
         } else {
-            let (pk, sk) = SchnorrSig::keygen(&mut rng);
-            let sig = SchnorrSig::sign(&mut rng, &pk, &sk, &[invalid_message]).unwrap();
+            let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
+            let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, &[invalid_message]).unwrap();
             (pk, sig)
         };
         pks.push(pk);
@@ -132,12 +106,12 @@ fn generate_inputs
     }
 
     //Generate b
-    let t_field = Fr::from_repr(BigInteger256::from(threshold as u64));
-    let valid_field = Fr::from_repr(BigInteger256::from(valid_sigs as u64));
+    let t_field = FieldElement::from_repr(FieldBigInteger::from(threshold as u64));
+    let valid_field = FieldElement::from_repr(FieldBigInteger::from(valid_sigs as u64));
     let b_field = valid_field - &t_field;
     let b_bool = {
         let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
-        let to_skip = Fr::size_in_bits() - (log_max_pks + 1);
+        let to_skip = FieldElement::size_in_bits() - (log_max_pks + 1);
         b_field.write_bits()[to_skip..].to_vec()
     };
 
@@ -191,7 +165,7 @@ fn generate_inputs
 
 fn generate_constraints(
     c: NaiveTresholdSignatureTest,
-    mut cs: TestConstraintSystem<Fr>,
+    mut cs: TestConstraintSystem<FieldElement>,
 ) -> bool
 {
     //Internal checks
@@ -290,7 +264,7 @@ fn generate_constraints(
         valid_signatures = valid_signatures.conditionally_add_constant(
             cs.ns(|| format!("add_verdict_{}", i)),
             v,
-            Fr::one(),
+            FieldElement::one(),
         ).unwrap();
     }
 
@@ -362,7 +336,7 @@ fn random_naive_threshold_sig_test() {
         println!("CS satisfiable: {}", satisfiable);
 
         let c = generate_inputs(n, v, t, false, false);
-        let cs = TestConstraintSystem::<Fr>::new();
+        let cs = TestConstraintSystem::<FieldElement>::new();
         let is_satisfied = generate_constraints(c, cs);
 
         // The output must be false whenever the cs should be satisfiable
@@ -382,7 +356,7 @@ fn naive_threshold_sig_test_all_cases() {
     let v = rng.gen_range(1, n);
     let t = rng.gen_range(0, v);
     let c = generate_inputs(n, v, t, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(generate_constraints(c, cs));
     println!("Ok !");
 
@@ -390,7 +364,7 @@ fn naive_threshold_sig_test_all_cases() {
     let v = rng.gen_range(1, n);
     let t = v;
     let c = generate_inputs(n, v, t, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(generate_constraints(c, cs));
     println!("Ok !");
 
@@ -398,31 +372,31 @@ fn naive_threshold_sig_test_all_cases() {
     let t = rng.gen_range(1, n);
     let v = rng.gen_range(0, t);
     let c = generate_inputs(n, v, t, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(!generate_constraints(c, cs));
     println!("Ok !");
 
     println!("Test case v = t = 0");
     let c = generate_inputs(n, 0, 0, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(generate_constraints(c, cs));
     println!("Ok !");
 
     println!("Test case v = t = n");
     let c = generate_inputs(n, n, n, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(generate_constraints(c, cs));
     println!("Ok !");
 
     println!("Test case v = n and t = 0");
     let c = generate_inputs(n, n, 0, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(generate_constraints(c, cs));
     println!("Ok !");
 
     println!("Test negative case v = 0 and t = n");
     let c = generate_inputs(n, 0, n, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(!generate_constraints(c, cs));
     println!("Ok !");
 
@@ -430,7 +404,7 @@ fn naive_threshold_sig_test_all_cases() {
     let v = rng.gen_range(1, n);
     let t = rng.gen_range(0, v);
     let c = generate_inputs(n, v, t, true, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(!generate_constraints(c, cs));
     println!("Ok !");
 
@@ -438,7 +412,7 @@ fn naive_threshold_sig_test_all_cases() {
     let v = rng.gen_range(1, n);
     let t = rng.gen_range(0, v);
     let c = generate_inputs(n, v, t, false, true);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(!generate_constraints(c, cs));
     println!("Ok !");
 }

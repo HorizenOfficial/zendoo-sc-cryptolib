@@ -12,7 +12,7 @@ primitives = {version = "0.1.0", features = ["tweedle", "merkle_tree"], git = "h
 poly-commit = { git = "https://github.com/HorizenLabs/poly-commit", branch = "dev_serializations" }
 marlin = {version = "0.1.0", git = "https://github.com/HorizenLabs/marlin", branch = "dev_serializations", features = [ "asm", "parallel" ] }
 
-ouroboros = {path = "../ouroboros"}
+#ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
 
 jni = "0.6.1"
