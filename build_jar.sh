@@ -1,8 +1,7 @@
 cargo clean
 
-cargo build --release --target=x86_64-pc-windows-gnu
-cargo build --release --target=x86_64-unknown-linux-gnu
-
+RUSTFLAGS="-C target-feature=+bmi2,+adx --emit=asm" cargo +nightly-2020-04-22 build --release --target=x86_64-pc-windows-gnu
+RUSTFLAGS="-C target-feature=+bmi2,+adx --emit=asm" cargo +nightly-2020-04-22 build --release --target=x86_64-unknown-linux-gnu
 
 mkdir -p jni/src/main/resources/native/linux64
 cp target/x86_64-unknown-linux-gnu/release/libzendoo_sc.so jni/src/main/resources/native/linux64/libzendoo_sc.so

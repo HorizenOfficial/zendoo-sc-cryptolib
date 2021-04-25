@@ -27,3 +27,7 @@ blake2 = { version = "0.8", default-features = false }
 name = "zendoo_sc"
 path = "src/lib.rs"
 crate_type = ["cdylib"]
+
+[features]
+default = [ "llvm_asm" ]
+llvm_asm = [ "algebra/llvm_asm", "poly-commit/asm", "marlin/asm" ]
