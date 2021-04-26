@@ -67,7 +67,7 @@ fn generate_inputs
 {
     //Istantiate rng
     let mut rng = OsRng::default();
-    let mut h = FieldHash::init(None);
+    let mut h = FieldHash::init_constant_length(3, None);
 
     //Generate message to sign
     let mr_bt: FieldElement = rng.gen();
@@ -77,7 +77,8 @@ fn generate_inputs
         .update(mr_bt)
         .update(prev_end_epoch_mc_b_hash)
         .update(end_epoch_mc_b_hash)
-        .finalize();
+        .finalize()
+        .unwrap();
     //Generate another random message used to simulate a non-valid signature
     let invalid_message: FieldElement = rng.gen();
 
@@ -86,7 +87,7 @@ fn generate_inputs
 
     for _ in 0..valid_sigs {
         let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
-        let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, &[message]).unwrap();
+        let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, message).unwrap();
         pks.push(pk);
         sigs.push(sig);
     }
@@ -98,7 +99,7 @@ fn generate_inputs
             (NULL_CONST.null_pk, NULL_CONST.null_sig)
         } else {
             let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
-            let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, &[invalid_message]).unwrap();
+            let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, invalid_message).unwrap();
             (pk, sig)
         };
         pks.push(pk);
@@ -116,38 +117,38 @@ fn generate_inputs
     };
 
     //Compute pks_threshold_hash
-    h.reset(None);
+    let mut h = FieldHash::init_constant_length(pks.len(), None);
     pks.iter().for_each(|pk| { h.update(pk.0.into_affine().x); });
-    let pks_hash = h.finalize();
+    let pks_hash = h.finalize().unwrap();
     let pks_threshold_hash = if !wrong_pks_threshold_hash {
-        h
-            .reset(None)
+        FieldHash::init_constant_length(2, None)
             .update(pks_hash)
             .update(t_field)
             .finalize()
+            .unwrap()
     } else {
         rng.gen()
     };
 
     //Compute wcert_sysdata_hash
     let wcert_sysdata_hash = if !wrong_wcert_sysdata_hash {
-        h
-            .reset(None)
+        FieldHash::init_constant_length(4, None)
             .update(valid_field)
             .update(mr_bt)
             .update(prev_end_epoch_mc_b_hash)
             .update(end_epoch_mc_b_hash)
             .finalize()
+            .unwrap()
     } else {
         rng.gen()
     };
 
     // Compute aggregated input
-    let aggregated_input = h
-        .reset(None)
+    let aggregated_input = FieldHash::init_constant_length(2, None)
         .update(pks_threshold_hash)
         .update(wcert_sysdata_hash)
-        .finalize();
+        .finalize()
+        .unwrap();
 
     //Create instance of the circuit
     NaiveTresholdSignatureTest {
@@ -191,7 +192,7 @@ fn generate_constraints(
     }
 
     //Check pks
-    let mut pks_threshold_hash_g = PoseidonHashGadget::check_evaluation_gadget(
+    let mut pks_threshold_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
         cs.ns(|| "hash public keys"),
         pks_g.iter().map(|pk| pk.pk.x.clone()).collect::<Vec<_>>().as_slice(),
     ).unwrap();
@@ -203,7 +204,7 @@ fn generate_constraints(
     ).unwrap();
 
     //Check hash commitment
-    pks_threshold_hash_g = PoseidonHashGadget::check_evaluation_gadget(
+    pks_threshold_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
         cs.ns(|| "H(H(pks), threshold)"),
         &[pks_threshold_hash_g, t_g.clone()],
     ).unwrap();
@@ -227,7 +228,7 @@ fn generate_constraints(
         || Ok(c.end_epoch_mc_b_hash)
     ).unwrap();
 
-    let message_g = PoseidonHashGadget::check_evaluation_gadget(
+    let message_g = PoseidonHashGadget::enforce_hash_constant_length(
         cs.ns(|| "H(MR(BT), H(Bi-1), H(Bi))"),
         &[mr_bt_g.clone(), prev_end_epoch_mc_block_hash_g.clone(), end_epoch_mc_block_hash_g.clone()],
     ).unwrap();
@@ -253,7 +254,7 @@ fn generate_constraints(
             cs.ns(|| format!("check_sig_verdict_{}", i)),
             pk_g,
             sig_g,
-            &[message_g.clone()],
+            message_g.clone(),
         ).unwrap();
         verdicts.push(v);
     }
@@ -269,7 +270,7 @@ fn generate_constraints(
     }
 
     //Enforce correct wcert_sysdata_hash
-    let wcert_sysdata_hash_g = PoseidonHashGadget::check_evaluation_gadget(
+    let wcert_sysdata_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
         cs.ns(|| "H(valid_signatures, MR(BT), BH(Bi-1), BH(Bi))"),
         &[valid_signatures.clone(), mr_bt_g, prev_end_epoch_mc_block_hash_g, end_epoch_mc_block_hash_g]
     ).unwrap();
@@ -280,7 +281,7 @@ fn generate_constraints(
         || Ok(c.aggregated_input)
     ).unwrap();
 
-    let actual_aggregated_input = PoseidonHashGadget::check_evaluation_gadget(
+    let actual_aggregated_input = PoseidonHashGadget::enforce_hash_constant_length(
         cs.ns(|| "H(pks_threshold_hash, wcert_sysdata_hash)"),
         &[pks_threshold_hash_g, wcert_sysdata_hash_g]
     ).unwrap();

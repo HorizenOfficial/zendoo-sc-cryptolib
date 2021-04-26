@@ -33,9 +33,8 @@ use crate::{
 };
 
 use std::marker::PhantomData;
-use rand::rngs::OsRng;
 use lazy_static::*;
-use marlin::{IndexProverKey, IndexVerifierKey};
+use cctp_primitives::proving_system::init::get_g1_committer_key;
 
 lazy_static! {
     pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
@@ -127,7 +126,7 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
         }
 
         //Enforce pks_threshold_hash
-        let mut pks_threshold_hash_g = PoseidonHashGadget::check_evaluation_gadget(
+        let mut pks_threshold_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
             cs.ns(|| "hash public keys"),
             pks_g.iter().map(|pk| pk.pk.x.clone()).collect::<Vec<_>>().as_slice(),
         )?;
@@ -138,7 +137,7 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
             || self.threshold.ok_or(SynthesisError::AssignmentMissing)
         )?;
 
-        pks_threshold_hash_g = PoseidonHashGadget::check_evaluation_gadget(
+        pks_threshold_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
             cs.ns(|| "H(H(pks), threshold)"),
             &[pks_threshold_hash_g, t_g.clone()],
         )?;
@@ -161,7 +160,7 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
             || self.end_epoch_mc_b_hash.ok_or(SynthesisError::AssignmentMissing)
         )?;
 
-        let message_g = PoseidonHashGadget::check_evaluation_gadget(
+        let message_g = PoseidonHashGadget::enforce_hash_constant_length(
             cs.ns(|| "H(MR(BT), BH(i-1), BH(i))"),
             &[mr_bt_g.clone(), prev_end_epoch_mc_block_hash_g.clone(), end_epoch_mc_block_hash_g.clone()],
         )?;
@@ -187,7 +186,7 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
                 cs.ns(|| format!("check_sig_verdict_{}", i)),
                 pk_g,
                 sig_g,
-                &[message_g.clone()],
+                message_g.clone(),
             )?;
             verdicts.push(v);
         }
@@ -203,14 +202,14 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
         }
 
         //Enforce wcert_sysdata_hash
-        let wcert_sysdata_hash_g = PoseidonHashGadget::check_evaluation_gadget(
+        let wcert_sysdata_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
             cs.ns(|| "H(valid_signatures, MR(BT), BH(i-1), BH(i))"),
             &[valid_signatures.clone(), mr_bt_g, prev_end_epoch_mc_block_hash_g, end_epoch_mc_block_hash_g]
         )?;
 
         //Check pks_threshold_hash and wcert_sysdata_hash
 
-        let actual_aggregated_input = PoseidonHashGadget::check_evaluation_gadget(
+        let actual_aggregated_input = PoseidonHashGadget::enforce_hash_constant_length(
             cs.ns(|| "H(pks_threshold_hash, wcert_sysdata_hash)"),
             &[pks_threshold_hash_g, wcert_sysdata_hash_g]
         )?;
@@ -255,14 +254,10 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
 
 #[allow(dead_code)]
 pub fn generate_parameters(max_pks: usize) -> Result<(
-    IndexProverKey<FieldElement, IPAPC>,
-    IndexVerifierKey<FieldElement, IPAPC>
-), SynthesisError>
+    CoboundaryMarlinProverKey,
+    CoboundaryMarlinVerifierKey
+), Error>
 {
-
-    //Istantiating rng
-    let mut rng = OsRng::default();
-
     //Istantiating supported number of pks and sigs
     let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
 
@@ -279,20 +274,11 @@ pub fn generate_parameters(max_pks: usize) -> Result<(
         _field:                   PhantomData
     };
 
-    // Temporary workaround to get the sizes, in future we will only call the index function
-    // using the DLOG keys generated at bootstrap
-    let info = marlin::AHPForR1CS::<FieldElement>::index(c.clone()).unwrap().index_info;
-    let universal_srs = MarlinInst::universal_setup(
-        info.num_constraints,
-        info.num_variables,
-        info.num_non_zero,
-        &mut rng
-    ).unwrap();
+    let ck = get_g1_committer_key()?;
 
-    Ok(MarlinInst::index(
-        &universal_srs,
-        c,
-    ).unwrap())
+    let pk = CoboundaryMarlin::index(ck.as_ref().unwrap(), c)?;
+
+    Ok(pk)
 }
 
 #[cfg(test)]
@@ -305,10 +291,10 @@ mod test {
             FieldBasedSignatureScheme, schnorr::field_based_schnorr::FieldBasedSchnorrSignatureScheme,
         },
     };
-    use poly_commit::Error as PCError;
-    use marlin::{Proof, Error as MarlinError};
-    use rand::{
-        Rng, rngs::OsRng, thread_rng
+    use rand::{Rng, rngs::OsRng};
+    use cctp_primitives::{
+        proving_system::init::load_g1_committer_key,
+        utils::proof_system::ProvingSystemUtils,
     };
 
     type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, Projective, FieldHash>;
@@ -319,12 +305,13 @@ mod test {
         threshold:                usize,
         wrong_pks_threshold_hash: bool,
         wrong_wcert_sysdata_hash: bool,
-        index_pk:                 IndexProverKey<FieldElement, IPAPC>,
-    ) -> Result<(Proof<FieldElement, IPAPC>, Vec<FieldElement>), MarlinError<PCError>> {
+        index_pk:                 CoboundaryMarlinProverKey,
+        zk:                       bool,
+    ) -> Result<(CoboundaryMarlinProof, Vec<FieldElement>), Error> {
 
         //Istantiate rng
         let mut rng = OsRng::default();
-        let mut h = FieldHash::init(None);
+        let mut h = FieldHash::init_constant_length(3, None);
 
         //Generate message to sign
         let mr_bt: FieldElement = rng.gen();
@@ -334,7 +321,8 @@ mod test {
             .update(mr_bt)
             .update(prev_end_epoch_mc_b_hash)
             .update(end_epoch_mc_b_hash)
-            .finalize();
+            .finalize()
+            .unwrap();
 
         //Generate another random message used to simulate a non-valid signature
         let invalid_message: FieldElement = rng.gen();
@@ -344,7 +332,7 @@ mod test {
 
         for _ in 0..valid_sigs {
             let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
-            let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, &[message]).unwrap();
+            let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, message).unwrap();
             pks.push(pk);
             sigs.push(Some(sig));
         }
@@ -357,7 +345,7 @@ mod test {
             } else {
 
                 let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
-                let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, &[invalid_message]).unwrap();
+                let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, invalid_message).unwrap();
                 (pk, sig)
             };
             pks.push(pk);
@@ -370,38 +358,38 @@ mod test {
         let b_field = valid_field - &t_field;
 
         //Compute pks_threshold_hash
-        h.reset(None);
+        let mut h = FieldHash::init_constant_length(pks.len(), None);
         pks.iter().for_each(|pk| { h.update(pk.0.into_affine().x); });
-        let pks_hash = h.finalize();
+        let pks_hash = h.finalize().unwrap();
         let pks_threshold_hash = if !wrong_pks_threshold_hash {
-            h
-                .reset(None)
+            FieldHash::init_constant_length(2, None)
                 .update(pks_hash)
                 .update(t_field)
                 .finalize()
+                .unwrap()
         } else {
             rng.gen()
         };
 
         //Compute wcert_sysdata_hash
         let wcert_sysdata_hash = if !wrong_wcert_sysdata_hash {
-            h
-                .reset(None)
+            FieldHash::init_constant_length(4, None)
                 .update(valid_field)
                 .update(mr_bt)
                 .update(prev_end_epoch_mc_b_hash)
                 .update(end_epoch_mc_b_hash)
                 .finalize()
+                .unwrap()
         } else {
             rng.gen()
         };
 
         // Compute aggregated input
-        let aggregated_input = h
-            .reset(None)
+        let aggregated_input = FieldHash::init_constant_length(2, None)
             .update(pks_threshold_hash)
             .update(wcert_sysdata_hash)
-            .finalize();
+            .finalize()
+            .unwrap();
 
         //Create proof for our circuit
         let c = NaiveTresholdSignature::<FieldElement>::new(
@@ -410,45 +398,47 @@ mod test {
         );
 
         //Return proof and public inputs if success
-        let start = std::time::Instant::now();
-
-        let proof = match MarlinInst::prove::<_, OsRng>(&index_pk, c, &mut rng) {
+        let rng = &mut OsRng;
+        match CoboundaryMarlin::create_proof(c, &index_pk, zk, if zk { Some(rng) } else { None }) {
             Ok(proof) => {
                 let public_inputs = vec![aggregated_input];
                 Ok((proof, public_inputs))
             }
-            Err(e) => Err(e)
-        };
-        println!("Proof creation time: {:?}", start.elapsed());
-        proof
+            Err(e) => Err(Box::new(e))
+        }
     }
 
     #[ignore]
     #[test]
     fn test_naive_threshold_circuit() {
-        let rng = &mut thread_rng();
         let n = 6;
+        let zk = false;
+
+        load_g1_committer_key(1 << 18, "./naive_threshold_sig_test_ck").unwrap();
+        let ck = get_g1_committer_key().unwrap();
 
         let params = generate_parameters(n).unwrap();
 
         //Generate proof with correct witnesses and v > t
         let (proof, public_inputs) =
-            generate_test_proof(n, 5, 4, false, false, params.0.clone()).unwrap();
-        assert!(MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+            generate_test_proof(n, 5, 4, false, false, params.0.clone(), zk).unwrap();
+        assert!(CoboundaryMarlin::verify(&params.1, ck.as_ref().unwrap(), public_inputs.as_slice(), &proof).unwrap());
 
         //Generate proof with insufficient valid signatures
         let (proof, public_inputs) =
-            generate_test_proof(n, 4, 5, false, false, params.0.clone()).unwrap();
-        assert!(!MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+            generate_test_proof(n, 4, 5, false, false, params.0.clone(), zk).unwrap();
+        assert!(!CoboundaryMarlin::verify(&params.1, ck.as_ref().unwrap(),public_inputs.as_slice(), &proof).unwrap());
 
         //Generate proof with bad pks_threshold_hash
         let (proof, public_inputs) =
-            generate_test_proof(n, 5, 4, true, false, params.0.clone()).unwrap();
-        assert!(!MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+            generate_test_proof(n, 5, 4, true, false, params.0.clone(), zk).unwrap();
+        assert!(!CoboundaryMarlin::verify(&params.1, ck.as_ref().unwrap(),public_inputs.as_slice(), &proof).unwrap());
 
         //Generate proof with bad wcert_sysdata_hash
         let (proof, public_inputs) =
-            generate_test_proof(n, 5, 4, false, true, params.0.clone()).unwrap();
-        assert!(!MarlinInst::verify(&params.1, public_inputs.as_slice(), &proof, rng).unwrap());
+            generate_test_proof(n, 5, 4, false, true, params.0.clone(), zk).unwrap();
+        assert!(!CoboundaryMarlin::verify(&params.1, ck.as_ref().unwrap(),public_inputs.as_slice(), &proof).unwrap());
+
+        std::fs::remove_file("./naive_threshold_sig_test_ck").unwrap()
     }
 }

@@ -1,10 +1,6 @@
 use algebra::{
-    curves::{
-        tweedle::dum::Projective as Projective
-    },
-    PrimeField, ProjectiveCurve, AffineCurve,
-    FromBytes, FromBytesChecked, validity::SemanticallyValid, ToBytes, ToConstraintField,
-    UniformRand,
+    PrimeField, ProjectiveCurve, AffineCurve, FromBytes, validity::SemanticallyValid,
+    ToBytes, ToConstraintField, UniformRand, serialize::*,
 };
 use primitives::{crh::{
     FieldBasedHash,
@@ -12,24 +8,19 @@ use primitives::{crh::{
         BoweHopwoodPedersenParameters
     },
 }, merkle_tree::field_based_mht::{
-    parameters::tweedle_fr::TWEEDLE_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS,
     FieldBasedMerkleTree,
     FieldBasedMerkleTreePath,
 }, signature::{
-    FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
-        FieldBasedSchnorrPk,
-    },
-}, vrf::{FieldBasedVrf, ecvrf::*}};
+    FieldBasedSignatureScheme, schnorr::field_based_schnorr::FieldBasedSchnorrPk
+}, vrf::{FieldBasedVrf, ecvrf::FieldBasedEcVrfPk}};
 
 use demo_circuit::{
-    constants::{
-        VRFParams,
-    },
+    constants::VRFParams,
     naive_threshold_sig::*,
     type_mapping::*,
 };
 use rand::{
-    SeedableRng, rngs::OsRng, thread_rng
+    SeedableRng, rngs::OsRng,
 };
 use rand_xorshift::XorShiftRng;
 use std::{
@@ -37,31 +28,59 @@ use std::{
 };
 use lazy_static::*;
 
-use marlin::{IndexProverKey, IndexVerifierKey};
+use cctp_primitives::{
+    proving_system::verifier::VerifierData,
+    utils::{
+        proof_system::ProvingSystemUtils, get_bt_merkle_root,
+        serialization::SerializationUtils,
+    },
+};
+use cctp_primitives::proving_system::verifier::RawVerifierData;
 
 //*******************************Generic functions**********************************************
 // Note: Should decide if panicking or handling IO errors
 
-pub fn deserialize_from_buffer<T: FromBytes>(buffer: &[u8]) ->  IoResult<T> {
-    T::read(buffer)
+pub fn deserialize_from_buffer<T: CanonicalDeserialize>(buffer: &[u8]) ->  Result<T, SerializationError>
+{
+    T::deserialize(buffer)
 }
 
-pub fn deserialize_from_buffer_checked<T: FromBytesChecked>(buffer: &[u8]) ->  IoResult<T> {
-    T::read_checked(buffer)
+pub fn deserialize_from_buffer_checked<T: CanonicalDeserialize + SemanticallyValid>(buffer: &[u8]) ->  Result<T, SerializationError>
+{
+    let elem = deserialize_from_buffer::<T>(buffer)?;
+    if !elem.is_valid() {
+        return Err(SerializationError::InvalidData)
+    }
+    Ok(elem)
 }
 
-pub fn serialize_to_buffer<T: ToBytes>(to_write: &T, buffer: &mut [u8]) -> IoResult<()> {
-    to_write.write(buffer)
+pub fn serialize_to_buffer<T: CanonicalSerialize>(to_write: &T) -> Result<Vec<u8>, SerializationError> {
+    let mut buffer = Vec::with_capacity(to_write.serialized_size());
+    CanonicalSerialize::serialize(to_write, &mut buffer)?;
+    Ok(buffer)
 }
 
-pub fn read_from_file<T: FromBytes>(file_path: &str) -> IoResult<T>{
-    let mut fs = File::open(file_path)?;
-    T::read(&mut fs)
+pub fn read_from_file<T: CanonicalDeserialize>(file_path: &str) -> Result<T, SerializationError> {
+    let fs = File::open(file_path)
+        .map_err(|e| SerializationError::IoError(e))?;
+    T::deserialize(fs)
 }
 
-pub fn read_from_file_checked<T: FromBytesChecked>(file_path: &str) -> IoResult<T>{
-    let mut fs = File::open(file_path)?;
-    T::read_checked(&mut fs)
+pub fn read_from_file_checked<T: CanonicalDeserialize + SemanticallyValid>(file_path: &str) -> Result<T, SerializationError>
+{
+    let elem = read_from_file::<T>(file_path)?;
+    if !elem.is_valid() {
+        return Err(SerializationError::InvalidData)
+    }
+    Ok(elem)
+}
+
+pub fn write_to_file<T: CanonicalSerialize>(to_write: &T, file_path: &str) -> Result<(), SerializationError>
+{
+    let mut fs = File::create(file_path)
+        .map_err(|e| SerializationError::IoError(e))?;
+    CanonicalSerialize::serialize(to_write, &mut fs)?;
+    Ok(())
 }
 
 pub fn is_valid<T: SemanticallyValid>(to_check: &T) -> bool {
@@ -93,17 +112,21 @@ pub fn schnorr_verify_public_key(pk: &SchnorrPk) -> bool {
 
 pub fn schnorr_sign(msg: &FieldElement, sk: &SchnorrSk, pk: &SchnorrPk) -> Result<SchnorrSig, Error> {
     let mut rng = OsRng;
-    SchnorrSigScheme::sign(&mut rng, &FieldBasedSchnorrPk(pk.into_projective()), sk, &[*msg])
+    SchnorrSigScheme::sign(&mut rng, &FieldBasedSchnorrPk(pk.into_projective()), sk, msg.clone())
 }
 
 pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &SchnorrSig) -> Result<bool, Error> {
-    SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), &[*msg], signature)
+    SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), msg.clone(), signature)
 }
 
 //************************************Poseidon Hash functions****************************************
 
-pub fn get_poseidon_hash(personalization: Option<&[FieldElement]>) -> FieldHash {
-    FieldHash::init(personalization)
+pub fn get_poseidon_hash_constant_length(input_size: usize, personalization: Option<&[FieldElement]>) -> FieldHash {
+    FieldHash::init_constant_length(input_size, personalization)
+}
+
+pub fn get_poseidon_hash_variable_length(mod_rate: bool, personalization: Option<&[FieldElement]>) -> FieldHash {
+    FieldHash::init_variable_length(mod_rate, personalization)
 }
 
 pub fn update_poseidon_hash(hash: &mut FieldHash, input: &FieldElement){
@@ -114,8 +137,9 @@ pub fn reset_poseidon_hash(hash: &mut FieldHash, personalization: Option<&[Field
     hash.reset(personalization);
 }
 
-pub fn finalize_poseidon_hash(hash: &FieldHash) -> FieldElement{
-    hash.finalize()
+pub fn finalize_poseidon_hash(hash: &FieldHash) -> Result<FieldElement, Error> {
+    let result = hash.finalize()?;
+    Ok(result)
 }
 
 //*****************************Naive threshold sig circuit related functions************************
@@ -160,28 +184,19 @@ pub fn read_field_element_from_u64(num: u64) -> FieldElement {
 
 // Computes H(H(pks), threshold): used to generate the constant value needed to be declared
 // in MC during SC creation.
-pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> FieldElement {
+pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<FieldElement, Error>
+{
     let threshold_field = read_field_element_from_u64(threshold);
-    let mut h = FieldHash::init(None);
+
+    // pks must always be all present
+    let mut h = FieldHash::init_constant_length(pks.len(), None);
     pks.iter().for_each(|pk| { h.update(pk.x); });
-    let pks_hash = h.finalize();
-    h
-        .reset(None)
+    let pks_hash = h.finalize()?;
+
+    FieldHash::init_constant_length(2, None)
         .update(pks_hash)
         .update(threshold_field)
         .finalize()
-}
-
-const BT_MERKLE_TREE_HEIGHT: usize = 12;
-
-fn compute_bt_root(bts: &[FieldElement]) -> Result<FieldElement, Error> {
-    let mut bt_mt =
-        GingerMHT::init(BT_MERKLE_TREE_HEIGHT, 2usize.pow(BT_MERKLE_TREE_HEIGHT as u32));
-    for &bt in bts.iter(){
-        bt_mt.append(bt);
-    }
-    bt_mt.finalize_in_place();
-    bt_mt.root().ok_or(Error::from("Failed to compute BT Merkle Tree root"))
 }
 
 //Compute and return (MR(bt_list), H(MR(bt_list), H(bi-1), H(bi))
@@ -191,9 +206,7 @@ pub fn compute_msg_to_sign(
     bt_list:                  &[BackwardTransfer],
 ) -> Result<(FieldElement, FieldElement), Error> {
 
-    let mr_bt = if bt_list.is_empty() {
-        MHT_PARAMETERS.nodes[BT_MERKLE_TREE_HEIGHT].clone()
-    } else {
+    let mr_bt = {
         let mut bt_field_list = vec![];
         for bt in bt_list.iter() {
             let bt_f = bt.to_field_element()?;
@@ -201,15 +214,15 @@ pub fn compute_msg_to_sign(
         }
 
         //Compute bt_list merkle_root
-        compute_bt_root(bt_field_list.as_slice())?
+        get_bt_merkle_root(bt_field_list)?
     };
 
     //Compute message to be verified
-    let msg = FieldHash::init(None)
+    let msg = FieldHash::init_constant_length(3, None)
         .update(mr_bt)
         .update(*prev_end_epoch_mc_b_hash)
         .update(*end_epoch_mc_b_hash)
-        .finalize();
+        .finalize()?;
 
     Ok((mr_bt, msg))
 }
@@ -223,16 +236,17 @@ pub fn compute_wcert_sysdata_hash(
 
     //Compute quality and wcert_sysdata_hash
     let quality = read_field_element_from_u64(valid_sigs);
-    let wcert_sysdata_hash = FieldHash::init(None)
+    let wcert_sysdata_hash = FieldHash::init_constant_length(4, None)
         .update(quality)
         .update(*mr_bt)
         .update(*prev_end_epoch_mc_b_hash)
         .update(*end_epoch_mc_b_hash)
-        .finalize();
+        .finalize()?;
     Ok(wcert_sysdata_hash)
 }
 
 pub fn create_naive_threshold_sig_proof(
+    proving_system:           ProvingSystem,
     pks:                      &[SchnorrPk],
     mut sigs:                 Vec<Option<SchnorrSig>>,
     end_epoch_mc_b_hash:      &[u8; 32],
@@ -241,7 +255,8 @@ pub fn create_naive_threshold_sig_proof(
     threshold:                u64,
     proving_key_path:         &str,
     enforce_membership:       bool,
-) -> Result<(SCProof, u64), Error> {
+    zk:                       bool,
+) -> Result<(Vec<u8>, u64), Error> {
 
     //Get max pks
     let max_pks = pks.len();
@@ -283,29 +298,43 @@ pub fn create_naive_threshold_sig_proof(
         prev_end_epoch_mc_b_hash, mr_bt, max_pks,
     );
 
-    //Read proving key
-    let pk: IndexProverKey<FieldElement, IPAPC> = if enforce_membership {
-        read_from_file_checked(proving_key_path)
-    } else {
-        read_from_file(proving_key_path)
-    }?;
+    let proof = match proving_system {
+        ProvingSystem::CoboundaryMarlin => {
 
-    //Create and return proof
-    let mut rng = OsRng;
-    let proof = MarlinInst::prove::<_, OsRng>(&pk, c, &mut rng).unwrap();
+            // Read proving key
+            let pk: CoboundaryMarlinProverKey = if enforce_membership {
+                read_from_file_checked(proving_key_path)
+            } else {
+                read_from_file(proving_key_path)
+            }?;
 
+            // Call prover
+            let rng = &mut OsRng;
+            CoboundaryMarlin::create_proof(
+                c,
+                &pk,
+                zk,
+                if zk { Some(rng) } else { None },
+            )?.as_bytes()?
+        },
+        ProvingSystem::Darlin => unreachable!()
+    };
     Ok((proof, valid_signatures))
 }
 
+// TODO: Once NaiveThresholdSignature circuit interface is stable, call the certificate-specific
+//       verifier function in zendoo-cctp-lib rather than the general one.
 pub fn verify_naive_threshold_sig_proof(
+    proving_system:           ProvingSystem,
     constant:                 &FieldElement,
     end_epoch_mc_b_hash:      &[u8; 32],
     prev_end_epoch_mc_b_hash: &[u8; 32],
     bt_list:                  &[BackwardTransfer],
     valid_sigs:               u64,
-    proof:                    &SCProof,
+    proof:                    Vec<u8>,
+    check_proof:              bool,
     vk_path:                  &str,
-    enforce_membership:       bool
+    check_vk:                 bool
 ) -> Result<bool, Error>
 {
     //Compute wcert_sysdata_hash
@@ -313,21 +342,26 @@ pub fn verify_naive_threshold_sig_proof(
     let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
     let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
     let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
-    let aggregated_input = FieldHash::init(None)
+    let aggregated_input = FieldHash::init_constant_length(2, None)
         .update(*constant)
         .update(wcert_sysdata_hash)
-        .finalize();
+        .finalize()?;
 
-    let rng = &mut thread_rng();
+    // Read verifier key
+    let vk: Vec<u8> = std::fs::read(vk_path)?;
 
-    //Verify proof
-    let vk: IndexVerifierKey<FieldElement, IPAPC> = if enforce_membership {
-        read_from_file_checked(vk_path)
-    } else {
-        read_from_file(vk_path)
+    let is_verified = match proving_system {
+        ProvingSystem::CoboundaryMarlin => {
+            VerifierData::from_raw(
+                RawVerifierData::CoboundaryMarlin {proof, vk},
+                check_proof,
+                check_vk,
+                vec![aggregated_input]
+            )?
+                .verify::<OsRng>(None)
+        },
+        ProvingSystem::Darlin => unreachable!()
     }?;
-
-    let is_verified = MarlinInst::verify(&vk, &[aggregated_input], &proof, rng).unwrap();
 
     Ok(is_verified)
 }
@@ -364,7 +398,7 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
         &VRF_GH_PARAMS,
         &FieldBasedEcVrfPk(pk.into_projective()),
         sk,
-        &[*msg]
+        msg.clone()
     )?;
 
     //Convert gamma from proof to field elements
@@ -372,20 +406,25 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
 
     //Compute VRF output
     let mut hash_input = Vec::new();
-    hash_input.push(*msg);
+    hash_input.push(msg.clone());
     hash_input.extend_from_slice(gamma_coords.as_slice());
     let output = {
-        let mut h = FieldHash::init(None);
-        h.update(*msg);
+        let mut h = FieldHash::init_constant_length(3, None);
+        h.update(msg.clone());
         gamma_coords.into_iter().for_each(|c| { h.update(c); });
         h.finalize()
-    };
+    }?;
 
     Ok((proof, output))
 }
 
 pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Result<FieldElement, Error> {
-    VRFScheme::proof_to_hash(&VRF_GH_PARAMS,&FieldBasedEcVrfPk(pk.into_projective()), &[*msg], proof)
+    VRFScheme::proof_to_hash(
+        &VRF_GH_PARAMS,
+        &FieldBasedEcVrfPk(pk.into_projective()),
+        msg.clone(),
+        proof
+    )
 }
 
 //************Merkle Tree functions******************
@@ -417,34 +456,35 @@ pub fn is_path_rightmost(path: &GingerMHTPath) -> bool {
     path.is_rightmost()
 }
 
-pub fn is_path_non_empty_rightmost(path: &GingerMHTPath) -> bool { path.is_non_empty_rightmost() }
+pub fn are_right_leaves_empty(path: &GingerMHTPath) -> bool { path.are_right_leaves_empty() }
 
 pub fn get_leaf_index_from_path(path: &GingerMHTPath) -> u64 {
     path.leaf_index() as u64
 }
 
-pub fn get_path_size_in_bytes(path: &GingerMHTPath) -> usize {
-    ((1 + FIELD_SIZE) * path.get_length()) + 1
-}
-
+//TODO: Move to GingerLib
 pub fn apply(path: &GingerMHTPath, leaf: &FieldElement) -> FieldElement
 {
-    let mut digest = FieldHash::init(None);
+    let mut digest = FieldHash::init_constant_length(2, None);
     let mut prev_node = *leaf;
-    for &(sibling, direction) in path.get_raw_path().as_slice() {
+    for (sibling, direction) in path.get_raw_path().iter() {
+
+        assert_eq!(sibling.len(), 2);
+        assert!(*direction == 0 || *direction == 1);
 
         // Choose left and right hash according to direction
-        let (left, right) = if !direction {
-            (prev_node, sibling)
+        let (left, right) = if *direction == 0{
+            (prev_node, sibling[0].clone())
         } else {
-            (sibling, prev_node)
+            (sibling[0].clone(), prev_node)
         };
 
         // Compute the parent node
         prev_node = digest
             .update(left)
             .update(right)
-            .finalize();
+            .finalize()
+            .unwrap();
 
         digest.reset(None);
     }
@@ -488,13 +528,8 @@ pub fn reset_ginger_mht(tree: &mut GingerMHT){
 mod test {
     use super::*;
     use rand::RngCore;
-    use algebra::{to_bytes, ToBytes, Field};
-
-    fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
-        let mut fs = File::create(file_path)?;
-        to_write.write(&mut fs)?;
-        Ok(())
-    }
+    use algebra::Field;
+    use cctp_primitives::proving_system::init::load_g1_committer_key;
 
     #[allow(dead_code)]
     fn into_i8(v: Vec<u8>) -> Vec<i8> {
@@ -567,7 +602,7 @@ mod test {
             let keypair = schnorr_generate_key();
             pks.push(keypair.0);
             sks.push(keypair.1);
-            println!("sk: {:?}", into_i8(to_bytes!(keypair.1).unwrap()).to_vec());
+            println!("sk: {:?}", into_i8(keypair.1.as_bytes().unwrap()));
         }
         println!("pks / sks finished");
 
@@ -576,18 +611,19 @@ mod test {
         sigs.push(None);
         sigs.push(Some(schnorr_sign(&msg, &sks[2], &pks[2]).unwrap()));
 
-        println!("sk: {:?}", into_i8(to_bytes!(sks[0]).unwrap()));
-        println!("sk: {:?}", into_i8(to_bytes!(sks[2]).unwrap()));
-        println!("sk: {:?}", into_i8(to_bytes!(sks[1]).unwrap()));
+        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[0]).unwrap()));
+        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[2]).unwrap()));
+        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[1]).unwrap()));
 
-        println!("sig: {:?}", into_i8(to_bytes!(sigs[0].unwrap()).unwrap()));
-        println!("sig: {:?}", into_i8(to_bytes!(sigs[2].unwrap()).unwrap()));
+        println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[0]).unwrap()));
+        println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[2]).unwrap()));
 
-        let constant = compute_pks_threshold_hash(pks.as_slice(), threshold);
-        println!("Constant u8: {:?}", to_bytes!(constant).unwrap());
+        let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
+        println!("Constant u8: {:?}", constant.as_bytes().unwrap());
 
         //Create and serialize proof
         let (proof, quality) = create_naive_threshold_sig_proof(
+            ProvingSystem::CoboundaryMarlin,
             pks.as_slice(),
             sigs,
             &end_epoch_mc_b_hash,
@@ -596,18 +632,21 @@ mod test {
             threshold,
             proving_key_path,
             false,
+            false,
         ).unwrap();
         let proof_path = if bt_num != 0 {"./sample_proof"} else {"./sample_proof_no_bwt"};
         write_to_file(&proof, proof_path).unwrap();
 
         //Verify proof
         assert!(verify_naive_threshold_sig_proof(
+            ProvingSystem::CoboundaryMarlin,
             &constant,
             &end_epoch_mc_b_hash,
             &prev_end_epoch_mc_b_hash,
             bt_list.as_slice(),
             quality,
-            &proof,
+            proof.clone(),
+            true,
             verifying_key_path,
             true,
         ).unwrap());
@@ -615,12 +654,14 @@ mod test {
 
         //Generate wrong public inputs by changing quality and assert proof verification doesn't pass
         assert!(!verify_naive_threshold_sig_proof(
+            ProvingSystem::CoboundaryMarlin,
             &constant,
             &end_epoch_mc_b_hash,
             &prev_end_epoch_mc_b_hash,
             bt_list.as_slice(),
             quality - 1,
-            &proof,
+            proof,
+            true,
             verifying_key_path,
             true,
         ).unwrap());
@@ -628,10 +669,20 @@ mod test {
 
     #[test]
     fn sample_calls_naive_threshold_sig_circuit() {
+        load_g1_committer_key(1 << 17, "./g1_ck").unwrap();
+
         println!("****************With BWT**********************");
         create_sample_naive_threshold_sig_circuit(10);
         println!("****************Without BWT*******************");
         create_sample_naive_threshold_sig_circuit(0);
+
+        std::fs::remove_file("./sample_pk").unwrap();
+        std::fs::remove_file("./sample_vk").unwrap();
+        std::fs::remove_file("./sample_proof").unwrap();
+        std::fs::remove_file("./sample_pk_no_bwt").unwrap();
+        std::fs::remove_file("./sample_vk_no_bwt").unwrap();
+        std::fs::remove_file("./sample_proof_no_bwt").unwrap();
+        std::fs::remove_file("./g1_ck").unwrap();
     }
 
     #[test]
@@ -644,14 +695,12 @@ mod test {
         assert!(schnorr_verify_public_key(&pk)); //Verify pk
 
         //Serialize/deserialize pk
-        let mut pk_serialized = vec![0u8; SCHNORR_PK_SIZE];
-        serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
+        let pk_serialized = serialize_to_buffer(&pk).unwrap();
         let pk_deserialized: SchnorrPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
-        let mut sk_serialized = vec![0u8; SCHNORR_SK_SIZE];
-        serialize_to_buffer(&sk, &mut sk_serialized).unwrap();
+        let sk_serialized = serialize_to_buffer(&sk).unwrap();
         let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
         assert_eq!(sk, sk_deserialized);
 
@@ -659,8 +708,7 @@ mod test {
         assert!(is_valid(&sig));
 
         //Serialize/deserialize sig
-        let mut sig_serialized = vec![0u8; SCHNORR_SIG_SIZE];
-        serialize_to_buffer(&sig, &mut sig_serialized).unwrap();
+        let sig_serialized = serialize_to_buffer(&sig).unwrap();
         let sig_deserialized = deserialize_from_buffer(&sig_serialized).unwrap();
         assert_eq!(sig, sig_deserialized);
 
@@ -681,14 +729,12 @@ mod test {
         assert!(vrf_verify_public_key(&pk)); //Verify pk
 
         //Serialize/deserialize pk
-        let mut pk_serialized = vec![0u8; VRF_PK_SIZE];
-        serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
+        let pk_serialized = serialize_to_buffer(&pk).unwrap();
         let pk_deserialized: VRFPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
-        let mut sk_serialized = vec![0u8; VRF_SK_SIZE];
-        serialize_to_buffer(&sk, &mut sk_serialized).unwrap();
+        let sk_serialized = serialize_to_buffer(&sk).unwrap();
         let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
         assert_eq!(sk, sk_deserialized);
 
@@ -696,14 +742,12 @@ mod test {
         assert!(is_valid(&vrf_proof));
 
         //Serialize/deserialize vrf proof
-        let mut proof_serialized = vec![0u8; VRF_PROOF_SIZE];
-        serialize_to_buffer(&vrf_proof, &mut proof_serialized).unwrap();
+        let proof_serialized = serialize_to_buffer(&vrf_proof).unwrap();
         let proof_deserialized = deserialize_from_buffer_checked(&proof_serialized).unwrap();
         assert_eq!(vrf_proof, proof_deserialized);
 
         //Serialize/deserialize vrf out (i.e. a field element)
-        let mut vrf_out_serialized = vec![0u8; FIELD_SIZE];
-        serialize_to_buffer(&vrf_out, &mut vrf_out_serialized).unwrap();
+        let vrf_out_serialized = serialize_to_buffer(&vrf_out).unwrap();
         let vrf_out_deserialized = deserialize_from_buffer(&vrf_out_serialized).unwrap();
         assert_eq!(vrf_out, vrf_out_deserialized);
 
@@ -751,7 +795,7 @@ mod test {
                 assert!(is_path_leftmost(&path));
             }
             else if i == (leaves_num / 2) - 1 { // non-empty rightmost check
-                assert!(is_path_non_empty_rightmost(&path));
+                assert!(are_right_leaves_empty(&path));
             }
             else if i == leaves_num - 1 { //rightmost check
                 assert!(is_path_rightmost(&path));
@@ -761,14 +805,12 @@ mod test {
                 assert!(!is_path_rightmost(&path));
 
                 if i < (leaves_num / 2) - 1 {
-                    assert!(!is_path_non_empty_rightmost(&path));
+                    assert!(!are_right_leaves_empty(&path));
                 }
             }
 
             // Serialization/deserialization test
-            let path_size = get_path_size_in_bytes(&path);
-            let mut path_serialized = vec![0u8; path_size];
-            serialize_to_buffer(&path, &mut path_serialized).unwrap();
+            let path_serialized = serialize_to_buffer(&path).unwrap();
             let path_deserialized: GingerMHTPath = deserialize_from_buffer(&path_serialized).unwrap();
             assert_eq!(path, path_deserialized);
         }
@@ -778,22 +820,22 @@ mod test {
     fn sample_calls_poseidon_hash(){
         let mut rng = OsRng;
         let hash_input = vec![FieldElement::rand(&mut rng); 2];
-        let mut h = get_poseidon_hash(None);
+        let mut h = get_poseidon_hash_variable_length(false, None);
 
         //Compute poseidon hash
         update_poseidon_hash(&mut h, &hash_input[0]);
         update_poseidon_hash(&mut h, &hash_input[1]);
-        let h_output = finalize_poseidon_hash(&h);
+        let h_output = finalize_poseidon_hash(&h).unwrap();
 
         //Call to finalize keeps the state
         reset_poseidon_hash(&mut h, None);
         update_poseidon_hash(&mut h, &hash_input[0]);
-        finalize_poseidon_hash(&h); //Call to finalize() keeps the state
+        finalize_poseidon_hash(&h).unwrap(); //Call to finalize() keeps the state
         update_poseidon_hash(&mut h, &hash_input[1]);
-        assert_eq!(h_output, finalize_poseidon_hash(&h));
+        assert_eq!(h_output, finalize_poseidon_hash(&h).unwrap());
 
         //finalize() is idempotent
-        assert_eq!(h_output, finalize_poseidon_hash(&h));
+        assert_eq!(h_output, finalize_poseidon_hash(&h).unwrap());
     }
 
 

@@ -1,13 +1,10 @@
 extern crate jni;
 
-use algebra::bytes::{FromBytes, FromBytesChecked, ToBytes};
-use demo_circuit::type_mapping::*;
-
+use algebra::{SemanticallyValid, serialize::*};
+use demo_circuit::{
+    type_mapping::*, generate_parameters
+};
 use std::{ptr::null_mut, any::type_name};
-use std::{fs::File, io::Result as IoResult};
-
-// use std::panic;
-use demo_circuit::generate_parameters;
 
 mod ginger_calls;
 use ginger_calls::*;
@@ -26,25 +23,24 @@ fn read_nullable_raw_pointer<'a, T>(input: *const T) -> Option<&'a T> {
     unsafe { input.as_ref() }
 }
 
-fn deserialize_to_raw_pointer<T: FromBytes>(buffer: &[u8]) -> *mut T {
+fn deserialize_to_raw_pointer<T: CanonicalDeserialize>(buffer: &[u8]) -> *mut T {
     match deserialize_from_buffer(buffer) {
         Ok(t) => Box::into_raw(Box::new(t)),
         Err(_) => return null_mut(),
     }
 }
 
-fn deserialize_to_raw_pointer_checked<T: FromBytesChecked>(buffer: &[u8]) -> *mut T {
+fn deserialize_to_raw_pointer_checked<T: CanonicalDeserialize + SemanticallyValid>(buffer: &[u8]) -> *mut T {
     match deserialize_from_buffer_checked(buffer) {
         Ok(t) => Box::into_raw(Box::new(t)),
         Err(_) => return null_mut(),
     }
 }
 
-fn serialize_from_raw_pointer<T: ToBytes>(
+fn serialize_from_raw_pointer<T: CanonicalSerialize>(
     to_write: *const T,
-    buffer: &mut [u8],
-) {
-    serialize_to_buffer(read_raw_pointer(to_write), buffer)
+) -> Vec<u8> {
+    serialize_to_buffer(read_raw_pointer(to_write))
         .expect(format!("unable to write {} to buffer", type_name::<T>()).as_str())
 }
 
@@ -52,6 +48,7 @@ use jni::JNIEnv;
 use jni::objects::{JClass, JString, JObject, JValue};
 use jni::sys::{jbyteArray, jboolean, jint, jlong, /*jlongArray, */jobject, jobjectArray};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
+use algebra::CanonicalDeserialize;
 
 //Field element related functions
 #[no_mangle]
@@ -71,10 +68,9 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeSer
 
     let fe = read_raw_pointer(fe_pointer.j().unwrap() as *const FieldElement);
 
-    let mut fe_bytes = [0u8; FIELD_SIZE];
-    serialize_from_raw_pointer(fe, &mut fe_bytes[..]);
+    let fe_bytes = serialize_from_raw_pointer(fe);
 
-    _env.byte_array_from_slice(fe_bytes.as_ref())
+    _env.byte_array_from_slice(fe_bytes.as_slice())
         .expect("Cannot write field element.")
 }
 
@@ -218,10 +214,9 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSer
 
     let public_key = read_raw_pointer(public_key_pointer.j().unwrap() as *const SchnorrPk);
 
-    let mut pk = [0u8; SCHNORR_PK_SIZE];
-    serialize_from_raw_pointer(public_key, &mut pk[..]);
+    let pk = serialize_from_raw_pointer(public_key);
 
-    _env.byte_array_from_slice(pk.as_ref())
+    _env.byte_array_from_slice(pk.as_slice())
         .expect("Cannot write public key.")
 }
 
@@ -287,15 +282,13 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSer
 
     let secret_key = read_raw_pointer(secret_key_pointer.j().unwrap() as *const SchnorrSk);
 
-    let mut sk = [0u8; SCHNORR_SK_SIZE];
-    serialize_from_raw_pointer(secret_key, &mut sk[..]);
+    let sk = serialize_from_raw_pointer(secret_key);
 
-    _env.byte_array_from_slice(sk.as_ref())
+    _env.byte_array_from_slice(sk.as_slice())
         .expect("Cannot write secret key.")
 }
 
 #[no_mangle]
-
 pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeDeserializeSecretKey(
     _env: JNIEnv,
     _schnorr_secret_key_class: JClass,
@@ -351,10 +344,9 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePu
 
     let public_key = read_raw_pointer(public_key_pointer.j().unwrap() as *const VRFPk);
 
-    let mut pk = [0u8; VRF_PK_SIZE];
-    serialize_from_raw_pointer(public_key, &mut pk[..]);
+    let pk = serialize_from_raw_pointer(public_key);
 
-    _env.byte_array_from_slice(pk.as_ref())
+    _env.byte_array_from_slice(pk.as_slice())
         .expect("Cannot write public key.")
 
 }
@@ -421,10 +413,9 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSe
 
     let secret_key = read_raw_pointer(secret_key_pointer.j().unwrap() as *const VRFSk);
 
-    let mut sk = [0u8; VRF_SK_SIZE];
-    serialize_from_raw_pointer(secret_key, &mut sk[..]);
+    let sk = serialize_from_raw_pointer(secret_key);
 
-    _env.byte_array_from_slice(sk.as_ref())
+    _env.byte_array_from_slice(sk.as_slice())
         .expect("Cannot write secret key.")
 }
 
@@ -481,10 +472,9 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSer
     _sig: *const SchnorrSig,
 ) -> jbyteArray
 {
-    let mut sig = [0u8; SCHNORR_SIG_SIZE];
-    serialize_from_raw_pointer(_sig, &mut sig[..], );
+    let sig = serialize_from_raw_pointer(_sig);
 
-    _env.byte_array_from_slice(sig.as_ref())
+    _env.byte_array_from_slice(sig.as_slice())
         .expect("Should be able to convert to jbyteArray")
 }
 
@@ -733,9 +723,10 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVer
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetPoseidonHash(
+pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetConstantLengthPoseidonHash(
     _env: JNIEnv,
     _class: JClass,
+    _input_size: jint,
     _personalization: jobjectArray,
 ) -> jobject
 {
@@ -761,7 +752,55 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetPos
     }
 
     //Instantiate PoseidonHash
-    let h = get_poseidon_hash(
+    let h = get_poseidon_hash_constant_length(
+        _input_size as usize,
+        if personalization.is_empty() { None } else { Some(personalization.as_slice()) }
+    );
+
+    //Return PoseidonHash instance
+    let h_ptr: jlong = jlong::from(Box::into_raw(Box::new(h)) as i64);
+
+    let h_class =  _env.find_class("com/horizen/poseidonnative/PoseidonHash")
+        .expect("Should be able to find PoseidonHash class");
+
+    let result = _env.new_object(h_class, "(J)V", &[
+        JValue::Long(h_ptr)]).expect("Should be able to create new long for PoseidonHash");
+
+    *result
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetVariableLengthPoseidonHash(
+    _env: JNIEnv,
+    _class: JClass,
+    _mod_rate: jboolean,
+    _personalization: jobjectArray,
+) -> jobject
+{
+    //Read _personalization as array of FieldElement
+    let personalization_len = _env.get_array_length(_personalization)
+        .expect("Should be able to read personalization array size");
+    let mut personalization = vec![];
+
+    // Array can be empty
+    for i in 0..personalization_len {
+        let field_obj = _env.get_object_array_element(_personalization, i)
+            .expect(format!("Should be able to read elem {} of the personalization array", i).as_str());
+
+        let field = {
+
+            let f =_env.get_field(field_obj, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            read_raw_pointer(f.j().unwrap() as *const FieldElement)
+        };
+
+        personalization.push(*field);
+    }
+
+    //Instantiate PoseidonHash
+    let h = get_poseidon_hash_variable_length(
+        _mod_rate == JNI_TRUE,
         if personalization.is_empty() { None } else { Some(personalization.as_slice()) }
     );
 
@@ -1041,7 +1080,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsRigh
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsNonEmptyRightmost(
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeAreRightLeavesEmpty(
     _env: JNIEnv,
     _path: JObject,
 ) -> jboolean
@@ -1054,7 +1093,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsNonE
         read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
     };
 
-    is_path_non_empty_rightmost(path) as jboolean
+    are_right_leaves_empty(path) as jboolean
 }
 
 #[no_mangle]
@@ -1088,12 +1127,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeSerial
         read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
     };
 
-    let path_bytes_len = get_path_size_in_bytes(path);
-    let mut path_bytes = vec![0u8; path_bytes_len];
-    serialize_to_buffer(path, path_bytes.as_mut_slice())
+    let path = serialize_to_buffer(path)
         .expect("Unable to write Merkle Path to buffer");
 
-    _env.byte_array_from_slice(path_bytes.as_ref())
+    _env.byte_array_from_slice(path.as_slice())
         .expect("Cannot write Merkle Path to jbyteArray.")
 }
 
@@ -1323,10 +1360,9 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
     _proof: *const VRFProof,
 ) -> jbyteArray
 {
-    let mut proof = [0u8; VRF_PROOF_SIZE];
-    serialize_from_raw_pointer(_proof, &mut proof[..]);
+    let proof = serialize_from_raw_pointer(_proof);
 
-    _env.byte_array_from_slice(proof.as_ref())
+    _env.byte_array_from_slice(proof.as_slice())
         .expect("Should be able to convert to jbyteArray")
 }
 
@@ -1702,7 +1738,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //Extract block hashes
     let end_epoch_block_hash = {
-        let t = _env.convert_byte_array(_end_epoch_block_hash)
+        let mut t = _env.convert_byte_array(_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
         let mut end_epoch_block_hash_bytes = [0u8; 32];
@@ -1718,7 +1754,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     };
 
     let prev_end_epoch_block_hash = {
-        let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
+        let mut t = _env.convert_byte_array(_prev_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
         let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
@@ -1762,6 +1798,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // used, but still needs to have
     // an argument slot
     _class: JClass,
+    _proving_system: JObject,
     _bt_list: jobjectArray,
     _end_epoch_block_hash: jbyteArray,
     _prev_end_epoch_block_hash: jbyteArray,
@@ -1770,9 +1807,23 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _threshold: jlong,
     _proving_key_path: JString,
     _check_proving_key: jboolean, //WARNING: Very expensive check
+    _zk: jboolean,
 ) -> jobject
 {
-    //Extract backward transfers
+    // Extract proving system type
+    let proving_system= _env
+        .call_method(_proving_system, "ordinal", "()I", &[])
+        .expect("Should be able to call ordinal() on ProvingSystem enum")
+        .i()
+        .unwrap() as usize;
+
+    let proving_system = match proving_system {
+        0 => ProvingSystem::CoboundaryMarlin,
+        1 => ProvingSystem::Darlin,
+        _ => unreachable!()
+    };
+
+    // Extract backward transfers
     let mut bt_list = vec![];
 
     let bt_list_size = _env.get_array_length(_bt_list)
@@ -1848,7 +1899,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //Extract block hashes
     let end_epoch_block_hash = {
-        let t = _env.convert_byte_array(_end_epoch_block_hash)
+        let mut t = _env.convert_byte_array(_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
         let mut end_epoch_block_hash_bytes = [0u8; 32];
@@ -1862,7 +1913,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     };
 
     let prev_end_epoch_block_hash = {
-        let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
+        let mut t = _env.convert_byte_array(_prev_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
         let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
@@ -1884,6 +1935,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //create proof
     let (proof, quality) = match create_naive_threshold_sig_proof(
+        proving_system,
         pks.as_slice(),
         sigs,
         &end_epoch_block_hash,
@@ -1892,18 +1944,14 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         threshold,
         proving_key_path.to_str().unwrap(),
         _check_proving_key == JNI_TRUE,
+        _zk == JNI_TRUE,
     ) {
         Ok(proof) => proof,
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR or IO_ERROR
     };
 
-    //Serialize proof
-    let mut proof_bytes: Vec<u8> = vec![];
-    proof.write(&mut proof_bytes)
-        .expect("Should be able to write proof into proof_bytes");
-
     //Return proof serialized
-    let proof_serialized = _env.byte_array_from_slice(proof_bytes.as_ref())
+    let proof_serialized = _env.byte_array_from_slice(proof.as_slice())
         .expect("Should be able to convert Rust slice into jbytearray");
 
     //Create new CreateProofResult object
@@ -1917,13 +1965,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     ).expect("Should be able to create new CreateProofResult:(long, byte[]) object");
 
     *result
-}
-
-// Test functions
-fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
-    let mut fs = File::create(file_path)?;
-    to_write.write(&mut fs)?;
-    Ok(())
 }
 
 #[no_mangle]
@@ -1959,6 +2000,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // used, but still needs to have
     // an argument slot
     _class: JClass,
+    _proving_system: JObject,
     _bt_list: jobjectArray,
     _end_epoch_block_hash: jbyteArray,
     _prev_end_epoch_block_hash: jbyteArray,
@@ -1968,7 +2010,20 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _check_proof: jboolean,
     _verification_key_path: JString,
     _check_vk: jboolean,
-) -> jboolean {
+) -> jboolean
+{
+    // Extract proving system type
+    let proving_system= _env
+        .call_method(_proving_system, "ordinal", "()I", &[])
+        .expect("Should be able to call ordinal() on ProvingSystem enum")
+        .i()
+        .unwrap() as usize;
+
+    let proving_system = match proving_system {
+        0 => ProvingSystem::CoboundaryMarlin,
+        1 => ProvingSystem::Darlin,
+        _ => unreachable!()
+    };
 
     //Extract backward transfers
     let mut bt_list = vec![];
@@ -2005,7 +2060,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //Extract block hashes
     let end_epoch_block_hash = {
-        let t = _env.convert_byte_array(_end_epoch_block_hash)
+        let mut t = _env.convert_byte_array(_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
         let mut end_epoch_block_hash_bytes = [0u8; 32];
@@ -2019,7 +2074,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     };
 
     let prev_end_epoch_block_hash = {
-        let t = _env.convert_byte_array(_prev_end_epoch_block_hash)
+        let mut t = _env.convert_byte_array(_prev_end_epoch_block_hash)
             .expect("Should be able to convert to Rust array");
 
         let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
@@ -2047,15 +2102,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     //Extract proof
     let proof_bytes = _env.convert_byte_array(_sc_proof_bytes)
         .expect("Should be able to convert to Rust byte array");
-    let result = if _check_proof == JNI_TRUE {
-        deserialize_from_buffer_checked(proof_bytes.as_slice())
-    } else {
-        deserialize_from_buffer(proof_bytes.as_slice())
-    };
-    let proof = match result {
-        Ok(proof) => proof,
-        Err(_) => return JNI_FALSE // I/O ERROR
-    };
 
     //Extract vk path
     let vk_path = _env.get_string(_verification_key_path)
@@ -2063,12 +2109,14 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //Verify proof
     match verify_naive_threshold_sig_proof(
+        proving_system,
         constant,
         &end_epoch_block_hash,
         &prev_end_epoch_block_hash,
         bt_list.as_slice(),
         quality,
-        &proof,
+        proof_bytes,
+        _check_proof == JNI_TRUE,
         vk_path.to_str().unwrap(),
         _check_vk == JNI_TRUE,
 
