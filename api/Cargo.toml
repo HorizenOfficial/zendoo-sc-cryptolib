@@ -30,4 +30,4 @@ crate_type = ["cdylib"]
 
 [features]
 default = [ "llvm_asm" ]
-llvm_asm = [ "algebra/llvm_asm", "poly-commit/asm", "marlin/asm" ]
+llvm_asm = [ "algebra/llvm_asm", "poly-commit/asm", "marlin/asm", "ouroboros/llvm_asm", "demo-circuit/llvm_asm" ]
