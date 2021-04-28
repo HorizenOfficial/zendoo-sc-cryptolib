@@ -23,7 +23,7 @@ public class SchnorrSignature implements AutoCloseable
     this.signaturePointer = 0;
   }
 
-  private static native byte[] nativeSerializeSignature(long signaturePointer);
+  private native byte[] nativeSerializeSignature();
 
   private static native SchnorrSignature nativeDeserializeSignature(byte[] signatureBytes, boolean checkSignature);
 
@@ -37,7 +37,7 @@ public class SchnorrSignature implements AutoCloseable
   }
 
   public byte[] serializeSignature() {
-    return nativeSerializeSignature(this.signaturePointer);
+    return nativeSerializeSignature();
   }
 
   private native boolean nativeIsValidSignature(); // jni call to Rust impl

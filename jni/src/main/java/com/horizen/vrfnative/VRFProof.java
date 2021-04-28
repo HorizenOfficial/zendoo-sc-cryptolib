@@ -19,7 +19,7 @@ public class VRFProof implements AutoCloseable
     this.proofPointer = proofPointer;
   }
 
-  private static native byte[] nativeSerializeProof(long proofPointer);
+  private native byte[] nativeSerializeProof();
 
   private static native VRFProof nativeDeserializeProof(byte[] proofBytes, boolean checkVRFProof);
 
@@ -33,7 +33,7 @@ public class VRFProof implements AutoCloseable
   }
 
   public byte[] serializeProof() {
-    return nativeSerializeProof(this.proofPointer);
+    return nativeSerializeProof();
   }
 
   private native boolean nativeIsValidVRFProof(); // jni call to Rust impl

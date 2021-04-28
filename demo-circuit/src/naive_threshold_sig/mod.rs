@@ -34,7 +34,6 @@ use crate::{
 
 use std::marker::PhantomData;
 use lazy_static::*;
-use cctp_primitives::proving_system::init::get_g1_committer_key;
 
 lazy_static! {
     pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
@@ -253,16 +252,13 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
 }
 
 #[allow(dead_code)]
-pub fn generate_parameters(max_pks: usize) -> Result<(
-    CoboundaryMarlinProverKey,
-    CoboundaryMarlinVerifierKey
-), Error>
+pub fn get_instance_for_setup(max_pks: usize) -> NaiveTresholdSignature<FieldElement>
 {
     //Istantiating supported number of pks and sigs
     let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
 
     // Create parameters for our circuit
-    let c = NaiveTresholdSignature::<FieldElement> {
+    NaiveTresholdSignature::<FieldElement> {
         pks:                      vec![None; max_pks],
         sigs:                     vec![None; max_pks],
         threshold:                None,
@@ -272,13 +268,7 @@ pub fn generate_parameters(max_pks: usize) -> Result<(
         mr_bt:                    None,
         max_pks,
         _field:                   PhantomData
-    };
-
-    let ck = get_g1_committer_key()?;
-
-    let pk = CoboundaryMarlin::index(ck.as_ref().unwrap(), c)?;
-
-    Ok(pk)
+    }
 }
 
 #[cfg(test)]
@@ -296,6 +286,7 @@ mod test {
         proving_system::init::load_g1_committer_key,
         utils::proof_system::ProvingSystemUtils,
     };
+    use cctp_primitives::proving_system::init::get_g1_committer_key;
 
     type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, Projective, FieldHash>;
 
@@ -416,8 +407,9 @@ mod test {
 
         load_g1_committer_key(1 << 18, "./naive_threshold_sig_test_ck").unwrap();
         let ck = get_g1_committer_key().unwrap();
+        let circ = get_instance_for_setup(n);
 
-        let params = generate_parameters(n).unwrap();
+        let params = CoboundaryMarlin::setup(circ).unwrap();
 
         //Generate proof with correct witnesses and v > t
         let (proof, public_inputs) =

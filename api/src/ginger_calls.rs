@@ -36,6 +36,7 @@ use cctp_primitives::{
     },
 };
 use cctp_primitives::proving_system::verifier::RawVerifierData;
+use cctp_primitives::proving_system::init::{load_g1_committer_key, load_g2_committer_key};
 
 //*******************************Generic functions**********************************************
 // Note: Should decide if panicking or handling IO errors
@@ -243,6 +244,42 @@ pub fn compute_wcert_sysdata_hash(
         .update(*end_epoch_mc_b_hash)
         .finalize()?;
     Ok(wcert_sysdata_hash)
+}
+
+pub fn init_dlog_keys(
+    proving_system: ProvingSystem,
+    segment_size: usize,
+    ck_g1_path: &str,
+    ck_g2_path: &str,
+) -> Result<(), Error> {
+    load_g1_committer_key(segment_size - 1, ck_g1_path)?;
+
+    if matches!(proving_system, ProvingSystem::Darlin) {
+        load_g2_committer_key(segment_size - 1, ck_g2_path)?
+    }
+
+    Ok(())
+}
+
+pub fn generate_naive_threshold_sig_circuit_keypair(
+    proving_system: ProvingSystem,
+    max_pks: usize,
+    pk_path: &str,
+    vk_path: &str,
+) -> Result<(), Error>
+{
+    let circ = get_instance_for_setup(max_pks);
+
+    match proving_system {
+        ProvingSystem::CoboundaryMarlin => {
+            let (pk, vk) = CoboundaryMarlin::setup(circ)?;
+            write_to_file(&pk, pk_path)?;
+            write_to_file(&vk, vk_path)?;
+        },
+        ProvingSystem::Darlin => unreachable!()
+    }
+
+    Ok(())
 }
 
 pub fn create_naive_threshold_sig_proof(
@@ -529,7 +566,6 @@ mod test {
     use super::*;
     use rand::RngCore;
     use algebra::Field;
-    use cctp_primitives::proving_system::init::load_g1_committer_key;
 
     #[allow(dead_code)]
     fn into_i8(v: Vec<u8>) -> Vec<i8> {
@@ -584,15 +620,15 @@ mod test {
         println!("compute_msg_to_sign finished");
 
         //Generate params and write them to file
-        let params = generate_parameters(3).unwrap();
-        println!("generate_parameters finished");
         let proving_key_path = if bt_num != 0 {"./sample_pk"} else {"./sample_pk_no_bwt"};
-        write_to_file(&params.0, proving_key_path).unwrap();
-        println!("generate_parameters write_to_file finished");
-
         let verifying_key_path = if bt_num != 0 {"./sample_vk"} else {"./sample_vk_no_bwt"};
-        write_to_file(&params.1, verifying_key_path).unwrap();
-        println!("verifying_key write_to_file finished");
+        generate_naive_threshold_sig_circuit_keypair(
+            ProvingSystem::CoboundaryMarlin,
+            3,
+            proving_key_path,
+            verifying_key_path
+        ).unwrap();
+        println!("generate_parameters finished");
 
         //Generate sample pks and sigs vec
         let threshold: u64 = 2;
@@ -669,7 +705,12 @@ mod test {
 
     #[test]
     fn sample_calls_naive_threshold_sig_circuit() {
-        load_g1_committer_key(1 << 17, "./g1_ck").unwrap();
+        init_dlog_keys(
+            ProvingSystem::CoboundaryMarlin,
+            1 << 17,
+            "./g1_ck",
+            "./g2_ck"
+        ).unwrap();
 
         println!("****************With BWT**********************");
         create_sample_naive_threshold_sig_circuit(10);
