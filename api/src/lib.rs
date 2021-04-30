@@ -59,7 +59,7 @@ fn get_byte_array(_env: &JNIEnv, java_byte_array: &jbyteArray, length:usize) -> 
         .expect("Should be able to convert to Rust array");
 
     if vec.len() != length {
-        panic!("Retriving array size is differ expected.");
+        panic!("Retrieved array size is differ expected.");
     }
 
     vec
@@ -2949,7 +2949,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
                 .expect("Should be able to create array of FieldElements");
 
             for (idx, leaf) in leaves.iter().enumerate() {
-                let leaf_field_ptr: jlong = jlong::from(Box::into_raw(Box::new(leaf)) as i64);
+                let leaf_field_ptr: jlong = jlong::from(Box::into_raw(Box::new(leaf.clone())) as i64);
 
                 let leaf_element = _env.new_object(field_class, "(J)V", &[
                     JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");

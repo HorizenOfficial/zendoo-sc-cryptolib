@@ -140,18 +140,24 @@ public class CommitmentTreeTest {
 
         assertFalse("Certificate expected to be missed.", commTree.getCertCommitment(scId).isPresent());
 
-        byte[] leaf = generateFieldElementBytes();
-        assertTrue("Certificate leaf expected to be added.", commTree.addCertLeaf(scId, leaf));
+        FieldElement leaf1 = FieldElement.createRandom();
+        FieldElement leaf2 = FieldElement.createRandom();
+        assertTrue("Certificate leaf expected to be added.", commTree.addCertLeaf(scId, leaf1.serializeFieldElement()));
+        assertTrue("Certificate leaf expected to be added.", commTree.addCertLeaf(scId, leaf2.serializeFieldElement()));
 
         Optional<FieldElement> commitmentOpt = commTree.getCertCommitment(scId);
         assertTrue("Certificate expected to be present.", commitmentOpt.isPresent());
         Optional<List<FieldElement>> leafListOpt = commTree.getCrtLeaves(scId);
         assertTrue("Certificate leaf expected to be present.", leafListOpt.isPresent());
-        assertTrue("Certificate leaf list expected to have one element.", leafListOpt.get().size() == 1);
-        byte[] serializedLeaf = leafListOpt.get().get(0).serializeFieldElement();
+        assertTrue("Certificate leaf list expected to have one element.", leafListOpt.get().size() == 2);
+        assertTrue("Certificate leaf1 is differ", Arrays.equals(leafListOpt.get().get(0).serializeFieldElement(), leaf1.serializeFieldElement()));
+        assertTrue("Certificate leaf2 is differ", Arrays.equals(leafListOpt.get().get(1).serializeFieldElement(), leaf2.serializeFieldElement()));
 
+        leaf1.freeFieldElement();
+        leaf2.freeFieldElement();
         commTree.freeCommitmentTree();
         leafListOpt.get().get(0).freeFieldElement();
+        leafListOpt.get().get(1).freeFieldElement();
     }
 
     @Test
