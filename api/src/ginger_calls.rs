@@ -371,9 +371,6 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
     let gamma_coords = proof.gamma.to_field_elements().unwrap();
 
     //Compute VRF output
-    let mut hash_input = Vec::new();
-    hash_input.push(*msg);
-    hash_input.extend_from_slice(gamma_coords.as_slice());
     let output = {
         let mut h = FieldHash::init(None);
         h.update(*msg);
