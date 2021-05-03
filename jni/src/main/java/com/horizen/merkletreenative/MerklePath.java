@@ -19,6 +19,9 @@ public class MerklePath implements AutoCloseable {
 
     private native boolean nativeVerify(int merkleTreeHeight, FieldElement leaf, FieldElement root);
 
+    /*
+    * Verify the Merkle Path for `leaf` given the `root` of a Merkle Tree with height `merkleTreeHeight`.
+    */
     public boolean verify(int merkleTreeHeight, FieldElement leaf, FieldElement root) {
         if (merklePathPointer == 0)
             throw new IllegalStateException("MerklePath instance was freed.");
@@ -27,6 +30,11 @@ public class MerklePath implements AutoCloseable {
 
     private native boolean nativeVerifyWithoutLengthCheck(FieldElement leaf, FieldElement root);
 
+    /*
+    * Verify the Merkle Path for `leaf` given the `root` of a Merkle Tree. Doesn't check if the
+    * length of the Merkle Path is consistent with the height of the corresponding Merkle Tree,
+    * therefore it is advisable to use it when it's certain that `leaf` is actually a leaf.
+    */
     public boolean verify(FieldElement leaf, FieldElement root) {
         if (merklePathPointer == 0)
             throw new IllegalStateException("MerklePath instance was freed.");
@@ -35,7 +43,9 @@ public class MerklePath implements AutoCloseable {
 
     private native FieldElement nativeApply(FieldElement leaf);
 
-    // TEMPORARY: Use this Merkle Path and the leaf to compute the root.
+    /*
+    * Compute the root of the MerkleTree associated to this path and to `leaf`
+    */
     public FieldElement apply(FieldElement leaf) {
         if (merklePathPointer == 0)
             throw new IllegalStateException("MerklePath instance was freed.");
@@ -44,6 +54,10 @@ public class MerklePath implements AutoCloseable {
 
     private native boolean nativeIsLeftmost();
 
+    /*
+    * Returns true if this is a Merkle Path for the left most leaf of a Merkle Tree,
+    * false, otherwise.
+    */
     public boolean isLeftmost() {
         if (merklePathPointer == 0)
             throw new IllegalStateException("MerklePath instance was freed.");
@@ -52,6 +66,10 @@ public class MerklePath implements AutoCloseable {
 
     private native boolean nativeIsRightmost();
 
+    /*
+    * Returns true if this is a Merkle Path for the right most leaf of a Merkle Tree,
+    * false, otherwise.
+    */
     public boolean isRightmost() {
         if (merklePathPointer == 0)
             throw new IllegalStateException("MerklePath instance was freed.");
@@ -61,14 +79,7 @@ public class MerklePath implements AutoCloseable {
     private native boolean nativeIsNonEmptyRightmost();
 
     /*
-     * Returns true if `self` is a Merkle Path for the righmost non-empty leaf of the Merkle Tree
-     * (e.g. the leaf which is not physically in the rightmost position of the tree, but it's
-     * followed by all empty leaves).
-     * Assumptions:
-     * 1) Append-only Merkle Tree;
-     * 2) Precomputed empty nodes are specified;
-     * 3) Not to be called on Merkle Path corresponding to an empty leaf.
-     *
+     * Returns true if this is a Merkle Path for a leaf whose right leaves are all empty.
      */
     public boolean isNonEmptyRightmost() {
         if (merklePathPointer == 0)
@@ -78,6 +89,10 @@ public class MerklePath implements AutoCloseable {
 
     private native long nativeLeafIndex();
 
+    /*
+    * Returns the index of the leaf, corresponding to this Merkle Path, in the
+    * corresponding Merkle Tree.
+    */
     public long leafIndex() {
         if (merklePathPointer == 0)
             throw new IllegalStateException("MerklePath instance was freed.");

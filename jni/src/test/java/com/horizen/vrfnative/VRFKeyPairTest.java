@@ -94,7 +94,7 @@ public class VRFKeyPairTest {
 //        }
 //    }
 
-    @Test
+    //@Test
     public void testRandomProveVerify() throws Exception {
         int samples = 100;
 

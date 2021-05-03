@@ -4,7 +4,7 @@ use algebra::{SemanticallyValid, serialize::*};
 use demo_circuit::{
     type_mapping::*
 };
-use std::{ptr::null_mut, any::type_name};
+use std::any::type_name;
 
 mod ginger_calls;
 use ginger_calls::*;
@@ -37,7 +37,7 @@ fn return_jobject<'a, T: Sized>(_env: &'a JNIEnv, obj: T, class_path: &str) -> J
 
     let obj_class = _env.find_class(class_path).expect("Should be able to find class");
 
-    _env.new_object(obj_class, "J(V)", &[JValue::Long(obj_ptr)])
+    _env.new_object(obj_class, "(J)V", &[JValue::Long(obj_ptr)])
         .expect("Should be able to create new jobject")
 }
 
@@ -1706,7 +1706,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_generateDLogKeys(
+pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGenerateDLogKeys(
     _env: JNIEnv,
     _class: JClass,
     _proving_system: JObject,

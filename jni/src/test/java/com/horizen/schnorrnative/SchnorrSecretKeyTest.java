@@ -11,7 +11,6 @@ public class SchnorrSecretKeyTest {
     public void testRandomKey() throws Exception {
 
         int samples = 100;
-
         for(int i = 0; i < samples; i++) {
             try(SchnorrKeyPair keyPair = SchnorrKeyPair.generate())
             {

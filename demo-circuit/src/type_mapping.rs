@@ -14,7 +14,7 @@ pub const SCHNORR_SIG_SIZE: usize = 2 * FIELD_SIZE;
 
 pub const VRF_PK_SIZE: usize = GROUP_COMPRESSED_SIZE;
 pub const VRF_SK_SIZE: usize = SCALAR_FIELD_SIZE;
-pub const VRF_PROOF_SIZE: usize = GROUP_SIZE + 2 * FIELD_SIZE;
+pub const VRF_PROOF_SIZE: usize = GROUP_COMPRESSED_SIZE + 2 * FIELD_SIZE;
 
 pub type Error = Box<dyn std::error::Error>;
 

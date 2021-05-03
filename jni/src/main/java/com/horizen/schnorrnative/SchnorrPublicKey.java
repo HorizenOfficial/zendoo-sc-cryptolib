@@ -5,7 +5,7 @@ import com.horizen.librustsidechains.*;
 public class SchnorrPublicKey implements AutoCloseable
 {
 
-  public static final int PUBLIC_KEY_LENGTH = 65;
+  public static final int PUBLIC_KEY_LENGTH = 33; // In compressed representation
 
   private long publicKeyPointer;
 

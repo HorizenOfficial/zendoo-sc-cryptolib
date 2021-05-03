@@ -442,9 +442,7 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
     let gamma_coords = proof.gamma.to_field_elements().unwrap();
 
     //Compute VRF output
-    let mut hash_input = Vec::new();
-    hash_input.push(msg.clone());
-    hash_input.extend_from_slice(gamma_coords.as_slice());
+
     let output = {
         let mut h = FieldHash::init_constant_length(3, None);
         h.update(msg.clone());
@@ -737,11 +735,13 @@ mod test {
 
         //Serialize/deserialize pk
         let pk_serialized = serialize_to_buffer(&pk).unwrap();
+        assert_eq!(pk_serialized.len(), SCHNORR_PK_SIZE);
         let pk_deserialized: SchnorrPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
         let sk_serialized = serialize_to_buffer(&sk).unwrap();
+        assert_eq!(sk_serialized.len(), SCHNORR_SK_SIZE);
         let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
         assert_eq!(sk, sk_deserialized);
 
@@ -750,6 +750,7 @@ mod test {
 
         //Serialize/deserialize sig
         let sig_serialized = serialize_to_buffer(&sig).unwrap();
+        assert_eq!(sig_serialized.len(), SCHNORR_SIG_SIZE);
         let sig_deserialized = deserialize_from_buffer(&sig_serialized).unwrap();
         assert_eq!(sig, sig_deserialized);
 
@@ -771,11 +772,13 @@ mod test {
 
         //Serialize/deserialize pk
         let pk_serialized = serialize_to_buffer(&pk).unwrap();
+        assert_eq!(pk_serialized.len(), VRF_PK_SIZE);
         let pk_deserialized: VRFPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
         let sk_serialized = serialize_to_buffer(&sk).unwrap();
+        assert_eq!(sk_serialized.len(), VRF_SK_SIZE);
         let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
         assert_eq!(sk, sk_deserialized);
 
@@ -784,6 +787,7 @@ mod test {
 
         //Serialize/deserialize vrf proof
         let proof_serialized = serialize_to_buffer(&vrf_proof).unwrap();
+        assert_eq!(proof_serialized.len(), VRF_PROOF_SIZE);
         let proof_deserialized = deserialize_from_buffer_checked(&proof_serialized).unwrap();
         assert_eq!(vrf_proof, proof_deserialized);
 

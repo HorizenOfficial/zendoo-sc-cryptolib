@@ -5,8 +5,12 @@ import com.horizen.schnorrnative.SchnorrKeyPair;
 import com.horizen.schnorrnative.SchnorrPublicKey;
 import com.horizen.schnorrnative.SchnorrSecretKey;
 import com.horizen.schnorrnative.SchnorrSignature;
-import org.junit.Before;
+import com.horizen.sigproofnative.*;
+import com.horizen.provingsystemnative.ProvingSystem;
+import com.horizen.provingsystemnative.ProvingSystem.ProvingSystemType;
+import org.junit.BeforeClass;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Test;
 
 import java.io.File;
@@ -14,6 +18,7 @@ import java.io.FileReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.Optional;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -31,6 +36,12 @@ public class NaiveThresholdSigProofTest {
     List<SchnorrPublicKey> publicKeyList = new ArrayList<>();
     List<SchnorrSignature> signatureList = new ArrayList<>();
     List<BackwardTransfer> btList = new ArrayList<>();
+    
+    static String dlogKeyPath = "./test_dlog_pk";
+    static String snarkPkPath = "./test_snark_pk";
+    static String snarkVkPath = "./test_snark_vk";
+    static int segmentSize = 1 << 17;
+    static ProvingSystemType psType = ProvingSystemType.COBOUNDARY_MARLIN;
 
 //    @Test
 //    public void testcreateProof() throws Exception {
@@ -222,6 +233,12 @@ public class NaiveThresholdSigProofTest {
 //
 //        createAndVerifyProof();
 //    }
+    
+    @BeforeClass
+    public static void initKeys() {
+        assertTrue(ProvingSystem.generateDLogKeys(psType, segmentSize, dlogKeyPath, Optional.empty()));
+        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath));
+    }
 
     @Test
     public void testCreateRandomProof() throws Exception {
@@ -273,16 +290,8 @@ public class NaiveThresholdSigProofTest {
 
     private void createAndVerifyProof() {
 
-        ClassLoader classLoader = getClass().getClassLoader();
-
-        String provingKeyPath = "./proving_key";
-        String verificationKeyPath = "./verification_key";
-
-        // Generate proving key and verification key
-        NaiveThresholdSigProof.setup(keyCount, provingKeyPath, verificationKeyPath);
-
-        CreateProofResult proofResult = NaiveThresholdSigProof.createProof(btList, endEpochBlockHash, prevEndEpochBlockHash,
-                signatureList, publicKeyList, threshold, provingKeyPath, false);
+        CreateProofResult proofResult = NaiveThresholdSigProof.createProof(psType, btList, endEpochBlockHash, prevEndEpochBlockHash,
+                signatureList, publicKeyList, threshold, snarkPkPath, false);
 
         assertNotNull("Proof creation must be successfull", proofResult);
 
@@ -292,24 +301,20 @@ public class NaiveThresholdSigProofTest {
         FieldElement constant = NaiveThresholdSigProof.getConstant(publicKeyList, threshold);
         assertNotNull("Constant creation must be successfull", constant);
 
-        boolean isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
-                prevEndEpochBlockHash, constant, quality, proof, true, verificationKeyPath, true);
+        boolean isProofVerified = NaiveThresholdSigProof.verifyProof(psType, btList, endEpochBlockHash,
+                prevEndEpochBlockHash, constant, quality, proof, true, snarkVkPath, true);
 
         assertTrue("Proof must be verified", isProofVerified);
 
         quality = threshold - 1;
-        isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
-                prevEndEpochBlockHash, constant, quality, proof, true, verificationKeyPath, true);
+        isProofVerified = NaiveThresholdSigProof.verifyProof(psType, btList, endEpochBlockHash,
+                prevEndEpochBlockHash, constant, quality, proof, true, snarkVkPath, true);
 
         assertFalse("Proof must not be verified", isProofVerified);
-
-        // Delete proving key and verification key
-        new File(provingKeyPath).delete();
-        new File(verificationKeyPath).delete();
     }
 
     @After
-    public void testFree(){
+    public void freeData() {
         for (SchnorrPublicKey pk: publicKeyList)
             pk.freePublicKey();
         publicKeyList.clear();
@@ -317,5 +322,15 @@ public class NaiveThresholdSigProofTest {
         for (SchnorrSignature sig: signatureList)
             sig.freeSignature();
         signatureList.clear();
+    }
+
+    @AfterClass
+    public static void deleteKeys(){
+        // Delete dlog key
+        new File(dlogKeyPath).delete();
+
+        // Delete proving key and verification key
+        new File(snarkPkPath).delete();
+        new File(snarkVkPath).delete();
     }
 }
