@@ -1,8 +1,10 @@
 package com.horizen.librustsidechains;
 
+import java.util.Random;
+
 public class FieldElement implements AutoCloseable {
 
-    public static int FIELD_ELEMENT_LENGTH = 96;
+    public static int FIELD_ELEMENT_LENGTH = 32;
 
     private long fieldElementPointer;
 
@@ -20,9 +22,17 @@ public class FieldElement implements AutoCloseable {
         return nativeCreateFromLong(value);
     }
 
-    private static native FieldElement nativeCreateRandom();
+    private static native FieldElement nativeCreateRandom(long seed);
 
-    public static FieldElement createRandom() { return nativeCreateRandom(); }
+    /*  NOTE: This function relies on a non-cryptographically safe RNG, therefore it
+     *  must be used ONLY for testing purposes
+     */
+    public static FieldElement createRandom(long seed) { return nativeCreateRandom(seed); }
+
+    public static FieldElement createRandom() {
+        long seed = new Random().nextLong();
+        return nativeCreateRandom(seed);
+    }
 
     private static native int nativeGetFieldElementSize();
 
@@ -32,7 +42,7 @@ public class FieldElement implements AutoCloseable {
 
     public byte[] serializeFieldElement() {
         if (fieldElementPointer == 0)
-            throw new IllegalArgumentException("Field element was freed.");
+            throw new IllegalStateException("Field element was freed.");
 
         return nativeSerializeFieldElement();
     }

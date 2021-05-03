@@ -1,18 +1,25 @@
 extern crate jni;
 
 use algebra::bytes::{FromBytes, FromBytesChecked, ToBytes};
+use demo_circuit::type_mapping::*;
 
 use std::{ptr::null_mut, any::type_name};
+use std::{fs::File, io::Result as IoResult};
 
-use std::panic;
+// use std::panic;
+use demo_circuit::generate_parameters;
 
 mod ginger_calls;
 use ginger_calls::*;
 
-
 fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
     assert!(!input.is_null());
     unsafe { &*input }
+}
+
+fn read_mut_raw_pointer<'a, T>(input: *mut T) -> &'a mut T {
+    assert!(!input.is_null());
+    unsafe { &mut *input }
 }
 
 fn read_nullable_raw_pointer<'a, T>(input: *const T) -> Option<&'a T> {
@@ -43,7 +50,7 @@ fn serialize_from_raw_pointer<T: ToBytes>(
 
 use jni::JNIEnv;
 use jni::objects::{JClass, JString, JObject, JValue};
-use jni::sys::{jbyteArray, jboolean, jint, jlong, jobject, jobjectArray};
+use jni::sys::{jbyteArray, jboolean, jint, jlong, /*jlongArray, */jobject, jobjectArray};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
 
 //Field element related functions
@@ -62,7 +69,7 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeSer
     let fe_pointer = _env.get_field(_field_element, "fieldElementPointer", "J")
         .expect("Cannot get field element pointer.");
 
-    let fe = read_raw_pointer({fe_pointer.j().unwrap() as *const FieldElement});
+    let fe = read_raw_pointer(fe_pointer.j().unwrap() as *const FieldElement);
 
     let mut fe_bytes = [0u8; FIELD_SIZE];
     serialize_from_raw_pointer(fe, &mut fe_bytes[..]);
@@ -103,10 +110,11 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCre
     // used, but still needs to have
     // an argument slot
     _class: JClass,
+    _seed: jlong,
 ) -> jobject
 {
     //Create random field element
-    let fe = get_random_field_element();
+    let fe = get_random_field_element(_seed as u64);
 
     //Return field element
     let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(fe)) as i64);
@@ -208,7 +216,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSer
     let public_key_pointer = _env.get_field(_schnorr_public_key, "publicKeyPointer", "J")
         .expect("Cannot get public key pointer.");
 
-    let public_key = read_raw_pointer({public_key_pointer.j().unwrap() as *const SchnorrPk});
+    let public_key = read_raw_pointer(public_key_pointer.j().unwrap() as *const SchnorrPk);
 
     let mut pk = [0u8; SCHNORR_PK_SIZE];
     serialize_from_raw_pointer(public_key, &mut pk[..]);
@@ -277,7 +285,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSer
     let secret_key_pointer = _env.get_field(_schnorr_secret_key, "secretKeyPointer", "J")
         .expect("Cannot get secret key pointer.");
 
-    let secret_key = read_raw_pointer({secret_key_pointer.j().unwrap() as *const SchnorrSk});
+    let secret_key = read_raw_pointer(secret_key_pointer.j().unwrap() as *const SchnorrSk);
 
     let mut sk = [0u8; SCHNORR_SK_SIZE];
     serialize_from_raw_pointer(secret_key, &mut sk[..]);
@@ -341,7 +349,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePu
     let public_key_pointer = _env.get_field(_vrf_public_key, "publicKeyPointer", "J")
         .expect("Cannot get public key pointer.");
 
-    let public_key = read_raw_pointer({public_key_pointer.j().unwrap() as *const VRFPk});
+    let public_key = read_raw_pointer(public_key_pointer.j().unwrap() as *const VRFPk);
 
     let mut pk = [0u8; VRF_PK_SIZE];
     serialize_from_raw_pointer(public_key, &mut pk[..]);
@@ -411,7 +419,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSe
     let secret_key_pointer = _env.get_field(_vrf_secret_key, "secretKeyPointer", "J")
         .expect("Should be able to read field secretKeyPointer");
 
-    let secret_key = read_raw_pointer({secret_key_pointer.j().unwrap() as *const VRFSk});
+    let secret_key = read_raw_pointer(secret_key_pointer.j().unwrap() as *const VRFSk);
 
     let mut sk = [0u8; VRF_SK_SIZE];
     serialize_from_raw_pointer(secret_key, &mut sk[..]);
@@ -725,20 +733,21 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVer
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeComputeHash(
+pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetPoseidonHash(
     _env: JNIEnv,
     _class: JClass,
-    _input: jobjectArray,
+    _personalization: jobjectArray,
 ) -> jobject
 {
-    //Read _input as array of FieldElement
-    let input_len = _env.get_array_length(_input)
-        .expect("Should be able to read input array size");
-    let mut input = vec![];
+    //Read _personalization as array of FieldElement
+    let personalization_len = _env.get_array_length(_personalization)
+        .expect("Should be able to read personalization array size");
+    let mut personalization = vec![];
 
-    for i in 0..input_len {
-        let field_obj = _env.get_object_array_element(_input, i)
-            .expect(format!("Should be able to read elem {} of the input array", i).as_str());
+    // Array can be empty
+    for i in 0..personalization_len {
+        let field_obj = _env.get_object_array_element(_personalization, i)
+            .expect(format!("Should be able to read elem {} of the personalization array", i).as_str());
 
         let field = {
 
@@ -748,17 +757,73 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeComput
             read_raw_pointer(f.j().unwrap() as *const FieldElement)
         };
 
-        input.push(*field);
+        personalization.push(*field);
     }
 
-    //Compute hash
-    let hash = match compute_poseidon_hash(input.as_slice()) {
-        Ok(hash) => hash,
-        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
+    //Instantiate PoseidonHash
+    let h = get_poseidon_hash(
+        if personalization.is_empty() { None } else { Some(personalization.as_slice()) }
+    );
+
+    //Return PoseidonHash instance
+    let h_ptr: jlong = jlong::from(Box::into_raw(Box::new(h)) as i64);
+
+    let h_class =  _env.find_class("com/horizen/poseidonnative/PoseidonHash")
+        .expect("Should be able to find PoseidonHash class");
+
+    let result = _env.new_object(h_class, "(J)V", &[
+        JValue::Long(h_ptr)]).expect("Should be able to create new long for PoseidonHash");
+
+    *result
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeUpdate(
+    _env: JNIEnv,
+    _h: JObject,
+    _input: JObject,
+){
+    //Read PoseidonHash instance
+    let digest = {
+
+        let h = _env.get_field(_h, "poseidonHashPointer", "J")
+            .expect("Should be able to get field poseidonHashPointer");
+
+        read_mut_raw_pointer(h.j().unwrap() as *mut FieldHash)
     };
 
-    //Return hash
-    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(hash)) as i64);
+    //Read input
+    let input = {
+
+        let i =_env.get_field(_input, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(i.j().unwrap() as *const FieldElement)
+    };
+
+    update_poseidon_hash(digest, input);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFinalize(
+    _env: JNIEnv,
+    _h: JObject,
+) -> jobject
+{
+    //Read PoseidonHash instance
+    let digest = {
+
+        let h = _env.get_field(_h, "poseidonHashPointer", "J")
+            .expect("Should be able to get field poseidonHashPointer");
+
+        read_raw_pointer(h.j().unwrap() as *const FieldHash)
+    };
+
+    //Get digest
+    let output = finalize_poseidon_hash(digest);
+
+    //Return output
+    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(output)) as i64);
 
     let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
         .expect("Should be able to find FieldElement class");
@@ -767,6 +832,479 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeComput
         JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
 
     *result
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeReset(
+    _env: JNIEnv,
+    _h: JObject,
+    _personalization: jobjectArray,
+){
+    //Read PoseidonHash instance
+    let digest = {
+
+        let h = _env.get_field(_h, "poseidonHashPointer", "J")
+            .expect("Should be able to get field poseidonHashPointer");
+
+        read_mut_raw_pointer(h.j().unwrap() as *mut FieldHash)
+    };
+
+    //Read _personalization as array of FieldElement
+    let personalization_len = _env.get_array_length(_personalization)
+        .expect("Should be able to read personalization array size");
+    let mut personalization = vec![];
+
+    // Array can be empty
+    for i in 0..personalization_len {
+        let field_obj = _env.get_object_array_element(_personalization, i)
+            .expect(format!("Should be able to read elem {} of the personalization array", i).as_str());
+
+        let field = {
+
+            let f =_env.get_field(field_obj, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            read_raw_pointer(f.j().unwrap() as *const FieldElement)
+        };
+
+        personalization.push(*field);
+    }
+
+    let personalization = if personalization.is_empty() { None } else { Some(personalization.as_slice()) };
+
+    reset_poseidon_hash(digest, personalization)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFreePoseidonHash(
+    _env: JNIEnv,
+    _h: JObject,
+)
+{
+    let h_pointer = _env.get_field(_h, "poseidonHashPointer", "J")
+        .expect("Cannot get poseidonHashPointer");
+
+    let h = h_pointer.j().unwrap() as *mut FieldHash;
+
+    if h.is_null()  { return }
+    drop(unsafe { Box::from_raw(h) });
+}
+
+//Merkle tree functions
+
+//////////// MERKLE PATH
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify(
+    _env: JNIEnv,
+    _path: JObject,
+    _height: jint,
+    _leaf: JObject,
+    _root: JObject,
+) -> jboolean
+{
+    let leaf = {
+
+        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let root = {
+
+        let fe =_env.get_field(_root, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    match verify_ginger_merkle_path(path, _height as usize, leaf, root) {
+        Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
+        Err(_) => JNI_FALSE // CRYPTO_ERROR
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerifyWithoutLengthCheck(
+    _env: JNIEnv,
+    _path: JObject,
+    _leaf: JObject,
+    _root: JObject,
+) -> jboolean
+{
+    let leaf = {
+
+        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let root = {
+
+        let fe =_env.get_field(_root, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    match verify_ginger_merkle_path_without_length_check(path, leaf, root) {
+        Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
+        Err(_) => JNI_FALSE // CRYPTO_ERROR
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeApply(
+    _env: JNIEnv,
+    _path: JObject,
+    _leaf: JObject,
+) -> jobject
+{
+    let path = {
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    let leaf = {
+
+        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let root = apply(path, leaf);
+
+    let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(root)) as i64);
+
+    let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Should be able to find FieldElement class");
+
+    let result = _env.new_object(field_class, "(J)V", &[
+        JValue::Long(field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+    *result
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsLeftmost(
+    _env: JNIEnv,
+    _path: JObject,
+) -> jboolean
+{
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    is_path_leftmost(path) as jboolean
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsRightmost(
+    _env: JNIEnv,
+    _path: JObject,
+) -> jboolean
+{
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    is_path_rightmost(path) as jboolean
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsNonEmptyRightmost(
+    _env: JNIEnv,
+    _path: JObject,
+) -> jboolean
+{
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    is_path_non_empty_rightmost(path) as jboolean
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeLeafIndex(
+    _env: JNIEnv,
+    _path: JObject,
+) -> jlong
+{
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    get_leaf_index_from_path(path) as jlong
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeSerialize(
+    _env: JNIEnv,
+    _path: JObject,
+) -> jbyteArray
+{
+    let path = {
+
+        let t =_env.get_field(_path, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    let path_bytes_len = get_path_size_in_bytes(path);
+    let mut path_bytes = vec![0u8; path_bytes_len];
+    serialize_to_buffer(path, path_bytes.as_mut_slice())
+        .expect("Unable to write Merkle Path to buffer");
+
+    _env.byte_array_from_slice(path_bytes.as_ref())
+        .expect("Cannot write Merkle Path to jbyteArray.")
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeDeserialize(
+    _env: JNIEnv,
+    _class: JClass,
+    _path_bytes: jbyteArray,
+) -> jobject
+{
+    let path_bytes = _env.convert_byte_array(_path_bytes)
+        .expect("Should be able to convert to Rust byte array");
+
+    let path_ptr: *const GingerMHTPath = deserialize_to_raw_pointer(path_bytes.as_slice());
+
+    let path: jlong = jlong::from(path_ptr as i64);
+
+    let path_class = _env.find_class("com/horizen/merkletreenative/MerklePath")
+        .expect("Cannot find MerklePath class.");
+
+    let path_object = _env.new_object(path_class, "(J)V",
+                                    &[JValue::Long(path)])
+        .expect("Cannot create MerklePath object.");
+
+    *path_object
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeFreeMerklePath(
+    _env: JNIEnv,
+    _class: JClass,
+    _path: *mut GingerMHTPath,
+)
+{
+    if _path.is_null()  { return }
+    drop(unsafe { Box::from_raw(_path) });
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeInit(
+    _env: JNIEnv,
+    _class: JClass,
+    _height: jint,
+    _processing_step: jlong,
+) -> jobject
+{
+    // Create new InMemoryOptimizedMerkleTree Rust side
+    let mt = new_ginger_mht(
+        _height as usize,
+        _processing_step as usize
+    );
+
+    // Create and return new InMemoryOptimizedMerkleTree Java side
+
+    let mt_ptr: jlong = jlong::from(Box::into_raw(Box::new(mt)) as i64);
+
+    _env.new_object(_class, "(J)V", &[JValue::Long(mt_ptr)])
+        .expect("Should be able to create new InMemoryOptimizedMerkleTree object")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeAppend(
+    _env: JNIEnv,
+    _tree: JObject,
+    _leaf: JObject,
+)
+{
+    let leaf = {
+
+        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+    };
+
+    let tree = {
+
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut GingerMHT)
+    };
+
+    append_leaf_to_ginger_mht(tree, leaf);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalize(
+    _env: JNIEnv,
+    _tree: JObject,
+) -> jobject
+{
+    let tree = {
+
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHT)
+    };
+
+    let tree_copy = finalize_ginger_mht(tree);
+
+    let tree_copy_ptr: jlong = jlong::from(Box::into_raw(Box::new(tree_copy)) as i64);
+
+    let tree_class = _env.find_class("com/horizen/merkletreenative/InMemoryOptimizedMerkleTree")
+        .expect("Cannot find InMemoryOptimizedMerkleTree class.");
+
+    _env.new_object(tree_class, "(J)V", &[JValue::Long(tree_copy_ptr)])
+        .expect("Cannot create InMemoryOptimizedMerkleTree object.")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalizeInPlace(
+    _env: JNIEnv,
+    _tree: JObject,
+)
+{
+    let tree = {
+
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut GingerMHT)
+    };
+
+    finalize_ginger_mht_in_place(tree);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeRoot(
+    _env: JNIEnv,
+    _tree: JObject,
+) -> jobject
+{
+    let tree = {
+
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHT)
+    };
+
+    let root = get_ginger_mht_root(tree)
+        .expect("Tree must've been finalized");
+
+    let root_ptr: jlong = jlong::from(Box::into_raw(Box::new(root)) as i64);
+
+    let fe_class = _env.find_class("com/horizen/librustsidechains/FieldElement")
+        .expect("Cannot find FieldElement class.");
+
+    _env.new_object(fe_class, "(J)V", &[JValue::Long(root_ptr)])
+        .expect("Cannot create FieldElement object.")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeGetMerklePath(
+    _env: JNIEnv,
+    _tree: JObject,
+    _leaf_index: jlong,
+) -> jobject
+{
+    let tree = {
+
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+
+        read_raw_pointer(t.j().unwrap() as *const GingerMHT)
+    };
+
+    let path = get_ginger_mht_path(tree, _leaf_index as u64)
+        .expect("Tree must've been finalized");
+
+    let path_ptr: jlong = jlong::from(Box::into_raw(Box::new(path)) as i64);
+
+    let path_class = _env.find_class("com/horizen/merkletreenative/MerklePath")
+        .expect("Cannot find MerklePath class.");
+
+    _env.new_object(path_class, "(J)V", &[JValue::Long(path_ptr)])
+        .expect("Cannot create MerklePath object.")
+        .into_inner()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeReset(
+    _env: JNIEnv,
+    _tree: JObject,
+)
+{
+    let tree = {
+
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+
+        read_mut_raw_pointer(t.j().unwrap() as *mut GingerMHT)
+    };
+
+    reset_ginger_mht(tree);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFreeInMemoryOptimizedMerkleTree(
+    _env: JNIEnv,
+    _class: JClass,
+    _tree: *mut GingerMHT,
+)
+{
+    if _tree.is_null()  { return }
+    drop(unsafe { Box::from_raw(_tree) });
 }
 
 //VRF utility functions
@@ -1100,10 +1638,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     let threshold = _threshold as u64;
 
     //Compute constant
-    let constant = match compute_pks_threshold_hash(pks.as_slice(), threshold){
-        Ok(constant) => constant,
-        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
-    };
+    let constant = compute_pks_threshold_hash(pks.as_slice(), threshold);
 
     //Return constant
     let field_ptr: jlong = jlong::from(Box::into_raw(Box::new(constant)) as i64);
@@ -1174,6 +1709,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         t.write(&mut end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
 
+        end_epoch_block_hash_bytes[FIELD_SIZE - 1] = end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
+
         read_field_element_from_buffer_with_padding(&end_epoch_block_hash_bytes)
             .expect("Should be able to read a FieldElement from a 32 byte array")
 
@@ -1187,6 +1724,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
         t.write(&mut prev_end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
+
+        prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] = prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
 
         read_field_element_from_buffer_with_padding(&prev_end_epoch_block_hash_bytes)
             .expect("Should be able to read a FieldElement from a 32 byte array")
@@ -1316,6 +1855,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         t.write(&mut end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
 
+        end_epoch_block_hash_bytes[FIELD_SIZE - 1] = end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
+
         end_epoch_block_hash_bytes
     };
 
@@ -1327,6 +1868,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
         t.write(&mut prev_end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
+
+        prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] = prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
 
         prev_end_epoch_block_hash_bytes
     };
@@ -1354,8 +1897,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     };
 
     //Serialize proof
-    let mut proof_bytes = [0u8; ZK_PROOF_SIZE];
-    proof.write(&mut proof_bytes[..])
+    let mut proof_bytes: Vec<u8> = vec![];
+    proof.write(&mut proof_bytes)
         .expect("Should be able to write proof into proof_bytes");
 
     //Return proof serialized
@@ -1375,7 +1918,38 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     *result
 }
 
-//Test functions
+// Test functions
+fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
+    let mut fs = File::create(file_path)?;
+    to_write.write(&mut fs)?;
+    Ok(())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeSetup(
+    _env: JNIEnv,
+    _class: JClass,
+    _max_pks: jlong,
+    _proving_key_path: JString,
+    _verification_key_path: JString,
+) {
+
+    // Read paths
+    let proving_key_path = _env.get_string(_proving_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    let verification_key_path = _env.get_string(_verification_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    let max_pks = _max_pks as usize;
+
+    let (pk, vk) = generate_parameters(max_pks)
+        .expect("Unable to generate (pk, vk)");
+
+    write_to_file(&pk, proving_key_path.to_str().unwrap()).unwrap();
+    write_to_file(&vk, verification_key_path.to_str().unwrap()).unwrap();
+}
+
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeVerifyProof(
     _env: JNIEnv,
@@ -1438,6 +2012,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         t.write(&mut end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
 
+        end_epoch_block_hash_bytes[FIELD_SIZE - 1] = end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
+
         end_epoch_block_hash_bytes
     };
 
@@ -1449,6 +2025,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
         t.write(&mut prev_end_epoch_block_hash_bytes[..])
             .expect("Should be able to write into byte array of fixed size");
+
+        prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] = prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
 
         prev_end_epoch_block_hash_bytes
     };

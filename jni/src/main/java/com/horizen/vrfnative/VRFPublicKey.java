@@ -6,7 +6,7 @@ import com.horizen.librustsidechains.Library;
 public class VRFPublicKey implements AutoCloseable
 {
 
-  public static final int PUBLIC_KEY_LENGTH = 193;
+  public static final int PUBLIC_KEY_LENGTH = 65;
 
   private long publicKeyPointer;
 
@@ -35,7 +35,7 @@ public class VRFPublicKey implements AutoCloseable
 
   public byte[] serializePublicKey() {
     if (publicKeyPointer == 0)
-      throw new IllegalArgumentException("Public key was freed.");
+      throw new IllegalStateException("Public key was freed.");
 
     return nativeSerializePublicKey();
   }
@@ -53,7 +53,7 @@ public class VRFPublicKey implements AutoCloseable
 
   public boolean verifyKey() {
     if (publicKeyPointer == 0)
-      throw new IllegalArgumentException("Public key was freed.");
+      throw new IllegalStateException("Public key was freed.");
 
     return nativeVerifyKey();
   }
@@ -62,7 +62,7 @@ public class VRFPublicKey implements AutoCloseable
 
   public FieldElement proofToHash(VRFProof proof, FieldElement message) {
     if (publicKeyPointer == 0)
-      throw new IllegalArgumentException("Public key was freed.");
+      throw new IllegalStateException("Public key was freed.");
 
     return nativeProofToHash(proof, message);
   }

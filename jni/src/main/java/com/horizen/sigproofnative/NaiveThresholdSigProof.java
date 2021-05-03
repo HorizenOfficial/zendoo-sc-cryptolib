@@ -22,6 +22,12 @@ public class NaiveThresholdSigProof {
         return nativeCreateMsgToSign(bt, endEpochBlockHash, prevEndEpochBlockHash);
     }
 
+    public static void setup(long maxPks, String provingKeyPath, String verificationKeyPath) {
+        nativeSetup(maxPks, provingKeyPath, verificationKeyPath);
+    }
+
+    private static native void nativeSetup(long maxPks, String provingKeyPath, String verificationKeyPath);
+
     private static native CreateProofResult nativeCreateProof(BackwardTransfer[] bt,
                                                    byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
                                                    SchnorrSignature[] schnorrSignatures, SchnorrPublicKey[] schnorrPublicKeys,

@@ -1,67 +1,43 @@
 use algebra::{
-    fields::{
-        mnt4753::{Fr as MNT4Fr, Fq as MNT4Fq}, PrimeField
-    },
     curves::{
-        mnt4753::MNT4,
-        mnt6753::{
-            G1Projective as MNT6G1Projective, G1Affine as MNT6G1Affine
-        },
+        tweedle::dum::Projective as Projective
     },
-    FromBytes, FromBytesChecked, SemanticallyValid, ToBytes,
-    BigInteger768,
-    ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand,
+    PrimeField, ProjectiveCurve, AffineCurve,
+    FromBytes, FromBytesChecked, validity::SemanticallyValid, ToBytes, ToConstraintField,
+    UniformRand,
 };
-use primitives::{
-    crh::{
-        poseidon::MNT4PoseidonHash,
-        FieldBasedHash,
-        bowe_hopwood::{
-            BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters
-        },
+use primitives::{crh::{
+    FieldBasedHash,
+    bowe_hopwood::{
+        BoweHopwoodPedersenParameters
     },
-    merkle_tree::field_based_mht::{
-        FieldBasedMerkleHashTree, FieldBasedMerkleTreeConfig,
-        FieldBasedMerkleTreePath, MNT4753_PHANTOM_MERKLE_ROOT,
+}, merkle_tree::field_based_mht::{
+    parameters::tweedle_fr::TWEEDLE_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS,
+    FieldBasedMerkleTree,
+    FieldBasedMerkleTreePath,
+}, signature::{
+    FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
+        FieldBasedSchnorrPk,
     },
-    signature::{
-        FieldBasedSignatureScheme, schnorr::field_based_schnorr::*,
-    },
-    vrf::{FieldBasedVrf, ecvrf::*},
-};
-use proof_systems::groth16::{
-    Proof, create_random_proof,
-    prepare_verifying_key, verify_proof,
-};
+}, vrf::{FieldBasedVrf, ecvrf::*}};
+
 use demo_circuit::{
     constants::{
-        VRFParams, VRFWindow,
+        VRFParams,
     },
-    naive_threshold_sig::*
+    naive_threshold_sig::*,
+    type_mapping::*,
 };
-use rand::rngs::OsRng;
-
+use rand::{
+    SeedableRng, rngs::OsRng, thread_rng
+};
+use rand_xorshift::XorShiftRng;
 use std::{
     fs::File, io::Result as IoResult
 };
 use lazy_static::*;
 
-pub type FieldElement = MNT4Fr;
-pub const FIELD_SIZE: usize = 96; //Field size in bytes
-pub const SCALAR_FIELD_SIZE: usize = FIELD_SIZE;// 96
-pub const G1_SIZE: usize = 193;
-pub const G2_SIZE: usize = 385;
-
-pub const SCHNORR_PK_SIZE: usize = G1_SIZE; // 193
-pub const SCHNORR_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 96
-pub const SCHNORR_SIG_SIZE: usize = 2 * FIELD_SIZE; // 192
-
-pub const VRF_PK_SIZE: usize = G1_SIZE; // 193
-pub const VRF_SK_SIZE: usize = SCALAR_FIELD_SIZE; // 96
-pub const VRF_PROOF_SIZE: usize = G1_SIZE + 2 * FIELD_SIZE; // 192
-
-pub const ZK_PROOF_SIZE: usize = 2 * G1_SIZE + G2_SIZE;  // 771
-pub type Error = Box<dyn std::error::Error>;
+use marlin::{IndexProverKey, IndexVerifierKey};
 
 //*******************************Generic functions**********************************************
 // Note: Should decide if panicking or handling IO errors
@@ -92,17 +68,14 @@ pub fn is_valid<T: SemanticallyValid>(to_check: &T) -> bool {
     T::is_valid(to_check)
 }
 
-pub fn get_random_field_element() -> FieldElement {
-    let mut rng = OsRng;
+// NOTE: This function relies on a non-cryptographically safe RNG, therefore it
+// must be used ONLY for testing purposes
+pub fn get_random_field_element(seed: u64) -> FieldElement {
+    let mut rng = XorShiftRng::seed_from_u64(seed);
     FieldElement::rand(&mut rng)
 }
 
 //***************************Schnorr types and functions********************************************
-
-pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<MNT4Fr, MNT6G1Projective, MNT4PoseidonHash>;
-pub type SchnorrSig = FieldBasedSchnorrSignature<MNT4Fr, MNT6G1Projective>;
-pub type SchnorrPk = MNT6G1Affine;
-pub type SchnorrSk = MNT4Fq;
 
 pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
     let mut rng = OsRng;
@@ -127,15 +100,25 @@ pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &
     SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), &[*msg], signature)
 }
 
-//************************************Poseidon Hash function****************************************
+//************************************Poseidon Hash functions****************************************
 
-pub fn compute_poseidon_hash(input: &[FieldElement]) -> Result<FieldElement, Error> {
-    MNT4PoseidonHash::evaluate(input)
+pub fn get_poseidon_hash(personalization: Option<&[FieldElement]>) -> FieldHash {
+    FieldHash::init(personalization)
+}
+
+pub fn update_poseidon_hash(hash: &mut FieldHash, input: &FieldElement){
+    hash.update(*input);
+}
+
+pub fn reset_poseidon_hash(hash: &mut FieldHash, personalization: Option<&[FieldElement]>){
+    hash.reset(personalization);
+}
+
+pub fn finalize_poseidon_hash(hash: &FieldHash) -> FieldElement{
+    hash.finalize()
 }
 
 //*****************************Naive threshold sig circuit related functions************************
-
-pub type SCProof = Proof<MNT4>;
 
 #[derive(Clone, Default)]
 pub struct BackwardTransfer {
@@ -172,16 +155,33 @@ pub fn read_field_element_from_buffer_with_padding(buffer: &[u8]) -> IoResult<Fi
 }
 
 pub fn read_field_element_from_u64(num: u64) -> FieldElement {
-    FieldElement::from_repr(BigInteger768::from(num))
+    FieldElement::from_repr(FieldBigInteger::from(num))
 }
 
 // Computes H(H(pks), threshold): used to generate the constant value needed to be declared
 // in MC during SC creation.
-pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<FieldElement, Error> {
+pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> FieldElement {
     let threshold_field = read_field_element_from_u64(threshold);
-    let pks_x = pks.iter().map(|pk| pk.x).collect::<Vec<_>>();
-    let pks_hash = compute_poseidon_hash(pks_x.as_slice())?;
-    compute_poseidon_hash(&[pks_hash, threshold_field])
+    let mut h = FieldHash::init(None);
+    pks.iter().for_each(|pk| { h.update(pk.x); });
+    let pks_hash = h.finalize();
+    h
+        .reset(None)
+        .update(pks_hash)
+        .update(threshold_field)
+        .finalize()
+}
+
+const BT_MERKLE_TREE_HEIGHT: usize = 12;
+
+fn compute_bt_root(bts: &[FieldElement]) -> Result<FieldElement, Error> {
+    let mut bt_mt =
+        GingerMHT::init(BT_MERKLE_TREE_HEIGHT, 2usize.pow(BT_MERKLE_TREE_HEIGHT as u32));
+    for &bt in bts.iter(){
+        bt_mt.append(bt);
+    }
+    bt_mt.finalize_in_place();
+    bt_mt.root().ok_or(Error::from("Failed to compute BT Merkle Tree root"))
 }
 
 //Compute and return (MR(bt_list), H(MR(bt_list), H(bi-1), H(bi))
@@ -192,7 +192,7 @@ pub fn compute_msg_to_sign(
 ) -> Result<(FieldElement, FieldElement), Error> {
 
     let mr_bt = if bt_list.is_empty() {
-        MNT4753_PHANTOM_MERKLE_ROOT
+        MHT_PARAMETERS.nodes[BT_MERKLE_TREE_HEIGHT].clone()
     } else {
         let mut bt_field_list = vec![];
         for bt in bt_list.iter() {
@@ -201,12 +201,15 @@ pub fn compute_msg_to_sign(
         }
 
         //Compute bt_list merkle_root
-        let bt_mt = new_ginger_merkle_tree(bt_field_list.as_slice())?;
-        get_ginger_merkle_root(&bt_mt)
+        compute_bt_root(bt_field_list.as_slice())?
     };
 
     //Compute message to be verified
-    let msg = compute_poseidon_hash(&[mr_bt, *prev_end_epoch_mc_b_hash, *end_epoch_mc_b_hash])?;
+    let msg = FieldHash::init(None)
+        .update(mr_bt)
+        .update(*prev_end_epoch_mc_b_hash)
+        .update(*end_epoch_mc_b_hash)
+        .finalize();
 
     Ok((mr_bt, msg))
 }
@@ -220,7 +223,12 @@ pub fn compute_wcert_sysdata_hash(
 
     //Compute quality and wcert_sysdata_hash
     let quality = read_field_element_from_u64(valid_sigs);
-    let wcert_sysdata_hash = compute_poseidon_hash(&[quality, *mr_bt, *prev_end_epoch_mc_b_hash, *end_epoch_mc_b_hash])?;
+    let wcert_sysdata_hash = FieldHash::init(None)
+        .update(quality)
+        .update(*mr_bt)
+        .update(*prev_end_epoch_mc_b_hash)
+        .update(*end_epoch_mc_b_hash)
+        .finalize();
     Ok(wcert_sysdata_hash)
 }
 
@@ -276,7 +284,7 @@ pub fn create_naive_threshold_sig_proof(
     );
 
     //Read proving key
-    let params = if enforce_membership {
+    let pk: IndexProverKey<FieldElement, IPAPC> = if enforce_membership {
         read_from_file_checked(proving_key_path)
     } else {
         read_from_file(proving_key_path)
@@ -284,7 +292,8 @@ pub fn create_naive_threshold_sig_proof(
 
     //Create and return proof
     let mut rng = OsRng;
-    let proof = create_random_proof(c, &params, &mut rng)?;
+    let proof = MarlinInst::prove::<_, OsRng>(&pk, c, &mut rng).unwrap();
+
     Ok((proof, valid_signatures))
 }
 
@@ -304,16 +313,21 @@ pub fn verify_naive_threshold_sig_proof(
     let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
     let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
     let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
-    let aggregated_input = compute_poseidon_hash(&[*constant, wcert_sysdata_hash])?;
+    let aggregated_input = FieldHash::init(None)
+        .update(*constant)
+        .update(wcert_sysdata_hash)
+        .finalize();
+
+    let rng = &mut thread_rng();
 
     //Verify proof
-    let vk = if enforce_membership {
+    let vk: IndexVerifierKey<FieldElement, IPAPC> = if enforce_membership {
         read_from_file_checked(vk_path)
     } else {
         read_from_file(vk_path)
     }?;
-    let pvk = prepare_verifying_key(&vk); //Get verifying key
-    let is_verified = verify_proof(&pvk, &proof, &[aggregated_input])?;
+
+    let is_verified = MarlinInst::verify(&vk, &[aggregated_input], &proof, rng).unwrap();
 
     Ok(is_verified)
 }
@@ -321,18 +335,11 @@ pub fn verify_naive_threshold_sig_proof(
 //VRF types and functions
 
 lazy_static! {
-    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<MNT6G1Projective> = {
+    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<Projective> = {
         let params = VRFParams::new();
-        BoweHopwoodPedersenParameters::<MNT6G1Projective>{generators: params.group_hash_generators}
+        BoweHopwoodPedersenParameters::<Projective>{generators: params.group_hash_generators}
     };
 }
-
-type GroupHash = BoweHopwoodPedersenCRH<MNT6G1Projective, VRFWindow>;
-
-pub type VRFScheme = FieldBasedEcVrf<MNT4Fr, MNT6G1Projective, MNT4PoseidonHash, GroupHash>;
-pub type VRFProof = FieldBasedEcVrfProof<MNT4Fr, MNT6G1Projective>;
-pub type VRFPk = MNT6G1Affine;
-pub type VRFSk = MNT4Fq;
 
 pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
     let mut rng = OsRng;
@@ -341,11 +348,11 @@ pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
 }
 
 pub fn vrf_get_public_key(sk: &VRFSk) -> VRFPk {
-    SchnorrSigScheme::get_public_key(sk).0.into_affine()
+    VRFScheme::get_public_key(sk).0.into_affine()
 }
 
 pub fn vrf_verify_public_key(pk: &VRFPk) -> bool {
-    SchnorrSigScheme::keyverify(&FieldBasedSchnorrPk(pk.into_projective()))
+    VRFScheme::keyverify(&FieldBasedEcVrfPk(pk.into_projective()))
 }
 
 pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof, FieldElement), Error> {
@@ -364,10 +371,12 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
     let gamma_coords = proof.gamma.to_field_elements().unwrap();
 
     //Compute VRF output
-    let mut hash_input = Vec::new();
-    hash_input.push(*msg);
-    hash_input.extend_from_slice(gamma_coords.as_slice());
-    let output = compute_poseidon_hash(hash_input.as_ref())?;
+    let output = {
+        let mut h = FieldHash::init(None);
+        h.update(*msg);
+        gamma_coords.into_iter().for_each(|c| { h.update(c); });
+        h.finalize()
+    };
 
     Ok((proof, output))
 }
@@ -378,45 +387,105 @@ pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Re
 
 //************Merkle Tree functions******************
 
-pub struct FieldBasedMerkleTreeParams;
+////////////MERKLE_PATH
 
-impl FieldBasedMerkleTreeConfig for FieldBasedMerkleTreeParams {
-    const HEIGHT: usize = 13;
-    type H = MNT4PoseidonHash;
+pub fn verify_ginger_merkle_path(
+    path: &GingerMHTPath,
+    height: usize,
+    leaf: &FieldElement,
+    root: &FieldElement
+) -> Result<bool, Error> {
+    path.verify(height, leaf, root)
 }
 
-type GingerMerkleTree = FieldBasedMerkleHashTree<FieldBasedMerkleTreeParams>;
-
-#[allow(dead_code)]
-type GingerMerkleTreePath = FieldBasedMerkleTreePath<FieldBasedMerkleTreeParams>;
-
-pub fn new_ginger_merkle_tree(leaves: &[FieldElement]) -> Result<GingerMerkleTree, Error> {
-    GingerMerkleTree::new(leaves)
+pub fn verify_ginger_merkle_path_without_length_check(
+    path: &GingerMHTPath,
+    leaf: &FieldElement,
+    root: &FieldElement
+) -> Result<bool, Error> {
+    path.verify_without_length_check(leaf, root)
 }
 
-pub fn get_ginger_merkle_root(tree: &GingerMerkleTree) -> FieldElement {
+pub fn is_path_leftmost(path: &GingerMHTPath) -> bool {
+    path.is_leftmost()
+}
+
+pub fn is_path_rightmost(path: &GingerMHTPath) -> bool {
+    path.is_rightmost()
+}
+
+pub fn is_path_non_empty_rightmost(path: &GingerMHTPath) -> bool { path.is_non_empty_rightmost() }
+
+pub fn get_leaf_index_from_path(path: &GingerMHTPath) -> u64 {
+    path.leaf_index() as u64
+}
+
+pub fn get_path_size_in_bytes(path: &GingerMHTPath) -> usize {
+    ((1 + FIELD_SIZE) * path.get_length()) + 1
+}
+
+pub fn apply(path: &GingerMHTPath, leaf: &FieldElement) -> FieldElement
+{
+    let mut digest = FieldHash::init(None);
+    let mut prev_node = *leaf;
+    for &(sibling, direction) in path.get_raw_path().as_slice() {
+
+        // Choose left and right hash according to direction
+        let (left, right) = if !direction {
+            (prev_node, sibling)
+        } else {
+            (sibling, prev_node)
+        };
+
+        // Compute the parent node
+        prev_node = digest
+            .update(left)
+            .update(right)
+            .finalize();
+
+        digest.reset(None);
+    }
+    prev_node
+}
+
+////////////OPTIMIZED MERKLE TREE
+
+pub fn new_ginger_mht(height: usize, processing_step: usize) -> GingerMHT {
+    GingerMHT::init(height, processing_step)
+}
+
+pub fn append_leaf_to_ginger_mht(tree: &mut GingerMHT, leaf: &FieldElement){
+    tree.append(*leaf);
+}
+
+pub fn finalize_ginger_mht(tree: &GingerMHT) -> GingerMHT {
+    tree.finalize()
+}
+
+pub fn finalize_ginger_mht_in_place(tree: &mut GingerMHT) {
+    tree.finalize_in_place();
+}
+
+pub fn get_ginger_mht_root(tree: &GingerMHT) -> Option<FieldElement> {
     tree.root()
 }
 
-#[allow(dead_code)]
-pub fn get_ginger_merkle_path(leaf: &FieldElement, leaf_index: usize, tree: &GingerMerkleTree)
-    -> Result<GingerMerkleTreePath, Error>
-{
-    tree.generate_proof(leaf_index, leaf)
+pub fn get_ginger_mht_path(tree: &GingerMHT, leaf_index: u64) -> Option<GingerMHTPath> {
+    match tree.get_merkle_path(leaf_index as usize) {
+        Some(path) => Some(path.into()),
+        None => None,
+    }
 }
 
-#[allow(dead_code)]
-pub fn verify_ginger_merkle_path(path: GingerMerkleTreePath, merkle_root: &FieldElement, leaf: &FieldElement)
-    -> Result<bool, Error>
-{
-    path.verify(merkle_root, leaf)
+pub fn reset_ginger_mht(tree: &mut GingerMHT){
+    tree.reset();
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use rand::RngCore;
-    use algebra::{ToBytes, to_bytes};
+    use algebra::{to_bytes, ToBytes, Field};
 
     fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
         let mut fs = File::create(file_path)?;
@@ -448,10 +517,17 @@ mod test {
         let mut prev_end_epoch_mc_b_hash = [0u8; 32];
         rng.fill_bytes(&mut end_epoch_mc_b_hash);
         rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
-        println!("embh {:?}", end_epoch_mc_b_hash);
-        println!("prev embh {:?}", prev_end_epoch_mc_b_hash);
-        println!("embh signed {:?}", into_i8(end_epoch_mc_b_hash.to_vec()));
-        println!("prev embh signed {:?}", into_i8(prev_end_epoch_mc_b_hash.to_vec()));
+        println!("end epoch u8: {:?}", end_epoch_mc_b_hash);
+        println!("prev end epoch u8: {:?}", prev_end_epoch_mc_b_hash);
+        println!("end epoch i8: {:?}", into_i8(end_epoch_mc_b_hash.to_vec()));
+        println!("prev end epoch i8: {:?}", into_i8(prev_end_epoch_mc_b_hash.to_vec()));
+
+        let mut end_epoch_mc_b_hash = end_epoch_mc_b_hash;
+        end_epoch_mc_b_hash[FIELD_SIZE - 1] = end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
+
+        let mut prev_end_epoch_mc_b_hash = prev_end_epoch_mc_b_hash;
+        prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] = prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
+
         let end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
         let prev_end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
 
@@ -459,6 +535,7 @@ mod test {
         for _ in 0..bt_num {
             bt_list.push(BackwardTransfer::default());
         }
+        println!("bt_list finished");
 
         //Compute msg to sign
         let (_, msg) = compute_msg_to_sign(
@@ -466,14 +543,18 @@ mod test {
             &prev_end_epoch_mc_b_hash_f,
             bt_list.as_slice()
         ).unwrap();
+        println!("compute_msg_to_sign finished");
 
         //Generate params and write them to file
         let params = generate_parameters(3).unwrap();
-        let proving_key_path = "./sample_proving_key";
-        write_to_file(&params, proving_key_path).unwrap();
+        println!("generate_parameters finished");
+        let proving_key_path = if bt_num != 0 {"./sample_pk"} else {"./sample_pk_no_bwt"};
+        write_to_file(&params.0, proving_key_path).unwrap();
+        println!("generate_parameters write_to_file finished");
 
-        let verifying_key_path = "./sample_vk";
-        write_to_file(&(params.vk), verifying_key_path).unwrap();
+        let verifying_key_path = if bt_num != 0 {"./sample_vk"} else {"./sample_vk_no_bwt"};
+        write_to_file(&params.1, verifying_key_path).unwrap();
+        println!("verifying_key write_to_file finished");
 
         //Generate sample pks and sigs vec
         let threshold: u64 = 2;
@@ -485,16 +566,22 @@ mod test {
             sks.push(keypair.1);
             println!("sk: {:?}", into_i8(to_bytes!(keypair.1).unwrap()).to_vec());
         }
+        println!("pks / sks finished");
 
         let mut sigs = vec![];
         sigs.push(Some(schnorr_sign(&msg, &sks[0], &pks[0]).unwrap()));
         sigs.push(None);
         sigs.push(Some(schnorr_sign(&msg, &sks[2], &pks[2]).unwrap()));
-        println!("sig: {:?}", into_i8(to_bytes!(sigs[0].unwrap()).unwrap()).to_vec());
-        println!("sig: {:?}", into_i8(to_bytes!(sigs[2].unwrap()).unwrap()).to_vec());
 
-        let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
-        println!("constant: {:?}", to_bytes!(constant));
+        println!("sk: {:?}", into_i8(to_bytes!(sks[0]).unwrap()));
+        println!("sk: {:?}", into_i8(to_bytes!(sks[2]).unwrap()));
+        println!("sk: {:?}", into_i8(to_bytes!(sks[1]).unwrap()));
+
+        println!("sig: {:?}", into_i8(to_bytes!(sigs[0].unwrap()).unwrap()));
+        println!("sig: {:?}", into_i8(to_bytes!(sigs[2].unwrap()).unwrap()));
+
+        let constant = compute_pks_threshold_hash(pks.as_slice(), threshold);
+        println!("Constant u8: {:?}", to_bytes!(constant).unwrap());
 
         //Create and serialize proof
         let (proof, quality) = create_naive_threshold_sig_proof(
@@ -507,7 +594,7 @@ mod test {
             proving_key_path,
             false,
         ).unwrap();
-        let proof_path = "./sample_proof";
+        let proof_path = if bt_num != 0 {"./sample_proof"} else {"./sample_proof_no_bwt"};
         write_to_file(&proof, proof_path).unwrap();
 
         //Verify proof
@@ -518,7 +605,7 @@ mod test {
             bt_list.as_slice(),
             quality,
             &proof,
-            "./sample_vk",
+            verifying_key_path,
             true,
         ).unwrap());
 
@@ -531,19 +618,21 @@ mod test {
             bt_list.as_slice(),
             quality - 1,
             &proof,
-            "./sample_vk",
+            verifying_key_path,
             true,
         ).unwrap());
     }
 
     #[test]
-    fn naive_threshold_sig_circuit_test() {
+    fn sample_calls_naive_threshold_sig_circuit() {
+        println!("****************With BWT**********************");
         create_sample_naive_threshold_sig_circuit(10);
+        println!("****************Without BWT*******************");
         create_sample_naive_threshold_sig_circuit(0);
     }
 
     #[test]
-    fn sample_schnorr_sig_prove_verify(){
+    fn sample_calls_schnorr_sig_prove_verify(){
         let mut rng = OsRng;
         let msg = FieldElement::rand(&mut rng);
 
@@ -554,7 +643,7 @@ mod test {
         //Serialize/deserialize pk
         let mut pk_serialized = vec![0u8; SCHNORR_PK_SIZE];
         serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
-        let pk_deserialized = deserialize_from_buffer_checked(&pk_serialized).unwrap();
+        let pk_deserialized: SchnorrPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
@@ -580,7 +669,7 @@ mod test {
     }
 
     #[test]
-    fn sample_vrf_prove_verify(){
+    fn sample_calls_vrf_prove_verify(){
         let mut rng = OsRng;
         let msg = FieldElement::rand(&mut rng);
 
@@ -591,7 +680,7 @@ mod test {
         //Serialize/deserialize pk
         let mut pk_serialized = vec![0u8; VRF_PK_SIZE];
         serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
-        let pk_deserialized = deserialize_from_buffer_checked(&pk_serialized).unwrap();
+        let pk_deserialized: VRFPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
@@ -624,22 +713,103 @@ mod test {
     }
 
     #[test]
-    fn sample_merkle_tree(){
-        let leaves_num = 16;
-        let mut leaves = vec![];
-        let mut rng = OsRng;
-        for _ in 0..leaves_num {
-            leaves.push(FieldElement::rand(&mut rng));
+    fn sample_calls_merkle_path() {
+        let height = 6;
+        let leaves_num = 2usize.pow(height as u32);
+
+        // Get GingerMHT
+        let mut mht = new_ginger_mht(height, leaves_num);
+
+        // Add leaves
+        let mut mht_leaves = Vec::with_capacity(leaves_num);
+        for i in 0..leaves_num/2 {
+            let leaf = get_random_field_element(i as u64);
+            mht_leaves.push(leaf);
+            append_leaf_to_ginger_mht(&mut mht, &leaf);
+        }
+        for _ in leaves_num/2..leaves_num {
+            mht_leaves.push(FieldElement::zero());
         }
 
-        let mt = GingerMerkleTree::new(leaves.as_slice()).unwrap();
-        let root = get_ginger_merkle_root(&mt);
-        let wrong_root = FieldElement::rand(&mut rng);
+        // Compute the root
+        finalize_ginger_mht_in_place(&mut mht);
+        let mht_root = get_ginger_mht_root(&mht).expect("Tree must've been finalized");
 
         for i in 0..leaves_num {
-            let path = get_ginger_merkle_path(&leaves[i], i, &mt).unwrap();
-            assert!(verify_ginger_merkle_path(path.clone(), &root, &leaves[i]).unwrap());
-            assert!(!verify_ginger_merkle_path(path, &wrong_root, &leaves[i]).unwrap());
+
+            //Create and verify merkle paths for each leaf
+            let path = get_ginger_mht_path(&mht, i as u64).unwrap();
+            assert!(verify_ginger_merkle_path_without_length_check(&path,&mht_leaves[i], &mht_root).unwrap());
+
+            // Check leaf index is the correct one
+            assert_eq!(i as u64, get_leaf_index_from_path(&path));
+
+            if i == 0 { // leftmost check
+                assert!(is_path_leftmost(&path));
+            }
+            else if i == (leaves_num / 2) - 1 { // non-empty rightmost check
+                assert!(is_path_non_empty_rightmost(&path));
+            }
+            else if i == leaves_num - 1 { //rightmost check
+                assert!(is_path_rightmost(&path));
+            }
+            else { // Other cases check
+                assert!(!is_path_leftmost(&path));
+                assert!(!is_path_rightmost(&path));
+
+                if i < (leaves_num / 2) - 1 {
+                    assert!(!is_path_non_empty_rightmost(&path));
+                }
+            }
+
+            // Serialization/deserialization test
+            let path_size = get_path_size_in_bytes(&path);
+            let mut path_serialized = vec![0u8; path_size];
+            serialize_to_buffer(&path, &mut path_serialized).unwrap();
+            let path_deserialized: GingerMHTPath = deserialize_from_buffer(&path_serialized).unwrap();
+            assert_eq!(path, path_deserialized);
         }
+    }
+
+    #[test]
+    fn sample_calls_poseidon_hash(){
+        let mut rng = OsRng;
+        let hash_input = vec![FieldElement::rand(&mut rng); 2];
+        let mut h = get_poseidon_hash(None);
+
+        //Compute poseidon hash
+        update_poseidon_hash(&mut h, &hash_input[0]);
+        update_poseidon_hash(&mut h, &hash_input[1]);
+        let h_output = finalize_poseidon_hash(&h);
+
+        //Call to finalize keeps the state
+        reset_poseidon_hash(&mut h, None);
+        update_poseidon_hash(&mut h, &hash_input[0]);
+        finalize_poseidon_hash(&h); //Call to finalize() keeps the state
+        update_poseidon_hash(&mut h, &hash_input[1]);
+        assert_eq!(h_output, finalize_poseidon_hash(&h));
+
+        //finalize() is idempotent
+        assert_eq!(h_output, finalize_poseidon_hash(&h));
+    }
+
+
+    #[test]
+    fn read_field_test(){
+        let mut rng = OsRng;
+
+        let mut end_epoch_mc_b_hash = [0u8; 32];
+        let mut prev_end_epoch_mc_b_hash = [0u8; 32];
+        rng.fill_bytes(&mut end_epoch_mc_b_hash);
+        rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
+
+        let mut end_epoch_mc_b_hash = end_epoch_mc_b_hash;
+        end_epoch_mc_b_hash[FIELD_SIZE - 1] = end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
+
+        let mut prev_end_epoch_mc_b_hash = prev_end_epoch_mc_b_hash;
+        prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] = prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
+
+        let _ = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
+        let _ = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
     }
 }

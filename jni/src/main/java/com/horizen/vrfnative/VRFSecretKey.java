@@ -4,7 +4,7 @@ import com.horizen.librustsidechains.Library;
 
 public class VRFSecretKey implements AutoCloseable
 {
-    public static final int SECRET_KEY_LENGTH = 96;
+    public static final int SECRET_KEY_LENGTH = 32;
 
     private long secretKeyPointer;
 
@@ -33,7 +33,7 @@ public class VRFSecretKey implements AutoCloseable
 
     public byte[] serializeSecretKey() {
         if (secretKeyPointer == 0)
-            throw new IllegalArgumentException("Secret key was freed.");
+            throw new IllegalStateException("Secret key was freed.");
 
         return nativeSerializeSecretKey();
     }
@@ -51,7 +51,7 @@ public class VRFSecretKey implements AutoCloseable
 
     public VRFPublicKey getPublicKey() {
         if (secretKeyPointer == 0)
-            throw new IllegalArgumentException("Secret key was freed.");
+            throw new IllegalStateException("Secret key was freed.");
 
         return nativeGetPublicKey();
     }

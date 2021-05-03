@@ -1,7 +1,7 @@
 use algebra::{
-    fields::mnt4753::Fr,
-    curves::mnt6753::G1Projective,
-    biginteger::BigInteger768 as BigInteger,
+    fields::tweedle::Fr,
+    curves::tweedle::dum::Projective,
+    biginteger::BigInteger256 as BigInteger,
     Field, PrimeField, ProjectiveCurve,
 };
 
@@ -14,66 +14,51 @@ use primitives::{
 
 pub mod constants;
 
-pub struct NaiveThresholdSigParams{
-    pub null_sig:   FieldBasedSchnorrSignature<Fr, G1Projective>,
-    pub null_pk:    FieldBasedSchnorrPk<G1Projective>,
+pub struct NaiveThresholdSigParams {
+    pub null_sig:   FieldBasedSchnorrSignature<Fr, Projective>,
+    pub null_pk:    FieldBasedSchnorrPk<Projective>,
 }
 
 impl NaiveThresholdSigParams {
     pub fn new() -> Self {
         let e = Fr::one();
         let s = e.clone();
-        let null_sig = FieldBasedSchnorrSignature::<Fr, G1Projective>::new(e, s);
+        let null_sig = FieldBasedSchnorrSignature::<Fr, Projective>::new(e, s);
 
         let x = Fr::from_repr(
-            BigInteger([
-                17938625038075785283,
-                16508371799393812784,
-                15483496128959353847,
-                2048968449075429543,
-                16732582715505535218,
-                17185233299328629254,
-                215284426071672551,
-                5549254975250138323,
-                1580560065762820894,
-                7090381661442181239,
-                14966187896916716816,
-                75867572971213,
-            ]));
+            BigInteger(
+                [
+                    11459712384328161916,
+                    74331367249679002,
+                    15100906357746989564,
+                    884124067961527758,
+                ],
+            )
+        );
 
         let y = Fr::from_repr(
-            BigInteger([
-                10704811943041274771,
-                2767103289650614019,
-                14558604087270339633,
-                16118780849751543899,
-                8585597437853085838,
-                449342974578382641,
-                8088465320681580870,
-                509643884085664102,
-                15310217451837794004,
-                4730806010349112824,
-                13668444198414977264,
-                219272068411579,
-            ]));
+            BigInteger(
+                [
+                    2310843056694237300,
+                    5782791099736303189,
+                    12630241105143989140,
+                    546084280382048576,
+                ],
+            )
+        );
 
         let z = Fr::from_repr(
-            BigInteger([
-                13373016969058414402,
-                5670427856875409064,
-                11667651089292452217,
-                1113053963617943770,
-                12325313033510771412,
-                11510260603202358114,
-                3606323059104122008,
-                6452324570546309730,
-                4644558993695221281,
-                1127165286758606988,
-                10756108507984535957,
-                135547536859714,
-            ]));
+            BigInteger(
+                [
+                    1,
+                    0,
+                    0,
+                    0,
+                ],
+            )
+        );
 
-        let null_pk = FieldBasedSchnorrPk(G1Projective::new(x, y, z));
+        let null_pk = FieldBasedSchnorrPk(Projective::new(x, y, z));
 
         Self{null_sig, null_pk}
     }
@@ -87,105 +72,57 @@ impl PedersenWindow for VRFWindow {
 }
 
 pub struct VRFParams{
-    pub group_hash_generators: Vec<Vec<G1Projective>>,
+    pub group_hash_generators: Vec<Vec<Projective>>,
 }
 
 impl VRFParams {
     pub fn new() -> Self {
 
-        let gen_1 = G1Projective::new(
+        let gen_1 = Projective::new(
         Fr::from_repr(
             BigInteger([
-                1294449187585434704,
-                5131287438243136725,
-                18081355146140789575,
-                15814805185239782286,
-                4405965803081461763,
-                4617523924423324244,
-                8379615642753764988,
-                2000790817957976954,
-                1770743024696829222,
-                664039781157959360,
-                8894836393413418304,
-                108509189311559,
+                15820103987692451840,
+                5627760773344132675,
+                7364856664427849490,
+                1197316833207718411,
             ])),
         Fr::from_repr(
             BigInteger([
-                14207092875898659328,
-                17205966376070017323,
-                17535583566531148253,
-                16415296113678429706,
-                15093927965206654338,
-                7770144268668767567,
-                929832473226976009,
-                10710907410150181098,
-                13777945618797139330,
-                5683769430746598257,
-                1088380296753030517,
-                324687205438666,
+                7042744174075706804,
+                9001263587917307341,
+                7557490353522824682,
+                3556537967756176456,
             ])),
         Fr::from_repr(
             BigInteger([
-                13373016969058414402,
-                5670427856875409064,
-                11667651089292452217,
-                1113053963617943770,
-                12325313033510771412,
-                11510260603202358114,
-                3606323059104122008,
-                6452324570546309730,
-                4644558993695221281,
-                1127165286758606988,
-                10756108507984535957,
-                135547536859714,
+                1,
+                0,
+                0,
+                0,
             ])),
         );
 
-        let gen_2 = G1Projective::new(
+        let gen_2 = Projective::new(
         Fr::from_repr(
             BigInteger([
-                649859634879180958,
-                13597720379005621868,
-                18064174816613973740,
-                8646429382307887638,
-                17014556852349184586,
-                1341584681953572340,
-                10416830578026787120,
-                12570924511801367504,
-                3370224175163505491,
-                16453203747482544835,
-                16824394801845877290,
-                57717353992973,
+                9693056411755223777,
+                8217843995826230011,
+                15875927051736968843,
+                2105995703304102124,
             ])),
         Fr::from_repr(
             BigInteger([
-                11571775449869477883,
-                5057296380047860478,
-                8041855877286195997,
-                32169344314064857,
-                3655001595782824013,
-                3080788830673849929,
-                7716699506620825739,
-                16062320569088622625,
-                205603018711731380,
-                17023118407673105708,
-                4011605409044447956,
-                324662289883754,
+                8182239457751741736,
+                2544164131538935955,
+                6306721856759651939,
+                2475985172125608280,
             ])),
         Fr::from_repr(
             BigInteger([
-                13373016969058414402,
-                5670427856875409064,
-                11667651089292452217,
-                1113053963617943770,
-                12325313033510771412,
-                11510260603202358114,
-                3606323059104122008,
-                6452324570546309730,
-                4644558993695221281,
-                1127165286758606988,
-                10756108507984535957,
-                135547536859714,
+                1,
+                0,
+                0,
+                0,
             ])),
         );
 
@@ -194,8 +131,8 @@ impl VRFParams {
         Self{group_hash_generators}
     }
 
-    pub(crate) fn compute_group_hash_table(generators: Vec<G1Projective>)
-    -> Vec<Vec<G1Projective>>
+    pub(crate) fn compute_group_hash_table(generators: Vec<Projective>)
+    -> Vec<Vec<Projective>>
     {
         let mut gen_table = Vec::new();
         for i in 0..VRFWindow::NUM_WINDOWS {
@@ -216,7 +153,7 @@ impl VRFParams {
 #[cfg(test)]
 mod test
 {
-    use algebra::{curves::mnt6753::G1Affine, FpParameters, FromCompressedBits, AffineCurve};
+    use algebra::{curves::tweedle::dum::Affine, FpParameters, FromCompressedBits, AffineCurve};
     use super::*;
     use blake2s_simd::{
         Hash, Params
@@ -298,12 +235,12 @@ mod test
     fn test_pk_null_gen() {
         let tag = b"Strontium Sr 90";
         let personalization = constants::NULL_PK_PERSONALIZATION;
-        let htc_out = hash_to_curve::<Fr, G1Affine>(tag, personalization)
+        let htc_out = hash_to_curve::<Fr, Affine>(tag, personalization)
             .unwrap()
             .into_projective();
         println!("{:#?}", htc_out);
-        let null_pk = NaiveThresholdSigParams::new().null_pk;
-        assert_eq!(htc_out, null_pk.0);
+        let null_pk = NaiveThresholdSigParams::new().null_pk.0;
+        assert_eq!(htc_out, null_pk);
     }
 
     #[test]
@@ -312,17 +249,15 @@ mod test
 
         //Gen1
         let tag = b"Magnesium Mg 12";
-        let htc_g1_out = hash_to_curve::<Fr, G1Affine>(tag, personalization)
+        let htc_g1_out = hash_to_curve::<Fr, Affine>(tag, personalization)
             .unwrap()
             .into_projective();
-        println!("{:#?}", htc_g1_out);
 
         //Gen2
         let tag = b"Gold Au 79";
-        let htc_g2_out = hash_to_curve::<Fr, G1Affine>(tag, personalization)
+        let htc_g2_out = hash_to_curve::<Fr, Affine>(tag, personalization)
             .unwrap()
             .into_projective();
-        println!("{:#?}", htc_g2_out);
 
         //Check GH generators
         let gh_generators = VRFParams::compute_group_hash_table(

@@ -7,10 +7,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {version = "0.1.0", git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "read_checked_unchecked"}
-primitives = {version = "0.1.0", features = ["merkle_tree", "signature", "vrf"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "read_checked_unchecked"}
-proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/ZencashOfficial/ginger-lib.git", branch = "read_checked_unchecked"}
-
+algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
+primitives = {version = "0.1.0", features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
+poly-commit = { git = "https://github.com/HorizenLabs/poly-commit", branch = "dev_serializations" }
+marlin = {version = "0.1.0", git = "https://github.com/HorizenLabs/marlin", branch = "dev_serializations", features = [ "asm", "parallel" ] }
 
 #ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
@@ -21,6 +21,7 @@ lazy_static = "1"
 radix_trie = "0.1"
 rand = { version = "0.7" }
 rand_xorshift = { version = "0.2" }
+blake2 = { version = "0.8", default-features = false }
 
 [lib]
 name = "zendoo_sc"

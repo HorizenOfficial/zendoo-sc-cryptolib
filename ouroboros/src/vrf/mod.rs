@@ -1,8 +1,7 @@
-use algebra::curves::mnt6753::G1Projective as MNT6G1Projective;
-//use algebra::curves::mnt6753::G1Affine as MNT6G1Affine;
-use algebra::fields::mnt4753::{Fq as Fs, Fr as Fr};
+use algebra::curves::tweedle::dum::Projective;
+use algebra::fields::tweedle::{Fq as Fs, Fr};
 use primitives::{crh::{
-    MNT4PoseidonHash,
+    TweedleFrPoseidonHash as PoseidonHash,
     bowe_hopwood::{
         BoweHopwoodPedersenCRH, BoweHopwoodPedersenParameters,
     },
@@ -10,7 +9,7 @@ use primitives::{crh::{
 }, vrf::{
     FieldBasedVrf,
     ecvrf::{
-        FieldBasedEcVrf, FieldBasedEcVrfProof,
+        FieldBasedEcVrf, FieldBasedEcVrfProof, FieldBasedEcVrfPk,
     },
 }};
 use rand::rngs::OsRng;
@@ -23,12 +22,11 @@ impl PedersenWindow for TestWindow {
     const NUM_WINDOWS: usize = 2;
 }
 
-type GroupHash = BoweHopwoodPedersenCRH<MNT6G1Projective, TestWindow>;
-type GroupHashParameters = BoweHopwoodPedersenParameters<MNT6G1Projective>;
-type EcVrfScheme = FieldBasedEcVrf<Fr, MNT6G1Projective, MNT4PoseidonHash, GroupHash>;
-type EcVrfProof = FieldBasedEcVrfProof<Fr, MNT6G1Projective>;
-type EcVrfPk = FieldBasedEcVrfPk<MNT6G1Projective>;
-
+type GroupHash = BoweHopwoodPedersenCRH<Projective, TestWindow>;
+type GroupHashParameters = BoweHopwoodPedersenParameters<Projective>;
+type EcVrfScheme = FieldBasedEcVrf<Fr, Projective, PoseidonHash, GroupHash>;
+type EcVrfProof = FieldBasedEcVrfProof<Fr, Projective>;
+type EcVrfPk = FieldBasedEcVrfPk<Projective>;
 
 pub fn ouroboros_create_proof
 (
@@ -62,8 +60,8 @@ pub fn ouroboros_check_proof
 ) -> Option<(Fr, Fr)> {
     //Example calling code
     match (
-        EcVrfScheme::proof_to_hash(pp, &forger_pk, &[*epoch_randomness], proof.0),
-        EcVrfScheme::proof_to_hash(pp, &forger_pk, &[*epoch_randomness], proof.1),
+        EcVrfScheme::proof_to_hash(pp, forger_pk, &[*epoch_randomness], proof.0),
+        EcVrfScheme::proof_to_hash(pp, forger_pk, &[*epoch_randomness], proof.1),
         )
     {
         (Ok(o1), Ok(o2)) => Some((o1, o2)),
