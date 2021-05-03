@@ -33,6 +33,8 @@ use rand::{
 };
 
 use lazy_static::*;
+use cctp_primitives::utils::commitment_tree::bytes_to_field_elements;
+use r1cs_std::bits::uint64::UInt64;
 
 lazy_static! {
     pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
@@ -41,19 +43,21 @@ lazy_static! {
 struct NaiveTresholdSignatureTest {
 
     //Witnesses
-    pks:                      Vec<FieldBasedSchnorrPk<Projective>>,
-    sigs:                     Vec<FieldBasedSchnorrSignature<FieldElement, Projective>>,
-    threshold:                FieldElement,
-    b:                        Vec<bool>,
-    end_epoch_mc_b_hash:      FieldElement,
-    prev_end_epoch_mc_b_hash: FieldElement,
-    mr_bt:                    FieldElement,
+    pks:                                    Vec<FieldBasedSchnorrPk<Projective>>,
+    sigs:                                   Vec<FieldBasedSchnorrSignature<FieldElement, Projective>>,
+    threshold:                              FieldElement,
+    b:                                      Vec<bool>,
+    epoch_number:                           FieldElement,
+    end_cumulative_sc_tx_comm_tree_root:    FieldElement,
+    mr_bt:                                  FieldElement,
+    ft_min_fee:                             u64,
+    btr_fee:                                u64,
 
     //Public inputs
-    aggregated_input:         FieldElement,
+    aggregated_input:                       FieldElement,
 
     //Other
-    max_pks:                  usize,
+    max_pks:                                usize,
 }
 
 fn generate_inputs
@@ -67,18 +71,27 @@ fn generate_inputs
 {
     //Istantiate rng
     let mut rng = OsRng::default();
-    let mut h = FieldHash::init_constant_length(3, None);
+    let mut h = FieldHash::init_constant_length(4, None);
 
     //Generate message to sign
+    let epoch_number: FieldElement = rng.gen();
     let mr_bt: FieldElement = rng.gen();
-    let prev_end_epoch_mc_b_hash: FieldElement = rng.gen();
-    let end_epoch_mc_b_hash: FieldElement = rng.gen();
+    let end_cumulative_sc_tx_comm_tree_root: FieldElement = rng.gen();
+    let btr_fee: u64 = rng.gen();
+    let ft_min_fee: u64 = rng.gen();
+    let fees_field_elements = {
+        let fes = bytes_to_field_elements(vec![btr_fee, ft_min_fee]).unwrap();
+        assert_eq!(fes.len(), 1);
+        fes[0]
+    };
     let message = h
+        .update(epoch_number)
         .update(mr_bt)
-        .update(prev_end_epoch_mc_b_hash)
-        .update(end_epoch_mc_b_hash)
+        .update(end_cumulative_sc_tx_comm_tree_root)
+        .update(fees_field_elements)
         .finalize()
         .unwrap();
+
     //Generate another random message used to simulate a non-valid signature
     let invalid_message: FieldElement = rng.gen();
 
@@ -132,11 +145,12 @@ fn generate_inputs
 
     //Compute wcert_sysdata_hash
     let wcert_sysdata_hash = if !wrong_wcert_sysdata_hash {
-        FieldHash::init_constant_length(4, None)
-            .update(valid_field)
+        FieldHash::init_constant_length(5, None)
+            .update(epoch_number)
             .update(mr_bt)
-            .update(prev_end_epoch_mc_b_hash)
-            .update(end_epoch_mc_b_hash)
+            .update(valid_field)
+            .update(end_cumulative_sc_tx_comm_tree_root)
+            .update(fees_field_elements)
             .finalize()
             .unwrap()
     } else {
@@ -156,9 +170,11 @@ fn generate_inputs
         sigs,
         threshold: t_field,
         b: b_bool,
-        end_epoch_mc_b_hash,
-        prev_end_epoch_mc_b_hash,
+        epoch_number,
+        end_cumulative_sc_tx_comm_tree_root,
         mr_bt,
+        ft_min_fee,
+        btr_fee,
         aggregated_input,
         max_pks,
     }
@@ -210,27 +226,48 @@ fn generate_constraints(
     ).unwrap();
 
     //Check signatures
+    //Reconstruct message as H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee)
 
-    //Reconstruct message as H(MR(BT), BH(Bi-1), BH(Bi))
+    // Alloc field elements
+    let epoch_number_g = FrGadget::alloc(
+        cs.ns(|| "alloc epoch number"),
+        || Ok(c.epoch_number)
+    ).unwrap();
 
     let mr_bt_g = FrGadget::alloc(
         cs.ns(|| "alloc mr_bt"),
         || Ok(c.mr_bt)
     ).unwrap();
 
-    let prev_end_epoch_mc_block_hash_g = FrGadget::alloc(
-        cs.ns(|| "alloc prev_end_epoch_mc_block_hash"),
-        || Ok(c.prev_end_epoch_mc_b_hash)
+    let end_cumulative_sc_tx_comm_tree_root_g = FrGadget::alloc(
+        cs.ns(|| "alloc end_cumulative_sc_tx_comm_tree_root"),
+        || Ok(c.end_cumulative_sc_tx_comm_tree_root)
     ).unwrap();
 
-    let end_epoch_mc_block_hash_g = FrGadget::alloc(
-        cs.ns(|| "alloc end_epoch_mc_block_hash"),
-        || Ok(c.end_epoch_mc_b_hash)
+    // Alloc btr_fee and ft_min_fee
+    let btr_fee_g = UInt64::alloc(
+        cs.ns(|| "alloc btr_fee"),
+        Some(c.btr_fee)
+    ).unwrap();
+
+    let ft_min_fee_g = UInt64::alloc(
+        cs.ns(|| "alloc ft_min_fee"),
+        Some(c.ft_min_fee)
+    ).unwrap();
+
+    // Pack them into a single field element
+    let mut fees_bits = btr_fee_g.to_bits_le();
+    fees_bits.append(&mut ft_min_fee_g.to_bits_le());
+    fees_bits.reverse();
+
+    let fees_g = FrGadget::from_bits(
+        cs.ns(|| "pack(btr_fee, ft_min_fee)"),
+        fees_bits.as_slice()
     ).unwrap();
 
     let message_g = PoseidonHashGadget::enforce_hash_constant_length(
-        cs.ns(|| "H(MR(BT), H(Bi-1), H(Bi))"),
-        &[mr_bt_g.clone(), prev_end_epoch_mc_block_hash_g.clone(), end_epoch_mc_block_hash_g.clone()],
+        cs.ns(|| "H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee)"),
+        &[epoch_number_g.clone(), mr_bt_g.clone(), end_cumulative_sc_tx_comm_tree_root_g.clone(), fees_g.clone()],
     ).unwrap();
 
     let mut sigs_g = Vec::with_capacity(c.max_pks);
@@ -269,10 +306,10 @@ fn generate_constraints(
         ).unwrap();
     }
 
-    //Enforce correct wcert_sysdata_hash
+    //Enforce wcert_sysdata_hash
     let wcert_sysdata_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
-        cs.ns(|| "H(valid_signatures, MR(BT), BH(Bi-1), BH(Bi))"),
-        &[valid_signatures.clone(), mr_bt_g, prev_end_epoch_mc_block_hash_g, end_epoch_mc_block_hash_g]
+        cs.ns(|| "H(epoch_number, bt_root, valid_sigs, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee)"),
+        &[epoch_number_g, mr_bt_g, valid_signatures.clone(), end_cumulative_sc_tx_comm_tree_root_g, fees_g],
     ).unwrap();
 
     //Check pks_threshold_hash and wcert_sysdata_hash

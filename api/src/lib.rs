@@ -1445,8 +1445,10 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // an argument slot
     _class: JClass,
     _bt_list: jobjectArray,
-    _end_epoch_block_hash: jbyteArray,
-    _prev_end_epoch_block_hash: jbyteArray,
+    _epoch_number: jint,
+    _end_cumulative_sc_tx_comm_tree_root: JObject,
+    _btr_fee: jlong,
+    _ft_min_fee: jlong,
 ) -> jobject
 {
     //Extract backward transfers
@@ -1482,42 +1484,19 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         }
     }
 
-    //Extract block hashes
-    let end_epoch_block_hash = {
-        let mut t = _env.convert_byte_array(_end_epoch_block_hash)
-            .expect("Should be able to convert to Rust array");
+    let end_cumulative_sc_tx_comm_tree_root = {
+        let f =_env.get_field(_end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
 
-        let mut end_epoch_block_hash_bytes = [0u8; 32];
-
-        t.write(&mut end_epoch_block_hash_bytes[..])
-            .expect("Should be able to write into byte array of fixed size");
-
-        end_epoch_block_hash_bytes[FIELD_SIZE - 1] = end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
-
-        read_field_element_from_buffer_with_padding(&end_epoch_block_hash_bytes)
-            .expect("Should be able to read a FieldElement from a 32 byte array")
-
-    };
-
-    let prev_end_epoch_block_hash = {
-        let mut t = _env.convert_byte_array(_prev_end_epoch_block_hash)
-            .expect("Should be able to convert to Rust array");
-
-        let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
-
-        t.write(&mut prev_end_epoch_block_hash_bytes[..])
-            .expect("Should be able to write into byte array of fixed size");
-
-        prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] = prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
-
-        read_field_element_from_buffer_with_padding(&prev_end_epoch_block_hash_bytes)
-            .expect("Should be able to read a FieldElement from a 32 byte array")
+        read_raw_pointer(f.j().unwrap() as *const FieldElement)
     };
 
     //Compute message to sign:
     let msg = match compute_msg_to_sign(
-        &end_epoch_block_hash,
-        &prev_end_epoch_block_hash,
+        _epoch_number as u32,
+        &end_cumulative_sc_tx_comm_tree_root,
+        _btr_fee as u64,
+        _ft_min_fee as u64,
         bt_list.as_slice()
     ){
         Ok((_, msg)) => msg,
@@ -1538,8 +1517,10 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _class: JClass,
     _proving_system: JObject,
     _bt_list: jobjectArray,
-    _end_epoch_block_hash: jbyteArray,
-    _prev_end_epoch_block_hash: jbyteArray,
+    _epoch_number: jint,
+    _end_cumulative_sc_tx_comm_tree_root: JObject,
+    _btr_fee: jlong,
+    _ft_min_fee: jlong,
     _schnorr_sigs_list: jobjectArray,
     _schnorr_pks_list:  jobjectArray,
     _threshold: jlong,
@@ -1635,37 +1616,12 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         pks.push(*public_key);
     }
 
-    //Extract block hashes
-    let end_epoch_block_hash = {
-        let mut t = _env.convert_byte_array(_end_epoch_block_hash)
-            .expect("Should be able to convert to Rust array");
+    let end_cumulative_sc_tx_comm_tree_root = {
+        let f =_env.get_field(_end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
 
-        let mut end_epoch_block_hash_bytes = [0u8; 32];
-
-        t.write(&mut end_epoch_block_hash_bytes[..])
-            .expect("Should be able to write into byte array of fixed size");
-
-        end_epoch_block_hash_bytes[FIELD_SIZE - 1] = end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
-
-        end_epoch_block_hash_bytes
+        read_raw_pointer(f.j().unwrap() as *const FieldElement)
     };
-
-    let prev_end_epoch_block_hash = {
-        let mut t = _env.convert_byte_array(_prev_end_epoch_block_hash)
-            .expect("Should be able to convert to Rust array");
-
-        let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
-
-        t.write(&mut prev_end_epoch_block_hash_bytes[..])
-            .expect("Should be able to write into byte array of fixed size");
-
-        prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] = prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
-
-        prev_end_epoch_block_hash_bytes
-    };
-
-    //Extract threshold
-    let threshold = _threshold as u64;
 
     //Extract params_path str
     let proving_key_path = _env.get_string(_proving_key_path)
@@ -1676,10 +1632,12 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         proving_system,
         pks.as_slice(),
         sigs,
-        &end_epoch_block_hash,
-        &prev_end_epoch_block_hash,
+        _epoch_number as u32,
+        &end_cumulative_sc_tx_comm_tree_root,
+        _btr_fee as u64,
+        _ft_min_fee as u64,
         bt_list.as_slice(),
-        threshold,
+        _threshold as u64,
         proving_key_path.to_str().unwrap(),
         _check_proving_key == JNI_TRUE,
         _zk == JNI_TRUE,
@@ -1801,8 +1759,10 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _class: JClass,
     _proving_system: JObject,
     _bt_list: jobjectArray,
-    _end_epoch_block_hash: jbyteArray,
-    _prev_end_epoch_block_hash: jbyteArray,
+    _epoch_number: jint,
+    _end_cumulative_sc_tx_comm_tree_root: JObject,
+    _btr_fee: jlong,
+    _ft_min_fee: jlong,
     _constant: JObject,
     _quality: jlong,
     _sc_proof_bytes: jbyteArray,
@@ -1812,7 +1772,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 ) -> jboolean
 {
     // Extract proving system type
-    let proving_system= _env
+    let proving_system = _env
         .call_method(_proving_system, "ordinal", "()I", &[])
         .expect("Should be able to call ordinal() on ProvingSystem enum")
         .i()
@@ -1853,37 +1813,15 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
             let a = _env.call_method(o, "getAmount", "()J", &[])
                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
 
-            bt_list.push(BackwardTransfer::new(pk, a));
+            bt_list.push((a, pk));
         }
     }
 
-    //Extract block hashes
-    let end_epoch_block_hash = {
-        let mut t = _env.convert_byte_array(_end_epoch_block_hash)
-            .expect("Should be able to convert to Rust array");
+    let end_cumulative_sc_tx_comm_tree_root = {
+        let f =_env.get_field(_end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
 
-        let mut end_epoch_block_hash_bytes = [0u8; 32];
-
-        t.write(&mut end_epoch_block_hash_bytes[..])
-            .expect("Should be able to write into byte array of fixed size");
-
-        end_epoch_block_hash_bytes[FIELD_SIZE - 1] = end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
-
-        end_epoch_block_hash_bytes
-    };
-
-    let prev_end_epoch_block_hash = {
-        let mut t = _env.convert_byte_array(_prev_end_epoch_block_hash)
-            .expect("Should be able to convert to Rust array");
-
-        let mut prev_end_epoch_block_hash_bytes = [0u8; 32];
-
-        t.write(&mut prev_end_epoch_block_hash_bytes[..])
-            .expect("Should be able to write into byte array of fixed size");
-
-        prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] = prev_end_epoch_block_hash_bytes[FIELD_SIZE - 1] & 0b00111111;
-
-        prev_end_epoch_block_hash_bytes
+        read_raw_pointer(f.j().unwrap() as *const FieldElement)
     };
 
     //Extract constant
@@ -1894,9 +1832,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
         read_raw_pointer(c.j().unwrap() as *const FieldElement)
     };
-
-    //Extract quality
-    let quality = _quality as u64;
 
     //Extract proof
     let proof_bytes = _env.convert_byte_array(_sc_proof_bytes)
@@ -1910,10 +1845,12 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     match verify_naive_threshold_sig_proof(
         proving_system,
         constant,
-        &end_epoch_block_hash,
-        &prev_end_epoch_block_hash,
-        bt_list.as_slice(),
-        quality,
+        _epoch_number as u32,
+        end_cumulative_sc_tx_comm_tree_root,
+        _btr_fee as u64,
+        _ft_min_fee as u64,
+        bt_list,
+        _quality as u64,
         proof_bytes,
         _check_proof == JNI_TRUE,
         vk_path.to_str().unwrap(),

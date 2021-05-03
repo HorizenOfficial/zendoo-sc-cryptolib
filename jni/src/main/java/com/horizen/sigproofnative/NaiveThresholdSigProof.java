@@ -24,17 +24,21 @@ public class NaiveThresholdSigProof {
 
     private static native FieldElement nativeCreateMsgToSign(
             BackwardTransfer[] bt,
-            byte[] endEpochBlockHash,
-            byte[] prevEndEpochBlockHash
+            int epochNumber,
+            FieldElement endCumulativeScTxCommTreeRoot,
+            long btrFee,
+            long ftMinFee
     );
 
     public static FieldElement createMsgToSign(
             BackwardTransfer[] bt,
-            byte[] endEpochBlockHash,
-            byte[] prevEndEpochBlockHash
+            int epochNumber,
+            FieldElement endCumulativeScTxCommTreeRoot,
+            long btrFee,
+            long ftMinFee
     )
     {
-        return nativeCreateMsgToSign(bt, endEpochBlockHash, prevEndEpochBlockHash);
+        return nativeCreateMsgToSign(bt,epochNumber, endCumulativeScTxCommTreeRoot, btrFee, ftMinFee);
     }
 
     public static boolean setup(
@@ -57,8 +61,10 @@ public class NaiveThresholdSigProof {
     private static native CreateProofResult nativeCreateProof(
             ProvingSystemType psType,
             BackwardTransfer[] bt,
-            byte[] endEpochBlockHash,
-            byte[] prevEndEpochBlockHash,
+            int epochNumber,
+            FieldElement endCumulativeScTxCommTreeRoot,
+            long btrFee,
+            long ftMinFee,
             SchnorrSignature[] schnorrSignatures,
             SchnorrPublicKey[] schnorrPublicKeys,
             long threshold,
@@ -69,36 +75,47 @@ public class NaiveThresholdSigProof {
     public static CreateProofResult createProof(
             ProvingSystemType psType,
             List<BackwardTransfer> btList,
-            byte[] endEpochBlockHash,
-            byte[] prevEndEpochBlockHash,
+            int epochNumber,
+            FieldElement endCumulativeScTxCommTreeRoot,
+            long btrFee,
+            long ftMinFee,
             List<SchnorrSignature> schnorrSignatureList,
             List<SchnorrPublicKey> schnorrPublicKeyList,
             long threshold,
             String provingKeyPath,
             boolean checkProvingKey
     ) {
-        return nativeCreateProof(psType, btList.toArray(new BackwardTransfer[0]), endEpochBlockHash, prevEndEpochBlockHash,
-                schnorrSignatureList.toArray(new SchnorrSignature[0]), schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
-                threshold, provingKeyPath, checkProvingKey);
+        return nativeCreateProof(
+            psType, btList.toArray(new BackwardTransfer[0]), epochNumber,
+            endCumulativeScTxCommTreeRoot, btrFee, ftMinFee,
+            schnorrSignatureList.toArray(new SchnorrSignature[0]),
+            schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
+            threshold, provingKeyPath, checkProvingKey
+        );
     }
 
     private static native boolean nativeVerifyProof(
             ProvingSystemType psType,
             BackwardTransfer[] btList,
-            byte[] endEpochBlockHash,
-            byte[] prevEndEpochBlockHash,
+            int epochNumber,
+            FieldElement endCumulativeScTxCommTreeRoot,
+            long btrFee,
+            long ftMinFee,
             FieldElement constant,
             long quality,
             byte[] proof,
             boolean checkProof,
             String verificationKeyPath,
-            boolean checkVerificationKey);
+            boolean checkVerificationKey
+    );
 
     public static boolean verifyProof(
             ProvingSystemType psType,
             List<BackwardTransfer> btList,
-            byte[] endEpochBlockHash,
-            byte[] prevEndEpochBlockHash,
+            int epochNumber,
+            FieldElement endCumulativeScTxCommTreeRoot,
+            long btrFee,
+            long ftMinFee,
             FieldElement constant,
             long quality,
             byte[] proof,
@@ -107,9 +124,10 @@ public class NaiveThresholdSigProof {
             boolean checkVerificationKey
     ){
         return nativeVerifyProof(
-                psType,
-                btList.toArray(new BackwardTransfer[0]),
-                endEpochBlockHash, prevEndEpochBlockHash,
-                constant, quality, proof, checkProof, verificationKeyPath, checkVerificationKey);
+            psType, btList.toArray(new BackwardTransfer[0]), epochNumber,
+            endCumulativeScTxCommTreeRoot, btrFee, ftMinFee,
+            constant, quality, proof, checkProof, verificationKeyPath,
+            checkVerificationKey
+        );
     }
 }

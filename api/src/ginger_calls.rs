@@ -29,14 +29,19 @@ use std::{
 use lazy_static::*;
 
 use cctp_primitives::{
-    proving_system::verifier::VerifierData,
+    proving_system::{
+        init::{load_g1_committer_key, load_g2_committer_key},
+        verifier::{
+            certificate::{CertificateProofUserInputs, ZendooCertProofVerifier},
+            RawVerifierData, ZendooVerifier
+        },
+    },
     utils::{
         proof_system::ProvingSystemUtils, get_bt_merkle_root,
         serialization::SerializationUtils,
+        commitment_tree::bytes_to_field_elements
     },
 };
-use cctp_primitives::proving_system::verifier::RawVerifierData;
-use cctp_primitives::proving_system::init::{load_g1_committer_key, load_g2_committer_key};
 
 //*******************************Generic functions**********************************************
 // Note: Should decide if panicking or handling IO errors
@@ -200,12 +205,16 @@ pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<F
         .finalize()
 }
 
-//Compute and return (MR(bt_list), H(MR(bt_list), H(bi-1), H(bi))
+//Compute and return (MR(bt_list), H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee))
 pub fn compute_msg_to_sign(
-    end_epoch_mc_b_hash:      &FieldElement,
-    prev_end_epoch_mc_b_hash: &FieldElement,
-    bt_list:                  &[BackwardTransfer],
+    epoch_number:                        u32,
+    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
+    btr_fee:                             u64,
+    ft_min_fee:                          u64,
+    bt_list:                             &[BackwardTransfer],
 ) -> Result<(FieldElement, FieldElement), Error> {
+
+    let epoch_number = FieldElement::from(epoch_number);
 
     let mr_bt = {
         let mut bt_field_list = vec![];
@@ -218,32 +227,21 @@ pub fn compute_msg_to_sign(
         get_bt_merkle_root(bt_field_list)?
     };
 
+    let fees_field_element = {
+        let fes = bytes_to_field_elements(vec![btr_fee, ft_min_fee])?;
+        assert_eq!(fes.len(), 1);
+        fes[0]
+    };
+
     //Compute message to be verified
-    let msg = FieldHash::init_constant_length(3, None)
+    let msg = FieldHash::init_constant_length(4, None)
+        .update(epoch_number)
         .update(mr_bt)
-        .update(*prev_end_epoch_mc_b_hash)
-        .update(*end_epoch_mc_b_hash)
+        .update(*end_cumulative_sc_tx_comm_tree_root)
+        .update(fees_field_element)
         .finalize()?;
 
     Ok((mr_bt, msg))
-}
-
-pub fn compute_wcert_sysdata_hash(
-    valid_sigs:               u64,
-    mr_bt:                    &FieldElement,
-    prev_end_epoch_mc_b_hash: &FieldElement,
-    end_epoch_mc_b_hash:      &FieldElement,
-) -> Result<FieldElement, Error> {
-
-    //Compute quality and wcert_sysdata_hash
-    let quality = read_field_element_from_u64(valid_sigs);
-    let wcert_sysdata_hash = FieldHash::init_constant_length(4, None)
-        .update(quality)
-        .update(*mr_bt)
-        .update(*prev_end_epoch_mc_b_hash)
-        .update(*end_epoch_mc_b_hash)
-        .finalize()?;
-    Ok(wcert_sysdata_hash)
 }
 
 pub fn init_dlog_keys(
@@ -283,28 +281,30 @@ pub fn generate_naive_threshold_sig_circuit_keypair(
 }
 
 pub fn create_naive_threshold_sig_proof(
-    proving_system:           ProvingSystem,
-    pks:                      &[SchnorrPk],
-    mut sigs:                 Vec<Option<SchnorrSig>>,
-    end_epoch_mc_b_hash:      &[u8; 32],
-    prev_end_epoch_mc_b_hash: &[u8; 32],
-    bt_list:                  &[BackwardTransfer],
-    threshold:                u64,
-    proving_key_path:         &str,
-    enforce_membership:       bool,
-    zk:                       bool,
+    proving_system:                      ProvingSystem,
+    pks:                                 &[SchnorrPk],
+    mut sigs:                            Vec<Option<SchnorrSig>>,
+    epoch_number:                        u32,
+    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
+    btr_fee:                             u64,
+    ft_min_fee:                          u64,
+    bt_list:                             &[BackwardTransfer],
+    threshold:                           u64,
+    proving_key_path:                    &str,
+    enforce_membership:                  bool,
+    zk:                                  bool,
 ) -> Result<(Vec<u8>, u64), Error> {
 
     //Get max pks
     let max_pks = pks.len();
     assert_eq!(sigs.len(), max_pks);
 
-    //Read end_epoch_mc_b_hash, prev_end_epoch_mc_b_hash and bt_list as field elements
-    let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
-    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
+    // Compute msg to sign
     let (mr_bt, msg) = compute_msg_to_sign(
-        &end_epoch_mc_b_hash,
-        &prev_end_epoch_mc_b_hash,
+        epoch_number,
+        end_cumulative_sc_tx_comm_tree_root,
+        btr_fee,
+        ft_min_fee,
         bt_list,
     )?;
 
@@ -331,8 +331,8 @@ pub fn create_naive_threshold_sig_proof(
     let threshold = read_field_element_from_u64(threshold);
 
     let c = NaiveTresholdSignature::<FieldElement>::new(
-        pks, sigs, threshold, b, end_epoch_mc_b_hash,
-        prev_end_epoch_mc_b_hash, mr_bt, max_pks,
+        pks, sigs, threshold, b, FieldElement::from(epoch_number),
+        *end_cumulative_sc_tx_comm_tree_root, mr_bt, ft_min_fee, btr_fee, max_pks,
     );
 
     let proof = match proving_system {
@@ -359,46 +359,67 @@ pub fn create_naive_threshold_sig_proof(
     Ok((proof, valid_signatures))
 }
 
-// TODO: Once NaiveThresholdSignature circuit interface is stable, call the certificate-specific
-//       verifier function in zendoo-cctp-lib rather than the general one.
+
 pub fn verify_naive_threshold_sig_proof(
-    proving_system:           ProvingSystem,
-    constant:                 &FieldElement,
-    end_epoch_mc_b_hash:      &[u8; 32],
-    prev_end_epoch_mc_b_hash: &[u8; 32],
-    bt_list:                  &[BackwardTransfer],
-    valid_sigs:               u64,
-    proof:                    Vec<u8>,
-    check_proof:              bool,
-    vk_path:                  &str,
-    check_vk:                 bool
+    proving_system:                      ProvingSystem,
+    constant:                            &FieldElement,
+    epoch_number:                        u32,
+    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
+    btr_fee:                             u64,
+    ft_min_fee:                          u64,
+    bt_list:                             Vec<(u64, [u8; 20])>,
+    valid_sigs:                          u64,
+    proof:                               Vec<u8>,
+    check_proof:                         bool,
+    vk_path:                             &str,
+    check_vk:                            bool
 ) -> Result<bool, Error>
 {
-    //Compute wcert_sysdata_hash
-    let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
-    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
-    let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
-    let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
-    let aggregated_input = FieldHash::init_constant_length(2, None)
-        .update(*constant)
-        .update(wcert_sysdata_hash)
-        .finalize()?;
+    // TODO: These copies here are wasted, since most of the CertificateProofUserInputs are
+    //       already passed around in their deserialized form. Instead this representation is
+    //       useful in zendoo-mc-cryptolib. We should consider adding a "non raw" representation
+    //       in zendoo-cctp-lib to save some copies.
+    let constant = &{
+        let mut buffer = [0u8; FIELD_SIZE];
+        CanonicalSerialize::serialize(constant, &mut buffer[..])?;
+        buffer
+    };
+
+    let end_cumulative_sc_tx_commitment_tree_root = &{
+        let mut buffer = [0u8; FIELD_SIZE];
+        CanonicalSerialize::serialize(end_cumulative_sc_tx_comm_tree_root, &mut buffer[..])?;
+        buffer
+    };
+
+    let ins = CertificateProofUserInputs {
+        constant: Some(constant),
+        epoch_number,
+        quality: valid_sigs,
+        bt_list: bt_list.as_slice(),
+        custom_fields: None,
+        end_cumulative_sc_tx_commitment_tree_root,
+        btr_fee,
+        ft_min_fee
+    };
 
     // Read verifier key
     let vk: Vec<u8> = std::fs::read(vk_path)?;
 
-    let is_verified = match proving_system {
+    let raw_verifier_data = match proving_system {
         ProvingSystem::CoboundaryMarlin => {
-            VerifierData::from_raw(
-                RawVerifierData::CoboundaryMarlin {proof, vk},
-                check_proof,
-                check_vk,
-                vec![aggregated_input]
-            )?
-                .verify::<OsRng>(None)
+            RawVerifierData::CoboundaryMarlin {proof, vk}
         },
         ProvingSystem::Darlin => unreachable!()
-    }?;
+    };
+
+    let rng = &mut OsRng;
+    let is_verified = ZendooCertProofVerifier::verify_proof(
+        &ins,
+        raw_verifier_data,
+        check_proof,
+        check_vk,
+        Some(rng)
+    )?;
 
     Ok(is_verified)
 }
@@ -562,7 +583,7 @@ pub fn reset_ginger_mht(tree: &mut GingerMHT){
 #[cfg(test)]
 mod test {
     use super::*;
-    use rand::RngCore;
+    use rand::{RngCore, Rng};
     use algebra::Field;
 
     #[allow(dead_code)]
@@ -585,34 +606,32 @@ mod test {
         let mut rng = OsRng;
 
         //Generate random mc block hashes and bt list
-        let mut end_epoch_mc_b_hash = [0u8; 32];
-        let mut prev_end_epoch_mc_b_hash = [0u8; 32];
-        rng.fill_bytes(&mut end_epoch_mc_b_hash);
-        rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
-        println!("end epoch u8: {:?}", end_epoch_mc_b_hash);
-        println!("prev end epoch u8: {:?}", prev_end_epoch_mc_b_hash);
-        println!("end epoch i8: {:?}", into_i8(end_epoch_mc_b_hash.to_vec()));
-        println!("prev end epoch i8: {:?}", into_i8(prev_end_epoch_mc_b_hash.to_vec()));
-
-        let mut end_epoch_mc_b_hash = end_epoch_mc_b_hash;
-        end_epoch_mc_b_hash[FIELD_SIZE - 1] = end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
-
-        let mut prev_end_epoch_mc_b_hash = prev_end_epoch_mc_b_hash;
-        prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] = prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
-
-        let end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
-        let prev_end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
+        let mut end_cumulative_sc_tx_comm_tree_root = [0u8; 32];
+        rng.fill_bytes(&mut end_cumulative_sc_tx_comm_tree_root);
+        println!("end_cumulative_sc_tx_comm_tree_root u8: {:?}", end_cumulative_sc_tx_comm_tree_root);
+        println!("end_cumulative_sc_tx_comm_tree_root i8: {:?}", into_i8(end_cumulative_sc_tx_comm_tree_root.to_vec()));
 
         let mut bt_list = vec![];
         for _ in 0..bt_num {
             bt_list.push(BackwardTransfer::default());
         }
+        let bt_list_raw = bt_list.iter().map(|bt| (bt.amount, bt.pk_dest)).collect::<Vec<_>>();
         println!("bt_list finished");
+
+        let end_cumulative_sc_tx_comm_tree_root_f = read_field_element_from_buffer_with_padding(
+            &end_cumulative_sc_tx_comm_tree_root[..(FIELD_SIZE - 1)]
+        ).unwrap();
+
+        let epoch_number: u32 = rng.gen();
+        let btr_fee: u64 = rng.gen();
+        let ft_min_fee: u64 = rng.gen();
 
         //Compute msg to sign
         let (_, msg) = compute_msg_to_sign(
-            &end_epoch_mc_b_hash_f,
-            &prev_end_epoch_mc_b_hash_f,
+            epoch_number,
+            &end_cumulative_sc_tx_comm_tree_root_f,
+            btr_fee,
+            ft_min_fee,
             bt_list.as_slice()
         ).unwrap();
         println!("compute_msg_to_sign finished");
@@ -660,8 +679,10 @@ mod test {
             ProvingSystem::CoboundaryMarlin,
             pks.as_slice(),
             sigs,
-            &end_epoch_mc_b_hash,
-            &prev_end_epoch_mc_b_hash,
+            epoch_number,
+            &end_cumulative_sc_tx_comm_tree_root_f,
+            btr_fee,
+            ft_min_fee,
             bt_list.as_slice(),
             threshold,
             proving_key_path,
@@ -675,9 +696,11 @@ mod test {
         assert!(verify_naive_threshold_sig_proof(
             ProvingSystem::CoboundaryMarlin,
             &constant,
-            &end_epoch_mc_b_hash,
-            &prev_end_epoch_mc_b_hash,
-            bt_list.as_slice(),
+            epoch_number,
+            &end_cumulative_sc_tx_comm_tree_root_f,
+            btr_fee,
+            ft_min_fee,
+            bt_list_raw.clone(),
             quality,
             proof.clone(),
             true,
@@ -690,9 +713,11 @@ mod test {
         assert!(!verify_naive_threshold_sig_proof(
             ProvingSystem::CoboundaryMarlin,
             &constant,
-            &end_epoch_mc_b_hash,
-            &prev_end_epoch_mc_b_hash,
-            bt_list.as_slice(),
+            epoch_number,
+            &end_cumulative_sc_tx_comm_tree_root_f,
+            btr_fee,
+            ft_min_fee,
+            bt_list_raw,
             quality - 1,
             proof,
             true,
@@ -881,25 +906,5 @@ mod test {
 
         //finalize() is idempotent
         assert_eq!(h_output, finalize_poseidon_hash(&h).unwrap());
-    }
-
-
-    #[test]
-    fn read_field_test(){
-        let mut rng = OsRng;
-
-        let mut end_epoch_mc_b_hash = [0u8; 32];
-        let mut prev_end_epoch_mc_b_hash = [0u8; 32];
-        rng.fill_bytes(&mut end_epoch_mc_b_hash);
-        rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
-
-        let mut end_epoch_mc_b_hash = end_epoch_mc_b_hash;
-        end_epoch_mc_b_hash[FIELD_SIZE - 1] = end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
-
-        let mut prev_end_epoch_mc_b_hash = prev_end_epoch_mc_b_hash;
-        prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] = prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
-
-        let _ = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
-        let _ = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
     }
 }

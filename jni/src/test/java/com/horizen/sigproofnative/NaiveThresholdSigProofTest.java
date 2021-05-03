@@ -30,8 +30,10 @@ public class NaiveThresholdSigProofTest {
     static long threshold = 2;
     static int backwardTransferCout = 10;
 
-    byte[] endEpochBlockHash = new byte[32];
-    byte[] prevEndEpochBlockHash = new byte[32];
+    static int epochNumber = 10;
+    static long btrFee = 100L;
+    static long ftMinFee = 200L;
+    FieldElement endCumulativeScTxCommTreeRoot;
 
     List<SchnorrPublicKey> publicKeyList = new ArrayList<>();
     List<SchnorrSignature> signatureList = new ArrayList<>();
@@ -240,13 +242,11 @@ public class NaiveThresholdSigProofTest {
         assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath));
     }
 
-    @Test
+    //@Test
     public void testCreateRandomProof() throws Exception {
         Random r = new Random();
 
-        r.nextBytes(endEpochBlockHash);
-
-        r.nextBytes(prevEndEpochBlockHash);
+        endCumulativeScTxCommTreeRoot = FieldElement.createRandom();
 
         backwardTransferCout = r.nextInt(backwardTransferCout + 1);
         // Create dummy Backward Transfers
@@ -273,8 +273,13 @@ public class NaiveThresholdSigProofTest {
 
         for (int i = 0; i<keyCount; i++) {
             if (i < threshold) {
-                FieldElement msgToSign = NaiveThresholdSigProof.createMsgToSign(btList.toArray(new BackwardTransfer[0]),
-                        endEpochBlockHash, prevEndEpochBlockHash);
+                FieldElement msgToSign = NaiveThresholdSigProof.createMsgToSign(
+                    btList.toArray(new BackwardTransfer[0]),
+                    epochNumber,
+                    endCumulativeScTxCommTreeRoot,
+                    btrFee,
+                    ftMinFee
+                );
                 signatureList.add(keyPairList.get(i).signMessage(msgToSign));
             } else {
                 signatureList.add(new SchnorrSignature());
@@ -290,8 +295,11 @@ public class NaiveThresholdSigProofTest {
 
     private void createAndVerifyProof() {
 
-        CreateProofResult proofResult = NaiveThresholdSigProof.createProof(psType, btList, endEpochBlockHash, prevEndEpochBlockHash,
-                signatureList, publicKeyList, threshold, snarkPkPath, false);
+        CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
+            psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
+            btrFee, ftMinFee, signatureList, publicKeyList, threshold,
+            snarkPkPath, false
+        );
 
         assertNotNull("Proof creation must be successfull", proofResult);
 
@@ -301,14 +309,18 @@ public class NaiveThresholdSigProofTest {
         FieldElement constant = NaiveThresholdSigProof.getConstant(publicKeyList, threshold);
         assertNotNull("Constant creation must be successfull", constant);
 
-        boolean isProofVerified = NaiveThresholdSigProof.verifyProof(psType, btList, endEpochBlockHash,
-                prevEndEpochBlockHash, constant, quality, proof, true, snarkVkPath, true);
+        boolean isProofVerified = NaiveThresholdSigProof.verifyProof(
+            psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
+            btrFee, ftMinFee, constant, quality, proof, true, snarkVkPath, true
+        );
 
         assertTrue("Proof must be verified", isProofVerified);
 
         quality = threshold - 1;
-        isProofVerified = NaiveThresholdSigProof.verifyProof(psType, btList, endEpochBlockHash,
-                prevEndEpochBlockHash, constant, quality, proof, true, snarkVkPath, true);
+        isProofVerified = NaiveThresholdSigProof.verifyProof(
+            psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
+            btrFee, ftMinFee, constant, quality, proof, true, snarkVkPath, true
+        );
 
         assertFalse("Proof must not be verified", isProofVerified);
     }
@@ -322,6 +334,8 @@ public class NaiveThresholdSigProofTest {
         for (SchnorrSignature sig: signatureList)
             sig.freeSignature();
         signatureList.clear();
+
+        endCumulativeScTxCommTreeRoot.freeFieldElement();
     }
 
     @AfterClass

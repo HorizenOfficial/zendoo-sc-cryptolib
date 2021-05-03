@@ -23,7 +23,7 @@ use r1cs_crypto::{
 use r1cs_std::{instantiated::tweedle::TweedleDumGadget as CurveGadget, fields::{
     fp::FpGadget, FieldGadget,
 }, alloc::AllocGadget, bits::{
-    boolean::Boolean, FromBitsGadget,
+    boolean::Boolean, uint64::UInt64, FromBitsGadget,
 }, eq::EqGadget, Assignment};
 
 use r1cs_core::{ConstraintSystem, ConstraintSynthesizer, SynthesisError};
@@ -53,29 +53,34 @@ pub(crate) type FrGadget = FpGadget<FieldElement>;
 pub struct NaiveTresholdSignature<F: PrimeField>{
 
     //Witnesses
-    pks:                      Vec<Option<FieldBasedSchnorrPk<Projective>>>, //pk_n = g^sk_n
-    sigs:                     Vec<Option<FieldBasedSchnorrSignature<FieldElement, Projective>>>, //sig_n = sign(sk_n, H(MR(BT), BH(Bi-1), BH(Bi)))
-    threshold:                Option<FieldElement>,
-    b:                        Vec<Option<bool>>,
-    end_epoch_mc_b_hash:      Option<FieldElement>,
-    prev_end_epoch_mc_b_hash: Option<FieldElement>,
-    mr_bt:                    Option<FieldElement>,
+    pks:                                  Vec<Option<FieldBasedSchnorrPk<Projective>>>, //pk_n = g^sk_n
+    //sig_n = sign(sk_n, H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee))
+    sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, Projective>>>,
+    threshold:                            Option<FieldElement>,
+    b:                                    Vec<Option<bool>>,
+    epoch_number:                         Option<FieldElement>,
+    end_cumulative_sc_tx_comm_tree_root:  Option<FieldElement>,
+    mr_bt:                                Option<FieldElement>,
+    ft_min_fee:                           Option<u64>,
+    btr_fee:                              Option<u64>,
 
     //Other
-    max_pks:                  usize,
-    _field:                   PhantomData<F>,
+    max_pks:                              usize,
+    _field:                               PhantomData<F>,
 }
 
 impl<F: PrimeField>NaiveTresholdSignature<F> {
     pub fn new(
-        pks:                      Vec<FieldBasedSchnorrPk<Projective>>,
-        sigs:                     Vec<Option<FieldBasedSchnorrSignature<FieldElement, Projective>>>,
-        threshold:                FieldElement,
-        b:                        FieldElement,
-        end_epoch_mc_b_hash:      FieldElement,
-        prev_end_epoch_mc_b_hash: FieldElement,
-        mr_bt:                    FieldElement,
-        max_pks:                  usize,
+        pks:                                  Vec<FieldBasedSchnorrPk<Projective>>,
+        sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, Projective>>>,
+        threshold:                            FieldElement,
+        b:                                    FieldElement,
+        epoch_number:                         FieldElement,
+        end_cumulative_sc_tx_comm_tree_root:  FieldElement,
+        mr_bt:                                FieldElement,
+        ft_min_fee:                           u64,
+        btr_fee:                              u64,
+        max_pks:                              usize,
     ) -> Self {
 
         //Convert b to the needed bool vector
@@ -90,9 +95,11 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
             sigs,
             threshold: Some(threshold),
             b: b_bool,
-            end_epoch_mc_b_hash:      Some(end_epoch_mc_b_hash),
-            prev_end_epoch_mc_b_hash: Some(prev_end_epoch_mc_b_hash),
-            mr_bt:                    Some(mr_bt),
+            epoch_number: Some(epoch_number),
+            end_cumulative_sc_tx_comm_tree_root: Some(end_cumulative_sc_tx_comm_tree_root),
+            mr_bt: Some(mr_bt),
+            ft_min_fee: Some(ft_min_fee),
+            btr_fee: Some(btr_fee),
             max_pks,
             _field: PhantomData
         }
@@ -143,25 +150,48 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
 
         //Check signatures
 
-        //Reconstruct message as H(MR(BT), BH(Bi-1), BH(Bi))
+        //Reconstruct message as H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee)
+
+        // Alloc field elements
+        let epoch_number_g = FrGadget::alloc(
+            cs.ns(|| "alloc epoch number"),
+            || self.epoch_number.ok_or(SynthesisError::AssignmentMissing)
+        )?;
+
         let mr_bt_g = FrGadget::alloc(
             cs.ns(|| "alloc mr_bt"),
             || self.mr_bt.ok_or(SynthesisError::AssignmentMissing)
         )?;
 
-        let prev_end_epoch_mc_block_hash_g = FrGadget::alloc(
-            cs.ns(|| "alloc prev_end_epoch_mc_block_hash"),
-            || self.prev_end_epoch_mc_b_hash.ok_or(SynthesisError::AssignmentMissing)
+        let end_cumulative_sc_tx_comm_tree_root_g = FrGadget::alloc(
+            cs.ns(|| "alloc end_cumulative_sc_tx_comm_tree_root"),
+            || self.end_cumulative_sc_tx_comm_tree_root.ok_or(SynthesisError::AssignmentMissing)
         )?;
 
-        let end_epoch_mc_block_hash_g = FrGadget::alloc(
-            cs.ns(|| "alloc end_epoch_mc_block_hash"),
-            || self.end_epoch_mc_b_hash.ok_or(SynthesisError::AssignmentMissing)
+        // Alloc btr_fee and ft_min_fee
+        let btr_fee_g = UInt64::alloc(
+            cs.ns(|| "alloc btr_fee"),
+            self.btr_fee.clone()
+        )?;
+
+        let ft_min_fee_g = UInt64::alloc(
+            cs.ns(|| "alloc ft_min_fee"),
+            self.ft_min_fee.clone()
+        )?;
+
+        // Pack them into a single field element
+        let mut fees_bits = btr_fee_g.to_bits_le();
+        fees_bits.append(&mut ft_min_fee_g.to_bits_le());
+        fees_bits.reverse();
+
+        let fees_g = FrGadget::from_bits(
+            cs.ns(|| "pack(btr_fee, ft_min_fee)"),
+            fees_bits.as_slice()
         )?;
 
         let message_g = PoseidonHashGadget::enforce_hash_constant_length(
-            cs.ns(|| "H(MR(BT), BH(i-1), BH(i))"),
-            &[mr_bt_g.clone(), prev_end_epoch_mc_block_hash_g.clone(), end_epoch_mc_block_hash_g.clone()],
+            cs.ns(|| "H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee)"),
+            &[epoch_number_g.clone(), mr_bt_g.clone(), end_cumulative_sc_tx_comm_tree_root_g.clone(), fees_g.clone()],
         )?;
 
         let mut sigs_g = Vec::with_capacity(self.max_pks);
@@ -202,8 +232,8 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
 
         //Enforce wcert_sysdata_hash
         let wcert_sysdata_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
-            cs.ns(|| "H(valid_signatures, MR(BT), BH(i-1), BH(i))"),
-            &[valid_signatures.clone(), mr_bt_g, prev_end_epoch_mc_block_hash_g, end_epoch_mc_block_hash_g]
+            cs.ns(|| "H(epoch_number, bt_root, valid_sigs, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee)"),
+            &[epoch_number_g, mr_bt_g, valid_signatures.clone(), end_cumulative_sc_tx_comm_tree_root_g, fees_g],
         )?;
 
         //Check pks_threshold_hash and wcert_sysdata_hash
@@ -259,15 +289,17 @@ pub fn get_instance_for_setup(max_pks: usize) -> NaiveTresholdSignature<FieldEle
 
     // Create parameters for our circuit
     NaiveTresholdSignature::<FieldElement> {
-        pks:                      vec![None; max_pks],
-        sigs:                     vec![None; max_pks],
-        threshold:                None,
-        b:                        vec![None; log_max_pks + 1],
-        end_epoch_mc_b_hash:      None,
-        prev_end_epoch_mc_b_hash: None,
-        mr_bt:                    None,
+        pks:                                    vec![None; max_pks],
+        sigs:                                   vec![None; max_pks],
+        threshold:                              None,
+        b:                                      vec![None; log_max_pks + 1],
+        epoch_number:                           None,
+        end_cumulative_sc_tx_comm_tree_root:    None,
+        mr_bt:                                  None,
+        ft_min_fee:                             None,
+        btr_fee:                                None,
         max_pks,
-        _field:                   PhantomData
+        _field:                                 PhantomData
     }
 }
 
@@ -287,6 +319,7 @@ mod test {
         utils::proof_system::ProvingSystemUtils,
     };
     use cctp_primitives::proving_system::init::get_g1_committer_key;
+    use cctp_primitives::utils::commitment_tree::bytes_to_field_elements;
 
     type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, Projective, FieldHash>;
 
@@ -302,16 +335,24 @@ mod test {
 
         //Istantiate rng
         let mut rng = OsRng::default();
-        let mut h = FieldHash::init_constant_length(3, None);
+        let mut h = FieldHash::init_constant_length(4, None);
 
         //Generate message to sign
+        let epoch_number: FieldElement = rng.gen();
         let mr_bt: FieldElement = rng.gen();
-        let prev_end_epoch_mc_b_hash: FieldElement = rng.gen();
-        let end_epoch_mc_b_hash: FieldElement = rng.gen();
+        let end_cumulative_sc_tx_comm_tree_root: FieldElement = rng.gen();
+        let btr_fee: u64 = rng.gen();
+        let ft_min_fee: u64 = rng.gen();
+        let fees_field_elements = {
+            let fes = bytes_to_field_elements(vec![btr_fee, ft_min_fee])?;
+            assert_eq!(fes.len(), 1);
+            fes[0]
+        };
         let message = h
+            .update(epoch_number)
             .update(mr_bt)
-            .update(prev_end_epoch_mc_b_hash)
-            .update(end_epoch_mc_b_hash)
+            .update(end_cumulative_sc_tx_comm_tree_root)
+            .update(fees_field_elements)
             .finalize()
             .unwrap();
 
@@ -364,11 +405,12 @@ mod test {
 
         //Compute wcert_sysdata_hash
         let wcert_sysdata_hash = if !wrong_wcert_sysdata_hash {
-            FieldHash::init_constant_length(4, None)
-                .update(valid_field)
+            FieldHash::init_constant_length(5, None)
+                .update(epoch_number)
                 .update(mr_bt)
-                .update(prev_end_epoch_mc_b_hash)
-                .update(end_epoch_mc_b_hash)
+                .update(valid_field)
+                .update(end_cumulative_sc_tx_comm_tree_root)
+                .update(fees_field_elements)
                 .finalize()
                 .unwrap()
         } else {
@@ -384,8 +426,8 @@ mod test {
 
         //Create proof for our circuit
         let c = NaiveTresholdSignature::<FieldElement>::new(
-            pks, sigs, t_field, b_field, end_epoch_mc_b_hash,
-            prev_end_epoch_mc_b_hash, mr_bt, max_pks,
+            pks, sigs, t_field, b_field, epoch_number, end_cumulative_sc_tx_comm_tree_root,
+            mr_bt, ft_min_fee, btr_fee, max_pks
         );
 
         //Return proof and public inputs if success
