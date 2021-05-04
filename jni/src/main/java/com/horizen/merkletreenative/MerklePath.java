@@ -76,15 +76,15 @@ public class MerklePath implements AutoCloseable {
         return nativeIsRightmost();
     }
 
-    private native boolean nativeIsNonEmptyRightmost();
+    private native boolean nativeAreRightLeavesEmpty();
 
     /*
      * Returns true if this is a Merkle Path for a leaf whose right leaves are all empty.
      */
-    public boolean isNonEmptyRightmost() {
+    public boolean areRightLeavesEmpty() {
         if (merklePathPointer == 0)
             throw new IllegalStateException("MerklePath instance was freed.");
-        return nativeIsNonEmptyRightmost();
+        return nativeAreRightLeavesEmpty();
     }
 
     private native long nativeLeafIndex();

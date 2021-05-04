@@ -56,6 +56,14 @@ public class FieldElement implements AutoCloseable {
         return nativeDeserializeFieldElement(fieldElementBytes);
     }
 
+    private native void nativePrintFieldElementBytes();
+
+    public void printFieldElementBytes() {
+        if (fieldElementPointer == 0)
+            throw new IllegalStateException("Field element was freed.");
+        nativePrintFieldElementBytes();
+    }
+
     private static native void nativeFreeFieldElement(long fieldElementPointer);
 
     public void freeFieldElement() {

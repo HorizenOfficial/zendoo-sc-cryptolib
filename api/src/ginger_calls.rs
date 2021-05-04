@@ -477,7 +477,7 @@ pub fn apply(path: &GingerMHTPath, leaf: &FieldElement) -> FieldElement
     let mut prev_node = *leaf;
     for (sibling, direction) in path.get_raw_path().iter() {
 
-        assert_eq!(sibling.len(), 2);
+        assert_eq!(sibling.len(), 1);
         assert!(*direction == 0 || *direction == 1);
 
         // Choose left and right hash according to direction
@@ -532,26 +532,27 @@ pub fn reset_ginger_mht(tree: &mut GingerMHT){
     tree.reset();
 }
 
+// Test functions
+
+pub(crate) fn into_i8(v: Vec<u8>) -> Vec<i8> {
+    // first, make sure v's destructor doesn't free the data
+    // it thinks it owns when it goes out of scope
+    let mut v = std::mem::ManuallyDrop::new(v);
+
+    // then, pick apart the existing Vec
+    let p = v.as_mut_ptr();
+    let len = v.len();
+    let cap = v.capacity();
+
+    // finally, adopt the data into a new Vec
+    unsafe { Vec::from_raw_parts(p as *mut i8, len, cap) }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use rand::{RngCore, Rng};
     use algebra::Field;
-
-    #[allow(dead_code)]
-    fn into_i8(v: Vec<u8>) -> Vec<i8> {
-        // first, make sure v's destructor doesn't free the data
-        // it thinks it owns when it goes out of scope
-        let mut v = std::mem::ManuallyDrop::new(v);
-
-        // then, pick apart the existing Vec
-        let p = v.as_mut_ptr();
-        let len = v.len();
-        let cap = v.capacity();
-
-        // finally, adopt the data into a new Vec
-        unsafe { Vec::from_raw_parts(p as *mut i8, len, cap) }
-    }
 
     fn create_sample_naive_threshold_sig_circuit(bt_num: usize) {
         //assume to have 3 pks, threshold = 2

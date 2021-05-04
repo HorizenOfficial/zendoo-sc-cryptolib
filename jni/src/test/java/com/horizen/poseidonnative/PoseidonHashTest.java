@@ -1,73 +1,138 @@
 package com.horizen.poseidonnative;
 
 import com.horizen.librustsidechains.FieldElement;
+
+import java.util.List;
+import java.util.ArrayList;
+
 import org.junit.Test;
-
+import org.junit.BeforeClass;
+import org.junit.AfterClass;
 import static org.junit.Assert.*;
-
 
 public class PoseidonHashTest {
 
-    //@Test
+    static List<FieldElement> hashInput = new ArrayList<>();
+
+    @BeforeClass
+    public static void initHashInput() {
+        for(long i = 0L; i < 100L; i++) {
+            hashInput.add(FieldElement.createFromLong(i));
+        }
+    }
+
+    @Test
     public void testComputeHashConstantLength() throws Exception {
 
-        // Deserialize lhs
-        byte[] lhsBytes = {
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0x3f
-        };
-
-        // Deserialize rhs
-        byte[] rhsBytes = {
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0x3f
+        // Deserialize expected hash
+        byte[] hashBytes = {
+            38, 19, 70, -18, 85, -23, -77, -117, -4, 47, -70, 13, -17, -87, -23, 48,
+            88, -107, -63, -74, -68, 46, -7, -49, 118, 16, 68, 121, 107, 8, 70, 22
         };
 
         try
         (
-            FieldElement lhs = FieldElement.deserialize(lhsBytes);
-            FieldElement rhs = FieldElement.deserialize(rhsBytes)
+            FieldElement expectedHash = FieldElement.deserialize(hashBytes);
+            PoseidonHash digest = PoseidonHash.getInstanceConstantLength(hashInput.size())
         )
         {
-            assertNotNull("lhs deserialization must not fail", lhs);
-            assertNotNull("rhs deserialization must not fail", rhs);
+            assertNotNull("expectedHash deserialization must not fail", expectedHash);
+            for (int i = 0; i < hashInput.size() - 1; i++)
+                digest.update(hashInput.get(i));
 
-            // Compute hash = PoseidonHash(lhs, rhs)
-            FieldElement[] hashInput = {lhs, rhs};
+            assertNull("Finalizing with smaller input size than specified must be forbidden", digest.finalizeHash());
 
-            // Deserialize expected hash
-            byte[] hashBytes = {
-                    (byte) 0x42, (byte) 0xff, (byte) 0xd4, (byte) 0x94, (byte) 0x7f, (byte) 0x76, (byte) 0xf7, (byte) 0xc1,
-                    (byte) 0xba, (byte) 0x0a, (byte) 0xcf, (byte) 0x73, (byte) 0xf3, (byte) 0x0a, (byte) 0xa3, (byte) 0x7b,
-                    (byte) 0x5a, (byte) 0xe8, (byte) 0xeb, (byte) 0xde, (byte) 0x5d, (byte) 0x61, (byte) 0xc3, (byte) 0x19,
-                    (byte) 0x70, (byte) 0xc2, (byte) 0xf6, (byte) 0x45, (byte) 0x7b, (byte) 0x83, (byte) 0x2a, (byte) 0x39
-            };
+            // Update with last input
+            digest.update(hashInput.get(hashInput.size() - 1));
 
             try
             (
-                FieldElement expectedHash = FieldElement.deserialize(hashBytes);
-                PoseidonHash digest = PoseidonHash.getInstanceConstantLength(2)
+                FieldElement hash = digest.finalizeHash();
+                FieldElement hashTemp = digest.finalizeHash() //.finalizeHash() keeps the state
             )
             {
-                assertNotNull("expectedHash deserialization must not fail", expectedHash);
+                assertNotNull("Finalizing with correct number of inputs must be ok", hash);
+                assertEquals("hash must be equal to expected hash", hash, expectedHash);
+                assertEquals(".finalizeHash() is not idempotent", hash, hashTemp);
+            }
 
-                digest.update(lhs);
-                digest.update(rhs);
+            digest.update(hashInput.get(hashInput.size() - 1));
+            assertNull("Finalizing with bigger input size than specified must be forbidden", digest.finalizeHash());
+        }
+    }
 
-                try
-                (
-                    FieldElement hash = digest.finalizeHash();
-                    FieldElement hashTemp = digest.finalizeHash() //.finalizeHash() keeps the state
-                )
-                {
-                    assertEquals("hash must be equal to expected hash", hash, expectedHash);
-                    assertEquals(".finalizeHash() is not idempotent", hash, hashTemp);
-                }
+    @Test
+    public void testComputeHashVariableLength() throws Exception {
+
+        // Deserialize expected hash
+        byte[] hashBytes = {
+            91, 86, -48, -123, 17, 40, 89, -89, 79, 41, 68, 84, -120, -118, 19, 116,
+            -111, -121, 111, 99, -122, 79, 67, 19, -111, -57, 18, 48, -8, 80, 60, 13
+        };
+
+        try
+        (
+            FieldElement expectedHash = FieldElement.deserialize(hashBytes);
+            PoseidonHash digest = PoseidonHash.getInstanceVariableLength(false)
+        )
+        {
+            assertNotNull("expectedHash deserialization must not fail", expectedHash);
+            for (int i = 0; i < hashInput.size() - 1; i++)
+                digest.update(hashInput.get(i));
+
+            try
+            (
+                FieldElement hash = digest.finalizeHash();
+                FieldElement hashTemp = digest.finalizeHash() //.finalizeHash() keeps the state
+            )
+            {
+                assertNotNull("Finalizing with correct number of inputs must be ok", hash);
+                assertEquals(".finalizeHash() is not idempotent", hash, hashTemp);
             }
         }
+    }
+
+    @Test
+    public void testComputeHashVariableLengthModRate() throws Exception {
+
+        // Deserialize expected hash
+        byte[] hashBytes = {
+            38, 19, 70, -18, 85, -23, -77, -117, -4, 47, -70, 13, -17, -87, -23, 48,
+            88, -107, -63, -74, -68, 46, -7, -49, 118, 16, 68, 121, 107, 8, 70, 22
+        };
+
+        try
+        (
+            FieldElement expectedHash = FieldElement.deserialize(hashBytes);
+            PoseidonHash digest = PoseidonHash.getInstanceVariableLength(true)
+        )
+        {
+            assertNotNull("expectedHash deserialization must not fail", expectedHash);
+            for (int i = 0; i < hashInput.size() - 1; i++)
+                digest.update(hashInput.get(i));
+
+            assertNull("Finalizing with input size non mod rate must be forbidden", digest.finalizeHash());
+
+            // Update with last input
+            digest.update(hashInput.get(hashInput.size() - 1));
+
+            try
+            (
+                FieldElement hash = digest.finalizeHash();
+                FieldElement hashTemp = digest.finalizeHash() //.finalizeHash() keeps the state
+            )
+            {
+                assertNotNull("Finalizing with correct number of inputs must be ok", hash);
+                assertEquals("hash must be equal to expected hash", hash, expectedHash);
+                assertEquals(".finalizeHash() is not idempotent", hash, hashTemp);
+            }
+        }
+    }
+
+    @AfterClass
+    public static void freeHashInput() {
+        for (FieldElement fe: hashInput)
+            fe.freeFieldElement();
+        hashInput.clear();
     }
 }

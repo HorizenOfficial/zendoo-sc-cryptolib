@@ -159,6 +159,22 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCre
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativePrintFieldElementBytes(
+    _env: JNIEnv,
+    _field_element: JObject,
+)
+{
+    let pointer = _env.get_field(_field_element, "fieldElementPointer", "J")
+        .expect("Cannot get object raw pointer.");
+
+    let obj = read_raw_pointer(pointer.j().unwrap() as *const FieldElement);
+
+    let obj_bytes = serialize_from_raw_pointer(obj);
+
+    println!("{:?}", into_i8(obj_bytes));
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeFreeFieldElement(
     _env: JNIEnv,
     _class: JClass,
