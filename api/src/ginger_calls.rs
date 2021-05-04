@@ -1,5 +1,5 @@
 use algebra::{
-    ProjectiveCurve, AffineCurve, validity::SemanticallyValid,
+    ProjectiveCurve, AffineCurve,
     ToConstraintField, UniformRand, serialize::*,
 };
 use primitives::{crh::{
@@ -23,7 +23,6 @@ use rand::{
     SeedableRng, rngs::OsRng,
 };
 use rand_xorshift::XorShiftRng;
-use std::fs::File;
 use lazy_static::*;
 
 use cctp_primitives::{
@@ -36,60 +35,12 @@ use cctp_primitives::{
     },
     utils::{
         proof_system::ProvingSystemUtils, get_bt_merkle_root,
-        serialization::SerializationUtils,
+        serialization::*,
         commitment_tree::bytes_to_field_elements
     },
 };
 
 //*******************************Generic functions**********************************************
-// Note: Should decide if panicking or handling IO errors
-
-pub fn deserialize_from_buffer<T: CanonicalDeserialize>(buffer: &[u8]) ->  Result<T, SerializationError>
-{
-    T::deserialize(buffer)
-}
-
-pub fn deserialize_from_buffer_checked<T: CanonicalDeserialize + SemanticallyValid>(buffer: &[u8]) ->  Result<T, SerializationError>
-{
-    let elem = deserialize_from_buffer::<T>(buffer)?;
-    if !elem.is_valid() {
-        return Err(SerializationError::InvalidData)
-    }
-    Ok(elem)
-}
-
-pub fn serialize_to_buffer<T: CanonicalSerialize>(to_write: &T) -> Result<Vec<u8>, SerializationError> {
-    let mut buffer = Vec::with_capacity(to_write.serialized_size());
-    CanonicalSerialize::serialize(to_write, &mut buffer)?;
-    Ok(buffer)
-}
-
-pub fn read_from_file<T: CanonicalDeserialize>(file_path: &str) -> Result<T, SerializationError> {
-    let fs = File::open(file_path)
-        .map_err(|e| SerializationError::IoError(e))?;
-    T::deserialize(fs)
-}
-
-pub fn read_from_file_checked<T: CanonicalDeserialize + SemanticallyValid>(file_path: &str) -> Result<T, SerializationError>
-{
-    let elem = read_from_file::<T>(file_path)?;
-    if !elem.is_valid() {
-        return Err(SerializationError::InvalidData)
-    }
-    Ok(elem)
-}
-
-pub fn write_to_file<T: CanonicalSerialize>(to_write: &T, file_path: &str) -> Result<(), SerializationError>
-{
-    let mut fs = File::create(file_path)
-        .map_err(|e| SerializationError::IoError(e))?;
-    CanonicalSerialize::serialize(to_write, &mut fs)?;
-    Ok(())
-}
-
-pub fn is_valid<T: SemanticallyValid>(to_check: &T) -> bool {
-    T::is_valid(to_check)
-}
 
 // NOTE: This function relies on a non-cryptographically safe RNG, therefore it
 // must be used ONLY for testing purposes
@@ -299,12 +250,12 @@ pub fn create_naive_threshold_sig_proof(
 
             // Call prover
             let rng = &mut OsRng;
-            CoboundaryMarlin::create_proof(
+            serialize_to_buffer(&CoboundaryMarlin::create_proof(
                 c,
                 &pk,
                 zk,
                 if zk { Some(rng) } else { None },
-            )?.as_bytes()?
+            )?)?
         },
         ProvingSystem::Darlin => unreachable!()
     };
@@ -569,7 +520,7 @@ mod test {
             bt_list.push((0u64, [0u8; MC_PK_SIZE]));
         }
 
-        let end_cumulative_sc_tx_comm_tree_root_f = FieldElement::from_bytes(&end_cumulative_sc_tx_comm_tree_root).unwrap();
+        let end_cumulative_sc_tx_comm_tree_root_f = deserialize_from_buffer::<FieldElement>(&end_cumulative_sc_tx_comm_tree_root).unwrap();
 
         let epoch_number: u32 = rng.gen();
         let btr_fee: u64 = rng.gen();
@@ -604,7 +555,7 @@ mod test {
             let keypair = schnorr_generate_key();
             pks.push(keypair.0);
             sks.push(keypair.1);
-            println!("sk: {:?}", into_i8(keypair.1.as_bytes().unwrap()));
+            println!("sk: {:?}", into_i8(serialize_to_buffer(&keypair.1).unwrap()));
         }
         println!("pks / sks finished");
 
@@ -621,7 +572,7 @@ mod test {
         println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[2]).unwrap()));
 
         let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
-        println!("Constant u8: {:?}", constant.as_bytes().unwrap());
+        println!("Constant u8: {:?}", serialize_to_buffer(&constant).unwrap());
 
         //Create and serialize proof
         let (proof, quality) = create_naive_threshold_sig_proof(

@@ -4,6 +4,7 @@ use algebra::{SemanticallyValid, serialize::*};
 use demo_circuit::{
     type_mapping::*
 };
+use cctp_primitives::utils::serialization::*;
 use std::any::type_name;
 
 mod ginger_calls;
@@ -84,7 +85,6 @@ use jni::JNIEnv;
 use jni::objects::{JClass, JString, JObject, JValue};
 use jni::sys::{jbyteArray, jboolean, jint, jlong, /*jlongArray, */jobject, jobjectArray};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
-use algebra::CanonicalDeserialize;
 
 //Field element related functions
 
