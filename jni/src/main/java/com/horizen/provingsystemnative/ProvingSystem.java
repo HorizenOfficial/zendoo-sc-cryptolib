@@ -32,6 +32,7 @@ public class ProvingSystem {
     * */
     public static boolean generateDLogKeys(
             ProvingSystemType psType,
+            //TODO: We need a way to enforce segment size of the SC DLogKey(s) being less equal than the MC one(s)
             int segmentSize,
             String g1KeyPath,
             Optional<String> g2KeyPath

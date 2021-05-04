@@ -1,10 +1,13 @@
 extern crate jni;
 
 use algebra::{SemanticallyValid, serialize::*};
-use demo_circuit::{
-    type_mapping::*
+use demo_circuit::{type_mapping::*, get_instance_for_setup};
+use cctp_primitives::utils::{
+    serialization::*,
+    poseidon_hash::*,
+    mht::*,
+    proof_system::*,
 };
-use cctp_primitives::utils::serialization::*;
 use std::any::type_name;
 
 mod ginger_calls;
@@ -1763,10 +1766,12 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     let max_pks = _max_pks as usize;
 
+    let circ = get_instance_for_setup(max_pks);
+
     // Generate snark keypair
-    match generate_naive_threshold_sig_circuit_keypair(
+    match generate_circuit_keypair(
+        circ,
         proving_system,
-        max_pks,
         proving_key_path.to_str().unwrap(),
         verification_key_path.to_str().unwrap()
     ) {

@@ -7,9 +7,6 @@ use primitives::{crh::{
     bowe_hopwood::{
         BoweHopwoodPedersenParameters
     },
-}, merkle_tree::field_based_mht::{
-    FieldBasedMerkleTree,
-    FieldBasedMerkleTreePath,
 }, signature::{
     FieldBasedSignatureScheme, schnorr::field_based_schnorr::FieldBasedSchnorrPk
 }, vrf::{FieldBasedVrf, ecvrf::FieldBasedEcVrfPk}};
@@ -26,17 +23,14 @@ use rand_xorshift::XorShiftRng;
 use lazy_static::*;
 
 use cctp_primitives::{
-    proving_system::{
-        init::{load_g1_committer_key, load_g2_committer_key},
-        verifier::{
-            certificate::{CertificateProofUserInputs, ZendooCertProofVerifier},
-            RawVerifierData, ZendooVerifier
-        },
+    proving_system::verifier::{
+        certificate::{CertificateProofUserInputs, ZendooCertProofVerifier},
+        RawVerifierData, ZendooVerifier
     },
     utils::{
         proof_system::ProvingSystemUtils, get_bt_merkle_root,
         serialization::*,
-        commitment_tree::bytes_to_field_elements
+        commitment_tree::bytes_to_field_elements,
     },
 };
 
@@ -72,29 +66,6 @@ pub fn schnorr_sign(msg: &FieldElement, sk: &SchnorrSk, pk: &SchnorrPk) -> Resul
 
 pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &SchnorrSig) -> Result<bool, Error> {
     SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), msg.clone(), signature)
-}
-
-//************************************Poseidon Hash functions****************************************
-
-pub fn get_poseidon_hash_constant_length(input_size: usize, personalization: Option<&[FieldElement]>) -> FieldHash {
-    FieldHash::init_constant_length(input_size, personalization)
-}
-
-pub fn get_poseidon_hash_variable_length(mod_rate: bool, personalization: Option<&[FieldElement]>) -> FieldHash {
-    FieldHash::init_variable_length(mod_rate, personalization)
-}
-
-pub fn update_poseidon_hash(hash: &mut FieldHash, input: &FieldElement){
-    hash.update(*input);
-}
-
-pub fn reset_poseidon_hash(hash: &mut FieldHash, personalization: Option<&[FieldElement]>){
-    hash.reset(personalization);
-}
-
-pub fn finalize_poseidon_hash(hash: &FieldHash) -> Result<FieldElement, Error> {
-    let result = hash.finalize()?;
-    Ok(result)
 }
 
 //*****************************Naive threshold sig circuit related functions************************
@@ -145,42 +116,6 @@ pub fn compute_msg_to_sign(
         .finalize()?;
 
     Ok((mr_bt, msg))
-}
-
-pub fn init_dlog_keys(
-    proving_system: ProvingSystem,
-    segment_size: usize,
-    ck_g1_path: &str,
-    ck_g2_path: &str,
-) -> Result<(), Error> {
-    load_g1_committer_key(segment_size - 1, ck_g1_path)?;
-
-    if matches!(proving_system, ProvingSystem::Darlin) {
-        load_g2_committer_key(segment_size - 1, ck_g2_path)?
-    }
-
-    Ok(())
-}
-
-pub fn generate_naive_threshold_sig_circuit_keypair(
-    proving_system: ProvingSystem,
-    max_pks: usize,
-    pk_path: &str,
-    vk_path: &str,
-) -> Result<(), Error>
-{
-    let circ = get_instance_for_setup(max_pks);
-
-    match proving_system {
-        ProvingSystem::CoboundaryMarlin => {
-            let (pk, vk) = CoboundaryMarlin::setup(circ)?;
-            write_to_file(&pk, pk_path)?;
-            write_to_file(&vk, vk_path)?;
-        },
-        ProvingSystem::Darlin => unreachable!()
-    }
-
-    Ok(())
 }
 
 pub fn create_naive_threshold_sig_proof(
@@ -385,103 +320,6 @@ pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Re
     )
 }
 
-//************Merkle Tree functions******************
-
-////////////MERKLE_PATH
-
-pub fn verify_ginger_merkle_path(
-    path: &GingerMHTPath,
-    height: usize,
-    leaf: &FieldElement,
-    root: &FieldElement
-) -> Result<bool, Error> {
-    path.verify(height, leaf, root)
-}
-
-pub fn verify_ginger_merkle_path_without_length_check(
-    path: &GingerMHTPath,
-    leaf: &FieldElement,
-    root: &FieldElement
-) -> Result<bool, Error> {
-    path.verify_without_length_check(leaf, root)
-}
-
-pub fn is_path_leftmost(path: &GingerMHTPath) -> bool {
-    path.is_leftmost()
-}
-
-pub fn is_path_rightmost(path: &GingerMHTPath) -> bool {
-    path.is_rightmost()
-}
-
-pub fn are_right_leaves_empty(path: &GingerMHTPath) -> bool { path.are_right_leaves_empty() }
-
-pub fn get_leaf_index_from_path(path: &GingerMHTPath) -> u64 {
-    path.leaf_index() as u64
-}
-
-//TODO: Move to GingerLib
-pub fn apply(path: &GingerMHTPath, leaf: &FieldElement) -> FieldElement
-{
-    let mut digest = FieldHash::init_constant_length(2, None);
-    let mut prev_node = *leaf;
-    for (sibling, direction) in path.get_raw_path().iter() {
-
-        assert_eq!(sibling.len(), 1);
-        assert!(*direction == 0 || *direction == 1);
-
-        // Choose left and right hash according to direction
-        let (left, right) = if *direction == 0{
-            (prev_node, sibling[0].clone())
-        } else {
-            (sibling[0].clone(), prev_node)
-        };
-
-        // Compute the parent node
-        prev_node = digest
-            .update(left)
-            .update(right)
-            .finalize()
-            .unwrap();
-
-        digest.reset(None);
-    }
-    prev_node
-}
-
-////////////OPTIMIZED MERKLE TREE
-
-pub fn new_ginger_mht(height: usize, processing_step: usize) -> GingerMHT {
-    GingerMHT::init(height, processing_step)
-}
-
-pub fn append_leaf_to_ginger_mht(tree: &mut GingerMHT, leaf: &FieldElement){
-    tree.append(*leaf);
-}
-
-pub fn finalize_ginger_mht(tree: &GingerMHT) -> GingerMHT {
-    tree.finalize()
-}
-
-pub fn finalize_ginger_mht_in_place(tree: &mut GingerMHT) {
-    tree.finalize_in_place();
-}
-
-pub fn get_ginger_mht_root(tree: &GingerMHT) -> Option<FieldElement> {
-    tree.root()
-}
-
-pub fn get_ginger_mht_path(tree: &GingerMHT, leaf_index: u64) -> Option<GingerMHTPath> {
-    match tree.get_merkle_path(leaf_index as usize) {
-        Some(path) => Some(path.into()),
-        None => None,
-    }
-}
-
-pub fn reset_ginger_mht(tree: &mut GingerMHT){
-    tree.reset();
-}
-
 // Test functions
 
 pub(crate) fn into_i8(v: Vec<u8>) -> Vec<i8> {
@@ -503,6 +341,9 @@ mod test {
     use super::*;
     use rand::{RngCore, Rng};
     use algebra::Field;
+    use cctp_primitives::utils::{
+        poseidon_hash::*, mht::*, proof_system::*,
+    };
 
     fn create_sample_naive_threshold_sig_circuit(bt_num: usize) {
         //assume to have 3 pks, threshold = 2
@@ -539,9 +380,10 @@ mod test {
         //Generate params and write them to file
         let proving_key_path = if bt_num != 0 {"./sample_pk"} else {"./sample_pk_no_bwt"};
         let verifying_key_path = if bt_num != 0 {"./sample_vk"} else {"./sample_vk_no_bwt"};
-        generate_naive_threshold_sig_circuit_keypair(
+        let circ = get_instance_for_setup(3);
+        generate_circuit_keypair(
+            circ,
             ProvingSystem::CoboundaryMarlin,
-            3,
             proving_key_path,
             verifying_key_path
         ).unwrap();
