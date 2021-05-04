@@ -4,13 +4,15 @@ import com.horizen.librustsidechains.Library;
 
 public class SchnorrSignature implements AutoCloseable
 {
-
-  public static int SIGNATURE_LENGTH = 64;
+  public static final int SIGNATURE_LENGTH;
 
   private long signaturePointer;
 
+  private static native int nativeGetSignatureSize();
+
   static {
     Library.load();
+    SIGNATURE_LENGTH = nativeGetSignatureSize();
   }
 
   private SchnorrSignature(long signaturePointer) {

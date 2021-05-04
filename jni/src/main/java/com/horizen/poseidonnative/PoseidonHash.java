@@ -5,12 +5,15 @@ import com.horizen.librustsidechains.Library;
 
 public class PoseidonHash implements AutoCloseable {
 
-    public static final int HASH_LENGTH = 32;
+    public static final int HASH_LENGTH;
 
     private long poseidonHashPointer;
 
+    private static native int nativeGetHashSize();
+
     static {
         Library.load();
+        HASH_LENGTH = nativeGetHashSize();
     }
 
     private PoseidonHash(long poseidonHashPointer) {

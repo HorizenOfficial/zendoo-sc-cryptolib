@@ -6,12 +6,15 @@ import com.horizen.librustsidechains.Library;
 public class VRFPublicKey implements AutoCloseable
 {
 
-  public static final int PUBLIC_KEY_LENGTH = 33; // Using compressed point representation
+  public static final int PUBLIC_KEY_LENGTH;
 
   private long publicKeyPointer;
 
+  private static native int nativeGetPublicKeySize();
+
   static {
     Library.load();
+    PUBLIC_KEY_LENGTH = nativeGetPublicKeySize();
   }
 
   private VRFPublicKey(long publicKeyPointer) {
@@ -19,8 +22,6 @@ public class VRFPublicKey implements AutoCloseable
       throw new IllegalArgumentException("Public key pointer must be not null.");
     this.publicKeyPointer = publicKeyPointer;
   }
-
-  private static native int nativeGetPublicKeySize();
 
   private static native VRFPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes, boolean checkPublicKey);
 

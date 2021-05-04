@@ -4,12 +4,15 @@ import java.util.Random;
 
 public class FieldElement implements AutoCloseable {
 
-    public static int FIELD_ELEMENT_LENGTH = 32;
+    public static final int FIELD_ELEMENT_LENGTH;
 
     private long fieldElementPointer;
 
+    private static native int nativeGetFieldElementSize();
+
     static {
         Library.load();
+        FIELD_ELEMENT_LENGTH = nativeGetFieldElementSize();
     }
 
     private FieldElement(long fieldElementPointer) {
@@ -33,10 +36,6 @@ public class FieldElement implements AutoCloseable {
         long seed = new Random().nextLong();
         return nativeCreateRandom(seed);
     }
-
-    private static native int nativeGetFieldElementSize();
-
-    public static int getFieldElementSize() {return  nativeGetFieldElementSize();}
 
     private native byte[] nativeSerializeFieldElement();
 

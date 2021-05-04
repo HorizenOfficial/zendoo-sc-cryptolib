@@ -5,12 +5,15 @@ import com.horizen.librustsidechains.*;
 public class SchnorrPublicKey implements AutoCloseable
 {
 
-  public static final int PUBLIC_KEY_LENGTH = 33; // In compressed representation
+  public static final int PUBLIC_KEY_LENGTH;
 
   private long publicKeyPointer;
 
+  private static native int nativeGetPublicKeySize();
+
   static {
     Library.load();
+    PUBLIC_KEY_LENGTH = nativeGetPublicKeySize();
   }
 
   private SchnorrPublicKey(long publicKeyPointer) {
@@ -18,8 +21,6 @@ public class SchnorrPublicKey implements AutoCloseable
       throw new IllegalArgumentException("Public key pointer must be not null.");
     this.publicKeyPointer = publicKeyPointer;
   }
-
-  private static native int nativeGetPublicKeySize();
 
   private static native SchnorrPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes, boolean checkPublicKey);
 

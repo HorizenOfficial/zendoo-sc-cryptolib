@@ -171,7 +171,7 @@ pub fn compute_msg_to_sign(
     end_cumulative_sc_tx_comm_tree_root: &FieldElement,
     btr_fee:                             u64,
     ft_min_fee:                          u64,
-    bt_list:                             Vec<(u64, [u8; 20])>,
+    bt_list:                             Vec<(u64, [u8; MC_PK_SIZE])>,
 ) -> Result<(FieldElement, FieldElement), Error> {
 
     let epoch_number = FieldElement::from(epoch_number);
@@ -240,7 +240,7 @@ pub fn create_naive_threshold_sig_proof(
     end_cumulative_sc_tx_comm_tree_root: &FieldElement,
     btr_fee:                             u64,
     ft_min_fee:                          u64,
-    bt_list:                             Vec<(u64, [u8; 20])>,
+    bt_list:                             Vec<(u64, [u8; MC_PK_SIZE])>,
     threshold:                           u64,
     proving_key_path:                    &str,
     enforce_membership:                  bool,
@@ -319,7 +319,7 @@ pub fn verify_naive_threshold_sig_proof(
     end_cumulative_sc_tx_comm_tree_root: &FieldElement,
     btr_fee:                             u64,
     ft_min_fee:                          u64,
-    bt_list:                             Vec<(u64, [u8; 20])>,
+    bt_list:                             Vec<(u64, [u8; MC_PK_SIZE])>,
     valid_sigs:                          u64,
     proof:                               Vec<u8>,
     check_proof:                         bool,
@@ -566,7 +566,7 @@ mod test {
 
         let mut bt_list = vec![];
         for _ in 0..bt_num {
-            bt_list.push((0u64, [0u8; 20]));
+            bt_list.push((0u64, [0u8; MC_PK_SIZE]));
         }
 
         let end_cumulative_sc_tx_comm_tree_root_f = FieldElement::from_bytes(&end_cumulative_sc_tx_comm_tree_root).unwrap();

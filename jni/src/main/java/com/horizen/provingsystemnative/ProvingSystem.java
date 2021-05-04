@@ -1,8 +1,13 @@
 package com.horizen.provingsystemnative;
 
+import com.horizen.librustsidechains.Library;
 import java.util.Optional;
 
 public class ProvingSystem {
+
+    static {
+        Library.load();
+    }
 
     public enum ProvingSystemType {
         COBOUNDARY_MARLIN,

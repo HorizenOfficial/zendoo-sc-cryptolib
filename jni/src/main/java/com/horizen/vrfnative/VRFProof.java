@@ -4,13 +4,15 @@ import com.horizen.librustsidechains.Library;
 
 public class VRFProof implements AutoCloseable
 {
-
-  public static int PROOF_LENGTH = 97; // Using compressed point representation
+  public static final int PROOF_LENGTH;
 
   private long proofPointer;
 
+  private static native int nativeGetProofSize();
+
   static {
     Library.load();
+    PROOF_LENGTH = nativeGetProofSize();
   }
 
   private VRFProof(long proofPointer) {

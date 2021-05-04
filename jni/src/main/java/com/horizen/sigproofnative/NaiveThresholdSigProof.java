@@ -1,5 +1,6 @@
 package com.horizen.sigproofnative;
 
+import com.horizen.librustsidechains.Library;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.schnorrnative.SchnorrPublicKey;
 import com.horizen.schnorrnative.SchnorrSignature;
@@ -8,6 +9,10 @@ import com.horizen.provingsystemnative.ProvingSystem.ProvingSystemType;
 import java.util.List;
 
 public class NaiveThresholdSigProof {
+
+    static {
+        Library.load();
+    }
 
     private static native FieldElement nativeGetConstant(
             SchnorrPublicKey[] schnorrPublicKeys,
