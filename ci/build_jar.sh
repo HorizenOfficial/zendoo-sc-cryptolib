@@ -2,10 +2,10 @@
 
 set -euo pipefail
 
-/home/osboxes/.cargo/bin/cargo clean
+cargo clean
 
 cargo build -j$(($(nproc)+1)) --release --target=x86_64-pc-windows-gnu
-/home/osboxes/.cargo/bin/cargo build -j$(($(nproc)+1)) --release --target=x86_64-unknown-linux-gnu
+cargo build -j$(($(nproc)+1)) --release --target=x86_64-unknown-linux-gnu
 
 mkdir -p jni/src/main/resources/native/linux64
 cp target/x86_64-unknown-linux-gnu/release/libzendoo_sc.so jni/src/main/resources/native/linux64/libzendoo_sc.so
