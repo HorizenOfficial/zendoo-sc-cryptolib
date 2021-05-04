@@ -22,38 +22,39 @@ public class NaiveThresholdSigProof {
         return nativeCreateMsgToSign(bt, endEpochBlockHash, prevEndEpochBlockHash);
     }
 
-    private static native CreateProofResult nativeCreateProof(BackwardTransfer[] bt,
-                                                   byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
-                                                   SchnorrSignature[] schnorrSignatures, SchnorrPublicKey[] schnorrPublicKeys,
-                                                   long threshold, String provingKeyPath);
-
-    public static CreateProofResult createProof(List<BackwardTransfer> btList,
-                                     byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
-                                     List<SchnorrSignature> schnorrSignatureList, List<SchnorrPublicKey> schnorrPublicKeyList,
-                                     long threshold, String provingKeyPath) {
-        return nativeCreateProof(btList.toArray(new BackwardTransfer[0]), endEpochBlockHash, prevEndEpochBlockHash,
-                schnorrSignatureList.toArray(new SchnorrSignature[0]), schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
-                threshold, provingKeyPath);
-    }
-
-    private static native boolean nativeVerifyProof(BackwardTransfer[] btList,
-                                      byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
-                                      FieldElement constant, long quality, byte[] proof, boolean checkProof, String verificationKeyPath, boolean checkVk);
-
-    // TODO: check type of `constant`. Why not a byte[]?
-    public static boolean verifyProof(List<BackwardTransfer> btList,
-                                      byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
-                                      FieldElement constant, long quality, byte[] proof, String verificationKeyPath){
-
-        return nativeVerifyProof(
-                btList.toArray(new BackwardTransfer[0]),
-                endEpochBlockHash, prevEndEpochBlockHash,
-                constant, quality, proof, true, verificationKeyPath, true);
-    }
-
     public static void setup(long maxPks, String provingKeyPath, String verificationKeyPath) {
         nativeSetup(maxPks, provingKeyPath, verificationKeyPath);
     }
 
     private static native void nativeSetup(long maxPks, String provingKeyPath, String verificationKeyPath);
+
+    private static native CreateProofResult nativeCreateProof(BackwardTransfer[] bt,
+                                                   byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
+                                                   SchnorrSignature[] schnorrSignatures, SchnorrPublicKey[] schnorrPublicKeys,
+                                                   long threshold, String provingKeyPath, boolean checkProvingKey);
+
+    public static CreateProofResult createProof(List<BackwardTransfer> btList,
+                                     byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
+                                     List<SchnorrSignature> schnorrSignatureList, List<SchnorrPublicKey> schnorrPublicKeyList,
+                                     long threshold, String provingKeyPath, boolean checkProvingKey) {
+        return nativeCreateProof(btList.toArray(new BackwardTransfer[0]), endEpochBlockHash, prevEndEpochBlockHash,
+                schnorrSignatureList.toArray(new SchnorrSignature[0]), schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
+                threshold, provingKeyPath, checkProvingKey);
+    }
+
+    private static native boolean nativeVerifyProof(BackwardTransfer[] btList,
+                                      byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
+                                      FieldElement constant, long quality, byte[] proof, boolean checkProof,
+                                      String verificationKeyPath, boolean checkVerificationKey);
+
+    // TODO: check type of `constant`. Why not a byte[]?
+    public static boolean verifyProof(List<BackwardTransfer> btList,
+                                      byte[] endEpochBlockHash, byte[] prevEndEpochBlockHash,
+                                      FieldElement constant, long quality, byte[] proof, boolean checkProof,
+                                      String verificationKeyPath, boolean checkVerificationKey){
+        return nativeVerifyProof(
+                btList.toArray(new BackwardTransfer[0]),
+                endEpochBlockHash, prevEndEpochBlockHash,
+                constant, quality, proof, checkProof, verificationKeyPath, checkVerificationKey);
+    }
 }

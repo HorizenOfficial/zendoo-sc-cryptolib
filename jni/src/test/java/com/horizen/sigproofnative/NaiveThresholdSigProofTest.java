@@ -282,7 +282,7 @@ public class NaiveThresholdSigProofTest {
         NaiveThresholdSigProof.setup(keyCount, provingKeyPath, verificationKeyPath);
 
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(btList, endEpochBlockHash, prevEndEpochBlockHash,
-                signatureList, publicKeyList, threshold, provingKeyPath);
+                signatureList, publicKeyList, threshold, provingKeyPath, false);
 
         assertNotNull("Proof creation must be successfull", proofResult);
 
@@ -293,13 +293,13 @@ public class NaiveThresholdSigProofTest {
         assertNotNull("Constant creation must be successfull", constant);
 
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
-                prevEndEpochBlockHash, constant, quality, proof, verificationKeyPath);
+                prevEndEpochBlockHash, constant, quality, proof, true, verificationKeyPath, true);
 
         assertTrue("Proof must be verified", isProofVerified);
 
         quality = threshold - 1;
         isProofVerified = NaiveThresholdSigProof.verifyProof(btList, endEpochBlockHash,
-                prevEndEpochBlockHash, constant, quality, proof, verificationKeyPath);
+                prevEndEpochBlockHash, constant, quality, proof, true, verificationKeyPath, true);
 
         assertFalse("Proof must not be verified", isProofVerified);
 

@@ -7,11 +7,11 @@ include = ["Cargo.toml", "src"]
 
 [dependencies]
 algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
-primitives = {version = "0.1.0", features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
+primitives = {version = "0.1.0", features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
 r1cs-crypto = {version = "0.1.0", features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
 r1cs-core = {version = "0.1.0", git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
 r1cs-std = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
-poly-commit = { git = "https://github.com/HorizenLabs/poly-commit", branch = "dev_serializations" }
+poly-commit = { git = "https://github.com/HorizenLabs/poly-commit", branch = "dev_serializations", features = ["asm"]}
 marlin = {version = "0.1.0", git = "https://github.com/HorizenLabs/marlin", branch = "dev_serializations", features = [ "asm", "parallel" ] }
 
 derivative = "1"

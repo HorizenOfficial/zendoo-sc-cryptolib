@@ -5,7 +5,7 @@ import com.horizen.librustsidechains.*;
 public class SchnorrPublicKey implements AutoCloseable
 {
 
-  public static final int PUBLIC_KEY_LENGTH = 96;
+  public static final int PUBLIC_KEY_LENGTH = 65;
 
   private long publicKeyPointer;
 
@@ -21,13 +21,13 @@ public class SchnorrPublicKey implements AutoCloseable
 
   private static native int nativeGetPublicKeySize();
 
-  private static native SchnorrPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes);
+  private static native SchnorrPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes, boolean checkPublicKey);
 
-  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes) {
+  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes, boolean checkPublicKey) {
     if (publicKeyBytes.length != PUBLIC_KEY_LENGTH)
       throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PUBLIC_KEY_LENGTH, publicKeyBytes.length));
 
-    return nativeDeserializePublicKey(publicKeyBytes);
+    return nativeDeserializePublicKey(publicKeyBytes, checkPublicKey);
   }
 
   private native byte[] nativeSerializePublicKey();

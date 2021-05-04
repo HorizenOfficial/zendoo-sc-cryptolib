@@ -28,7 +28,7 @@ public class VRFSecretKeyTest {
                 try
                 (
                     VRFPublicKey recreatedPublicKey = keyPair.getSecretKey().getPublicKey();
-                    VRFPublicKey deserializedPublicKey = VRFPublicKey.deserialize(publicKeyBytes);
+                    VRFPublicKey deserializedPublicKey = VRFPublicKey.deserialize(publicKeyBytes, true);
                     VRFSecretKey deserializedSecretKey = VRFSecretKey.deserialize(secretKeyBytes);
                 )
                 {

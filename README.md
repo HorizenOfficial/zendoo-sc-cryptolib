@@ -1,7 +1,7 @@
 
 # zendoo-sc-cryptolib
 
-`zendoo-sc-cryptolib` is a Rust crate that exposes to Java, through JNI, the [ginger-lib](https://github.com/ZencashOfficial/ginger-lib) components needed by the [Zendoo](https://eprint.iacr.org/2020/123.pdf "Zendoo") sidechain SDK.
+`zendoo-sc-cryptolib` is a Rust crate that exposes to Java, through JNI, the [ginger-lib](https://github.com/HorizenOfficial/ginger-lib) components needed by the [Zendoo](https://eprint.iacr.org/2020/123.pdf "Zendoo") sidechain SDK.
 
 In particular it exposes interfaces to:
 
