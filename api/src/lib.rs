@@ -1029,7 +1029,6 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeFreeMe
     drop(unsafe { Box::from_raw(_path) });
 }
 
-////////////RANDOM ACCESS MERKLE TREE
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeInit(
     _env: JNIEnv,
