@@ -153,7 +153,7 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCre
 ) -> jobject
 {
     //Create field element from _long
-    let fe = read_field_element_from_u64(_long as u64);
+    let fe = FieldElement::from(_long as u64);
 
     return_field_element(&_env, fe)
 }
@@ -1171,7 +1171,6 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeGetProofSize(
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
     _env: JNIEnv,
-    _class: JClass,
     _proof: JObject,
 ) -> jbyteArray
 {
@@ -1297,16 +1296,12 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
 
     //Compute vrf proof
     let (proof, vrf_out) = match vrf_prove(message, secret_key, public_key) {
-        Ok((p, vrf_out)) =>
-            (Box::into_raw(Box::new(p)), Box::into_raw(Box::new(vrf_out))),
+        Ok((proof, vrf_out)) => (
+            return_jobject(&_env, proof, "com/horizen/vrfnative/VRFProof"),
+            return_jobject(&_env, vrf_out, "com/horizen/librustsidechains/FieldElement")
+        ),
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
     };
-
-    //Create VRFProof instance
-    let proof_object = return_jobject(&_env, proof, "com/horizen/vrfnative/VRFProof");
-
-    //Create FieldElement instance
-    let field_object = return_jobject(&_env, vrf_out, "com/horizen/librustsidechains/FieldElement");
 
     //Create and return VRFProveResult instance
     let class = _env.find_class("com/horizen/vrfnative/VRFProveResult")
@@ -1315,7 +1310,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
     let result = _env.new_object(
         class,
         "(Lcom/horizen/vrfnative/VRFProof;Lcom/horizen/librustsidechains/FieldElement;)V",
-        &[JValue::Object(proof_object), JValue::Object(field_object)]
+        &[JValue::Object(proof), JValue::Object(vrf_out)]
     ).expect("Should be able to create new VRFProveResult:(VRFProof, FieldElement) object");
 
     *result
@@ -1480,7 +1475,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
             let a = _env.call_method(o, "getAmount", "()J", &[])
                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
 
-            bt_list.push(BackwardTransfer::new(pk, a));
+            bt_list.push((a, pk));
         }
     }
 
@@ -1497,7 +1492,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         &end_cumulative_sc_tx_comm_tree_root,
         _btr_fee as u64,
         _ft_min_fee as u64,
-        bt_list.as_slice()
+        bt_list
     ){
         Ok((_, msg)) => msg,
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
@@ -1571,7 +1566,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
             let a = _env.call_method(o, "getAmount", "()J", &[])
                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
 
-            bt_list.push(BackwardTransfer::new(pk, a));
+            bt_list.push((a, pk));
         }
     }
 
@@ -1636,7 +1631,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         &end_cumulative_sc_tx_comm_tree_root,
         _btr_fee as u64,
         _ft_min_fee as u64,
-        bt_list.as_slice(),
+        bt_list,
         _threshold as u64,
         proving_key_path.to_str().unwrap(),
         _check_proving_key == JNI_TRUE,
@@ -1658,7 +1653,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         proof_result_class,
         "([BJ)V",
         &[JValue::Object(JObject::from(proof_serialized)), JValue::Long(jlong::from(quality as i64))]
-    ).expect("Should be able to create new CreateProofResult:(long, byte[]) object");
+    ).expect("Should be able to create new CreateProofResult:(byte[], long) object");
 
     *result
 }

@@ -38,7 +38,7 @@ public class NaiveThresholdSigProof {
             long ftMinFee
     )
     {
-        return nativeCreateMsgToSign(bt,epochNumber, endCumulativeScTxCommTreeRoot, btrFee, ftMinFee);
+        return nativeCreateMsgToSign(bt, epochNumber, endCumulativeScTxCommTreeRoot, btrFee, ftMinFee);
     }
 
     public static boolean setup(
@@ -69,7 +69,8 @@ public class NaiveThresholdSigProof {
             SchnorrPublicKey[] schnorrPublicKeys,
             long threshold,
             String provingKeyPath,
-            boolean checkProvingKey
+            boolean checkProvingKey,
+            boolean zk
     );
 
     public static CreateProofResult createProof(
@@ -83,14 +84,15 @@ public class NaiveThresholdSigProof {
             List<SchnorrPublicKey> schnorrPublicKeyList,
             long threshold,
             String provingKeyPath,
-            boolean checkProvingKey
+            boolean checkProvingKey,
+            boolean zk
     ) {
         return nativeCreateProof(
             psType, btList.toArray(new BackwardTransfer[0]), epochNumber,
             endCumulativeScTxCommTreeRoot, btrFee, ftMinFee,
             schnorrSignatureList.toArray(new SchnorrSignature[0]),
             schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
-            threshold, provingKeyPath, checkProvingKey
+            threshold, provingKeyPath, checkProvingKey, zk
         );
     }
 

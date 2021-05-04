@@ -1,6 +1,6 @@
 use algebra::{
-    PrimeField, ProjectiveCurve, AffineCurve, FromBytes, validity::SemanticallyValid,
-    ToBytes, ToConstraintField, UniformRand, serialize::*,
+    ProjectiveCurve, AffineCurve, validity::SemanticallyValid,
+    ToConstraintField, UniformRand, serialize::*,
 };
 use primitives::{crh::{
     FieldBasedHash,
@@ -23,9 +23,7 @@ use rand::{
     SeedableRng, rngs::OsRng,
 };
 use rand_xorshift::XorShiftRng;
-use std::{
-    fs::File, io::Result as IoResult
-};
+use std::fs::File;
 use lazy_static::*;
 
 use cctp_primitives::{
@@ -150,49 +148,11 @@ pub fn finalize_poseidon_hash(hash: &FieldHash) -> Result<FieldElement, Error> {
 
 //*****************************Naive threshold sig circuit related functions************************
 
-#[derive(Clone, Default)]
-pub struct BackwardTransfer {
-    pub pk_dest:    [u8; 20],
-    pub amount:     u64,
-}
-
-impl BackwardTransfer {
-    pub fn new(pk_dest: [u8; 20], amount: u64) -> Self
-    {
-        Self{ pk_dest, amount }
-    }
-
-    pub fn to_field_element(&self) -> IoResult<FieldElement>
-    {
-        let mut buffer = vec![];
-        self.pk_dest.write(&mut buffer)?;
-        self.amount.write(&mut buffer)?;
-        read_field_element_from_buffer_with_padding(buffer.as_slice())
-    }
-}
-
-//Will return error if buffer.len > FIELD_SIZE. If buffer.len < FIELD_SIZE, padding 0s will be added
-pub fn read_field_element_from_buffer_with_padding(buffer: &[u8]) -> IoResult<FieldElement>
-{
-    let buff_len = buffer.len();
-
-    //Pad to reach field element size
-    let mut new_buffer = vec![];
-    new_buffer.extend_from_slice(buffer);
-    for _ in buff_len..FIELD_SIZE { new_buffer.push(0u8) } //Add padding zeros to reach field size
-
-    FieldElement::read(&new_buffer[..])
-}
-
-pub fn read_field_element_from_u64(num: u64) -> FieldElement {
-    FieldElement::from_repr(FieldBigInteger::from(num))
-}
-
 // Computes H(H(pks), threshold): used to generate the constant value needed to be declared
 // in MC during SC creation.
 pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<FieldElement, Error>
 {
-    let threshold_field = read_field_element_from_u64(threshold);
+    let threshold_field = FieldElement::from(threshold);
 
     // pks must always be all present
     let mut h = FieldHash::init_constant_length(pks.len(), None);
@@ -211,21 +171,13 @@ pub fn compute_msg_to_sign(
     end_cumulative_sc_tx_comm_tree_root: &FieldElement,
     btr_fee:                             u64,
     ft_min_fee:                          u64,
-    bt_list:                             &[BackwardTransfer],
+    bt_list:                             Vec<(u64, [u8; 20])>,
 ) -> Result<(FieldElement, FieldElement), Error> {
 
     let epoch_number = FieldElement::from(epoch_number);
 
-    let mr_bt = {
-        let mut bt_field_list = vec![];
-        for bt in bt_list.iter() {
-            let bt_f = bt.to_field_element()?;
-            bt_field_list.push(bt_f);
-        }
-
-        //Compute bt_list merkle_root
-        get_bt_merkle_root(bt_field_list)?
-    };
+    //Compute bt_list merkle_root
+    let mr_bt = get_bt_merkle_root(bt_list.as_slice())?;
 
     let fees_field_element = {
         let fes = bytes_to_field_elements(vec![btr_fee, ft_min_fee])?;
@@ -288,7 +240,7 @@ pub fn create_naive_threshold_sig_proof(
     end_cumulative_sc_tx_comm_tree_root: &FieldElement,
     btr_fee:                             u64,
     ft_min_fee:                          u64,
-    bt_list:                             &[BackwardTransfer],
+    bt_list:                             Vec<(u64, [u8; 20])>,
     threshold:                           u64,
     proving_key_path:                    &str,
     enforce_membership:                  bool,
@@ -322,13 +274,13 @@ pub fn create_naive_threshold_sig_proof(
     }
 
     //Compute b as v-t and convert it to field element
-    let b = read_field_element_from_u64(valid_signatures - threshold);
+    let b = FieldElement::from(valid_signatures - threshold);
 
     //Convert affine pks to projective
     let pks = pks.iter().map(|&pk| FieldBasedSchnorrPk(pk.into_projective())).collect::<Vec<_>>();
 
     //Convert needed variables into field elements
-    let threshold = read_field_element_from_u64(threshold);
+    let threshold = FieldElement::from(threshold);
 
     let c = NaiveTresholdSignature::<FieldElement>::new(
         pks, sigs, threshold, b, FieldElement::from(epoch_number),
@@ -608,19 +560,16 @@ mod test {
         //Generate random mc block hashes and bt list
         let mut end_cumulative_sc_tx_comm_tree_root = [0u8; 32];
         rng.fill_bytes(&mut end_cumulative_sc_tx_comm_tree_root);
+        end_cumulative_sc_tx_comm_tree_root[31] = 0u8; // Mask away last byte
         println!("end_cumulative_sc_tx_comm_tree_root u8: {:?}", end_cumulative_sc_tx_comm_tree_root);
         println!("end_cumulative_sc_tx_comm_tree_root i8: {:?}", into_i8(end_cumulative_sc_tx_comm_tree_root.to_vec()));
 
         let mut bt_list = vec![];
         for _ in 0..bt_num {
-            bt_list.push(BackwardTransfer::default());
+            bt_list.push((0u64, [0u8; 20]));
         }
-        let bt_list_raw = bt_list.iter().map(|bt| (bt.amount, bt.pk_dest)).collect::<Vec<_>>();
-        println!("bt_list finished");
 
-        let end_cumulative_sc_tx_comm_tree_root_f = read_field_element_from_buffer_with_padding(
-            &end_cumulative_sc_tx_comm_tree_root[..(FIELD_SIZE - 1)]
-        ).unwrap();
+        let end_cumulative_sc_tx_comm_tree_root_f = FieldElement::from_bytes(&end_cumulative_sc_tx_comm_tree_root).unwrap();
 
         let epoch_number: u32 = rng.gen();
         let btr_fee: u64 = rng.gen();
@@ -632,7 +581,7 @@ mod test {
             &end_cumulative_sc_tx_comm_tree_root_f,
             btr_fee,
             ft_min_fee,
-            bt_list.as_slice()
+            bt_list.clone()
         ).unwrap();
         println!("compute_msg_to_sign finished");
 
@@ -683,7 +632,7 @@ mod test {
             &end_cumulative_sc_tx_comm_tree_root_f,
             btr_fee,
             ft_min_fee,
-            bt_list.as_slice(),
+            bt_list.clone(),
             threshold,
             proving_key_path,
             false,
@@ -700,7 +649,7 @@ mod test {
             &end_cumulative_sc_tx_comm_tree_root_f,
             btr_fee,
             ft_min_fee,
-            bt_list_raw.clone(),
+            bt_list.clone(),
             quality,
             proof.clone(),
             true,
@@ -717,7 +666,7 @@ mod test {
             &end_cumulative_sc_tx_comm_tree_root_f,
             btr_fee,
             ft_min_fee,
-            bt_list_raw,
+            bt_list,
             quality - 1,
             proof,
             true,

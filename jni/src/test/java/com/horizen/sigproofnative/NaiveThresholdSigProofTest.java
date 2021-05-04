@@ -242,7 +242,7 @@ public class NaiveThresholdSigProofTest {
         assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath));
     }
 
-    //@Test
+    @Test
     public void testCreateRandomProof() throws Exception {
         Random r = new Random();
 
@@ -298,7 +298,7 @@ public class NaiveThresholdSigProofTest {
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
             psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinFee, signatureList, publicKeyList, threshold,
-            snarkPkPath, false
+            snarkPkPath, false, false
         );
 
         assertNotNull("Proof creation must be successfull", proofResult);
