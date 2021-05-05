@@ -11,7 +11,7 @@ services:
 env:
   global:
     - CONTAINER_JAVA_VER="openjdk-8-jdk"
-    - CONTAINER_RUST_VER="1.51.0"
+    - CONTAINER_RUST_VER="nightly-2020-04-22"
 
 script: >-
   source ci/setup_env.sh &&
