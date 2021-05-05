@@ -1,7 +1,7 @@
 
 # zendoo-sc-cryptolib
 
-`zendoo-sc-cryptolib` is a Rust crate that exposes to Java, through JNI, the [ginger-lib](https://github.com/ZencashOfficial/ginger-lib) components needed by the [Zendoo](https://eprint.iacr.org/2020/123.pdf "Zendoo") sidechain SDK.
+`zendoo-sc-cryptolib` is a Rust crate that exposes to Java, through JNI, the [ginger-lib](https://github.com/HorizenOfficial/ginger-lib) components needed by the [Zendoo](https://eprint.iacr.org/2020/123.pdf "Zendoo") sidechain SDK.
 
 In particular it exposes interfaces to:
 
@@ -35,7 +35,7 @@ There are a few Rust tests that can be executed still with the usual Cargo comma
 
 ## Java Jar build guide
 
-To be able to build a Java Jar package you need to run `build_jar.sh` script.
+To be able to build a Java Jar package you can use the `build_jar.sh` script in `ci` folder.
 Requirements:
 1. Build on Linux (Ubuntu 18.04+, for example) with a cross compilation of a native Rust code for windows target as well.
 2. Install `rust` and `cargo` following the [official guide](https://www.rust-lang.org/tools/install). Restart the OS if needed.
@@ -53,7 +53,7 @@ Requirements:
     update-alternatives --install /usr/bin/x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix 100
     update-alternatives --install /usr/bin/x86_64-w64-mingw32-g++ x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix 100
     ``` 
-6. Run `./build_jar.sh`
+6. Run `./ci/build_jar.sh`
 
 
 ## Contributing

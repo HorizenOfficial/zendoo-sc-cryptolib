@@ -1,59 +1,57 @@
 use algebra::{
-    fields::tweedle::Fr,
-    curves::tweedle::dum::Projective,
     biginteger::BigInteger256 as BigInteger,
-    Field, PrimeField, ProjectiveCurve,
+    Field, ProjectiveCurve, field_new
 };
 
 use primitives::{
     crh::pedersen::PedersenWindow,
-    signature::schnorr::field_based_schnorr::{
-        FieldBasedSchnorrSignature, FieldBasedSchnorrPk,
-    }
+    signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk,
 };
+
+use crate::type_mapping::*;
 
 pub mod constants;
 
-pub struct NaiveThresholdSigParams{
-    pub null_sig:   FieldBasedSchnorrSignature<Fr, Projective>,
+pub struct NaiveThresholdSigParams {
+    pub null_sig:   SchnorrSig,
     pub null_pk:    FieldBasedSchnorrPk<Projective>,
 }
 
 impl NaiveThresholdSigParams {
     pub fn new() -> Self {
-        let e = Fr::one();
+        let e = FieldElement::one();
         let s = e.clone();
-        let null_sig = FieldBasedSchnorrSignature::<Fr, Projective>::new(e, s);
+        let null_sig = SchnorrSig::new(e, s);
 
-        let x = Fr::from_repr(
+        let x = field_new!(FieldElement,
             BigInteger(
                 [
-                    11459712384328161916,
-                    74331367249679002,
-                    15100906357746989564,
-                    884124067961527758,
+                    817531083298639342,
+                    16113810631348879462,
+                    1306238005170570794,
+                    917352325188691328,
                 ],
             )
         );
 
-        let y = Fr::from_repr(
+        let y = field_new!(FieldElement,
             BigInteger(
                 [
-                    2310843056694237300,
-                    5782791099736303189,
-                    12630241105143989140,
-                    546084280382048576,
+                    7051092939593429249,
+                    9720513155186830666,
+                    6359574609400546156,
+                    2888851165431378812,
                 ],
             )
         );
 
-        let z = Fr::from_repr(
+        let z = field_new!(FieldElement,
             BigInteger(
                 [
-                    1,
-                    0,
-                    0,
-                    0,
+                    2035294266095304701,
+                    17681163514934325971,
+                    18446744073709551615,
+                    4611686018427387903,
                 ],
             )
         );
@@ -79,50 +77,50 @@ impl VRFParams {
     pub fn new() -> Self {
 
         let gen_1 = Projective::new(
-        Fr::from_repr(
+        field_new!(FieldElement,
             BigInteger([
-                15820103987692451840,
-                5627760773344132675,
-                7364856664427849490,
-                1197316833207718411,
+                12926485790763496744,
+                7301812230106132899,
+                5868404524855748477,
+                606499321461550871,
             ])),
-        Fr::from_repr(
+        field_new!(FieldElement,
             BigInteger([
-                7042744174075706804,
-                9001263587917307341,
-                7557490353522824682,
-                3556537967756176456,
+                12459762756615730720,
+                7373659181971905397,
+                417161890334020390,
+                1065371458433835676,
             ])),
-        Fr::from_repr(
+        field_new!(FieldElement,
             BigInteger([
-                1,
-                0,
-                0,
-                0,
+                2035294266095304701,
+                17681163514934325971,
+                18446744073709551615,
+                4611686018427387903,
             ])),
         );
 
         let gen_2 = Projective::new(
-        Fr::from_repr(
+        field_new!(FieldElement,
             BigInteger([
-                9693056411755223777,
-                8217843995826230011,
-                15875927051736968843,
-                2105995703304102124,
+                15342121784330514541,
+                9118652640516123238,
+                17509069746383483632,
+                1285742610361624126,
             ])),
-        Fr::from_repr(
+        field_new!(FieldElement,
             BigInteger([
-                8182239457751741736,
-                2544164131538935955,
-                6306721856759651939,
-                2475985172125608280,
+                5093526993895361515,
+                7436829771986140347,
+                8066708127376422025,
+                1382517365996680842,
             ])),
-        Fr::from_repr(
+        field_new!(FieldElement,
             BigInteger([
-                1,
-                0,
-                0,
-                0,
+                2035294266095304701,
+                17681163514934325971,
+                18446744073709551615,
+                4611686018427387903,
             ])),
         );
 
@@ -153,7 +151,7 @@ impl VRFParams {
 #[cfg(test)]
 mod test
 {
-    use algebra::{curves::tweedle::dum::Affine, FpParameters, FromCompressedBits, AffineCurve};
+    use algebra::{PrimeField, FpParameters, FromCompressedBits, AffineCurve};
     use super::*;
     use blake2s_simd::{
         Hash, Params
@@ -235,7 +233,7 @@ mod test
     fn test_pk_null_gen() {
         let tag = b"Strontium Sr 90";
         let personalization = constants::NULL_PK_PERSONALIZATION;
-        let htc_out = hash_to_curve::<Fr, Affine>(tag, personalization)
+        let htc_out = hash_to_curve::<FieldElement, Affine>(tag, personalization)
             .unwrap()
             .into_projective();
         println!("{:#?}", htc_out);
@@ -249,13 +247,13 @@ mod test
 
         //Gen1
         let tag = b"Magnesium Mg 12";
-        let htc_g1_out = hash_to_curve::<Fr, Affine>(tag, personalization)
+        let htc_g1_out = hash_to_curve::<FieldElement, Affine>(tag, personalization)
             .unwrap()
             .into_projective();
 
         //Gen2
         let tag = b"Gold Au 79";
-        let htc_g2_out = hash_to_curve::<Fr, Affine>(tag, personalization)
+        let htc_g2_out = hash_to_curve::<FieldElement, Affine>(tag, personalization)
             .unwrap()
             .into_projective();
 
@@ -263,6 +261,8 @@ mod test
         let gh_generators = VRFParams::compute_group_hash_table(
             [htc_g1_out, htc_g2_out].to_vec()
         );
+        println!("{:#?}", htc_g1_out);
+        println!("{:#?}", htc_g2_out);
         assert_eq!(gh_generators, VRFParams::new().group_hash_generators);
     }
 }
