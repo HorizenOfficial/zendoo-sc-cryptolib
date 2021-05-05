@@ -27,15 +27,18 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
         return nativeInit(height, processingStep);
     }
 
-    private native void nativeAppend(FieldElement input);
+    private native boolean nativeAppend(FieldElement input);
 
     /*
-     * Append a new leaf `input` to this instance
+     * Append a new leaf `input` to this instance.
+     * Return false if the operation was not successfull
+     * (for the moment this happens whenever the maximum number
+     * of leaves is exceeded)
      */
-    public void append(FieldElement input) {
+    public boolean append(FieldElement input) {
         if (inMemoryOptimizedMerkleTreePointer == 0)
             throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
-        nativeAppend(input);
+        return nativeAppend(input);
     }
 
     private native InMemoryOptimizedMerkleTree nativeFinalize();

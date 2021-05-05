@@ -10,8 +10,9 @@ public class ProvingSystem {
     }
 
     public enum ProvingSystemType {
+        UNDEFINED,
+        DARLIN,
         COBOUNDARY_MARLIN,
-        DARLIN
     }
 
     private static native boolean nativeGenerateDLogKeys(

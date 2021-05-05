@@ -896,9 +896,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
         read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
     };
 
-    match verify_ginger_merkle_path_without_length_check(path, leaf, root) {
-        Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
-        Err(_) => JNI_FALSE // CRYPTO_ERROR
+    if verify_ginger_merkle_path_without_length_check(path, leaf, root) {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
     }
 }
 
@@ -924,7 +925,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeApply(
         read_raw_pointer(fe.j().unwrap() as *const FieldElement)
     };
 
-    let root = apply(path, leaf);
+    let root = get_root_from_path(path, leaf);
 
     return_field_element(&_env, root)
 }
@@ -1056,7 +1057,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
     _env: JNIEnv,
     _tree: JObject,
     _leaf: JObject,
-)
+) -> jboolean
 {
     let leaf = {
 
@@ -1074,7 +1075,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         read_mut_raw_pointer(t.j().unwrap() as *mut GingerMHT)
     };
 
-    append_leaf_to_ginger_mht(tree, leaf);
+    match append_leaf_to_ginger_mht(tree, leaf) {
+        Ok(_) => JNI_TRUE,
+        Err(_) => JNI_FALSE,
+    }
 }
 
 #[no_mangle]
@@ -1566,8 +1570,9 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         .unwrap() as usize;
 
     let proving_system = match proving_system {
-        0 => ProvingSystem::CoboundaryMarlin,
+        0 => ProvingSystem::Undefined,
         1 => ProvingSystem::Darlin,
+        2 => ProvingSystem::CoboundaryMarlin,
         _ => unreachable!()
     };
 
@@ -1710,8 +1715,9 @@ pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_native
         .unwrap() as usize;
 
     let proving_system = match proving_system {
-        0 => ProvingSystem::CoboundaryMarlin,
+        0 => ProvingSystem::Undefined,
         1 => ProvingSystem::Darlin,
+        2 => ProvingSystem::CoboundaryMarlin,
         _ => unreachable!()
     };
 
@@ -1752,8 +1758,9 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         .unwrap() as usize;
 
     let proving_system = match proving_system {
-        0 => ProvingSystem::CoboundaryMarlin,
+        0 => ProvingSystem::Undefined,
         1 => ProvingSystem::Darlin,
+        2 => ProvingSystem::CoboundaryMarlin,
         _ => unreachable!()
     };
 
@@ -1810,8 +1817,9 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         .unwrap() as usize;
 
     let proving_system = match proving_system {
-        0 => ProvingSystem::CoboundaryMarlin,
+        0 => ProvingSystem::Undefined,
         1 => ProvingSystem::Darlin,
+        2 => ProvingSystem::CoboundaryMarlin,
         _ => unreachable!()
     };
 

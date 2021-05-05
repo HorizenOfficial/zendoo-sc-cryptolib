@@ -66,7 +66,7 @@ public class MerkleTreeTest {
 
         //Append all the leaves to mht
         for (FieldElement leaf: mhtLeaves)
-            mht.append(leaf);
+            assertTrue("Leaf append must be successfull", mht.append(leaf));
 
         //Finalize the tree
         mht.finalizeTreeInPlace();
@@ -98,7 +98,7 @@ public class MerkleTreeTest {
         for (int i = 0; i < numLeaves/2; i ++) {
             FieldElement leaf = FieldElement.createRandom(i);
             testLeaves.add(leaf);
-            mht.append(leaf);
+            assertTrue("Leaf append must be successfull", mht.append(leaf));
         }
         for (int i = numLeaves/2; i < numLeaves; i ++) {
             FieldElement leaf = FieldElement.createFromLong(0L);
@@ -165,7 +165,7 @@ public class MerkleTreeTest {
         // Generate random leaves
         for (int i = 0; i < numLeaves; i ++) {
             FieldElement leaf = FieldElement.createRandom(i);
-            mht.append(leaf);
+            assertTrue("Leaf append must be successfull", mht.append(leaf));
 
             InMemoryOptimizedMerkleTree mhtCopy = mht.finalizeTree();
             MerklePath path = mhtCopy.getMerklePath((long)i);

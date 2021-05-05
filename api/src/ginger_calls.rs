@@ -23,9 +23,12 @@ use rand_xorshift::XorShiftRng;
 use lazy_static::*;
 
 use cctp_primitives::{
-    proving_system::verifier::{
-        certificate::{CertificateProofUserInputs, ZendooCertProofVerifier},
-        RawVerifierData, ZendooVerifier
+    proving_system::{
+        verifier::{
+            certificate::{CertificateProofUserInputs, ZendooCertProofVerifier},
+            RawVerifierData, ZendooVerifier,
+        },
+        error::ProvingSystemError,
     },
     utils::{
         proof_system::ProvingSystemUtils, get_bt_merkle_root,
@@ -174,8 +177,25 @@ pub fn create_naive_threshold_sig_proof(
     );
 
     let proof = match proving_system {
-        ProvingSystem::CoboundaryMarlin => {
+        ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
+        ProvingSystem::Darlin => {
+            // Read proving key
+            let pk: DarlinProverKey = if enforce_membership {
+                read_from_file_checked(proving_key_path)
+            } else {
+                read_from_file(proving_key_path)
+            }?;
 
+            // Call prover
+            let rng = &mut OsRng;
+            serialize_to_buffer(&Darlin::create_proof(
+                c,
+                &pk,
+                zk,
+                if zk { Some(rng) } else { None },
+            )?)?
+        },
+        ProvingSystem::CoboundaryMarlin => {
             // Read proving key
             let pk: CoboundaryMarlinProverKey = if enforce_membership {
                 read_from_file_checked(proving_key_path)
@@ -192,7 +212,6 @@ pub fn create_naive_threshold_sig_proof(
                 if zk { Some(rng) } else { None },
             )?)?
         },
-        ProvingSystem::Darlin => unreachable!()
     };
     Ok((proof, valid_signatures))
 }
@@ -244,10 +263,9 @@ pub fn verify_naive_threshold_sig_proof(
     let vk: Vec<u8> = std::fs::read(vk_path)?;
 
     let raw_verifier_data = match proving_system {
-        ProvingSystem::CoboundaryMarlin => {
-            RawVerifierData::CoboundaryMarlin {proof, vk}
-        },
-        ProvingSystem::Darlin => unreachable!()
+        ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
+        ProvingSystem::Darlin => RawVerifierData::Darlin {proof, vk},
+        ProvingSystem::CoboundaryMarlin => RawVerifierData::CoboundaryMarlin {proof, vk},
     };
 
     let rng = &mut OsRng;
@@ -584,7 +602,7 @@ mod test {
         for i in 0..leaves_num/2 {
             let leaf = get_random_field_element(i as u64);
             mht_leaves.push(leaf);
-            append_leaf_to_ginger_mht(&mut mht, &leaf);
+            append_leaf_to_ginger_mht(&mut mht, &leaf).unwrap();
         }
         for _ in leaves_num/2..leaves_num {
             mht_leaves.push(FieldElement::zero());
@@ -598,7 +616,7 @@ mod test {
 
             //Create and verify merkle paths for each leaf
             let path = get_ginger_mht_path(&mht, i as u64).unwrap();
-            assert!(verify_ginger_merkle_path_without_length_check(&path,&mht_leaves[i], &mht_root).unwrap());
+            assert!(verify_ginger_merkle_path_without_length_check(&path,&mht_leaves[i], &mht_root));
 
             // Check leaf index is the correct one
             assert_eq!(i as u64, get_leaf_index_from_path(&path));
