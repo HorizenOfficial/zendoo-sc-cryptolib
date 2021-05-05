@@ -1,73 +1,43 @@
 use algebra::{
-    curves::{
-        tweedle::dum::Projective as Projective
-    },
-    PrimeField, ProjectiveCurve, AffineCurve,
-    FromBytes, FromBytesChecked, validity::SemanticallyValid, ToBytes, ToConstraintField,/* ToBits,*/
-    UniformRand,
+    ProjectiveCurve, AffineCurve,
+    ToConstraintField, UniformRand, serialize::*,
 };
 use primitives::{crh::{
     FieldBasedHash,
     bowe_hopwood::{
         BoweHopwoodPedersenParameters
     },
-}, merkle_tree::field_based_mht::{
-    // smt::{BigMerkleTree, LazyBigMerkleTree, Coord, OperationLeaf},
-    parameters::tweedle_fr::TWEEDLE_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS,
-    FieldBasedMerkleTree,
-    FieldBasedMerkleTreePath,
 }, signature::{
-    FieldBasedSignatureScheme, schnorr::field_based_schnorr::{
-        FieldBasedSchnorrPk,
-    },
-}, vrf::{FieldBasedVrf, ecvrf::*}/*, ActionLeaf*/};
+    FieldBasedSignatureScheme, schnorr::field_based_schnorr::FieldBasedSchnorrPk
+}, vrf::{FieldBasedVrf, ecvrf::FieldBasedEcVrfPk}};
 
 use demo_circuit::{
-    constants::{
-        VRFParams,
-    },
-    naive_threshold_sig::*
+    constants::VRFParams,
+    naive_threshold_sig::*,
+    type_mapping::*,
 };
 use rand::{
-    SeedableRng, rngs::OsRng, thread_rng
+    SeedableRng, rngs::OsRng,
 };
 use rand_xorshift::XorShiftRng;
-use std::{
-    fs::File, io::Result as IoResult/*, path::Path*/
-};
 use lazy_static::*;
 
-use crate::type_mapping::*;
-use marlin::{IndexProverKey, IndexVerifierKey};
+use cctp_primitives::{
+    proving_system::{
+        verifier::{
+            certificate::{CertificateProofUserInputs, ZendooCertProofVerifier},
+            RawVerifierData, ZendooVerifier,
+        },
+        error::ProvingSystemError,
+    },
+    utils::{
+        proof_system::ProvingSystemUtils, get_bt_merkle_root,
+        serialization::*,
+        commitment_tree::bytes_to_field_elements,
+    },
+};
 
 //*******************************Generic functions**********************************************
-// Note: Should decide if panicking or handling IO errors
-
-pub fn deserialize_from_buffer<T: FromBytes>(buffer: &[u8]) ->  IoResult<T> {
-    T::read(buffer)
-}
-
-pub fn deserialize_from_buffer_checked<T: FromBytesChecked>(buffer: &[u8]) ->  IoResult<T> {
-    T::read_checked(buffer)
-}
-
-pub fn serialize_to_buffer<T: ToBytes>(to_write: &T, buffer: &mut [u8]) -> IoResult<()> {
-    to_write.write(buffer)
-}
-
-pub fn read_from_file<T: FromBytes>(file_path: &str) -> IoResult<T>{
-    let mut fs = File::open(file_path)?;
-    T::read(&mut fs)
-}
-
-pub fn read_from_file_checked<T: FromBytesChecked>(file_path: &str) -> IoResult<T>{
-    let mut fs = File::open(file_path)?;
-    T::read_checked(&mut fs)
-}
-
-pub fn is_valid<T: SemanticallyValid>(to_check: &T) -> bool {
-    T::is_valid(to_check)
-}
 
 // NOTE: This function relies on a non-cryptographically safe RNG, therefore it
 // must be used ONLY for testing purposes
@@ -94,166 +64,88 @@ pub fn schnorr_verify_public_key(pk: &SchnorrPk) -> bool {
 
 pub fn schnorr_sign(msg: &FieldElement, sk: &SchnorrSk, pk: &SchnorrPk) -> Result<SchnorrSig, Error> {
     let mut rng = OsRng;
-    SchnorrSigScheme::sign(&mut rng, &FieldBasedSchnorrPk(pk.into_projective()), sk, &[*msg])
+    SchnorrSigScheme::sign(&mut rng, &FieldBasedSchnorrPk(pk.into_projective()), sk, msg.clone())
 }
 
 pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &SchnorrSig) -> Result<bool, Error> {
-    SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), &[*msg], signature)
-}
-
-//************************************Poseidon Hash functions****************************************
-
-pub fn get_poseidon_hash(personalization: Option<&[FieldElement]>) -> FieldHash {
-    FieldHash::init(personalization)
-}
-
-pub fn update_poseidon_hash(hash: &mut FieldHash, input: &FieldElement){
-    hash.update(*input);
-}
-
-pub fn reset_poseidon_hash(hash: &mut FieldHash, personalization: Option<&[FieldElement]>){
-    hash.reset(personalization);
-}
-
-pub fn finalize_poseidon_hash(hash: &FieldHash) -> FieldElement{
-    hash.finalize()
+    SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), msg.clone(), signature)
 }
 
 //*****************************Naive threshold sig circuit related functions************************
 
-#[derive(Clone, Default)]
-pub struct BackwardTransfer {
-    pub pk_dest:    [u8; 20],
-    pub amount:     u64,
-}
-
-impl BackwardTransfer {
-    pub fn new(pk_dest: [u8; 20], amount: u64) -> Self
-    {
-        Self{ pk_dest, amount }
-    }
-
-    pub fn to_field_element(&self) -> IoResult<FieldElement>
-    {
-        let mut buffer = vec![];
-        self.pk_dest.write(&mut buffer)?;
-        self.amount.write(&mut buffer)?;
-        read_field_element_from_buffer_with_padding(buffer.as_slice())
-    }
-}
-
-//Will return error if buffer.len > FIELD_SIZE. If buffer.len < FIELD_SIZE, padding 0s will be added
-pub fn read_field_element_from_buffer_with_padding(buffer: &[u8]) -> IoResult<FieldElement>
-{
-    let buff_len = buffer.len();
-
-    //Pad to reach field element size
-    let mut new_buffer = vec![];
-    new_buffer.extend_from_slice(buffer);
-    for _ in buff_len..FIELD_SIZE { new_buffer.push(0u8) } //Add padding zeros to reach field size
-
-    FieldElement::read(&new_buffer[..])
-}
-
-pub fn read_field_element_from_u64(num: u64) -> FieldElement {
-    FieldElement::from_repr(FieldBigInteger::from(num))
-}
-
 // Computes H(H(pks), threshold): used to generate the constant value needed to be declared
 // in MC during SC creation.
-pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> FieldElement {
-    let threshold_field = read_field_element_from_u64(threshold);
-    let mut h = FieldHash::init(None);
+pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<FieldElement, Error>
+{
+    let threshold_field = FieldElement::from(threshold);
+
+    // pks must always be all present
+    let mut h = FieldHash::init_constant_length(pks.len(), None);
     pks.iter().for_each(|pk| { h.update(pk.x); });
-    let pks_hash = h.finalize();
-    h
-        .reset(None)
+    let pks_hash = h.finalize()?;
+
+    FieldHash::init_constant_length(2, None)
         .update(pks_hash)
         .update(threshold_field)
         .finalize()
 }
 
-const BT_MERKLE_TREE_HEIGHT: usize = 12;
-
-fn compute_bt_root(bts: &[FieldElement]) -> Result<FieldElement, Error> {
-    let mut bt_mt =
-        GingerMHT::init(BT_MERKLE_TREE_HEIGHT, 2usize.pow(BT_MERKLE_TREE_HEIGHT as u32));
-    for &bt in bts.iter(){
-        bt_mt.append(bt);
-    }
-    bt_mt.finalize_in_place();
-    bt_mt.root().ok_or(Error::from("Failed to compute BT Merkle Tree root"))
-}
-
-//Compute and return (MR(bt_list), H(MR(bt_list), H(bi-1), H(bi))
+//Compute and return (MR(bt_list), H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee))
 pub fn compute_msg_to_sign(
-    end_epoch_mc_b_hash:      &FieldElement,
-    prev_end_epoch_mc_b_hash: &FieldElement,
-    bt_list:                  &[BackwardTransfer],
+    epoch_number:                        u32,
+    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
+    btr_fee:                             u64,
+    ft_min_fee:                          u64,
+    bt_list:                             Vec<(u64, [u8; MC_PK_SIZE])>,
 ) -> Result<(FieldElement, FieldElement), Error> {
 
-    let mr_bt = if bt_list.is_empty() {
-        MHT_PARAMETERS.nodes[BT_MERKLE_TREE_HEIGHT].clone()
-    } else {
-        let mut bt_field_list = vec![];
-        for bt in bt_list.iter() {
-            let bt_f = bt.to_field_element()?;
-            bt_field_list.push(bt_f);
-        }
+    let epoch_number = FieldElement::from(epoch_number);
 
-        //Compute bt_list merkle_root
-        compute_bt_root(bt_field_list.as_slice())?
+    //Compute bt_list merkle_root
+    let mr_bt = get_bt_merkle_root(bt_list.as_slice())?;
+
+    let fees_field_element = {
+        let fes = bytes_to_field_elements(vec![btr_fee, ft_min_fee])?;
+        assert_eq!(fes.len(), 1);
+        fes[0]
     };
 
     //Compute message to be verified
-    let msg = FieldHash::init(None)
+    let msg = FieldHash::init_constant_length(4, None)
+        .update(epoch_number)
         .update(mr_bt)
-        .update(*prev_end_epoch_mc_b_hash)
-        .update(*end_epoch_mc_b_hash)
-        .finalize();
+        .update(*end_cumulative_sc_tx_comm_tree_root)
+        .update(fees_field_element)
+        .finalize()?;
 
     Ok((mr_bt, msg))
 }
 
-pub fn compute_wcert_sysdata_hash(
-    valid_sigs:               u64,
-    mr_bt:                    &FieldElement,
-    prev_end_epoch_mc_b_hash: &FieldElement,
-    end_epoch_mc_b_hash:      &FieldElement,
-) -> Result<FieldElement, Error> {
-
-    //Compute quality and wcert_sysdata_hash
-    let quality = read_field_element_from_u64(valid_sigs);
-    let wcert_sysdata_hash = FieldHash::init(None)
-        .update(quality)
-        .update(*mr_bt)
-        .update(*prev_end_epoch_mc_b_hash)
-        .update(*end_epoch_mc_b_hash)
-        .finalize();
-    Ok(wcert_sysdata_hash)
-}
-
 pub fn create_naive_threshold_sig_proof(
-    pks:                      &[SchnorrPk],
-    mut sigs:                 Vec<Option<SchnorrSig>>,
-    end_epoch_mc_b_hash:      &[u8; 32],
-    prev_end_epoch_mc_b_hash: &[u8; 32],
-    bt_list:                  &[BackwardTransfer],
-    threshold:                u64,
-    proving_key_path:         &str,
-    enforce_membership:       bool,
-) -> Result<(SCProof, u64), Error> {
+    proving_system:                      ProvingSystem,
+    pks:                                 &[SchnorrPk],
+    mut sigs:                            Vec<Option<SchnorrSig>>,
+    epoch_number:                        u32,
+    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
+    btr_fee:                             u64,
+    ft_min_fee:                          u64,
+    bt_list:                             Vec<(u64, [u8; MC_PK_SIZE])>,
+    threshold:                           u64,
+    proving_key_path:                    &str,
+    enforce_membership:                  bool,
+    zk:                                  bool,
+) -> Result<(Vec<u8>, u64), Error> {
 
     //Get max pks
     let max_pks = pks.len();
     assert_eq!(sigs.len(), max_pks);
 
-    //Read end_epoch_mc_b_hash, prev_end_epoch_mc_b_hash and bt_list as field elements
-    let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
-    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
+    // Compute msg to sign
     let (mr_bt, msg) = compute_msg_to_sign(
-        &end_epoch_mc_b_hash,
-        &prev_end_epoch_mc_b_hash,
+        epoch_number,
+        end_cumulative_sc_tx_comm_tree_root,
+        btr_fee,
+        ft_min_fee,
         bt_list,
     )?;
 
@@ -271,64 +163,119 @@ pub fn create_naive_threshold_sig_proof(
     }
 
     //Compute b as v-t and convert it to field element
-    let b = read_field_element_from_u64(valid_signatures - threshold);
+    let b = FieldElement::from(valid_signatures - threshold);
 
     //Convert affine pks to projective
     let pks = pks.iter().map(|&pk| FieldBasedSchnorrPk(pk.into_projective())).collect::<Vec<_>>();
 
     //Convert needed variables into field elements
-    let threshold = read_field_element_from_u64(threshold);
+    let threshold = FieldElement::from(threshold);
 
     let c = NaiveTresholdSignature::<FieldElement>::new(
-        pks, sigs, threshold, b, end_epoch_mc_b_hash,
-        prev_end_epoch_mc_b_hash, mr_bt, max_pks,
+        pks, sigs, threshold, b, FieldElement::from(epoch_number),
+        *end_cumulative_sc_tx_comm_tree_root, mr_bt, ft_min_fee, btr_fee, max_pks,
     );
 
-    //Read proving key
-    let pk: IndexProverKey<FieldElement, IPAPC> = if enforce_membership {
-        read_from_file_checked(proving_key_path)
-    } else {
-        read_from_file(proving_key_path)
-    }?;
+    let proof = match proving_system {
+        ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
+        ProvingSystem::Darlin => {
+            // Read proving key
+            let pk: DarlinProverKey = if enforce_membership {
+                read_from_file_checked(proving_key_path)
+            } else {
+                read_from_file(proving_key_path)
+            }?;
 
-    //Create and return proof
-    let mut rng = OsRng;
-    let proof = MarlinInst::prove::<_, OsRng>(&pk, c, &mut rng).unwrap();
+            // Call prover
+            let rng = &mut OsRng;
+            serialize_to_buffer(&Darlin::create_proof(
+                c,
+                &pk,
+                zk,
+                if zk { Some(rng) } else { None },
+            )?)?
+        },
+        ProvingSystem::CoboundaryMarlin => {
+            // Read proving key
+            let pk: CoboundaryMarlinProverKey = if enforce_membership {
+                read_from_file_checked(proving_key_path)
+            } else {
+                read_from_file(proving_key_path)
+            }?;
 
+            // Call prover
+            let rng = &mut OsRng;
+            serialize_to_buffer(&CoboundaryMarlin::create_proof(
+                c,
+                &pk,
+                zk,
+                if zk { Some(rng) } else { None },
+            )?)?
+        },
+    };
     Ok((proof, valid_signatures))
 }
 
+
 pub fn verify_naive_threshold_sig_proof(
-    constant:                 &FieldElement,
-    end_epoch_mc_b_hash:      &[u8; 32],
-    prev_end_epoch_mc_b_hash: &[u8; 32],
-    bt_list:                  &[BackwardTransfer],
-    valid_sigs:               u64,
-    proof:                    &SCProof,
-    vk_path:                  &str,
-    enforce_membership:       bool
+    proving_system:                      ProvingSystem,
+    constant:                            &FieldElement,
+    epoch_number:                        u32,
+    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
+    btr_fee:                             u64,
+    ft_min_fee:                          u64,
+    bt_list:                             Vec<(u64, [u8; MC_PK_SIZE])>,
+    valid_sigs:                          u64,
+    proof:                               Vec<u8>,
+    check_proof:                         bool,
+    vk_path:                             &str,
+    check_vk:                            bool
 ) -> Result<bool, Error>
 {
-    //Compute wcert_sysdata_hash
-    let end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..])?;
-    let prev_end_epoch_mc_b_hash = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..])?;
-    let (mr_bt, _) = compute_msg_to_sign(&end_epoch_mc_b_hash, &prev_end_epoch_mc_b_hash, bt_list)?;
-    let wcert_sysdata_hash = compute_wcert_sysdata_hash(valid_sigs, &mr_bt, &prev_end_epoch_mc_b_hash, &end_epoch_mc_b_hash)?;
-    let aggregated_input = FieldHash::init(None)
-        .update(*constant)
-        .update(wcert_sysdata_hash)
-        .finalize();
+    // TODO: These copies here are wasted, since most of the CertificateProofUserInputs are
+    //       already passed around in their deserialized form. Instead this representation is
+    //       useful in zendoo-mc-cryptolib. We should consider adding a "non raw" representation
+    //       in zendoo-cctp-lib to save some copies.
+    let constant = &{
+        let mut buffer = [0u8; FIELD_SIZE];
+        CanonicalSerialize::serialize(constant, &mut buffer[..])?;
+        buffer
+    };
 
-    let rng = &mut thread_rng();
+    let end_cumulative_sc_tx_commitment_tree_root = &{
+        let mut buffer = [0u8; FIELD_SIZE];
+        CanonicalSerialize::serialize(end_cumulative_sc_tx_comm_tree_root, &mut buffer[..])?;
+        buffer
+    };
 
-    //Verify proof
-    let vk: IndexVerifierKey<FieldElement, IPAPC> = if enforce_membership {
-        read_from_file_checked(vk_path)
-    } else {
-        read_from_file(vk_path)
-    }?;
+    let ins = CertificateProofUserInputs {
+        constant: Some(constant),
+        epoch_number,
+        quality: valid_sigs,
+        bt_list: bt_list.as_slice(),
+        custom_fields: None,
+        end_cumulative_sc_tx_commitment_tree_root,
+        btr_fee,
+        ft_min_fee
+    };
 
-    let is_verified = MarlinInst::verify(&vk, &[aggregated_input], &proof, rng).unwrap();
+    // Read verifier key
+    let vk: Vec<u8> = std::fs::read(vk_path)?;
+
+    let raw_verifier_data = match proving_system {
+        ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
+        ProvingSystem::Darlin => RawVerifierData::Darlin {proof, vk},
+        ProvingSystem::CoboundaryMarlin => RawVerifierData::CoboundaryMarlin {proof, vk},
+    };
+
+    let rng = &mut OsRng;
+    let is_verified = ZendooCertProofVerifier::verify_proof(
+        &ins,
+        raw_verifier_data,
+        check_proof,
+        check_vk,
+        Some(rng)
+    )?;
 
     Ok(is_verified)
 }
@@ -365,365 +312,100 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
         &VRF_GH_PARAMS,
         &FieldBasedEcVrfPk(pk.into_projective()),
         sk,
-        &[*msg]
+        msg.clone()
     )?;
 
     //Convert gamma from proof to field elements
     let gamma_coords = proof.gamma.to_field_elements().unwrap();
 
     //Compute VRF output
-    let mut hash_input = Vec::new();
-    hash_input.push(*msg);
-    hash_input.extend_from_slice(gamma_coords.as_slice());
     let output = {
-        let mut h = FieldHash::init(None);
-        h.update(*msg);
+        let mut h = FieldHash::init_constant_length(3, None);
+        h.update(msg.clone());
         gamma_coords.into_iter().for_each(|c| { h.update(c); });
         h.finalize()
-    };
+    }?;
 
     Ok((proof, output))
 }
 
 pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Result<FieldElement, Error> {
-    VRFScheme::proof_to_hash(&VRF_GH_PARAMS,&FieldBasedEcVrfPk(pk.into_projective()), &[*msg], proof)
+    VRFScheme::proof_to_hash(
+        &VRF_GH_PARAMS,
+        &FieldBasedEcVrfPk(pk.into_projective()),
+        msg.clone(),
+        proof
+    )
 }
 
-//************Merkle Tree functions******************
+// Test functions
 
-////////////MERKLE_PATH
+pub(crate) fn into_i8(v: Vec<u8>) -> Vec<i8> {
+    // first, make sure v's destructor doesn't free the data
+    // it thinks it owns when it goes out of scope
+    let mut v = std::mem::ManuallyDrop::new(v);
 
-pub fn verify_ginger_merkle_path(
-    path: &GingerMHTPath,
-    height: usize,
-    leaf: &FieldElement,
-    root: &FieldElement
-) -> Result<bool, Error> {
-    path.verify(height, leaf, root)
+    // then, pick apart the existing Vec
+    let p = v.as_mut_ptr();
+    let len = v.len();
+    let cap = v.capacity();
+
+    // finally, adopt the data into a new Vec
+    unsafe { Vec::from_raw_parts(p as *mut i8, len, cap) }
 }
-
-pub fn verify_ginger_merkle_path_without_length_check(
-    path: &GingerMHTPath,
-    leaf: &FieldElement,
-    root: &FieldElement
-) -> Result<bool, Error> {
-    path.verify_without_length_check(leaf, root)
-}
-
-pub fn is_path_leftmost(path: &GingerMHTPath) -> bool {
-    path.is_leftmost()
-}
-
-pub fn is_path_rightmost(path: &GingerMHTPath) -> bool {
-    path.is_rightmost()
-}
-
-pub fn is_path_non_empty_rightmost(path: &GingerMHTPath) -> bool { path.is_non_empty_rightmost() }
-
-pub fn get_leaf_index_from_path(path: &GingerMHTPath) -> u64 {
-    path.leaf_index() as u64
-}
-
-pub fn get_path_size_in_bytes(path: &GingerMHTPath) -> usize {
-    ((1 + FIELD_SIZE) * path.get_length()) + 1
-}
-
-pub fn apply(path: &GingerMHTPath, leaf: &FieldElement) -> FieldElement
-{
-    let mut digest = FieldHash::init(None);
-    let mut prev_node = *leaf;
-    for &(sibling, direction) in path.get_raw_path().as_slice() {
-
-        // Choose left and right hash according to direction
-        let (left, right) = if !direction {
-            (prev_node, sibling)
-        } else {
-            (sibling, prev_node)
-        };
-
-        // Compute the parent node
-        prev_node = digest
-            .update(left)
-            .update(right)
-            .finalize();
-
-        digest.reset(None);
-    }
-    prev_node
-}
-
-////////////OPTIMIZED MERKLE TREE
-
-pub fn new_ginger_mht(height: usize, processing_step: usize) -> GingerMHT {
-    GingerMHT::init(height, processing_step)
-}
-
-pub fn append_leaf_to_ginger_mht(tree: &mut GingerMHT, leaf: &FieldElement){
-    tree.append(*leaf);
-}
-
-pub fn finalize_ginger_mht(tree: &GingerMHT) -> GingerMHT {
-    tree.finalize()
-}
-
-pub fn finalize_ginger_mht_in_place(tree: &mut GingerMHT) {
-    tree.finalize_in_place();
-}
-
-pub fn get_ginger_mht_root(tree: &GingerMHT) -> Option<FieldElement> {
-    tree.root()
-}
-
-pub fn get_ginger_mht_path(tree: &GingerMHT, leaf_index: u64) -> Option<GingerMHTPath> {
-    match tree.get_merkle_path(leaf_index as usize) {
-        Some(path) => Some(path.into()),
-        None => None,
-    }
-}
-
-pub fn reset_ginger_mht(tree: &mut GingerMHT){
-    tree.reset();
-}
-
-////////////SPARSE MERKLE TREE
-
-// pub type GingerSMT = BigMerkleTree<GingerMerkleTreeParameters>;
-
-// Note: If position is non empty in the SMTs the old leaf will be overwritten.
-// If that's not the desired behaviour, then leaf should depend on some tweakable
-// parameter that allows to re-compute a new position for it, possibly multiple times.
-// Therefore, it is advisable to minimize the risk of having collisions,or to handle
-// them
-// pub fn leaf_to_index(leaf: &FieldElement, height: usize) -> u64 {
-//
-//     // Convert field element to bits
-//     let bits = leaf.write_bits();
-//     assert!(height <= bits.len());
-//
-//     // Use log_2(num_leaves) MSB of serialized FieldElement to estabilish leaf position inside
-//     // the tree
-//     let leaf_bits = &bits[..height];
-//     let position = leaf_bits.iter().rev().fold(0, |acc, &b| acc*2 + b as u64);
-//     position
-// }
-
-// pub fn get_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>{
-//
-//     // If at least the leaves database is available, we can restore the tree
-//     if Path::new(db_path).exists() {
-//         restore_ginger_smt(height, db_path)
-//     } else { // Otherwise we need to create a new tree
-//         new_ginger_smt(height, db_path)
-//     }
-// }
-//
-// fn new_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error> {
-//     match GingerSMT::new(
-//         height,
-//         true,
-//         db_path.to_owned(),
-//     ) {
-//         Ok(tree) => Ok(tree),
-//         Err(e) => Err(Box::new(e))
-//     }
-// }
-//
-// fn restore_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>
-// {
-//     match GingerSMT::load_batch::<GingerMerkleTreeParameters>(
-//         height,
-//         true,
-//         db_path.to_owned(),
-//     ) {
-//         Ok(tree) => Ok(tree),
-//         Err(e) => Err(Box::new(e))
-//     }
-// }
-//
-// pub fn flush_ginger_smt(tree: &mut GingerSMT) {
-//     tree.flush()
-// }
-//
-// pub fn set_ginger_smt_persistency(tree: &mut GingerSMT, persistency: bool) {
-//     tree.set_persistency(persistency);
-// }
-//
-// pub fn get_position_in_ginger_smt(tree: &GingerSMT, leaf: &FieldElement) -> u64
-// {
-//     leaf_to_index(leaf, tree.height())
-// }
-//
-// pub fn is_position_empty_in_ginger_smt(tree: &GingerSMT, position: u64) -> bool {
-//     tree.is_leaf_empty(Coord::new(0, position as usize))
-// }
-//
-// pub fn add_leaf_to_ginger_smt(tree: &mut GingerSMT, leaf: &FieldElement, position: u64){
-//     tree.insert_leaf(Coord::new(0, position as usize), *leaf);
-// }
-//
-// pub fn remove_leaf_from_ginger_smt(tree: &mut GingerSMT, position: u64){
-//     tree.remove_leaf(Coord::new(0, position as usize));
-// }
-//
-// pub fn get_ginger_smt_root(tree: &GingerSMT) -> FieldElement {
-//     tree.get_root()
-// }
-//
-// pub fn get_ginger_smt_path(tree: &mut GingerSMT, leaf_position: u64) -> GingerMHTPath {
-//     tree.get_merkle_path(Coord::new(0, leaf_position as usize))
-// }
-
-////////////LAZY SPARSE MERKLE TREE
-
-// pub type LazyGingerSMT = LazyBigMerkleTree<GingerMerkleTreeParameters>;
-// type GingerLeaf = OperationLeaf<FieldElement>;
-
-// pub fn get_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error>{
-//
-//     // If at least the leaves database is available, we can restore the tree
-//     if Path::new(db_path).exists() {
-//         restore_lazy_ginger_smt(height, db_path)
-//     } else { // Otherwise we need to create a new tree
-//         new_lazy_ginger_smt(height, db_path)
-//     }
-// }
-//
-// fn new_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error> {
-//     match LazyGingerSMT::new(
-//         height,
-//         true,
-//         db_path.to_owned(),
-//     ) {
-//         Ok(tree) => Ok(tree),
-//         Err(e) => Err(Box::new(e))
-//     }
-// }
-//
-// fn restore_lazy_ginger_smt(height: usize, db_path: &str) -> Result<LazyGingerSMT, Error>
-// {
-//     match LazyGingerSMT::load(
-//         height,
-//         true,
-//         db_path.to_owned(),
-//     ) {
-//         Ok(tree) => Ok(tree),
-//         Err(e) => Err(Box::new(e))
-//     }
-// }
-//
-// pub fn flush_lazy_ginger_smt(tree: &mut LazyGingerSMT){
-//     tree.flush()
-// }
-//
-// pub fn set_ginger_lazy_smt_persistency(tree: &mut LazyGingerSMT, persistency: bool) {
-//     tree.set_persistency(persistency);
-// }
-//
-// pub fn get_position_in_lazy_ginger_smt(tree: &LazyGingerSMT, leaf: &FieldElement) -> u64
-// {
-//     leaf_to_index(leaf, tree.height())
-// }
-//
-// pub fn is_position_empty_in_lazy_ginger_smt(tree: &LazyGingerSMT, position: u64) -> bool {
-//     tree.is_leaf_empty(Coord::new(0, position as usize))
-// }
-//
-// pub fn add_leaves_to_ginger_lazy_smt(tree: &mut LazyGingerSMT, leaves: &[FieldElement]) -> FieldElement{
-//     let leaves = leaves.iter().map(|leaf| {
-//         GingerLeaf::new(0, leaf_to_index(leaf, tree.height()) as usize, ActionLeaf::Insert, Some(*leaf))
-//     }).collect::<Vec<_>>();
-//     tree.process_leaves(leaves.as_slice())
-// }
-//
-// pub fn remove_leaves_from_ginger_lazy_smt(tree: &mut LazyGingerSMT, positions: &[i64]) -> FieldElement{
-//     let leaves = positions.iter().map(|&position| {
-//         GingerLeaf::new(0, position as usize, ActionLeaf::Remove, None)
-//     }).collect::<Vec<_>>();
-//     tree.process_leaves(leaves.as_slice())
-// }
-//
-// pub fn get_lazy_ginger_smt_root(tree: &LazyGingerSMT) -> FieldElement {
-//     tree.get_root()
-// }
-//
-// pub fn get_lazy_ginger_smt_path(tree: &mut LazyGingerSMT, leaf_position: u64) -> GingerMHTPath {
-//     tree.get_merkle_path(Coord::new(0, leaf_position as usize))
-// }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use rand::RngCore;
-    use algebra::{to_bytes, ToBytes, Field};
-
-    fn write_to_file<T: ToBytes>(to_write: &T, file_path: &str) -> IoResult<()>{
-        let mut fs = File::create(file_path)?;
-        to_write.write(&mut fs)?;
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn into_i8(v: Vec<u8>) -> Vec<i8> {
-        // first, make sure v's destructor doesn't free the data
-        // it thinks it owns when it goes out of scope
-        let mut v = std::mem::ManuallyDrop::new(v);
-
-        // then, pick apart the existing Vec
-        let p = v.as_mut_ptr();
-        let len = v.len();
-        let cap = v.capacity();
-
-        // finally, adopt the data into a new Vec
-        unsafe { Vec::from_raw_parts(p as *mut i8, len, cap) }
-    }
+    use rand::{RngCore, Rng};
+    use algebra::Field;
+    use cctp_primitives::utils::{
+        poseidon_hash::*, mht::*, proof_system::*,
+    };
 
     fn create_sample_naive_threshold_sig_circuit(bt_num: usize) {
         //assume to have 3 pks, threshold = 2
         let mut rng = OsRng;
 
         //Generate random mc block hashes and bt list
-        let mut end_epoch_mc_b_hash = [0u8; 32];
-        let mut prev_end_epoch_mc_b_hash = [0u8; 32];
-        rng.fill_bytes(&mut end_epoch_mc_b_hash);
-        rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
-        println!("end epoch u8: {:?}", end_epoch_mc_b_hash);
-        println!("prev end epoch u8: {:?}", prev_end_epoch_mc_b_hash);
-        println!("end epoch i8: {:?}", into_i8(end_epoch_mc_b_hash.to_vec()));
-        println!("prev end epoch i8: {:?}", into_i8(prev_end_epoch_mc_b_hash.to_vec()));
-
-        let mut end_epoch_mc_b_hash = end_epoch_mc_b_hash;
-        end_epoch_mc_b_hash[FIELD_SIZE - 1] = end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
-
-        let mut prev_end_epoch_mc_b_hash = prev_end_epoch_mc_b_hash;
-        prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] = prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
-
-        let end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
-        let prev_end_epoch_mc_b_hash_f = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
+        let mut end_cumulative_sc_tx_comm_tree_root = [0u8; 32];
+        rng.fill_bytes(&mut end_cumulative_sc_tx_comm_tree_root);
+        end_cumulative_sc_tx_comm_tree_root[31] = 0u8; // Mask away last byte
+        println!("end_cumulative_sc_tx_comm_tree_root u8: {:?}", end_cumulative_sc_tx_comm_tree_root);
+        println!("end_cumulative_sc_tx_comm_tree_root i8: {:?}", into_i8(end_cumulative_sc_tx_comm_tree_root.to_vec()));
 
         let mut bt_list = vec![];
         for _ in 0..bt_num {
-            bt_list.push(BackwardTransfer::default());
+            bt_list.push((0u64, [0u8; MC_PK_SIZE]));
         }
-        println!("bt_list finished");
+
+        let end_cumulative_sc_tx_comm_tree_root_f = deserialize_from_buffer::<FieldElement>(&end_cumulative_sc_tx_comm_tree_root).unwrap();
+
+        let epoch_number: u32 = rng.gen();
+        let btr_fee: u64 = rng.gen();
+        let ft_min_fee: u64 = rng.gen();
 
         //Compute msg to sign
         let (_, msg) = compute_msg_to_sign(
-            &end_epoch_mc_b_hash_f,
-            &prev_end_epoch_mc_b_hash_f,
-            bt_list.as_slice()
+            epoch_number,
+            &end_cumulative_sc_tx_comm_tree_root_f,
+            btr_fee,
+            ft_min_fee,
+            bt_list.clone()
         ).unwrap();
         println!("compute_msg_to_sign finished");
 
         //Generate params and write them to file
-        let params = generate_parameters(3).unwrap();
-        println!("generate_parameters finished");
-        let proving_key_path = if bt_num != 0 {"./sample_pk"} else {"./sample_pl_no_bwt"};
-        write_to_file(&params.0, proving_key_path).unwrap();
-        println!("generate_parameters write_to_file finished");
-
+        let proving_key_path = if bt_num != 0 {"./sample_pk"} else {"./sample_pk_no_bwt"};
         let verifying_key_path = if bt_num != 0 {"./sample_vk"} else {"./sample_vk_no_bwt"};
-        write_to_file(&params.1, verifying_key_path).unwrap();
-        println!("verifying_key write_to_file finished");
+        let circ = get_instance_for_setup(3);
+        generate_circuit_keypair(
+            circ,
+            ProvingSystem::CoboundaryMarlin,
+            proving_key_path,
+            verifying_key_path
+        ).unwrap();
+        println!("generate_parameters finished");
 
         //Generate sample pks and sigs vec
         let threshold: u64 = 2;
@@ -733,7 +415,7 @@ mod test {
             let keypair = schnorr_generate_key();
             pks.push(keypair.0);
             sks.push(keypair.1);
-            println!("sk: {:?}", into_i8(to_bytes!(keypair.1).unwrap()).to_vec());
+            println!("sk: {:?}", into_i8(serialize_to_buffer(&keypair.1).unwrap()));
         }
         println!("pks / sks finished");
 
@@ -742,25 +424,29 @@ mod test {
         sigs.push(None);
         sigs.push(Some(schnorr_sign(&msg, &sks[2], &pks[2]).unwrap()));
 
-        println!("sk: {:?}", into_i8(to_bytes!(sks[0]).unwrap()));
-        println!("sk: {:?}", into_i8(to_bytes!(sks[2]).unwrap()));
-        println!("sk: {:?}", into_i8(to_bytes!(sks[1]).unwrap()));
+        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[0]).unwrap()));
+        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[2]).unwrap()));
+        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[1]).unwrap()));
 
-        println!("sig: {:?}", into_i8(to_bytes!(sigs[0].unwrap()).unwrap()));
-        println!("sig: {:?}", into_i8(to_bytes!(sigs[2].unwrap()).unwrap()));
+        println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[0]).unwrap()));
+        println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[2]).unwrap()));
 
-        let constant = compute_pks_threshold_hash(pks.as_slice(), threshold);
-        println!("Constant u8: {:?}", to_bytes!(constant).unwrap());
+        let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
+        println!("Constant u8: {:?}", serialize_to_buffer(&constant).unwrap());
 
         //Create and serialize proof
         let (proof, quality) = create_naive_threshold_sig_proof(
+            ProvingSystem::CoboundaryMarlin,
             pks.as_slice(),
             sigs,
-            &end_epoch_mc_b_hash,
-            &prev_end_epoch_mc_b_hash,
-            bt_list.as_slice(),
+            epoch_number,
+            &end_cumulative_sc_tx_comm_tree_root_f,
+            btr_fee,
+            ft_min_fee,
+            bt_list.clone(),
             threshold,
             proving_key_path,
+            false,
             false,
         ).unwrap();
         let proof_path = if bt_num != 0 {"./sample_proof"} else {"./sample_proof_no_bwt"};
@@ -768,12 +454,16 @@ mod test {
 
         //Verify proof
         assert!(verify_naive_threshold_sig_proof(
+            ProvingSystem::CoboundaryMarlin,
             &constant,
-            &end_epoch_mc_b_hash,
-            &prev_end_epoch_mc_b_hash,
-            bt_list.as_slice(),
+            epoch_number,
+            &end_cumulative_sc_tx_comm_tree_root_f,
+            btr_fee,
+            ft_min_fee,
+            bt_list.clone(),
             quality,
-            &proof,
+            proof.clone(),
+            true,
             verifying_key_path,
             true,
         ).unwrap());
@@ -781,12 +471,16 @@ mod test {
 
         //Generate wrong public inputs by changing quality and assert proof verification doesn't pass
         assert!(!verify_naive_threshold_sig_proof(
+            ProvingSystem::CoboundaryMarlin,
             &constant,
-            &end_epoch_mc_b_hash,
-            &prev_end_epoch_mc_b_hash,
-            bt_list.as_slice(),
+            epoch_number,
+            &end_cumulative_sc_tx_comm_tree_root_f,
+            btr_fee,
+            ft_min_fee,
+            bt_list,
             quality - 1,
-            &proof,
+            proof,
+            true,
             verifying_key_path,
             true,
         ).unwrap());
@@ -794,10 +488,25 @@ mod test {
 
     #[test]
     fn sample_calls_naive_threshold_sig_circuit() {
+        init_dlog_keys(
+            ProvingSystem::CoboundaryMarlin,
+            1 << 17,
+            "./g1_ck",
+            "./g2_ck"
+        ).unwrap();
+
         println!("****************With BWT**********************");
         create_sample_naive_threshold_sig_circuit(10);
         println!("****************Without BWT*******************");
         create_sample_naive_threshold_sig_circuit(0);
+
+        std::fs::remove_file("./sample_pk").unwrap();
+        std::fs::remove_file("./sample_vk").unwrap();
+        std::fs::remove_file("./sample_proof").unwrap();
+        std::fs::remove_file("./sample_pk_no_bwt").unwrap();
+        std::fs::remove_file("./sample_vk_no_bwt").unwrap();
+        std::fs::remove_file("./sample_proof_no_bwt").unwrap();
+        std::fs::remove_file("./g1_ck").unwrap();
     }
 
     #[test]
@@ -810,14 +519,14 @@ mod test {
         assert!(schnorr_verify_public_key(&pk)); //Verify pk
 
         //Serialize/deserialize pk
-        let mut pk_serialized = vec![0u8; SCHNORR_PK_SIZE];
-        serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
+        let pk_serialized = serialize_to_buffer(&pk).unwrap();
+        assert_eq!(pk_serialized.len(), SCHNORR_PK_SIZE);
         let pk_deserialized: SchnorrPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
-        let mut sk_serialized = vec![0u8; SCHNORR_SK_SIZE];
-        serialize_to_buffer(&sk, &mut sk_serialized).unwrap();
+        let sk_serialized = serialize_to_buffer(&sk).unwrap();
+        assert_eq!(sk_serialized.len(), SCHNORR_SK_SIZE);
         let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
         assert_eq!(sk, sk_deserialized);
 
@@ -825,8 +534,8 @@ mod test {
         assert!(is_valid(&sig));
 
         //Serialize/deserialize sig
-        let mut sig_serialized = vec![0u8; SCHNORR_SIG_SIZE];
-        serialize_to_buffer(&sig, &mut sig_serialized).unwrap();
+        let sig_serialized = serialize_to_buffer(&sig).unwrap();
+        assert_eq!(sig_serialized.len(), SCHNORR_SIG_SIZE);
         let sig_deserialized = deserialize_from_buffer(&sig_serialized).unwrap();
         assert_eq!(sig, sig_deserialized);
 
@@ -847,14 +556,14 @@ mod test {
         assert!(vrf_verify_public_key(&pk)); //Verify pk
 
         //Serialize/deserialize pk
-        let mut pk_serialized = vec![0u8; VRF_PK_SIZE];
-        serialize_to_buffer(&pk, &mut pk_serialized).unwrap();
+        let pk_serialized = serialize_to_buffer(&pk).unwrap();
+        assert_eq!(pk_serialized.len(), VRF_PK_SIZE);
         let pk_deserialized: VRFPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
-        let mut sk_serialized = vec![0u8; VRF_SK_SIZE];
-        serialize_to_buffer(&sk, &mut sk_serialized).unwrap();
+        let sk_serialized = serialize_to_buffer(&sk).unwrap();
+        assert_eq!(sk_serialized.len(), VRF_SK_SIZE);
         let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
         assert_eq!(sk, sk_deserialized);
 
@@ -862,14 +571,13 @@ mod test {
         assert!(is_valid(&vrf_proof));
 
         //Serialize/deserialize vrf proof
-        let mut proof_serialized = vec![0u8; VRF_PROOF_SIZE];
-        serialize_to_buffer(&vrf_proof, &mut proof_serialized).unwrap();
+        let proof_serialized = serialize_to_buffer(&vrf_proof).unwrap();
+        assert_eq!(proof_serialized.len(), VRF_PROOF_SIZE);
         let proof_deserialized = deserialize_from_buffer_checked(&proof_serialized).unwrap();
         assert_eq!(vrf_proof, proof_deserialized);
 
         //Serialize/deserialize vrf out (i.e. a field element)
-        let mut vrf_out_serialized = vec![0u8; FIELD_SIZE];
-        serialize_to_buffer(&vrf_out, &mut vrf_out_serialized).unwrap();
+        let vrf_out_serialized = serialize_to_buffer(&vrf_out).unwrap();
         let vrf_out_deserialized = deserialize_from_buffer(&vrf_out_serialized).unwrap();
         assert_eq!(vrf_out, vrf_out_deserialized);
 
@@ -880,79 +588,6 @@ mod test {
         let wrong_msg = FieldElement::rand(&mut rng);
         assert!(vrf_proof_to_hash(&wrong_msg, &pk, &vrf_proof).is_err());
     }
-
-    // #[test]
-    // fn sample_calls_merkle_tree(){
-    //     let height = 10;
-    //     let leaves_num = 2usize.pow(3 as u32);
-    //     let mut leaves = vec![];
-    //     let mut positions = vec![];
-    //     let mut rng = OsRng;
-    //
-    //     // Get GingerSMT
-    //     let mut smt = get_ginger_smt(
-    //         height,
-    //         "./temp_db",
-    //     ).unwrap();
-    //
-    //     // Add leaves to GingerSMT in different positions
-    //     for _ in 0..leaves_num {
-    //         loop {
-    //             let r = FieldElement::rand(&mut rng);
-    //             let position = get_position_in_ginger_smt(&smt, &r);
-    //             if is_position_empty_in_ginger_smt(&smt, position) { //Ensure that each leaf ends up in a different position
-    //                 leaves.push(r);
-    //                 positions.push(position);
-    //                 println!("Leaf: {:?}", into_i8(to_bytes!(r).unwrap()));
-    //                 println!("Position: {:?}", position);
-    //                 println!("__________________");
-    //                 add_leaf_to_ginger_smt(&mut smt, &r, position as u64);
-    //                 break;
-    //             }
-    //         }
-    //     }
-    //
-    //     //Remove first and last leaves
-    //     remove_leaf_from_ginger_smt(&mut smt, positions[0]);
-    //     remove_leaf_from_ginger_smt(&mut smt, positions[leaves_num - 1]);
-    //
-    //     //Get root of GingerSMT
-    //     let smt_root = get_ginger_smt_root(&smt);
-    //
-    //     // Get LazyGingerSMT
-    //     let mut lazy_smt = get_lazy_ginger_smt(
-    //         height,
-    //         "./temp_db_lazy",
-    //     ).unwrap();
-    //
-    //     // No conflicts here because we ensured each leaf to fall in a different position
-    //     add_leaves_to_ginger_lazy_smt(&mut lazy_smt, leaves.as_slice());
-    //
-    //     // Remove first and last leaves
-    //     let lazy_smt_root = remove_leaves_from_ginger_lazy_smt(&mut lazy_smt, &[positions[0] as i64, positions[(leaves_num - 1)] as i64]);
-    //
-    //     assert_eq!(smt_root, lazy_smt_root);
-    //
-    //     //Get GingerMHT
-    //     let mut mht = new_ginger_mht(height, leaves_num);
-    //
-    //     // Must place the leaves at the same positions of the previous trees
-    //     let mut mht_leaves = vec![FieldElement::zero(); 2usize.pow(height as u32)];
-    //     for i in 1..(leaves_num - 1){
-    //         mht_leaves[positions[i] as usize] = leaves[i];
-    //     }
-    //
-    //     // Append leaves to the tree and compute the root
-    //     mht_leaves.iter().for_each(|leaf| { append_leaf_to_ginger_mht(&mut mht, leaf) });
-    //     finalize_ginger_mht_in_place(&mut mht);
-    //     let mht_root = get_ginger_mht_root(&mht).expect("Tree must've been finalized");
-    //
-    //     assert_eq!(mht_root, lazy_smt_root);
-    //
-    //     //Delete SMTs data
-    //     set_ginger_smt_persistency(&mut smt, false);
-    //     set_ginger_lazy_smt_persistency(&mut lazy_smt, false);
-    // }
 
     #[test]
     fn sample_calls_merkle_path() {
@@ -967,7 +602,7 @@ mod test {
         for i in 0..leaves_num/2 {
             let leaf = get_random_field_element(i as u64);
             mht_leaves.push(leaf);
-            append_leaf_to_ginger_mht(&mut mht, &leaf);
+            append_leaf_to_ginger_mht(&mut mht, &leaf).unwrap();
         }
         for _ in leaves_num/2..leaves_num {
             mht_leaves.push(FieldElement::zero());
@@ -981,7 +616,7 @@ mod test {
 
             //Create and verify merkle paths for each leaf
             let path = get_ginger_mht_path(&mht, i as u64).unwrap();
-            assert!(verify_ginger_merkle_path_without_length_check(&path,&mht_leaves[i], &mht_root).unwrap());
+            assert!(verify_ginger_merkle_path_without_length_check(&path,&mht_leaves[i], &mht_root));
 
             // Check leaf index is the correct one
             assert_eq!(i as u64, get_leaf_index_from_path(&path));
@@ -990,7 +625,7 @@ mod test {
                 assert!(is_path_leftmost(&path));
             }
             else if i == (leaves_num / 2) - 1 { // non-empty rightmost check
-                assert!(is_path_non_empty_rightmost(&path));
+                assert!(are_right_leaves_empty(&path));
             }
             else if i == leaves_num - 1 { //rightmost check
                 assert!(is_path_rightmost(&path));
@@ -1000,124 +635,36 @@ mod test {
                 assert!(!is_path_rightmost(&path));
 
                 if i < (leaves_num / 2) - 1 {
-                    assert!(!is_path_non_empty_rightmost(&path));
+                    assert!(!are_right_leaves_empty(&path));
                 }
             }
 
             // Serialization/deserialization test
-            let path_size = get_path_size_in_bytes(&path);
-            let mut path_serialized = vec![0u8; path_size];
-            serialize_to_buffer(&path, &mut path_serialized).unwrap();
+            let path_serialized = serialize_to_buffer(&path).unwrap();
             let path_deserialized: GingerMHTPath = deserialize_from_buffer(&path_serialized).unwrap();
             assert_eq!(path, path_deserialized);
         }
     }
 
-    // #[test]
-    // fn sample_restore_merkle_tree() {
-    //     let expected_root = FieldElement::new(
-    //         FieldBigInteger([
-    //             1174313500572535251,
-    //             11989340445607088007,
-    //             12453165802583165309,
-    //             6869334689845037123,
-    //             18071747287931669646,
-    //             10010741666663785511,
-    //             17335522832723564810,
-    //             8102968406317429938,
-    //             11258756029259070139,
-    //             11585029297630923139,
-    //             10229262840520193915,
-    //             10238382938508
-    //         ]));
-    //
-    //     let height = 5;
-    //
-    //     // create a persistent smt in a separate scope
-    //     {
-    //         let mut smt = get_ginger_smt(
-    //             height,
-    //             "./db_leaves_persistency_test_info",
-    //         ).unwrap();
-    //
-    //         //Insert some leaves in the tree
-    //         let leaves = vec![FieldElement::from(1u16), FieldElement::from(2u16)];
-    //         add_leaf_to_ginger_smt(&mut smt, &leaves[0], 0);
-    //         add_leaf_to_ginger_smt(&mut smt, &leaves[1], 9);
-    //         remove_leaf_from_ginger_smt(&mut smt, 0);
-    //
-    //         // smt gets dropped but its info should be saved
-    //     }
-    //
-    //     // files and directories should have been created
-    //     assert!(Path::new("./db_leaves_persistency_test_info").exists());
-    //
-    //     // create a non-persistent smt in another scope by restoring the previous one
-    //     {
-    //         let mut smt = get_ginger_smt(
-    //             height,
-    //             "./db_leaves_persistency_test_info",
-    //         ).unwrap();
-    //
-    //         // insert other leaves
-    //         let leaves = vec![FieldElement::from(10u16), FieldElement::from(3u16)];
-    //         add_leaf_to_ginger_smt(&mut smt, &leaves[0], 16);
-    //         add_leaf_to_ginger_smt(&mut smt, &leaves[1], 29);
-    //         remove_leaf_from_ginger_smt(&mut smt, 16);
-    //
-    //         // if truly state has been kept, then the equality below must pass, since `root` was
-    //         // computed in one go with another smt
-    //         assert_eq!(expected_root, get_ginger_smt_root(&smt));
-    //
-    //         //Set the persistency of the tree to false so that the tree gets dropped
-    //         set_ginger_smt_persistency(&mut smt, false);
-    //
-    //         // smt gets dropped and state and dbs are deleted
-    //     }
-    //
-    //     // files and directories should have been deleted
-    //     assert!(!Path::new("./db_leaves_persistency_test_info").exists());
-    // }
-
     #[test]
     fn sample_calls_poseidon_hash(){
         let mut rng = OsRng;
         let hash_input = vec![FieldElement::rand(&mut rng); 2];
-        let mut h = get_poseidon_hash(None);
+        let mut h = get_poseidon_hash_variable_length(false, None);
 
         //Compute poseidon hash
         update_poseidon_hash(&mut h, &hash_input[0]);
         update_poseidon_hash(&mut h, &hash_input[1]);
-        let h_output = finalize_poseidon_hash(&h);
+        let h_output = finalize_poseidon_hash(&h).unwrap();
 
         //Call to finalize keeps the state
         reset_poseidon_hash(&mut h, None);
         update_poseidon_hash(&mut h, &hash_input[0]);
-        finalize_poseidon_hash(&h); //Call to finalize() keeps the state
+        finalize_poseidon_hash(&h).unwrap(); //Call to finalize() keeps the state
         update_poseidon_hash(&mut h, &hash_input[1]);
-        assert_eq!(h_output, finalize_poseidon_hash(&h));
+        assert_eq!(h_output, finalize_poseidon_hash(&h).unwrap());
 
         //finalize() is idempotent
-        assert_eq!(h_output, finalize_poseidon_hash(&h));
-    }
-
-
-    #[test]
-    fn read_field_test(){
-        let mut rng = OsRng;
-
-        let mut end_epoch_mc_b_hash = [0u8; 32];
-        let mut prev_end_epoch_mc_b_hash = [0u8; 32];
-        rng.fill_bytes(&mut end_epoch_mc_b_hash);
-        rng.fill_bytes(&mut prev_end_epoch_mc_b_hash);
-
-        let mut end_epoch_mc_b_hash = end_epoch_mc_b_hash;
-        end_epoch_mc_b_hash[FIELD_SIZE - 1] = end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
-
-        let mut prev_end_epoch_mc_b_hash = prev_end_epoch_mc_b_hash;
-        prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] = prev_end_epoch_mc_b_hash[FIELD_SIZE - 1] & 0b00111111;
-
-        let _ = read_field_element_from_buffer_with_padding(&end_epoch_mc_b_hash[..]).unwrap();
-        let _ = read_field_element_from_buffer_with_padding(&prev_end_epoch_mc_b_hash[..]).unwrap();
+        assert_eq!(h_output, finalize_poseidon_hash(&h).unwrap());
     }
 }

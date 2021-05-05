@@ -12,7 +12,6 @@ import static org.junit.Assert.assertEquals;
 
 public class VRFKeyPairTest {
 
-
     @Test
     public void testGenerate() throws Exception {
 

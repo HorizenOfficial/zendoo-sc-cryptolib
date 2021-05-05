@@ -1,6 +1,6 @@
 # Generic Threshold Circuit for Schnorr Signatures
 
-We describe a generic counting and threshold comparison procedure for Schnorr signatures (as in [ginger-lib's SchnorrSignature.pdf](https://github.com/ZencashOfficial/ginger-lib/blob/development/doc/SchnorrSignature.pdf)) formulated as circuit over the 'SNARK field' $F$ with modulus bit length denoted by $len|F|$. As a fixed circuit it should be able to treat up to 
+We describe a generic counting and threshold comparison procedure for Schnorr signatures (as in [ginger-lib's SchnorrSignature.pdf](https://github.com/HorizenOfficial/ginger-lib/blob/development/doc/SchnorrSignature.pdf)) formulated as circuit over the 'SNARK field' $F$ with modulus bit length denoted by $len|F|$. As a fixed circuit it should be able to treat up to 
 $$
 N < L=len|F|,
 $$
@@ -40,14 +40,14 @@ Our gadget $Threshold(m,h)$ is as follows.
 It's circuit is based on three components, as depicted below: 
 
 1. *Poseidon* Gadget, which enforces the privatly chosen $pk_i$ to hash to the given fingerprint $h$, 
-2. the $SchnorrVerdict$ gadget, as described in [ginger-lib's SchnorrVerdict.pdf](https://github.com/ZencashOfficial/ginger-lib/blob/development/doc/SchnorrVerdict.pdf), which enforces the Boolean verdicts $v_i$ to reflect a valid/invalid signature, and 
+2. the $SchnorrVerdict$ gadget, as described in [ginger-lib's SchnorrVerdict.pdf](https://github.com/HorizenOfficial/ginger-lib/blob/development/doc/SchnorrVerdict.pdf), which enforces the Boolean verdicts $v_i$ to reflect a valid/invalid signature, and 
 3. the *threshold enforcer*, which uses a simple length-restriction argument to force that the number $v=\sum_{i=1}^{N} v_i$ of valid signatures satisfies $v\geq t$ .
 
 ![Generic threshold circuit for Schnorr Signature style=](./pics/GenericThresholdCircuit-03.svg.png)
 
 ### The Poseidon gadget
 
-is as described in [ginger-lib's Poseidon.pdf](https://github.com/ZencashOfficial/ginger-lib/blob/development/doc/Poseidon.pdf), extended to the domain of $N$ field elements (the public keys to be hashed).
+is as described in [ginger-lib's Poseidon.pdf](https://github.com/HorizenOfficial/ginger-lib/blob/development/doc/Poseidon.pdf), extended to the domain of $N$ field elements (the public keys to be hashed).
 
 ### Threshold enforcer
 

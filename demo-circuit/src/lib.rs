@@ -13,7 +13,7 @@ unreachable_pub
 #![deny(
 non_shorthand_field_patterns,
 unused_attributes,
-// unused_imports,
+unused_imports,
 unused_extern_crates
 )]
 #![deny(
@@ -38,3 +38,6 @@ pub use self::naive_threshold_sig::*;
 
 pub mod constants;
 pub use self::constants::*;
+
+pub mod type_mapping;
+pub use self::type_mapping::*;

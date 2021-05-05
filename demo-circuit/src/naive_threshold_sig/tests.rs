@@ -1,36 +1,21 @@
 use algebra::{
-    BigInteger256,
-    fields::tweedle::Fr,
-    curves::tweedle::dum::Projective,
     Field, PrimeField, ToBits, ProjectiveCurve,
 };
 
 use primitives::{
     signature::{
-        schnorr::field_based_schnorr::{
-            FieldBasedSchnorrSignature, FieldBasedSchnorrSignatureScheme,
-            FieldBasedSchnorrPk,
-        },
+        schnorr::field_based_schnorr::{FieldBasedSchnorrSignature, FieldBasedSchnorrPk},
         FieldBasedSignatureScheme,
     },
-    crh::{FieldBasedHash, TweedleFrPoseidonHash as PoseidonHash},
+    crh::FieldBasedHash,
 };
 use r1cs_crypto::{
-    signature::{
-        schnorr::field_based_schnorr::{
-            FieldBasedSchnorrSigGadget, FieldBasedSchnorrSigVerificationGadget,
-            FieldBasedSchnorrPkGadget,
-        },
-        FieldBasedSigGadget,
-    },
+    signature::FieldBasedSigGadget,
     crh::{TweedleFrPoseidonHashGadget as PoseidonHashGadget, FieldBasedHashGadget}
 };
 
 use r1cs_std::{
-    instantiated::tweedle::TweedleDumGadget as CurveGadget,
-    fields::{
-        fp::FpGadget, FieldGadget,
-    },
+    fields::FieldGadget,
     alloc::AllocGadget,
     bits::{
         boolean::Boolean, FromBitsGadget,
@@ -39,48 +24,41 @@ use r1cs_std::{
 };
 
 use r1cs_core::ConstraintSystem;
-use crate::constants::NaiveThresholdSigParams;
+use crate::{
+    constants::NaiveThresholdSigParams, type_mapping::*, naive_threshold_sig::*,
+};
 
 use rand::{
     Rng, rngs::OsRng
 };
 
 use lazy_static::*;
+use cctp_primitives::utils::commitment_tree::bytes_to_field_elements;
+use r1cs_std::bits::uint64::UInt64;
 
 lazy_static! {
     pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
 }
 
-//Sig types
-type SchnorrSig = FieldBasedSchnorrSignatureScheme<Fr, Projective, PoseidonHash>;
-type SchnorrSigGadget = FieldBasedSchnorrSigGadget<Fr, Projective>;
-type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
-    Fr, Projective, CurveGadget, PoseidonHash, PoseidonHashGadget
->;
-type SchnorrPk = FieldBasedSchnorrPk<Projective>;
-type SchnorrPkGadget = FieldBasedSchnorrPkGadget<Fr, Projective, CurveGadget>;
-
-//Field types
-type FrGadget = FpGadget<Fr>;
-
-struct NaiveTresholdSignatureTest{
+struct NaiveTresholdSignatureTest {
 
     //Witnesses
-    pks:                      Vec<SchnorrPk>,
-    sigs:                     Vec<FieldBasedSchnorrSignature<Fr, Projective>>,
-    threshold:                Fr,
-    b:                        Vec<bool>,
-    end_epoch_mc_b_hash:      Fr,
-    prev_end_epoch_mc_b_hash: Fr,
-    mr_bt:                    Fr,
+    pks:                                    Vec<FieldBasedSchnorrPk<Projective>>,
+    sigs:                                   Vec<FieldBasedSchnorrSignature<FieldElement, Projective>>,
+    threshold:                              FieldElement,
+    b:                                      Vec<bool>,
+    epoch_number:                           FieldElement,
+    end_cumulative_sc_tx_comm_tree_root:    FieldElement,
+    mr_bt:                                  FieldElement,
+    ft_min_fee:                             u64,
+    btr_fee:                                u64,
 
     //Public inputs
-    aggregated_input:         Fr,
+    aggregated_input:                       FieldElement,
 
     //Other
-    max_pks:                  usize,
+    max_pks:                                usize,
 }
-
 
 fn generate_inputs
 (
@@ -93,26 +71,36 @@ fn generate_inputs
 {
     //Istantiate rng
     let mut rng = OsRng::default();
-    let mut h = PoseidonHash::init(None);
+    let mut h = FieldHash::init_constant_length(4, None);
 
     //Generate message to sign
-    let mr_bt: Fr = rng.gen();
-    let prev_end_epoch_mc_b_hash: Fr = rng.gen();
-    let end_epoch_mc_b_hash: Fr = rng.gen();
+    let epoch_number: FieldElement = rng.gen();
+    let mr_bt: FieldElement = rng.gen();
+    let end_cumulative_sc_tx_comm_tree_root: FieldElement = rng.gen();
+    let btr_fee: u64 = rng.gen();
+    let ft_min_fee: u64 = rng.gen();
+    let fees_field_elements = {
+        let fes = bytes_to_field_elements(vec![btr_fee, ft_min_fee]).unwrap();
+        assert_eq!(fes.len(), 1);
+        fes[0]
+    };
     let message = h
+        .update(epoch_number)
         .update(mr_bt)
-        .update(prev_end_epoch_mc_b_hash)
-        .update(end_epoch_mc_b_hash)
-        .finalize();
+        .update(end_cumulative_sc_tx_comm_tree_root)
+        .update(fees_field_elements)
+        .finalize()
+        .unwrap();
+
     //Generate another random message used to simulate a non-valid signature
-    let invalid_message: Fr = rng.gen();
+    let invalid_message: FieldElement = rng.gen();
 
     let mut pks = vec![];
     let mut sigs = vec![];
 
     for _ in 0..valid_sigs {
-        let (pk, sk) = SchnorrSig::keygen(&mut rng);
-        let sig = SchnorrSig::sign(&mut rng, &pk, &sk, &[message]).unwrap();
+        let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
+        let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, message).unwrap();
         pks.push(pk);
         sigs.push(sig);
     }
@@ -123,8 +111,8 @@ fn generate_inputs
         let (pk, sig) = if generate_null {
             (NULL_CONST.null_pk, NULL_CONST.null_sig)
         } else {
-            let (pk, sk) = SchnorrSig::keygen(&mut rng);
-            let sig = SchnorrSig::sign(&mut rng, &pk, &sk, &[invalid_message]).unwrap();
+            let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
+            let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, invalid_message).unwrap();
             (pk, sig)
         };
         pks.push(pk);
@@ -132,48 +120,49 @@ fn generate_inputs
     }
 
     //Generate b
-    let t_field = Fr::from_repr(BigInteger256::from(threshold as u64));
-    let valid_field = Fr::from_repr(BigInteger256::from(valid_sigs as u64));
+    let t_field = FieldElement::from_repr(FieldBigInteger::from(threshold as u64));
+    let valid_field = FieldElement::from_repr(FieldBigInteger::from(valid_sigs as u64));
     let b_field = valid_field - &t_field;
     let b_bool = {
         let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
-        let to_skip = Fr::size_in_bits() - (log_max_pks + 1);
+        let to_skip = FieldElement::size_in_bits() - (log_max_pks + 1);
         b_field.write_bits()[to_skip..].to_vec()
     };
 
     //Compute pks_threshold_hash
-    h.reset(None);
+    let mut h = FieldHash::init_constant_length(pks.len(), None);
     pks.iter().for_each(|pk| { h.update(pk.0.into_affine().x); });
-    let pks_hash = h.finalize();
+    let pks_hash = h.finalize().unwrap();
     let pks_threshold_hash = if !wrong_pks_threshold_hash {
-        h
-            .reset(None)
+        FieldHash::init_constant_length(2, None)
             .update(pks_hash)
             .update(t_field)
             .finalize()
+            .unwrap()
     } else {
         rng.gen()
     };
 
     //Compute wcert_sysdata_hash
     let wcert_sysdata_hash = if !wrong_wcert_sysdata_hash {
-        h
-            .reset(None)
-            .update(valid_field)
+        FieldHash::init_constant_length(5, None)
+            .update(epoch_number)
             .update(mr_bt)
-            .update(prev_end_epoch_mc_b_hash)
-            .update(end_epoch_mc_b_hash)
+            .update(valid_field)
+            .update(end_cumulative_sc_tx_comm_tree_root)
+            .update(fees_field_elements)
             .finalize()
+            .unwrap()
     } else {
         rng.gen()
     };
 
     // Compute aggregated input
-    let aggregated_input = h
-        .reset(None)
+    let aggregated_input = FieldHash::init_constant_length(2, None)
         .update(pks_threshold_hash)
         .update(wcert_sysdata_hash)
-        .finalize();
+        .finalize()
+        .unwrap();
 
     //Create instance of the circuit
     NaiveTresholdSignatureTest {
@@ -181,9 +170,11 @@ fn generate_inputs
         sigs,
         threshold: t_field,
         b: b_bool,
-        end_epoch_mc_b_hash,
-        prev_end_epoch_mc_b_hash,
+        epoch_number,
+        end_cumulative_sc_tx_comm_tree_root,
         mr_bt,
+        ft_min_fee,
+        btr_fee,
         aggregated_input,
         max_pks,
     }
@@ -191,7 +182,7 @@ fn generate_inputs
 
 fn generate_constraints(
     c: NaiveTresholdSignatureTest,
-    mut cs: TestConstraintSystem<Fr>,
+    mut cs: TestConstraintSystem<FieldElement>,
 ) -> bool
 {
     //Internal checks
@@ -217,7 +208,7 @@ fn generate_constraints(
     }
 
     //Check pks
-    let mut pks_threshold_hash_g = PoseidonHashGadget::check_evaluation_gadget(
+    let mut pks_threshold_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
         cs.ns(|| "hash public keys"),
         pks_g.iter().map(|pk| pk.pk.x.clone()).collect::<Vec<_>>().as_slice(),
     ).unwrap();
@@ -229,33 +220,54 @@ fn generate_constraints(
     ).unwrap();
 
     //Check hash commitment
-    pks_threshold_hash_g = PoseidonHashGadget::check_evaluation_gadget(
+    pks_threshold_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
         cs.ns(|| "H(H(pks), threshold)"),
         &[pks_threshold_hash_g, t_g.clone()],
     ).unwrap();
 
     //Check signatures
+    //Reconstruct message as H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee)
 
-    //Reconstruct message as H(MR(BT), BH(Bi-1), BH(Bi))
+    // Alloc field elements
+    let epoch_number_g = FrGadget::alloc(
+        cs.ns(|| "alloc epoch number"),
+        || Ok(c.epoch_number)
+    ).unwrap();
 
     let mr_bt_g = FrGadget::alloc(
         cs.ns(|| "alloc mr_bt"),
         || Ok(c.mr_bt)
     ).unwrap();
 
-    let prev_end_epoch_mc_block_hash_g = FrGadget::alloc(
-        cs.ns(|| "alloc prev_end_epoch_mc_block_hash"),
-        || Ok(c.prev_end_epoch_mc_b_hash)
+    let end_cumulative_sc_tx_comm_tree_root_g = FrGadget::alloc(
+        cs.ns(|| "alloc end_cumulative_sc_tx_comm_tree_root"),
+        || Ok(c.end_cumulative_sc_tx_comm_tree_root)
     ).unwrap();
 
-    let end_epoch_mc_block_hash_g = FrGadget::alloc(
-        cs.ns(|| "alloc end_epoch_mc_block_hash"),
-        || Ok(c.end_epoch_mc_b_hash)
+    // Alloc btr_fee and ft_min_fee
+    let btr_fee_g = UInt64::alloc(
+        cs.ns(|| "alloc btr_fee"),
+        Some(c.btr_fee)
     ).unwrap();
 
-    let message_g = PoseidonHashGadget::check_evaluation_gadget(
-        cs.ns(|| "H(MR(BT), H(Bi-1), H(Bi))"),
-        &[mr_bt_g.clone(), prev_end_epoch_mc_block_hash_g.clone(), end_epoch_mc_block_hash_g.clone()],
+    let ft_min_fee_g = UInt64::alloc(
+        cs.ns(|| "alloc ft_min_fee"),
+        Some(c.ft_min_fee)
+    ).unwrap();
+
+    // Pack them into a single field element
+    let mut fees_bits = btr_fee_g.to_bits_le();
+    fees_bits.append(&mut ft_min_fee_g.to_bits_le());
+    fees_bits.reverse();
+
+    let fees_g = FrGadget::from_bits(
+        cs.ns(|| "pack(btr_fee, ft_min_fee)"),
+        fees_bits.as_slice()
+    ).unwrap();
+
+    let message_g = PoseidonHashGadget::enforce_hash_constant_length(
+        cs.ns(|| "H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee)"),
+        &[epoch_number_g.clone(), mr_bt_g.clone(), end_cumulative_sc_tx_comm_tree_root_g.clone(), fees_g.clone()],
     ).unwrap();
 
     let mut sigs_g = Vec::with_capacity(c.max_pks);
@@ -279,7 +291,7 @@ fn generate_constraints(
             cs.ns(|| format!("check_sig_verdict_{}", i)),
             pk_g,
             sig_g,
-            &[message_g.clone()],
+            message_g.clone(),
         ).unwrap();
         verdicts.push(v);
     }
@@ -290,14 +302,14 @@ fn generate_constraints(
         valid_signatures = valid_signatures.conditionally_add_constant(
             cs.ns(|| format!("add_verdict_{}", i)),
             v,
-            Fr::one(),
+            FieldElement::one(),
         ).unwrap();
     }
 
-    //Enforce correct wcert_sysdata_hash
-    let wcert_sysdata_hash_g = PoseidonHashGadget::check_evaluation_gadget(
-        cs.ns(|| "H(valid_signatures, MR(BT), BH(Bi-1), BH(Bi))"),
-        &[valid_signatures.clone(), mr_bt_g, prev_end_epoch_mc_block_hash_g, end_epoch_mc_block_hash_g]
+    //Enforce wcert_sysdata_hash
+    let wcert_sysdata_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
+        cs.ns(|| "H(epoch_number, bt_root, valid_sigs, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee)"),
+        &[epoch_number_g, mr_bt_g, valid_signatures.clone(), end_cumulative_sc_tx_comm_tree_root_g, fees_g],
     ).unwrap();
 
     //Check pks_threshold_hash and wcert_sysdata_hash
@@ -306,7 +318,7 @@ fn generate_constraints(
         || Ok(c.aggregated_input)
     ).unwrap();
 
-    let actual_aggregated_input = PoseidonHashGadget::check_evaluation_gadget(
+    let actual_aggregated_input = PoseidonHashGadget::enforce_hash_constant_length(
         cs.ns(|| "H(pks_threshold_hash, wcert_sysdata_hash)"),
         &[pks_threshold_hash_g, wcert_sysdata_hash_g]
     ).unwrap();
@@ -362,7 +374,7 @@ fn random_naive_threshold_sig_test() {
         println!("CS satisfiable: {}", satisfiable);
 
         let c = generate_inputs(n, v, t, false, false);
-        let cs = TestConstraintSystem::<Fr>::new();
+        let cs = TestConstraintSystem::<FieldElement>::new();
         let is_satisfied = generate_constraints(c, cs);
 
         // The output must be false whenever the cs should be satisfiable
@@ -382,7 +394,7 @@ fn naive_threshold_sig_test_all_cases() {
     let v = rng.gen_range(1, n);
     let t = rng.gen_range(0, v);
     let c = generate_inputs(n, v, t, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(generate_constraints(c, cs));
     println!("Ok !");
 
@@ -390,7 +402,7 @@ fn naive_threshold_sig_test_all_cases() {
     let v = rng.gen_range(1, n);
     let t = v;
     let c = generate_inputs(n, v, t, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(generate_constraints(c, cs));
     println!("Ok !");
 
@@ -398,31 +410,31 @@ fn naive_threshold_sig_test_all_cases() {
     let t = rng.gen_range(1, n);
     let v = rng.gen_range(0, t);
     let c = generate_inputs(n, v, t, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(!generate_constraints(c, cs));
     println!("Ok !");
 
     println!("Test case v = t = 0");
     let c = generate_inputs(n, 0, 0, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(generate_constraints(c, cs));
     println!("Ok !");
 
     println!("Test case v = t = n");
     let c = generate_inputs(n, n, n, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(generate_constraints(c, cs));
     println!("Ok !");
 
     println!("Test case v = n and t = 0");
     let c = generate_inputs(n, n, 0, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(generate_constraints(c, cs));
     println!("Ok !");
 
     println!("Test negative case v = 0 and t = n");
     let c = generate_inputs(n, 0, n, false, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(!generate_constraints(c, cs));
     println!("Ok !");
 
@@ -430,7 +442,7 @@ fn naive_threshold_sig_test_all_cases() {
     let v = rng.gen_range(1, n);
     let t = rng.gen_range(0, v);
     let c = generate_inputs(n, v, t, true, false);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(!generate_constraints(c, cs));
     println!("Ok !");
 
@@ -438,7 +450,7 @@ fn naive_threshold_sig_test_all_cases() {
     let v = rng.gen_range(1, n);
     let t = rng.gen_range(0, v);
     let c = generate_inputs(n, v, t, false, true);
-    let cs = TestConstraintSystem::<Fr>::new();
+    let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(!generate_constraints(c, cs));
     println!("Ok !");
 }
