@@ -2143,7 +2143,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
     _out_idx: jint,
     _withdrawal_epoch_length: jint,
     _cert_proving_system: jbyte,
-    _csw_proving_system: jbyte,
+    _csw_proving_system_nullable: JObject, // java.lang.Byte can be null if there is no csw_proving_system
     _mc_btr_request_data_length: jbyte,
     _custom_field_elements_configs: jobjectArray,
     _custom_bitvector_elements_configs: jobjectArray,
@@ -2156,7 +2156,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
 ) -> jboolean
 {
 
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let amount = _amount as u64;
 
@@ -2172,7 +2173,12 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
 
     let cert_proving_system = _cert_proving_system as u8;
 
-    let csw_proving_system = _csw_proving_system as u8;
+    let csw_proving_system_opt = if _csw_proving_system_nullable.is_null() {
+        Option::None
+    } else {
+        Some(_env.call_method(_csw_proving_system_nullable, "byteValue", "()B", &[])
+            .expect("Should be able to call getBitVectorSizeBits method").b().unwrap() as u8)
+    };
 
     let mc_btr_request_data_length = _mc_btr_request_data_length as u8;
 
@@ -2262,7 +2268,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
                                out_idx,
                                withdrawal_epoch_length,
                                cert_proving_system,
-                               csw_proving_system,
+                               csw_proving_system_opt,
                                mc_btr_request_data_length,
                                custom_field_elements_configs.as_slice(),
                                custom_bitvector_elements_configs.as_slice(),
@@ -2290,7 +2296,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddF
     _out_idx: jint
 ) -> jboolean
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let amount = _amount as u64;
 
@@ -2334,7 +2341,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddB
     _out_idx: jint
 ) -> jboolean
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let sc_fee = _sc_fee as u64;
 
@@ -2400,7 +2408,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
     _ft_min_amount: jlong
 ) -> jboolean
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let mut constant_nullable = [0u8; FIELD_SIZE];
     let constant = if _constant_nullable.is_null() {
@@ -2509,7 +2518,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
     _leaf: jbyteArray
 ) -> jboolean
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let leaf_fe = {
         let leaf_bytes = parse_jbyte_array_to_vec(&_env, &_leaf, FIELD_SIZE);
@@ -2539,7 +2549,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let commitment_tree = {
 
@@ -2599,7 +2610,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
     _mc_pk_hash: jbyteArray
 ) -> jboolean
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let amount = _amount as u64;
 
@@ -2634,7 +2646,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let commitment_tree = {
 
@@ -2675,7 +2688,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetF
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let commitment_tree = {
 
@@ -2716,7 +2730,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeBtrC
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let commitment_tree = {
 
@@ -2757,7 +2772,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let commitment_tree = {
 
@@ -2798,7 +2814,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let commitment_tree = {
 
@@ -2839,7 +2856,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let commitment_tree = {
 
@@ -2919,7 +2937,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let commitment_tree = {
 
@@ -3019,7 +3038,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     let commitment_tree = {
 
@@ -3160,7 +3180,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
 ) -> bool
 {
     // Read sidechain id
-    let sc_id = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+    let mut sc_id = [0u8; FIELD_SIZE];
+    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
 
     //Read commitment proof
     let sc_absence_proof = {

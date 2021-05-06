@@ -43,21 +43,21 @@ public class CommitmentTree implements AutoCloseable {
     }
 
     private native boolean nativeAddScCr(byte[] scId, long amount, byte[] pubKey, byte[] txHash, int outIdx,
-                                         int withdrawalEpochLength, byte certProvingSystem, byte cswProvingSystem,
+                                         int withdrawalEpochLength, byte certProvingSystem, Byte cswProvingSystemNullable,
                                          byte mcBtrRequestDataLength, CustomFieldElementsConfig[] customFieldElementsConfigs,
                                          CustomBitvectorElementsConfig[] customBitvectorElementsConfigs,
                                          long btrFee, long ftMinAmount, byte[] customCreationDataHash,
                                          byte[] constantNullable, byte[] certVerificationKey, byte[] cswVerificationKeyNullable);
     
     public boolean addScCr(byte[] scId, long amount, byte[] pubKey, byte[] txHash, int outIdx, int withdrawalEpochLength,
-                           byte certProvingSystem, byte cswProvingSystem, byte mcBtrRequestDataLength,
+                           byte certProvingSystem, Optional<Byte> cswProvingSystemOpt, byte mcBtrRequestDataLength,
                            CustomFieldElementsConfig[] customFieldElementsConfigs, CustomBitvectorElementsConfig[] customBitvectorElementsConfigs,
                            long btrFee, long ftMinAmount, byte[] customCreationDataHash, Optional<byte[]> constantOpt,
                            byte[] certVerificationKey, Optional<byte[]> cswVerificationKeyOpt) {
         if (commitmentTreePointer == 0)
             throw new IllegalStateException("CommitmentTree instance was freed.");
         return nativeAddScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
-                cswProvingSystem, mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
+                cswProvingSystemOpt.orElse(null), mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
                 btrFee, ftMinAmount, customCreationDataHash, constantOpt.orElse(null), certVerificationKey,
                 cswVerificationKeyOpt.orElse(null));
     }

@@ -64,7 +64,7 @@ public class CommitmentTreeTest {
         // Add sc creation output with all fields defined.
         assertTrue("Sidechain creation output expected to be added.",
                 commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
-                        cswProvingSystem, mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
+                        Optional.of(cswProvingSystem), mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
                         btrFee, ftMinAmount, customCreationDataHash, Optional.of(constant), certVerificationKey,
                         Optional.of(cswVerificationKey))
         );
@@ -76,7 +76,7 @@ public class CommitmentTreeTest {
         // Add sc creation output with empty customFieldElementsConfigs.
         assertTrue("Sidechain creation output expected to be added.",
                 commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
-                        cswProvingSystem, mcBtrRequestDataLength, new CustomFieldElementsConfig[] {},
+                        Optional.of(cswProvingSystem), mcBtrRequestDataLength, new CustomFieldElementsConfig[] {},
                         customBitvectorElementsConfigs, btrFee, ftMinAmount, customCreationDataHash,
                         Optional.of(constant), certVerificationKey, Optional.of(cswVerificationKey))
         );
@@ -85,7 +85,7 @@ public class CommitmentTreeTest {
         // Add sc creation output with empty customBitvectorElementsConfigs.
         assertTrue("Sidechain creation output expected to be added.",
                 commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
-                        cswProvingSystem, mcBtrRequestDataLength, customFieldElementsConfigs,
+                        Optional.of(cswProvingSystem), mcBtrRequestDataLength, customFieldElementsConfigs,
                         new CustomBitvectorElementsConfig[] {}, btrFee, ftMinAmount, customCreationDataHash,
                         Optional.of(constant), certVerificationKey, Optional.of(cswVerificationKey))
         );
@@ -94,7 +94,7 @@ public class CommitmentTreeTest {
         // Add certificate with no constant defined.
         assertTrue("Sidechain creation output expected to be added.",
                 commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
-                        cswProvingSystem, mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
+                        Optional.of(cswProvingSystem), mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
                         btrFee, ftMinAmount, customCreationDataHash, Optional.empty(), certVerificationKey,
                         Optional.of(cswVerificationKey))
         );
@@ -103,9 +103,18 @@ public class CommitmentTreeTest {
         // Add sc creation output with no CSW Vk defined.
         assertTrue("Sidechain creation output expected to be added.",
                 commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
-                        cswProvingSystem, mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
+                        Optional.of(cswProvingSystem), mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
                         btrFee, ftMinAmount, customCreationDataHash, Optional.of(constant), certVerificationKey,
                         Optional.empty())
+        );
+
+
+        // Add sc creation output with no cswProvingSystem defined.
+        assertTrue("Sidechain creation output expected to be added.",
+                commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
+                        Optional.empty(), mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
+                        btrFee, ftMinAmount, customCreationDataHash, Optional.of(constant), certVerificationKey,
+                        Optional.of(cswVerificationKey))
         );
 
         commTree.freeCommitmentTree();
