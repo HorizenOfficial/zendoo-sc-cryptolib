@@ -39,22 +39,75 @@ public class CommitmentTreeTest {
 
         long amount = 100;
         byte[] pubKey = generateRandomBytes(32);
-        int withdrawalEpochLength = 1000;
-        byte[] customData = generateRandomBytes(1024);
-        Optional<byte[]> constant = Optional.of(generateFieldElementBytes());
-        byte[] certVk = new byte[1]; // todo
-        Optional<byte[]> btrVk = Optional.empty();
-        Optional<byte[]> cswVk = Optional.empty();
         byte[] txHash = generateRandomBytes(32);
         int outIdx = 0;
+        int withdrawalEpochLength = 1000;
+        byte certProvingSystem = (byte) 1;
+        byte cswProvingSystem = (byte) 0;
+        byte mcBtrRequestDataLength = (byte) 200;
+        CustomFieldElementsConfig[] customFieldElementsConfigs = new CustomFieldElementsConfig[]{
+                new CustomFieldElementsConfig((byte) 256)
+        };
+        CustomBitvectorElementsConfig[] customBitvectorElementsConfigs = new CustomBitvectorElementsConfig[] {
+                new CustomBitvectorElementsConfig(100, 200),
+                new CustomBitvectorElementsConfig(300, 400)
+        };
+        long btrFee = 100L;
+        long ftMinAmount = 10000L;
+        
+        byte[] customCreationDataHash = generateFieldElementBytes();//generateRandomBytes(1024);
+        byte[] constant = generateFieldElementBytes();
+        byte[] certVerificationKey = new byte[1]; // todo
+        byte[] cswVerificationKey = new byte[1]; // todo
 
+
+        // Add sc creation output with all fields defined.
         assertTrue("Sidechain creation output expected to be added.",
-                commTree.addScCr(scId, amount, pubKey, withdrawalEpochLength,
-                        customData, constant, certVk, btrVk, cswVk, txHash, outIdx)
+                commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
+                        cswProvingSystem, mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
+                        btrFee, ftMinAmount, customCreationDataHash, Optional.of(constant), certVerificationKey,
+                        Optional.of(cswVerificationKey))
         );
 
         Optional<FieldElement> commitmentOpt = commTree.getScCrCommitment(scId);
         assertTrue("ScCr commitment expected to be present.", commitmentOpt.isPresent());
+
+
+        // Add sc creation output with empty customFieldElementsConfigs.
+        assertTrue("Sidechain creation output expected to be added.",
+                commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
+                        cswProvingSystem, mcBtrRequestDataLength, new CustomFieldElementsConfig[] {},
+                        customBitvectorElementsConfigs, btrFee, ftMinAmount, customCreationDataHash,
+                        Optional.of(constant), certVerificationKey, Optional.of(cswVerificationKey))
+        );
+
+
+        // Add sc creation output with empty customBitvectorElementsConfigs.
+        assertTrue("Sidechain creation output expected to be added.",
+                commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
+                        cswProvingSystem, mcBtrRequestDataLength, customFieldElementsConfigs,
+                        new CustomBitvectorElementsConfig[] {}, btrFee, ftMinAmount, customCreationDataHash,
+                        Optional.of(constant), certVerificationKey, Optional.of(cswVerificationKey))
+        );
+
+
+        // Add certificate with no constant defined.
+        assertTrue("Sidechain creation output expected to be added.",
+                commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
+                        cswProvingSystem, mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
+                        btrFee, ftMinAmount, customCreationDataHash, Optional.empty(), certVerificationKey,
+                        Optional.of(cswVerificationKey))
+        );
+
+
+        // Add sc creation output with no CSW Vk defined.
+        assertTrue("Sidechain creation output expected to be added.",
+                commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
+                        cswProvingSystem, mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
+                        btrFee, ftMinAmount, customCreationDataHash, Optional.of(constant), certVerificationKey,
+                        Optional.empty())
+        );
+
         commTree.freeCommitmentTree();
     }
 
@@ -85,11 +138,31 @@ public class CommitmentTreeTest {
         assertFalse("Backward transfer output expected to be missed.", commTree.getBtrCommitment(scId).isPresent());
 
         long bwtAmount = 120;
-        byte[] bwtPublicKeyHash = generateRandomBytes(20);
-        byte[] bwtRequestData = generateFieldElementBytes();
-        byte[] bwtTransactionHash = generateFieldElementBytes();;
+        byte[] mcDestinationAddress = generateRandomBytes(20);
+        byte[][] bwtRequestDataArray = new byte[][] { generateFieldElementBytes(), generateFieldElementBytes() };
+        byte[] bwtTransactionHash = generateFieldElementBytes();
         int bwtOutId = 220;
-        assertTrue("Backward transfer output expected to be added.", commTree.addBtr(scId, bwtAmount, bwtPublicKeyHash, bwtRequestData, bwtTransactionHash, bwtOutId));
+        assertTrue("Backward transfer output expected to be added.",
+                commTree.addBtr(scId, bwtAmount, mcDestinationAddress, bwtRequestDataArray, bwtTransactionHash, bwtOutId));
+
+        Optional<FieldElement> commitmentOpt = commTree.getBtrCommitment(scId);
+        assertTrue("Backward transfer expected to be present.", commitmentOpt.isPresent());
+        commTree.freeCommitmentTree();
+    }
+
+    @Test
+    public void addBackwardTransferWithEmptyRequestData() {
+        CommitmentTree commTree = CommitmentTree.init();
+        byte[] scId = generateFieldElementBytes();
+
+        assertFalse("Backward transfer output expected to be missed.", commTree.getBtrCommitment(scId).isPresent());
+
+        long bwtAmount = 120;
+        byte[] mcDestinationAddress = generateRandomBytes(20);
+        byte[] bwtTransactionHash = generateFieldElementBytes();
+        int bwtOutId = 220;
+        assertTrue("Backward transfer output expected to be added.",
+                commTree.addBtr(scId, bwtAmount, mcDestinationAddress, new byte[][] {}, bwtTransactionHash, bwtOutId));
 
         Optional<FieldElement> commitmentOpt = commTree.getBtrCommitment(scId);
         assertTrue("Backward transfer expected to be present.", commitmentOpt.isPresent());
@@ -104,10 +177,10 @@ public class CommitmentTreeTest {
         assertFalse("Ceased Sidechain Withdrawal output expected to be missed.", commTree.getCswCommitment(scId).isPresent());
 
         long cswAmount = 140;
-        byte[] cswPublicKeyHash = generateRandomBytes(20);;
+        byte[] cswMcPubKeyHash = generateRandomBytes(20);
         byte[] cswNullifier = generateFieldElementBytes();
-        byte[] cswCertificate  = generateFieldElementBytes();
-        assertTrue("Ceased Sidechain Withdrawal output expected to be added.", commTree.addCsw(scId, cswAmount, cswNullifier, cswPublicKeyHash, cswCertificate));
+        assertTrue("Ceased Sidechain Withdrawal output expected to be added.",
+                commTree.addCsw(scId, cswAmount, cswNullifier, cswMcPubKeyHash));
 
         Optional<FieldElement> commitmentOpt = commTree.getCswCommitment(scId);
         assertTrue("Ceased Sidechain Withdrawal expected to be present.", commitmentOpt.isPresent());
@@ -121,15 +194,47 @@ public class CommitmentTreeTest {
 
         assertFalse("Certificate expected to be missed.", commTree.getCertCommitment(scId).isPresent());
 
+        byte[] constant = generateFieldElementBytes();
         int cert_epoch = 220;
         long cert_quality = 50;
-        byte[] certDataHash = generateFieldElementBytes();
-        byte[] certMerkelRoot = generateFieldElementBytes();
-        byte[] certCumulativeCommTreeHash = generateFieldElementBytes();
+        BackwardTransfer[] btList = new BackwardTransfer[] {
+                new BackwardTransfer(generateRandomBytes(20), 100L),
+                new BackwardTransfer(generateRandomBytes(20), 20000L)
+        };
 
-        assertTrue("Certificate output expected to be added.", commTree.addCert(scId, cert_epoch, cert_quality, certDataHash, new BackwardTransfer[0], certMerkelRoot, certCumulativeCommTreeHash));
+        byte[][] customFields = new byte[][] {
+                generateFieldElementBytes(), generateFieldElementBytes(), generateFieldElementBytes()
+        };
+        
+        byte[] endCumulativeScTxCommitmentTreeRoot = generateFieldElementBytes();
+        long btrFee = 123L;
+        long ftMinAmount = 444L;
+
+
+        // Add certificate with all fields defined.
+        assertTrue("Certificate output expected to be added.",
+                commTree.addCert(scId, Optional.of(constant), cert_epoch, cert_quality, btList,
+                        Optional.of(customFields), endCumulativeScTxCommitmentTreeRoot, btrFee, ftMinAmount)
+        );
+
         Optional<FieldElement> commitmentOpt = commTree.getCertCommitment(scId);
         assertTrue("Certificate expected to be present.", commitmentOpt.isPresent());
+
+
+        // Add certificate with empty constant.
+        assertTrue("Certificate output expected to be added.",
+                commTree.addCert(scId, Optional.empty(), cert_epoch, cert_quality, btList,
+                        Optional.of(customFields), endCumulativeScTxCommitmentTreeRoot, btrFee, ftMinAmount)
+        );
+
+
+        // Add certificate with no custom fields.
+        assertTrue("Certificate output expected to be added.",
+                commTree.addCert(scId, Optional.of(constant), cert_epoch, cert_quality, btList,
+                        Optional.empty(), endCumulativeScTxCommitmentTreeRoot, btrFee, ftMinAmount)
+        );
+
+
         commTree.freeCommitmentTree();
     }
 
@@ -149,9 +254,9 @@ public class CommitmentTreeTest {
         assertTrue("Certificate expected to be present.", commitmentOpt.isPresent());
         Optional<List<FieldElement>> leafListOpt = commTree.getCrtLeaves(scId);
         assertTrue("Certificate leaf expected to be present.", leafListOpt.isPresent());
-        assertTrue("Certificate leaf list expected to have one element.", leafListOpt.get().size() == 2);
-        assertTrue("Certificate leaf1 is differ", Arrays.equals(leafListOpt.get().get(0).serializeFieldElement(), leaf1.serializeFieldElement()));
-        assertTrue("Certificate leaf2 is differ", Arrays.equals(leafListOpt.get().get(1).serializeFieldElement(), leaf2.serializeFieldElement()));
+        assertEquals("Certificate leaf list expected to have one element.", 2, leafListOpt.get().size());
+        assertArrayEquals("Certificate leaf1 is differ", leafListOpt.get().get(0).serializeFieldElement(), leaf1.serializeFieldElement());
+        assertArrayEquals("Certificate leaf2 is differ", leafListOpt.get().get(1).serializeFieldElement(), leaf2.serializeFieldElement());
 
         leaf1.freeFieldElement();
         leaf2.freeFieldElement();
@@ -218,7 +323,7 @@ public class CommitmentTreeTest {
         byte[] existenceProofBytes = existenceOpt.get().serialize();
         ScExistenceProof deserializedExistanceProof = ScExistenceProof.deserialize(existenceProofBytes);
 
-        assertTrue("Deserialized existence proof should be serialized to same bytes", Arrays.equals(deserializedExistanceProof.serialize(), existenceProofBytes));
+        assertArrayEquals("Deserialized existence proof should be serialized to same bytes", deserializedExistanceProof.serialize(), existenceProofBytes);
         assertTrue("Commitment verification of original proof expected to be successful", CommitmentTree.verifyScCommitment(scCommitmentOpt.get(), existenceOpt.get(), commitmentOpt.get()));
         assertTrue("Commitment verification of deserialized proof expected to be successful", CommitmentTree.verifyScCommitment(scCommitmentOpt.get(), deserializedExistanceProof, commitmentOpt.get()));
         commitmentOpt.get().freeFieldElement();
@@ -245,7 +350,6 @@ public class CommitmentTreeTest {
         // Get absence proof in empty CommitmentTree
         assertFalse("Existance proof should not be present", commTree.getScExistenceProof(scId[0]).isPresent());
         Optional<ScAbsenceProof> absenceOpt = commTree.getScAbsenceProof(scId[0]);
-        // TODO Uncomment this code when rust library will be able to operate with absence proof on empty commitment tree.
         assertTrue("Absence proof expected to be present.", absenceOpt.isPresent());
         assertTrue("Absence verification expected to be successful", CommitmentTree.verifyScAbsence(scId[0], absenceOpt.get() ,commitmentOpt.get()));
 
@@ -262,11 +366,12 @@ public class CommitmentTreeTest {
         assertFalse("Absence proof should not be present.", absenceOpt.isPresent());
 
         long bwtAmount = 120;
-        byte[] bwtPublicKeyHash = generateRandomBytes(20);
-        byte[] bwtRequestData = generateFieldElementBytes();
-        byte[] bwtTransactionHash = generateFieldElementBytes();;
+        byte[] mcDestinationAddress = generateRandomBytes(20);
+        byte[][] bwtRequestDataArray = new byte[][] { generateFieldElementBytes(), generateFieldElementBytes() };
+        byte[] bwtTransactionHash = generateFieldElementBytes();
         int bwtOutId = 220;
-        assertTrue("Backward transfer output expected to be added.", commTree.addBtr(scId[3], bwtAmount, bwtPublicKeyHash, bwtRequestData, bwtTransactionHash, bwtOutId));
+        assertTrue("Backward transfer output expected to be added.",
+                commTree.addBtr(scId[3], bwtAmount, mcDestinationAddress, bwtRequestDataArray, bwtTransactionHash, bwtOutId));
 
         // Get absence proof with right neighbor
         assertFalse("Existance proof should not be present", commTree.getScExistenceProof(scId[0]).isPresent());
@@ -311,11 +416,12 @@ public class CommitmentTreeTest {
                 commTree.addFwt(scId[0], ftrAmount, ftrPublicKey, ftrTransactionHash, fwtOutId));
 
         long bwtAmount = 120;
-        byte[] bwtPublicKeyHash = generateRandomBytes(20);
-        byte[] bwtRequestData = generateFieldElementBytes();
-        byte[] bwtTransactionHash = generateFieldElementBytes();;
+        byte[] mcDestinationAddress = generateRandomBytes(20);
+        byte[][] bwtRequestDataArray = new byte[][] { generateFieldElementBytes(), generateFieldElementBytes() };
+        byte[] bwtTransactionHash = generateFieldElementBytes();
         int bwtOutId = 220;
-        assertTrue("Backward transfer output expected to be added.", commTree.addBtr(scId[2], bwtAmount, bwtPublicKeyHash, bwtRequestData, bwtTransactionHash, bwtOutId));
+        assertTrue("Backward transfer output expected to be added.",
+                commTree.addBtr(scId[2], bwtAmount, mcDestinationAddress, bwtRequestDataArray, bwtTransactionHash, bwtOutId));
 
         // Get absence proof with both neighbors
         assertFalse("Existance proof should not be present", commTree.getScExistenceProof(scId[1]).isPresent());
@@ -326,7 +432,7 @@ public class CommitmentTreeTest {
         byte[] absenceProofBytes = absenceOpt.get().serialize();
         ScAbsenceProof deserializedAbsenceProof = ScAbsenceProof.deserialize(absenceProofBytes);
 
-        assertTrue("Deserialized absence proof should be serialized to same bytes", Arrays.equals(deserializedAbsenceProof.serialize(), absenceProofBytes));
+        assertArrayEquals("Deserialized absence proof should be serialized to same bytes", deserializedAbsenceProof.serialize(), absenceProofBytes);
         assertTrue("Absence verification of original proof expected to be successful", CommitmentTree.verifyScAbsence(scId[1], absenceOpt.get() ,commitmentOpt.get()));
         assertTrue("Absence verification of deserialized proof expected to be successful", CommitmentTree.verifyScAbsence(scId[1], deserializedAbsenceProof ,commitmentOpt.get()));
 
