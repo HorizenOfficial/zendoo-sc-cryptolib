@@ -46,19 +46,19 @@ public class CommitmentTree implements AutoCloseable {
                                          int withdrawalEpochLength, byte certProvingSystem, Byte cswProvingSystemNullable,
                                          byte mcBtrRequestDataLength, CustomFieldElementsConfig[] customFieldElementsConfigs,
                                          CustomBitvectorElementsConfig[] customBitvectorElementsConfigs,
-                                         long btrFee, long ftMinAmount, byte[] customCreationDataHash,
+                                         long btrFee, long ftMinAmount, byte[] customCreationData,
                                          byte[] constantNullable, byte[] certVerificationKey, byte[] cswVerificationKeyNullable);
     
     public boolean addScCr(byte[] scId, long amount, byte[] pubKey, byte[] txHash, int outIdx, int withdrawalEpochLength,
                            byte certProvingSystem, Optional<Byte> cswProvingSystemOpt, byte mcBtrRequestDataLength,
                            CustomFieldElementsConfig[] customFieldElementsConfigs, CustomBitvectorElementsConfig[] customBitvectorElementsConfigs,
-                           long btrFee, long ftMinAmount, byte[] customCreationDataHash, Optional<byte[]> constantOpt,
+                           long btrFee, long ftMinAmount, byte[] customCreationData, Optional<byte[]> constantOpt,
                            byte[] certVerificationKey, Optional<byte[]> cswVerificationKeyOpt) {
         if (commitmentTreePointer == 0)
             throw new IllegalStateException("CommitmentTree instance was freed.");
         return nativeAddScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
                 cswProvingSystemOpt.orElse(null), mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
-                btrFee, ftMinAmount, customCreationDataHash, constantOpt.orElse(null), certVerificationKey,
+                btrFee, ftMinAmount, customCreationData, constantOpt.orElse(null), certVerificationKey,
                 cswVerificationKeyOpt.orElse(null));
     }
     
@@ -79,16 +79,16 @@ public class CommitmentTree implements AutoCloseable {
         return nativeAddBtr(scId, scFee, mcDestinationAddress, scRequestData, txHash, outIdx);
     }
     
-    private native boolean nativeAddCert(byte[] scId, byte[] constantNullable, int epochNumber, long quality,
+    private native boolean nativeAddCert(byte[] scId, int epochNumber, long quality,
                                          BackwardTransfer[] btList, byte[][] customFieldsNullable,
                                          byte[] endCumulativeScTxCommitmentTreeRoot, long btrFee, long ftMinAmount);
 
-    public boolean addCert(byte[] scId, Optional<byte[]> constantOpt, int epochNumber, long quality,
+    public boolean addCert(byte[] scId, int epochNumber, long quality,
                            BackwardTransfer[] btList, Optional<byte[][]> customFieldsOpt,
                            byte[] endCumulativeScTxCommitmentTreeRoot, long btrFee, long ftMinAmount) {
         if (commitmentTreePointer == 0)
             throw new IllegalStateException("CommitmentTree instance was freed.");
-        return nativeAddCert(scId, constantOpt.orElse(null), epochNumber, quality, btList,
+        return nativeAddCert(scId, epochNumber, quality, btList,
                 customFieldsOpt.orElse(null), endCumulativeScTxCommitmentTreeRoot, btrFee, ftMinAmount);
     }
 

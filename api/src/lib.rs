@@ -2149,10 +2149,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
     _custom_bitvector_elements_configs: jobjectArray,
     _btr_fee: jlong,
     _ft_min_amount: jlong,
-    _custom_creation_data_hash: jbyteArray,
+    _custom_creation_data: jbyteArray,
     _constant_nullable: jbyteArray,                 // can be null if there is no constant
-    _cert_verification_key_hash: jbyteArray,
-    _csw_verification_key_hash_nullable: jbyteArray // can be null if there is no key for CSWs
+    _cert_verification_key: jbyteArray,
+    _csw_verification_key_nullable: jbyteArray // can be null if there is no key for CSWs
 ) -> jboolean
 {
 
@@ -2219,10 +2219,8 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
 
     let ft_min_amount = _ft_min_amount as u64;
 
-    // let custom_creation_data = _env.convert_byte_array(_custom_creation_data_hash)
-    //     .expect("Should be able to convert to Rust byte array");
-    let mut custom_creation_data_hash = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_custom_creation_data_hash, &mut custom_creation_data_hash[..]);
+    let custom_creation_data = _env.convert_byte_array(_custom_creation_data)
+        .expect("Should be able to convert to Rust array");
 
     let mut constant_nullable = [0u8; FIELD_SIZE];
     let constant = if _constant_nullable.is_null() {
@@ -2232,25 +2230,16 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
         Some(&constant_nullable)
     };
 
-    // let cert_verification_key = _env.convert_byte_array(_cert_verification_key)
-    //     .expect("Should be able to convert to Rust byte array");
-    let mut cert_verification_key_hash = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_cert_verification_key_hash, &mut cert_verification_key_hash[..]);
+    let cert_verification_key = _env.convert_byte_array(_cert_verification_key)
+        .expect("Should be able to convert to Rust byte array");
 
-    // let mut _csw_verification_key_nullable_vec;
-    // let csw_verification_key = if _csw_verification_key_nullable.is_null() {
-    //     Option::None
-    // } else {
-    //     _csw_verification_key_nullable_vec = _env.convert_byte_array(_csw_verification_key_nullable)
-    //         .expect("Should be able to convert to Rust byte array");
-    //     Some(_csw_verification_key_nullable_vec.as_slice())
-    // };
-    let mut csw_verification_key_hash_nullable = [0u8; FIELD_SIZE];
-    let csw_verification_key_hash = if _csw_verification_key_hash_nullable.is_null() {
+    let mut _csw_verification_key_nullable_vec;
+    let csw_verification_key_opt = if _csw_verification_key_nullable.is_null() {
         Option::None
     } else {
-        get_byte_array(&_env, &_csw_verification_key_hash_nullable, &mut csw_verification_key_hash_nullable[..]);
-        Some(&csw_verification_key_hash_nullable)
+        _csw_verification_key_nullable_vec = _env.convert_byte_array(_csw_verification_key_nullable)
+            .expect("Should be able to convert to Rust byte array");
+        Some(_csw_verification_key_nullable_vec.as_slice())
     };
 
     let commitment_tree = {
@@ -2274,10 +2263,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
                                custom_bitvector_elements_configs.as_slice(),
                                btr_fee,
                                ft_min_amount,
-                               &custom_creation_data_hash,
+                               custom_creation_data.as_slice(),
                                constant,
-                               &cert_verification_key_hash,
-                               csw_verification_key_hash
+                               cert_verification_key.as_slice(),
+                               csw_verification_key_opt
                                ) {
         JNI_TRUE
     } else {
@@ -2398,7 +2387,6 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray,
-    _constant_nullable: jbyteArray, // can be null if there is no constant
     _epoch_number: jint,
     _quality: jlong,
     _bt_list: jobjectArray,
@@ -2410,14 +2398,6 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
 {
     let mut sc_id = [0u8; FIELD_SIZE];
     get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
-
-    let mut constant_nullable = [0u8; FIELD_SIZE];
-    let constant = if _constant_nullable.is_null() {
-        Option::None
-    } else {
-        get_byte_array(&_env, &_constant_nullable, &mut constant_nullable[..]);
-        Some(&constant_nullable)
-    };
 
     let epoch_number = _epoch_number as u32;
 
@@ -2496,7 +2476,6 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
     };
 
     if commitment_tree.add_cert(&sc_id,
-                                constant,
                                 epoch_number,
                                 quality,
                                 bt_list.as_slice(),

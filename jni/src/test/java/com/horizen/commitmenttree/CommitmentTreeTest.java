@@ -55,17 +55,17 @@ public class CommitmentTreeTest {
         long btrFee = 100L;
         long ftMinAmount = 10000L;
         
-        byte[] customCreationDataHash = generateFieldElementBytes();//generateRandomBytes(1024);
+        byte[] customCreationData = generateRandomBytes(1024);
         byte[] constant = generateFieldElementBytes();
-        byte[] certVerificationKey = new byte[1]; // todo
-        byte[] cswVerificationKey = new byte[1]; // todo
+        byte[] certVerificationKey = generateRandomBytes(2000); // random bytes simulating snark Vk
+        byte[] cswVerificationKey = generateRandomBytes(1000); // random bytes simulating snark Vk
 
 
         // Add sc creation output with all fields defined.
         assertTrue("Sidechain creation output expected to be added.",
                 commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
                         Optional.of(cswProvingSystem), mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
-                        btrFee, ftMinAmount, customCreationDataHash, Optional.of(constant), certVerificationKey,
+                        btrFee, ftMinAmount, customCreationData, Optional.of(constant), certVerificationKey,
                         Optional.of(cswVerificationKey))
         );
 
@@ -77,7 +77,7 @@ public class CommitmentTreeTest {
         assertTrue("Sidechain creation output expected to be added.",
                 commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
                         Optional.of(cswProvingSystem), mcBtrRequestDataLength, new CustomFieldElementsConfig[] {},
-                        customBitvectorElementsConfigs, btrFee, ftMinAmount, customCreationDataHash,
+                        customBitvectorElementsConfigs, btrFee, ftMinAmount, customCreationData,
                         Optional.of(constant), certVerificationKey, Optional.of(cswVerificationKey))
         );
 
@@ -86,7 +86,7 @@ public class CommitmentTreeTest {
         assertTrue("Sidechain creation output expected to be added.",
                 commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
                         Optional.of(cswProvingSystem), mcBtrRequestDataLength, customFieldElementsConfigs,
-                        new CustomBitvectorElementsConfig[] {}, btrFee, ftMinAmount, customCreationDataHash,
+                        new CustomBitvectorElementsConfig[] {}, btrFee, ftMinAmount, customCreationData,
                         Optional.of(constant), certVerificationKey, Optional.of(cswVerificationKey))
         );
 
@@ -95,7 +95,7 @@ public class CommitmentTreeTest {
         assertTrue("Sidechain creation output expected to be added.",
                 commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
                         Optional.of(cswProvingSystem), mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
-                        btrFee, ftMinAmount, customCreationDataHash, Optional.empty(), certVerificationKey,
+                        btrFee, ftMinAmount, customCreationData, Optional.empty(), certVerificationKey,
                         Optional.of(cswVerificationKey))
         );
 
@@ -104,7 +104,7 @@ public class CommitmentTreeTest {
         assertTrue("Sidechain creation output expected to be added.",
                 commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
                         Optional.of(cswProvingSystem), mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
-                        btrFee, ftMinAmount, customCreationDataHash, Optional.of(constant), certVerificationKey,
+                        btrFee, ftMinAmount, customCreationData, Optional.of(constant), certVerificationKey,
                         Optional.empty())
         );
 
@@ -113,7 +113,7 @@ public class CommitmentTreeTest {
         assertTrue("Sidechain creation output expected to be added.",
                 commTree.addScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
                         Optional.empty(), mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
-                        btrFee, ftMinAmount, customCreationDataHash, Optional.of(constant), certVerificationKey,
+                        btrFee, ftMinAmount, customCreationData, Optional.of(constant), certVerificationKey,
                         Optional.of(cswVerificationKey))
         );
 
@@ -203,7 +203,6 @@ public class CommitmentTreeTest {
 
         assertFalse("Certificate expected to be missed.", commTree.getCertCommitment(scId).isPresent());
 
-        byte[] constant = generateFieldElementBytes();
         int cert_epoch = 220;
         long cert_quality = 50;
         BackwardTransfer[] btList = new BackwardTransfer[] {
@@ -222,7 +221,7 @@ public class CommitmentTreeTest {
 
         // Add certificate with all fields defined.
         assertTrue("Certificate output expected to be added.",
-                commTree.addCert(scId, Optional.of(constant), cert_epoch, cert_quality, btList,
+                commTree.addCert(scId, cert_epoch, cert_quality, btList,
                         Optional.of(customFields), endCumulativeScTxCommitmentTreeRoot, btrFee, ftMinAmount)
         );
 
@@ -230,16 +229,9 @@ public class CommitmentTreeTest {
         assertTrue("Certificate expected to be present.", commitmentOpt.isPresent());
 
 
-        // Add certificate with empty constant.
-        assertTrue("Certificate output expected to be added.",
-                commTree.addCert(scId, Optional.empty(), cert_epoch, cert_quality, btList,
-                        Optional.of(customFields), endCumulativeScTxCommitmentTreeRoot, btrFee, ftMinAmount)
-        );
-
-
         // Add certificate with no custom fields.
         assertTrue("Certificate output expected to be added.",
-                commTree.addCert(scId, Optional.of(constant), cert_epoch, cert_quality, btList,
+                commTree.addCert(scId, cert_epoch, cert_quality, btList,
                         Optional.empty(), endCumulativeScTxCommitmentTreeRoot, btrFee, ftMinAmount)
         );
 
