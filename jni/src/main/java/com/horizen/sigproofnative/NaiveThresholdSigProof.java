@@ -32,7 +32,7 @@ public class NaiveThresholdSigProof {
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
-            long ftMinFee
+            long ftMinAmount
     );
 
     public static FieldElement createMsgToSign(
@@ -40,10 +40,10 @@ public class NaiveThresholdSigProof {
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
-            long ftMinFee
+            long ftMinAmount
     )
     {
-        return nativeCreateMsgToSign(bt, epochNumber, endCumulativeScTxCommTreeRoot, btrFee, ftMinFee);
+        return nativeCreateMsgToSign(bt, epochNumber, endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount);
     }
 
     public static boolean setup(
@@ -69,7 +69,7 @@ public class NaiveThresholdSigProof {
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
-            long ftMinFee,
+            long ftMinAmount,
             SchnorrSignature[] schnorrSignatures,
             SchnorrPublicKey[] schnorrPublicKeys,
             long threshold,
@@ -84,7 +84,7 @@ public class NaiveThresholdSigProof {
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
-            long ftMinFee,
+            long ftMinAmount,
             List<SchnorrSignature> schnorrSignatureList,
             List<SchnorrPublicKey> schnorrPublicKeyList,
             long threshold,
@@ -94,7 +94,7 @@ public class NaiveThresholdSigProof {
     ) {
         return nativeCreateProof(
             psType, btList.toArray(new BackwardTransfer[0]), epochNumber,
-            endCumulativeScTxCommTreeRoot, btrFee, ftMinFee,
+            endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
             schnorrSignatureList.toArray(new SchnorrSignature[0]),
             schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
             threshold, provingKeyPath, checkProvingKey, zk
@@ -107,7 +107,7 @@ public class NaiveThresholdSigProof {
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
-            long ftMinFee,
+            long ftMinAmount,
             FieldElement constant,
             long quality,
             byte[] proof,
@@ -122,7 +122,7 @@ public class NaiveThresholdSigProof {
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
-            long ftMinFee,
+            long ftMinAmount,
             FieldElement constant,
             long quality,
             byte[] proof,
@@ -132,7 +132,7 @@ public class NaiveThresholdSigProof {
     ){
         return nativeVerifyProof(
             psType, btList.toArray(new BackwardTransfer[0]), epochNumber,
-            endCumulativeScTxCommTreeRoot, btrFee, ftMinFee,
+            endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
             constant, quality, proof, checkProof, verificationKeyPath,
             checkVerificationKey
         );

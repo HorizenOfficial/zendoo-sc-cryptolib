@@ -32,7 +32,7 @@ public class NaiveThresholdSigProofTest {
 
     static int epochNumber = 10;
     static long btrFee = 100L;
-    static long ftMinFee = 200L;
+    static long ftMinAmount = 200L;
     FieldElement endCumulativeScTxCommTreeRoot;
 
     List<SchnorrPublicKey> publicKeyList = new ArrayList<>();
@@ -278,7 +278,7 @@ public class NaiveThresholdSigProofTest {
                     epochNumber,
                     endCumulativeScTxCommTreeRoot,
                     btrFee,
-                    ftMinFee
+                    ftMinAmount
                 );
                 signatureList.add(keyPairList.get(i).signMessage(msgToSign));
             } else {
@@ -297,7 +297,7 @@ public class NaiveThresholdSigProofTest {
 
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
             psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
-            btrFee, ftMinFee, signatureList, publicKeyList, threshold,
+            btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
             snarkPkPath, false, false
         );
 
@@ -311,7 +311,7 @@ public class NaiveThresholdSigProofTest {
 
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(
             psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
-            btrFee, ftMinFee, constant, quality, proof, true, snarkVkPath, true
+            btrFee, ftMinAmount, constant, quality, proof, true, snarkVkPath, true
         );
 
         assertTrue("Proof must be verified", isProofVerified);
@@ -319,7 +319,7 @@ public class NaiveThresholdSigProofTest {
         quality = threshold - 1;
         isProofVerified = NaiveThresholdSigProof.verifyProof(
             psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
-            btrFee, ftMinFee, constant, quality, proof, true, snarkVkPath, true
+            btrFee, ftMinAmount, constant, quality, proof, true, snarkVkPath, true
         );
 
         assertFalse("Proof must not be verified", isProofVerified);

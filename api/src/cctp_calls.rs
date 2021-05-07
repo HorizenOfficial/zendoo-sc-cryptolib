@@ -31,11 +31,14 @@ use cctp_primitives::{
         error::ProvingSystemError,
     },
     utils::{
-        proof_system::ProvingSystemUtils, get_bt_merkle_root,
+        proving_system::ProvingSystemUtils, get_bt_merkle_root,
         serialization::*,
-        commitment_tree::bytes_to_field_elements,
+        commitment_tree::ByteAccumulator,
+        data_structures::{ProvingSystem, BackwardTransfer}
     },
 };
+
+use std::path::Path;
 
 //*******************************Generic functions**********************************************
 
@@ -90,13 +93,13 @@ pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<F
         .finalize()
 }
 
-//Compute and return (MR(bt_list), H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee))
+//Compute and return (MR(bt_list), H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount))
 pub fn compute_msg_to_sign(
     epoch_number:                        u32,
     end_cumulative_sc_tx_comm_tree_root: &FieldElement,
     btr_fee:                             u64,
-    ft_min_fee:                          u64,
-    bt_list:                             Vec<(u64, [u8; MC_PK_SIZE])>,
+    ft_min_amount:                       u64,
+    bt_list:                             Vec<BackwardTransfer>,
 ) -> Result<(FieldElement, FieldElement), Error> {
 
     let epoch_number = FieldElement::from(epoch_number);
@@ -105,7 +108,10 @@ pub fn compute_msg_to_sign(
     let mr_bt = get_bt_merkle_root(bt_list.as_slice())?;
 
     let fees_field_element = {
-        let fes = bytes_to_field_elements(vec![btr_fee, ft_min_fee])?;
+        let fes = ByteAccumulator::init()
+            .update(btr_fee)?
+            .update(ft_min_amount)?
+            .get_field_elements()?;
         assert_eq!(fes.len(), 1);
         fes[0]
     };
@@ -128,10 +134,10 @@ pub fn create_naive_threshold_sig_proof(
     epoch_number:                        u32,
     end_cumulative_sc_tx_comm_tree_root: &FieldElement,
     btr_fee:                             u64,
-    ft_min_fee:                          u64,
-    bt_list:                             Vec<(u64, [u8; MC_PK_SIZE])>,
+    ft_min_amount:                       u64,
+    bt_list:                             Vec<BackwardTransfer>,
     threshold:                           u64,
-    proving_key_path:                    &str,
+    proving_key_path:                    &Path,
     enforce_membership:                  bool,
     zk:                                  bool,
 ) -> Result<(Vec<u8>, u64), Error> {
@@ -145,7 +151,7 @@ pub fn create_naive_threshold_sig_proof(
         epoch_number,
         end_cumulative_sc_tx_comm_tree_root,
         btr_fee,
-        ft_min_fee,
+        ft_min_amount,
         bt_list,
     )?;
 
@@ -173,7 +179,7 @@ pub fn create_naive_threshold_sig_proof(
 
     let c = NaiveTresholdSignature::<FieldElement>::new(
         pks, sigs, threshold, b, FieldElement::from(epoch_number),
-        *end_cumulative_sc_tx_comm_tree_root, mr_bt, ft_min_fee, btr_fee, max_pks,
+        *end_cumulative_sc_tx_comm_tree_root, mr_bt, ft_min_amount, btr_fee, max_pks,
     );
 
     let proof = match proving_system {
@@ -223,12 +229,12 @@ pub fn verify_naive_threshold_sig_proof(
     epoch_number:                        u32,
     end_cumulative_sc_tx_comm_tree_root: &FieldElement,
     btr_fee:                             u64,
-    ft_min_fee:                          u64,
-    bt_list:                             Vec<(u64, [u8; MC_PK_SIZE])>,
+    ft_min_amount:                       u64,
+    bt_list:                             Vec<BackwardTransfer>,
     valid_sigs:                          u64,
     proof:                               Vec<u8>,
     check_proof:                         bool,
-    vk_path:                             &str,
+    vk_path:                             &Path,
     check_vk:                            bool
 ) -> Result<bool, Error>
 {
@@ -256,7 +262,7 @@ pub fn verify_naive_threshold_sig_proof(
         custom_fields: None,
         end_cumulative_sc_tx_commitment_tree_root,
         btr_fee,
-        ft_min_fee
+        ft_min_amount
     };
 
     // Read verifier key
@@ -283,9 +289,9 @@ pub fn verify_naive_threshold_sig_proof(
 //VRF types and functions
 
 lazy_static! {
-    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<Projective> = {
+    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<G2Projective> = {
         let params = VRFParams::new();
-        BoweHopwoodPedersenParameters::<Projective>{generators: params.group_hash_generators}
+        BoweHopwoodPedersenParameters::<G2Projective>{generators: params.group_hash_generators}
     };
 }
 
@@ -360,10 +366,15 @@ mod test {
     use rand::{RngCore, Rng};
     use algebra::Field;
     use cctp_primitives::utils::{
-        poseidon_hash::*, mht::*, proof_system::*,
+        poseidon_hash::*, mht::*, proving_system::*,
     };
 
-    fn create_sample_naive_threshold_sig_circuit(bt_num: usize) {
+    fn create_sample_naive_threshold_sig_circuit(
+        bt_num: usize,
+        pk_path: &Path,
+        vk_path: &Path,
+        proof_path: &Path,
+    ) {
         //assume to have 3 pks, threshold = 2
         let mut rng = OsRng;
 
@@ -376,34 +387,32 @@ mod test {
 
         let mut bt_list = vec![];
         for _ in 0..bt_num {
-            bt_list.push((0u64, [0u8; MC_PK_SIZE]));
+            bt_list.push(BackwardTransfer::default());
         }
 
         let end_cumulative_sc_tx_comm_tree_root_f = deserialize_from_buffer::<FieldElement>(&end_cumulative_sc_tx_comm_tree_root).unwrap();
 
         let epoch_number: u32 = rng.gen();
         let btr_fee: u64 = rng.gen();
-        let ft_min_fee: u64 = rng.gen();
+        let ft_min_amount: u64 = rng.gen();
 
         //Compute msg to sign
         let (_, msg) = compute_msg_to_sign(
             epoch_number,
             &end_cumulative_sc_tx_comm_tree_root_f,
             btr_fee,
-            ft_min_fee,
+            ft_min_amount,
             bt_list.clone()
         ).unwrap();
         println!("compute_msg_to_sign finished");
 
         //Generate params and write them to file
-        let proving_key_path = if bt_num != 0 {"./sample_pk"} else {"./sample_pk_no_bwt"};
-        let verifying_key_path = if bt_num != 0 {"./sample_vk"} else {"./sample_vk_no_bwt"};
         let circ = get_instance_for_setup(3);
         generate_circuit_keypair(
             circ,
             ProvingSystem::CoboundaryMarlin,
-            proving_key_path,
-            verifying_key_path
+            pk_path,
+            vk_path
         ).unwrap();
         println!("generate_parameters finished");
 
@@ -442,14 +451,13 @@ mod test {
             epoch_number,
             &end_cumulative_sc_tx_comm_tree_root_f,
             btr_fee,
-            ft_min_fee,
+            ft_min_amount,
             bt_list.clone(),
             threshold,
-            proving_key_path,
+            pk_path,
             false,
             false,
         ).unwrap();
-        let proof_path = if bt_num != 0 {"./sample_proof"} else {"./sample_proof_no_bwt"};
         write_to_file(&proof, proof_path).unwrap();
 
         //Verify proof
@@ -459,12 +467,12 @@ mod test {
             epoch_number,
             &end_cumulative_sc_tx_comm_tree_root_f,
             btr_fee,
-            ft_min_fee,
+            ft_min_amount,
             bt_list.clone(),
             quality,
             proof.clone(),
             true,
-            verifying_key_path,
+            vk_path,
             true,
         ).unwrap());
 
@@ -476,37 +484,67 @@ mod test {
             epoch_number,
             &end_cumulative_sc_tx_comm_tree_root_f,
             btr_fee,
-            ft_min_fee,
+            ft_min_amount,
             bt_list,
             quality - 1,
             proof,
             true,
-            verifying_key_path,
+            vk_path,
             true,
         ).unwrap());
     }
 
     #[test]
     fn sample_calls_naive_threshold_sig_circuit() {
+        let tmp_dir = std::env::temp_dir();
+
+        let mut g1_ck_path = tmp_dir.clone();
+        g1_ck_path.push("ck_g1");
+
+        let mut g2_ck_path = tmp_dir.clone();
+        g2_ck_path.push("ck_g2");
+
         init_dlog_keys(
             ProvingSystem::CoboundaryMarlin,
-            1 << 17,
-            "./g1_ck",
-            "./g2_ck"
+            1 << 14,
+            &g1_ck_path,
+            &g2_ck_path
         ).unwrap();
 
         println!("****************With BWT**********************");
-        create_sample_naive_threshold_sig_circuit(10);
-        println!("****************Without BWT*******************");
-        create_sample_naive_threshold_sig_circuit(0);
 
-        std::fs::remove_file("./sample_pk").unwrap();
-        std::fs::remove_file("./sample_vk").unwrap();
-        std::fs::remove_file("./sample_proof").unwrap();
-        std::fs::remove_file("./sample_pk_no_bwt").unwrap();
-        std::fs::remove_file("./sample_vk_no_bwt").unwrap();
-        std::fs::remove_file("./sample_proof_no_bwt").unwrap();
-        std::fs::remove_file("./g1_ck").unwrap();
+        let mut pk_path = tmp_dir.clone();
+        pk_path.push("sample_pk");
+
+        let mut vk_path = tmp_dir.clone();
+        vk_path.push("sample_vk");
+
+        let mut proof_path = tmp_dir.clone();
+        proof_path.push("sample_proof");
+
+        create_sample_naive_threshold_sig_circuit(10, &pk_path, &vk_path, &proof_path);
+
+        println!("****************Without BWT*******************");
+
+        let mut pk_path_no_bwt = tmp_dir.clone();
+        pk_path_no_bwt.push("sample_pk_no_bwt");
+
+        let mut vk_path_no_bwt = tmp_dir.clone();
+        vk_path_no_bwt.push("sample_vk_no_bwt");
+
+        let mut proof_path_no_bwt = tmp_dir.clone();
+        proof_path_no_bwt.push("sample_proof_no_bwt");
+
+        create_sample_naive_threshold_sig_circuit(0, &pk_path_no_bwt, &vk_path_no_bwt, &proof_path_no_bwt);
+
+        println!("*************** Clean up **********************");
+        std::fs::remove_file(pk_path).unwrap();
+        std::fs::remove_file(vk_path).unwrap();
+        std::fs::remove_file(proof_path).unwrap();
+        std::fs::remove_file(pk_path_no_bwt).unwrap();
+        std::fs::remove_file(vk_path_no_bwt).unwrap();
+        std::fs::remove_file(proof_path_no_bwt).unwrap();
+        std::fs::remove_file(g1_ck_path).unwrap();
     }
 
     #[test]

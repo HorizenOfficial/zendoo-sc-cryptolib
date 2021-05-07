@@ -6,12 +6,15 @@ use cctp_primitives::utils::{
     serialization::*,
     poseidon_hash::*,
     mht::*,
-    proof_system::*,
+    proving_system::*,
+    data_structures::*,
 };
-use std::any::type_name;
+use std::{
+    any::type_name, path::Path,
+};
 
-mod ginger_calls;
-use ginger_calls::*;
+mod cctp_calls;
+use cctp_calls::*;
 
 fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
     assert!(!input.is_null());
@@ -86,7 +89,7 @@ fn serialize_from_jobject<T: CanonicalSerialize>(
 
 use jni::JNIEnv;
 use jni::objects::{JClass, JString, JObject, JValue};
-use jni::sys::{jbyteArray, jboolean, jint, jlong, /*jlongArray, */jobject, jobjectArray};
+use jni::sys::{jbyteArray, jboolean, jint, jlong, jobject, jobjectArray};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
 
 //Field element related functions
@@ -1481,7 +1484,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _epoch_number: jint,
     _end_cumulative_sc_tx_comm_tree_root: JObject,
     _btr_fee: jlong,
-    _ft_min_fee: jlong,
+    _ft_min_amount: jlong,
 ) -> jobject
 {
     //Extract backward transfers
@@ -1517,6 +1520,11 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         }
     }
 
+    let bt_list = bt_list.into_iter().map(|bt_raw| BackwardTransfer {
+        pk_dest: bt_raw.1,
+        amount: bt_raw.0
+    }).collect::<Vec<_>>();
+
     let end_cumulative_sc_tx_comm_tree_root = {
         let f =_env.get_field(_end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
@@ -1529,7 +1537,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         _epoch_number as u32,
         &end_cumulative_sc_tx_comm_tree_root,
         _btr_fee as u64,
-        _ft_min_fee as u64,
+        _ft_min_amount as u64,
         bt_list
     ){
         Ok((_, msg)) => msg,
@@ -1553,7 +1561,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _epoch_number: jint,
     _end_cumulative_sc_tx_comm_tree_root: JObject,
     _btr_fee: jlong,
-    _ft_min_fee: jlong,
+    _ft_min_amount: jlong,
     _schnorr_sigs_list: jobjectArray,
     _schnorr_pks_list:  jobjectArray,
     _threshold: jlong,
@@ -1608,6 +1616,11 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
             bt_list.push((a, pk));
         }
     }
+
+    let bt_list = bt_list.into_iter().map(|bt_raw| BackwardTransfer {
+        pk_dest: bt_raw.1,
+        amount: bt_raw.0
+    }).collect::<Vec<_>>();
 
     //Extract Schnorr signatures and the corresponding Schnorr pks
     let mut sigs = vec![];
@@ -1669,10 +1682,10 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         _epoch_number as u32,
         &end_cumulative_sc_tx_comm_tree_root,
         _btr_fee as u64,
-        _ft_min_fee as u64,
+        _ft_min_amount as u64,
         bt_list,
         _threshold as u64,
-        proving_key_path.to_str().unwrap(),
+        Path::new(proving_key_path.to_str().unwrap()),
         _check_proving_key == JNI_TRUE,
         _zk == JNI_TRUE,
     ) {
@@ -1732,8 +1745,8 @@ pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_native
     match init_dlog_keys(
         proving_system,
         _segment_size as usize,
-        g1_key_path.to_str().unwrap(),
-        g2_key_path.to_str().unwrap(),
+        Path::new(g1_key_path.to_str().unwrap()),
+        Path::new(g2_key_path.to_str().unwrap()),
     ) {
         Ok(_) => JNI_TRUE,
         Err(_) => JNI_FALSE,
@@ -1779,8 +1792,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     match generate_circuit_keypair(
         circ,
         proving_system,
-        proving_key_path.to_str().unwrap(),
-        verification_key_path.to_str().unwrap()
+        Path::new(proving_key_path.to_str().unwrap()),
+        Path::new(verification_key_path.to_str().unwrap())
     ) {
         Ok(_) => JNI_TRUE,
         Err(_) => JNI_FALSE,
@@ -1800,7 +1813,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _epoch_number: jint,
     _end_cumulative_sc_tx_comm_tree_root: JObject,
     _btr_fee: jlong,
-    _ft_min_fee: jlong,
+    _ft_min_amount: jlong,
     _constant: JObject,
     _quality: jlong,
     _sc_proof_bytes: jbyteArray,
@@ -1856,6 +1869,11 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         }
     }
 
+    let bt_list = bt_list.into_iter().map(|bt_raw| BackwardTransfer {
+        pk_dest: bt_raw.1,
+        amount: bt_raw.0
+    }).collect::<Vec<_>>();
+
     let end_cumulative_sc_tx_comm_tree_root = {
         let f =_env.get_field(_end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
@@ -1887,12 +1905,12 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         _epoch_number as u32,
         end_cumulative_sc_tx_comm_tree_root,
         _btr_fee as u64,
-        _ft_min_fee as u64,
+        _ft_min_amount as u64,
         bt_list,
         _quality as u64,
         proof_bytes,
         _check_proof == JNI_TRUE,
-        vk_path.to_str().unwrap(),
+        Path::new(vk_path.to_str().unwrap()),
         _check_vk == JNI_TRUE,
 
     ) {
