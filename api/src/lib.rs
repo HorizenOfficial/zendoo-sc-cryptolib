@@ -663,13 +663,13 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetCon
             read_raw_pointer(f.j().unwrap() as *const FieldElement)
         };
 
-        personalization.push(*field);
+        personalization.push(field);
     }
 
     //Instantiate PoseidonHash
     let h = get_poseidon_hash_constant_length(
         _input_size as usize,
-        if personalization.is_empty() { None } else { Some(personalization.as_slice()) }
+        if personalization.is_empty() { None } else { Some(personalization) }
     );
 
     //Return PoseidonHash instance
@@ -703,13 +703,13 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetVar
             read_raw_pointer(f.j().unwrap() as *const FieldElement)
         };
 
-        personalization.push(*field);
+        personalization.push(field);
     }
 
     //Instantiate PoseidonHash
     let h = get_poseidon_hash_variable_length(
         _mod_rate == JNI_TRUE,
-        if personalization.is_empty() { None } else { Some(personalization.as_slice()) }
+        if personalization.is_empty() { None } else { Some(personalization) }
     );
 
     //Return PoseidonHash instance
@@ -801,10 +801,10 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeReset(
             read_raw_pointer(f.j().unwrap() as *const FieldElement)
         };
 
-        personalization.push(*field);
+        personalization.push(field);
     }
 
-    let personalization = if personalization.is_empty() { None } else { Some(personalization.as_slice()) };
+    let personalization = if personalization.is_empty() { None } else { Some(personalization) };
 
     reset_poseidon_hash(digest, personalization)
 }
@@ -1556,7 +1556,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // used, but still needs to have
     // an argument slot
     _class: JClass,
-    _proving_system: JObject,
     _bt_list: jobjectArray,
     _epoch_number: jint,
     _end_cumulative_sc_tx_comm_tree_root: JObject,
@@ -1570,20 +1569,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _zk: jboolean,
 ) -> jobject
 {
-    // Extract proving system type
-    let proving_system= _env
-        .call_method(_proving_system, "ordinal", "()I", &[])
-        .expect("Should be able to call ordinal() on ProvingSystem enum")
-        .i()
-        .unwrap() as usize;
-
-    let proving_system = match proving_system {
-        0 => ProvingSystem::Undefined,
-        1 => ProvingSystem::Darlin,
-        2 => ProvingSystem::CoboundaryMarlin,
-        _ => unreachable!()
-    };
-
     // Extract backward transfers
     let mut bt_list = vec![];
 
@@ -1676,7 +1661,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //create proof
     let (proof, quality) = match create_naive_threshold_sig_proof(
-        proving_system,
         pks.as_slice(),
         sigs,
         _epoch_number as u32,
@@ -1808,7 +1792,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // used, but still needs to have
     // an argument slot
     _class: JClass,
-    _proving_system: JObject,
     _bt_list: jobjectArray,
     _epoch_number: jint,
     _end_cumulative_sc_tx_comm_tree_root: JObject,
@@ -1822,20 +1805,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _check_vk: jboolean,
 ) -> jboolean
 {
-    // Extract proving system type
-    let proving_system = _env
-        .call_method(_proving_system, "ordinal", "()I", &[])
-        .expect("Should be able to call ordinal() on ProvingSystem enum")
-        .i()
-        .unwrap() as usize;
-
-    let proving_system = match proving_system {
-        0 => ProvingSystem::Undefined,
-        1 => ProvingSystem::Darlin,
-        2 => ProvingSystem::CoboundaryMarlin,
-        _ => unreachable!()
-    };
-
     //Extract backward transfers
     let mut bt_list = vec![];
 
@@ -1900,7 +1869,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //Verify proof
     match verify_naive_threshold_sig_proof(
-        proving_system,
         constant,
         _epoch_number as u32,
         end_cumulative_sc_tx_comm_tree_root,

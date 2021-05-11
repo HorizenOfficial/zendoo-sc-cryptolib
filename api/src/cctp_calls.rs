@@ -1,6 +1,6 @@
 use algebra::{
     ProjectiveCurve, AffineCurve,
-    ToConstraintField, UniformRand, serialize::*,
+    ToConstraintField, UniformRand,
 };
 use primitives::{crh::{
     FieldBasedHash,
@@ -23,18 +23,17 @@ use rand_xorshift::XorShiftRng;
 use lazy_static::*;
 
 use cctp_primitives::{
-    proving_system::{
-        verifier::{
-            certificate::{CertificateProofUserInputs, ZendooCertProofVerifier},
-            RawVerifierData, ZendooVerifier,
-        },
-        error::ProvingSystemError,
+    proving_system::verifier::{
+            certificate::CertificateProofUserInputs, verify_zendoo_proof
     },
     utils::{
-        proving_system::ProvingSystemUtils, get_bt_merkle_root,
+        proving_system::{
+            ProvingSystemUtils, ZendooProof, ZendooVerifierKey, ZendooProverKey
+        },
+        get_bt_merkle_root,
         serialization::*,
         commitment_tree::ByteAccumulator,
-        data_structures::{ProvingSystem, BackwardTransfer}
+        data_structures::BackwardTransfer
     },
 };
 
@@ -128,7 +127,6 @@ pub fn compute_msg_to_sign(
 }
 
 pub fn create_naive_threshold_sig_proof(
-    proving_system:                      ProvingSystem,
     pks:                                 &[SchnorrPk],
     mut sigs:                            Vec<Option<SchnorrSig>>,
     epoch_number:                        u32,
@@ -182,41 +180,32 @@ pub fn create_naive_threshold_sig_proof(
         *end_cumulative_sc_tx_comm_tree_root, mr_bt, ft_min_amount, btr_fee, max_pks,
     );
 
-    let proof = match proving_system {
-        ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
-        ProvingSystem::Darlin => {
-            // Read proving key
-            let pk: DarlinProverKey = if enforce_membership {
-                read_from_file_checked(proving_key_path)
-            } else {
-                read_from_file(proving_key_path)
-            }?;
+    let pk: ZendooProverKey = if enforce_membership {
+        read_from_file_checked(proving_key_path)
+    } else {
+        read_from_file(proving_key_path)
+    }?;
 
+    let proof = match pk {
+        ZendooProverKey::Darlin(pk) => {
             // Call prover
             let rng = &mut OsRng;
-            serialize_to_buffer(&Darlin::create_proof(
+            serialize_to_buffer(&ZendooProof::Darlin(Darlin::create_proof(
                 c,
                 &pk,
                 zk,
                 if zk { Some(rng) } else { None },
-            )?)?
+            )?))?
         },
-        ProvingSystem::CoboundaryMarlin => {
-            // Read proving key
-            let pk: CoboundaryMarlinProverKey = if enforce_membership {
-                read_from_file_checked(proving_key_path)
-            } else {
-                read_from_file(proving_key_path)
-            }?;
-
+        ZendooProverKey::CoboundaryMarlin(pk) => {
             // Call prover
             let rng = &mut OsRng;
-            serialize_to_buffer(&CoboundaryMarlin::create_proof(
+            serialize_to_buffer(&ZendooProof::CoboundaryMarlin(CoboundaryMarlin::create_proof(
                 c,
                 &pk,
                 zk,
                 if zk { Some(rng) } else { None },
-            )?)?
+            )?))?
         },
     };
     Ok((proof, valid_signatures))
@@ -224,36 +213,19 @@ pub fn create_naive_threshold_sig_proof(
 
 
 pub fn verify_naive_threshold_sig_proof(
-    proving_system:                      ProvingSystem,
-    constant:                            &FieldElement,
-    epoch_number:                        u32,
-    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
-    btr_fee:                             u64,
-    ft_min_amount:                       u64,
-    bt_list:                             Vec<BackwardTransfer>,
-    valid_sigs:                          u64,
-    proof:                               Vec<u8>,
-    check_proof:                         bool,
-    vk_path:                             &Path,
-    check_vk:                            bool
+    constant:                                   &FieldElement,
+    epoch_number:                               u32,
+    end_cumulative_sc_tx_commitment_tree_root:  &FieldElement,
+    btr_fee:                                    u64,
+    ft_min_amount:                              u64,
+    bt_list:                                    Vec<BackwardTransfer>,
+    valid_sigs:                                 u64,
+    proof:                                      Vec<u8>,
+    check_proof:                                bool,
+    vk_path:                                    &Path,
+    check_vk:                                   bool
 ) -> Result<bool, Error>
 {
-    // TODO: These copies here are wasted, since most of the CertificateProofUserInputs are
-    //       already passed around in their deserialized form. Instead this representation is
-    //       useful in zendoo-mc-cryptolib. We should consider adding a "non raw" representation
-    //       in zendoo-cctp-lib to save some copies.
-    let constant = &{
-        let mut buffer = [0u8; FIELD_SIZE];
-        CanonicalSerialize::serialize(constant, &mut buffer[..])?;
-        buffer
-    };
-
-    let end_cumulative_sc_tx_commitment_tree_root = &{
-        let mut buffer = [0u8; FIELD_SIZE];
-        CanonicalSerialize::serialize(end_cumulative_sc_tx_comm_tree_root, &mut buffer[..])?;
-        buffer
-    };
-
     let ins = CertificateProofUserInputs {
         constant: Some(constant),
         epoch_number,
@@ -265,23 +237,11 @@ pub fn verify_naive_threshold_sig_proof(
         ft_min_amount
     };
 
-    // Read verifier key
-    let vk: Vec<u8> = std::fs::read(vk_path)?;
-
-    let raw_verifier_data = match proving_system {
-        ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
-        ProvingSystem::Darlin => RawVerifierData::Darlin {proof, vk},
-        ProvingSystem::CoboundaryMarlin => RawVerifierData::CoboundaryMarlin {proof, vk},
-    };
+    let vk: ZendooVerifierKey = if check_vk { read_from_file_checked(vk_path) } else { read_from_file(vk_path) }?;
+    let proof: ZendooProof = if check_proof { deserialize_from_buffer_checked(proof.as_slice()) } else { deserialize_from_buffer(proof.as_slice()) }?;
 
     let rng = &mut OsRng;
-    let is_verified = ZendooCertProofVerifier::verify_proof(
-        &ins,
-        raw_verifier_data,
-        check_proof,
-        check_vk,
-        Some(rng)
-    )?;
+    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))?;
 
     Ok(is_verified)
 }
@@ -445,7 +405,6 @@ mod test {
 
         //Create and serialize proof
         let (proof, quality) = create_naive_threshold_sig_proof(
-            ProvingSystem::CoboundaryMarlin,
             pks.as_slice(),
             sigs,
             epoch_number,
@@ -462,7 +421,6 @@ mod test {
 
         //Verify proof
         assert!(verify_naive_threshold_sig_proof(
-            ProvingSystem::CoboundaryMarlin,
             &constant,
             epoch_number,
             &end_cumulative_sc_tx_comm_tree_root_f,
@@ -479,7 +437,6 @@ mod test {
 
         //Generate wrong public inputs by changing quality and assert proof verification doesn't pass
         assert!(!verify_naive_threshold_sig_proof(
-            ProvingSystem::CoboundaryMarlin,
             &constant,
             epoch_number,
             &end_cumulative_sc_tx_comm_tree_root_f,

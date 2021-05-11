@@ -296,7 +296,7 @@ public class NaiveThresholdSigProofTest {
     private void createAndVerifyProof() {
 
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
-            psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
+            btList, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
             snarkPkPath, false, false
         );
@@ -310,7 +310,7 @@ public class NaiveThresholdSigProofTest {
         assertNotNull("Constant creation must be successfull", constant);
 
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(
-            psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
+            btList, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, constant, quality, proof, true, snarkVkPath, true
         );
 
@@ -318,7 +318,7 @@ public class NaiveThresholdSigProofTest {
 
         quality = threshold - 1;
         isProofVerified = NaiveThresholdSigProof.verifyProof(
-            psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
+            btList, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, constant, quality, proof, true, snarkVkPath, true
         );
 
