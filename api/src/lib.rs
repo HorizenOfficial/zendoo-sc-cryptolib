@@ -16,6 +16,9 @@ use std::{
 mod cctp_calls;
 use cctp_calls::*;
 
+mod bitvector_smt;
+use bitvector_smt::*;
+
 fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
     assert!(!input.is_null());
     unsafe { &*input }

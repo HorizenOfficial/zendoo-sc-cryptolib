@@ -7,8 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development_tmp"}
-primitives = {version = "0.1.0", features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development_tmp"}
+algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "smt_with_tweedle"}
+primitives = {version = "0.1.0", features = ["tweedle", "smt"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "smt_with_tweedle"}
 
 cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "darlin" }
 
