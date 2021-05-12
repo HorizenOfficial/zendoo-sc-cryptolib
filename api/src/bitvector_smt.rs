@@ -1,6 +1,7 @@
 use primitives::{BigMerkleTree, Coord, FieldBasedBinaryMHTPath, FieldBasedMerkleTreeParameters, FieldBasedMerkleTreePrecomputedZeroConstants, BatchFieldBasedMerkleTreeParameters};
-use algebra::{ToBits, FromBits, FpParameters, Field};
+use algebra::{ToBits, FromBits, FpParameters, ToConstraintField, Field};
 use std::path::Path;
+use bit_vec::BitVec;
 
 // Others
 pub type Error = Box<dyn std::error::Error>;
@@ -16,6 +17,7 @@ use primitives::{
     TweedleFrBatchPoseidonHash as FieldBatchHash,
     merkle_tree::tweedle_dee::TWEEDLE_DEE_MHT_POSEIDON_PARAMETERS as MHT_PARAMETERS
 };
+
 //--------------------------------------------------------------------------------------------------
 // Parameters for a Field-based Merkle Tree
 //--------------------------------------------------------------------------------------------------
@@ -131,8 +133,6 @@ fn get_bvt_leaf_by_index(tree: &BitvectorSMT, leaf_index: u64) -> Option<FieldEl
 }
 
 fn modify_bit_in_bvt(tree: &mut BitvectorSMT, bit_position: u64, bit_value: bool){
-    use algebra::Field;
-
     let updated_leaf = FieldElement::read_bits(
         {
             let mut leaf_bits =
@@ -159,8 +159,8 @@ fn modify_bit_in_bvt(tree: &mut BitvectorSMT, bit_position: u64, bit_value: bool
 }
 
 fn serialize_bvt(tree: &BitvectorSMT) -> Vec<u8> {
-    let mut bits = Vec::<bool>::new();
-    let leaves_num = 1usize << tree.height();
+    let mut bits = BitVec::new();
+    let leaves_num = pow2(tree.height());
 
     // Read sequentially all bits from BVT in BigEndian ordering
     for pos in 0.. leaves_num {
@@ -169,23 +169,13 @@ fn serialize_bvt(tree: &BitvectorSMT) -> Vec<u8> {
                 .skip(BVT_LEAF_START_OFFSET as usize) // take only the BV-related bits of a current leaf
                 .for_each(|bit|bits.push(*bit));
         } else { // if a leaf doesn't exist assume it contains all zero bits
-            bits.extend(&vec![false; BVT_LEAF_SIZE as usize])
+            bits.grow(BVT_LEAF_SIZE as usize, false)
         }
     }
-
-    // Splitting a whole bits-sequence into bytes
-    bits.chunks(8).map(
-        |bits_chunk| byte_from_bits(bits_chunk)
-    ).collect()
+    bits.to_bytes()
 }
 
 fn initialize_bvt(tree: &mut BitvectorSMT, bvt_bytes: Vec<u8>) -> Result<(), Error>{
-    // Converts byte-array into a sequence of FieldElement-leaves
-    fn bytes_to_leaves(bytes: &[u8], bvt_bit_len: usize) -> Result<Vec<FieldElement>, Error> {
-        // Removing padding zeroes by taking bvt_bit_len bits
-        bits_to_leaves(&bytes_to_bits(bytes).into_iter().take(bvt_bit_len).collect())
-    }
-
     // Number of leaves in a tree of corresponding to its height
     let leaves_num = pow2(tree.height());
     // Bit-size of a BV which is contained in a given tree
@@ -196,7 +186,12 @@ fn initialize_bvt(tree: &mut BitvectorSMT, bvt_bytes: Vec<u8>) -> Result<(), Err
     // Checking size of a given byte-array
     if bvt_bytes.len() * 8 == (bvt_bit_len + padding) as usize {
         // Converting byte-array into a sequence of FieldElement-leaves
-        let bvt_leaves = bytes_to_leaves(bvt_bytes.as_slice(), bvt_bit_len)?;
+        let bvt_leaves =
+            BitVec::from_bytes(bvt_bytes.as_slice())
+                .into_iter()
+                .take(bvt_bit_len) // removing padding zeroes by taking bvt_bit_len bits
+                .collect::<Vec<_>>()
+                .to_field_elements()?;
         // Sequentially inserting leaves into a tree
         for i in 0.. leaves_num {
             tree.insert_leaf(Coord::new(0, i), bvt_leaves[i]);
@@ -207,49 +202,11 @@ fn initialize_bvt(tree: &mut BitvectorSMT, bvt_bytes: Vec<u8>) -> Result<(), Err
     }
 }
 
-// Builds byte from a BigEndian-ordered sequence of bits
-fn byte_from_bits(bits: &[bool]) -> u8 {
-    let mut byte = 0u8;
-    bits.iter().enumerate().for_each(|(i, bit)| if *bit {byte |= 0x80 >> i});
-    byte
-}
-
-// Serializes byte into BigEndian-ordered bits
-fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
-    let mut bits = Vec::new();
-    for byte in bytes {
-        for i in 0..8 {
-            bits.push(((0x80 >> i) & *byte) != 0)
-        }
-    }
-    bits
-}
-
-// Slices the whole bits sequence into BVT_LEAF_SIZE-d chunks and creates FieldElement from an each chunk
-fn bits_to_leaves(bits: &Vec<bool>) -> Result<Vec<FieldElement>, Error> {
-    // bits.len should be a strict multiple of BVT_LEAF_SIZE
-    if bits.len() % BVT_LEAF_SIZE as usize == 0 {
-        let leaves: Vec<FieldElement> = bits.chunks(BVT_LEAF_SIZE as usize)
-            .flat_map(|leaf_bits|{ // using flat_map to handle possible Error returned by FieldElement::read_bits
-                // Initializing FieldElement-leaf from BigEndian-ordered bits
-                FieldElement::read_bits(leaf_bits.to_vec())
-            }).collect();
-        // Checking that all leaves are built successfully
-        if leaves.len() == bits.len() / BVT_LEAF_SIZE as usize {
-            Ok(leaves)
-        } else {
-            Err("Insufficient number of leaves are built from the given bits".into())
-        }
-    } else {
-        Err("bits.len() should be a multiple of BVT_LEAF_SIZE".into())
-    }
-}
 
 #[cfg(test)]
 mod test {
     use algebra::{ToBits, ToBytes, to_bytes};
     use crate::bitvector_smt::{BVT_LEAF_SIZE, BVT_LEAF_START_OFFSET, get_bvt, serialize_bvt, pow2, set_bvt_bit, initialize_bvt, set_bvt_persistency, get_bvt_leaf, get_bvt_leaf_by_index, get_bvt_path, get_bvt_bit, reset_bvt_bit, Error};
-    use cctp_primitives::type_mapping::FieldElement;
 
     fn sample_bitvector(height: usize, bytes_fname: &str, root_fname: &str) -> Result<(), Error> {
         let mut bvt = get_bvt(height, "/tmp/bvt_db_serialization1")?;

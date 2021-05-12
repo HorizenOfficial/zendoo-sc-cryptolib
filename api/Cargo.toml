@@ -24,6 +24,7 @@ radix_trie = "0.1"
 rand = { version = "0.7" }
 rand_xorshift = { version = "0.2" }
 blake2 = { version = "0.8", default-features = false }
+bit-vec = "0.6"
 
 [features]
 asm = ["algebra/llvm_asm"]
