@@ -66,6 +66,10 @@ public class FieldElement implements AutoCloseable {
         }
     }
 
+    public boolean nonEmpty(){
+        return fieldElementPointer != 0;
+    }
+
     private native boolean nativeEquals(FieldElement fe);
 
     @Override

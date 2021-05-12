@@ -5,7 +5,7 @@ use algebra::{fields::{
     mnt6753::{
         G1Projective as GroupProjective, G1Affine as GroupAffine
     },
-}, FromBytes, ToBytes, BigInteger768, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits};
+}, FromBytes, ToBytes, BigInteger768, ProjectiveCurve, AffineCurve, ToConstraintField, UniformRand, ToBits, FpParameters};
 use primitives::{crh::{
     poseidon::{
         MNT4PoseidonHash,
@@ -46,6 +46,7 @@ use std::{
     fs::File, io::Result as IoResult, path::Path
 };
 use lazy_static::*;
+use algebra::fields::mnt6753::FqParameters;
 
 pub type FieldElement = Fr;
 
@@ -551,7 +552,7 @@ pub fn get_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>{
     }
 }
 
-fn new_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error> {
+pub fn new_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error> {
     match GingerSMT::new(
         height,
         true,
@@ -562,7 +563,7 @@ fn new_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error> {
     }
 }
 
-fn restore_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>
+pub fn restore_ginger_smt(height: usize, db_path: &str) -> Result<GingerSMT, Error>
 {
     match GingerSMT::load_batch::<GingerMerkleTreeParameters>(
         height,
@@ -597,6 +598,10 @@ pub fn add_leaf_to_ginger_smt(tree: &mut GingerSMT, leaf: &FieldElement, positio
 
 pub fn remove_leaf_from_ginger_smt(tree: &mut GingerSMT, position: u64){
     tree.remove_leaf(Coord::new(0, position as usize));
+}
+
+pub fn get_leaf_from_ginger_smt(tree: &GingerSMT, position: u64) -> Option<FieldElement> {
+    tree.get_leaf(Coord::new(0, position as usize))
 }
 
 pub fn get_ginger_smt_root(tree: &GingerSMT) -> FieldElement {
@@ -683,6 +688,7 @@ pub fn get_lazy_ginger_smt_root(tree: &LazyGingerSMT) -> FieldElement {
 pub fn get_lazy_ginger_smt_path(tree: &mut LazyGingerSMT, leaf_position: u64) -> GingerMHTPath {
     tree.get_merkle_path(Coord::new(0, leaf_position as usize))
 }
+
 
 #[cfg(test)]
 mod test {
