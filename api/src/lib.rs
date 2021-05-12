@@ -1,13 +1,15 @@
 extern crate jni;
 
 use algebra::{SemanticallyValid, serialize::*};
-use demo_circuit::{type_mapping::*, get_instance_for_setup};
-use cctp_primitives::utils::{
-    serialization::*,
-    poseidon_hash::*,
-    mht::*,
-    proving_system::*,
-    data_structures::*,
+use demo_circuit::{type_mapping::*, get_instance_for_setup, generate_circuit_keypair};
+use cctp_primitives::{
+    proving_system::{ProvingSystem, init_dlog_keys},
+    utils::{
+        serialization::*,
+        poseidon_hash::*,
+        mht::*,
+        data_structures::*,
+    }
 };
 use std::{
     any::type_name, path::Path,

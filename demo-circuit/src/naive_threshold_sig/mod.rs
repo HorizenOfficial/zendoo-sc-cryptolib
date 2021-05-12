@@ -338,11 +338,11 @@ mod test {
     };
     use rand::{Rng, rngs::OsRng};
     use cctp_primitives::{
-        proving_system::init::load_g1_committer_key,
-        utils::proving_system::ProvingSystemUtils,
+        proving_system::init::{
+            load_g1_committer_key, get_g1_committer_key
+        },
+        utils::commitment_tree::ByteAccumulator
     };
-    use cctp_primitives::proving_system::init::get_g1_committer_key;
-    use cctp_primitives::utils::commitment_tree::ByteAccumulator;
 
     type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, G2Projective, FieldHash>;
 
@@ -351,7 +351,7 @@ mod test {
         valid_sigs:               usize,
         threshold:                usize,
         wrong_pks_threshold_hash: bool,
-        wrong_cert_data_hash: bool,
+        wrong_cert_data_hash:     bool,
         index_pk:                 CoboundaryMarlinProverKey,
         zk:                       bool,
     ) -> Result<(CoboundaryMarlinProof, Vec<FieldElement>), Error> {
@@ -455,10 +455,13 @@ mod test {
 
         //Return proof and public inputs if success
         let rng = &mut OsRng;
-        match CoboundaryMarlin::create_proof(c, &index_pk, zk, if zk { Some(rng) } else { None }) {
+        let ck_g1 = get_g1_committer_key().unwrap();
+        match CoboundaryMarlin::prove(
+            &index_pk, ck_g1.as_ref().unwrap(), c, zk, if zk { Some(rng) } else { None }
+        ) {
             Ok(proof) => {
                 let public_inputs = vec![pks_threshold_hash, cert_data_hash];
-                Ok((proof, public_inputs))
+                Ok((MarlinProof(proof), public_inputs))
             }
             Err(e) => Err(Box::new(e))
         }
@@ -476,7 +479,7 @@ mod test {
         let ck = get_g1_committer_key().unwrap();
         let circ = get_instance_for_setup(n);
 
-        let params = CoboundaryMarlin::setup(circ).unwrap();
+        let params = CoboundaryMarlin::index(ck.as_ref().unwrap(), circ).unwrap();
 
         //Generate proof with correct witnesses and v > t
         let (proof, public_inputs) =

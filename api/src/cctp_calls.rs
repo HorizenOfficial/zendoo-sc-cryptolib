@@ -23,13 +23,13 @@ use rand_xorshift::XorShiftRng;
 use lazy_static::*;
 
 use cctp_primitives::{
-    proving_system::verifier::{
+    proving_system::{
+        verifier::{
             certificate::CertificateProofUserInputs, verify_zendoo_proof
+        },
+        ZendooProof, ZendooVerifierKey, ZendooProverKey,
     },
     utils::{
-        proving_system::{
-            ProvingSystemUtils, ZendooProof, ZendooVerifierKey, ZendooProverKey
-        },
         get_bt_merkle_root,
         serialization::*,
         commitment_tree::ByteAccumulator,
@@ -38,6 +38,7 @@ use cctp_primitives::{
 };
 
 use std::path::Path;
+use cctp_primitives::proving_system::init::get_g1_committer_key;
 
 //*******************************Generic functions**********************************************
 
@@ -187,25 +188,18 @@ pub fn create_naive_threshold_sig_proof(
     }?;
 
     let proof = match pk {
-        ZendooProverKey::Darlin(pk) => {
-            // Call prover
-            let rng = &mut OsRng;
-            serialize_to_buffer(&ZendooProof::Darlin(Darlin::create_proof(
-                c,
-                &pk,
-                zk,
-                if zk { Some(rng) } else { None },
-            )?))?
-        },
+        ZendooProverKey::Darlin(_) => unimplemented!(),
         ZendooProverKey::CoboundaryMarlin(pk) => {
             // Call prover
             let rng = &mut OsRng;
-            serialize_to_buffer(&ZendooProof::CoboundaryMarlin(CoboundaryMarlin::create_proof(
-                c,
+            let proof = CoboundaryMarlin::prove(
                 &pk,
+                get_g1_committer_key().unwrap().as_ref().unwrap(),
+                c,
                 zk,
                 if zk { Some(rng) } else { None },
-            )?))?
+            )?;
+            serialize_to_buffer(&ZendooProof::CoboundaryMarlin(MarlinProof(proof)))?
         },
     };
     Ok((proof, valid_signatures))
@@ -326,8 +320,10 @@ mod test {
     use rand::{RngCore, Rng};
     use algebra::Field;
     use cctp_primitives::utils::{
-        poseidon_hash::*, mht::*, proving_system::*,
+        poseidon_hash::*, mht::*
     };
+    use cctp_primitives::proving_system::init_dlog_keys;
+    use demo_circuit::generate_circuit_keypair;
 
     fn create_sample_naive_threshold_sig_circuit(
         bt_num: usize,
