@@ -1,7 +1,7 @@
 use primitives::{BigMerkleTree, Coord};
 use crate::ginger_calls::{GingerMerkleTreeParameters, Error, FieldElement, GingerMHTPath, restore_ginger_smt, new_ginger_smt};
 use algebra::fields::mnt6753::FqParameters;
-use algebra::{FpParameters, ToBits, FromBits};
+use algebra::{FpParameters, ToBits, FromBits, ToConstraintField};
 use std::path::Path;
 
 // Bitvector Sparse Merkle Tree
@@ -21,6 +21,7 @@ fn pow2(power: usize) -> usize {
 pub const BVT_LEAF_SIZE: u64 = FqParameters::CAPACITY as u64;
 pub const BVT_LEAF_SIZE_LOG2: usize = log2(BVT_LEAF_SIZE);
 const FIELD_ELEMENT_SIZE: u64 = FqParameters::MODULUS_BITS as u64;
+const BVT_LEAF_START_OFFSET: u64 = FIELD_ELEMENT_SIZE - BVT_LEAF_SIZE;
 
 pub fn get_bvt(height: usize, db_path: &str) -> Result<BitvectorSMT, Error>{
     // If at least the leaves database is available, we can restore the tree
@@ -62,10 +63,9 @@ pub fn reset_bvt_bit(tree: &mut BitvectorSMT, bit_position: u64){
 pub fn get_bvt_bit(tree: &BitvectorSMT, bit_position: u64) -> bool {
     if let Some(leaf) = get_bvt_leaf(tree, bit_position) {
         let leaf_bits= leaf.write_bits();
-        assert_eq!(BVT_LEAF_SIZE, (leaf_bits.len() - 1) as u64);
-        // BV bits are contained in reverse order: the MSB bits of a BV are at the LSB positions of a FieldElement-leaf
-        // This is to avoid usage of the bits which are over the (MODULUS_BITS - 1) size
-        leaf_bits[((FIELD_ELEMENT_SIZE - 1) - (bit_position % BVT_LEAF_SIZE)) as usize]
+        // BV bits are contained in BigEndian order: the MSB bits of a BV are at the MSB positions of a FieldElement-leaf
+        // The first BVT_LEAF_START_OFFSET bits should be skipped to avoid FieldElement value overflow
+        leaf_bits[(BVT_LEAF_START_OFFSET + (bit_position % BVT_LEAF_SIZE)) as usize]
     } else { // leaf doesn't even exist, so the bit isn't set
         false
     }
@@ -86,10 +86,9 @@ fn modify_bit_in_bvt(tree: &mut BitvectorSMT, bit_position: u64, bit_value: bool
                 } else { // leaf doesn't exist, so create an empty leaf
                     FieldElement::zero().write_bits()
                 };
-            assert_eq!(BVT_LEAF_SIZE, (leaf_bits.len() - 1) as u64);
-            // BV bits are contained in reverse order: the MSB bits of a BV are at the LSB positions of a FieldElement-leaf
-            // This is to avoid usage of the bits which are over the (MODULUS_BITS - 1) size
-            leaf_bits[((FIELD_ELEMENT_SIZE - 1) - (bit_position % BVT_LEAF_SIZE)) as usize] = bit_value;
+            // BV bits are contained in BigEndian order: the MSB bits of a BV are at the MSB positions of a FieldElement-leaf
+            // The first BVT_LEAF_START_OFFSET bits should be skipped to avoid FieldElement value overflow
+            leaf_bits[(BVT_LEAF_START_OFFSET + (bit_position % BVT_LEAF_SIZE)) as usize] = bit_value;
             leaf_bits
         }
     ).unwrap();
@@ -99,7 +98,7 @@ fn modify_bit_in_bvt(tree: &mut BitvectorSMT, bit_position: u64, bit_value: bool
         // Write an updated leaf value
         tree.insert_leaf(Coord::new(0, leaf_index), updated_leaf);
     } else {
-        // Don't store empty leafs to optimize SMT size
+        // Don't store empty leaves to optimize SMT size
         tree.remove_leaf(Coord::new(0, leaf_index))
     }
 }
@@ -111,9 +110,8 @@ fn serialize_bvt(tree: &BitvectorSMT) -> Vec<u8> {
     // Read sequentially all bits from BVT in BigEndian ordering
     for pos in 0.. leaves_num {
         if let Some(leaf) = tree.get_leaf(Coord::new(0, pos)){
-            leaf.write_bits().iter() // the LSB bits of a BV are at the MSB positions of the leaf_bits
-                .rev()// re-ordering into BigEndian
-                .take(BVT_LEAF_SIZE as usize) // take only the BV-related bits of a current leaf
+            leaf.write_bits().iter() // the MSB bits of a BV are at the MSB positions of the leaf_bits
+                .skip(BVT_LEAF_START_OFFSET as usize) // take only the BV-related bits of a current leaf
                 .for_each(|bit|bits.push(*bit));
         } else { // if a leaf doesn't exist assume it contains all zero bits
             bits.extend(&vec![false; BVT_LEAF_SIZE as usize])
@@ -147,8 +145,8 @@ fn initialize_bvt(tree: &mut BitvectorSMT, bvt_bytes: Vec<u8>) -> Result<(), Err
             if bits.len() % BVT_LEAF_SIZE as usize == 0 {
                 let leaves: Vec<FieldElement> = bits.chunks(BVT_LEAF_SIZE as usize)
                     .flat_map(|leaf_bits|{ // using flat_map to handle possible Error returned by FieldElement::read_bits
-                        // Initializing FieldElement-leaf with re-ordered into LittleEndian bits of BV
-                        FieldElement::read_bits(leaf_bits.to_vec().into_iter().rev().collect())
+                        // Initializing FieldElement-leaf from BigEndian-ordered bits
+                        FieldElement::read_bits(leaf_bits.to_vec())
                     }).collect();
                 // Checking that all leaves are built successfully
                 if leaves.len() == bits.len() / BVT_LEAF_SIZE as usize {
@@ -187,7 +185,7 @@ fn initialize_bvt(tree: &mut BitvectorSMT, bvt_bytes: Vec<u8>) -> Result<(), Err
 
 #[cfg(test)]
 mod test {
-    use crate::zenbox_smt::bitvector_smt::{BVT_LEAF_SIZE, get_bvt, set_bvt_bit, get_bvt_bit, reset_bvt_bit, get_bvt_leaf_by_index, get_bvt_leaf, get_bvt_path, set_bvt_persistency, serialize_bvt, initialize_bvt, pow2};
+    use crate::zenbox_smt::bitvector_smt::{BVT_LEAF_SIZE, get_bvt, set_bvt_bit, get_bvt_bit, reset_bvt_bit, get_bvt_leaf_by_index, get_bvt_leaf, get_bvt_path, set_bvt_persistency, serialize_bvt, initialize_bvt, pow2, BVT_LEAF_START_OFFSET};
     use algebra::ToBits;
 
     #[test]
@@ -246,7 +244,7 @@ mod test {
 
         // To make test run not too long the number of tested bits per leaf is at step = 47 times lesser
         let step = (BVT_LEAF_SIZE / 16) as usize;
-        // Minimal step is 2. The fully filled leafs will be tested with such a step but it takes around 12 minutes to run this test
+        // Minimal step is 2. The fully filled leaves will be tested with such a step but it takes around 12 minutes to run this test
         // let step = 2;
         assert!(step >= 2);
 
@@ -276,7 +274,7 @@ mod test {
             }
         }
 
-        // Reseting the previously set bits in the first bitvector
+        // Resetting the previously set bits in the first bitvector
         for pos in 0..BVT_LEAF_SIZE {
             if bit_by_position(pos) {
                 reset_bvt_bit(&mut bvt, pos);
@@ -302,8 +300,8 @@ mod test {
         }
         // Low-level check: parsing directly the leaf containing the second bitvector
         let second_leaf_bits = get_bvt_leaf_by_index(&bvt, 1).unwrap().write_bits();
-        // Reversing bits due to a FieldElement is deserialized in the BigEndian format
-        let second_bitvector: Vec<bool> = second_leaf_bits.iter().rev().take(BVT_LEAF_SIZE as usize).map(|b|*b).collect();
+        // FieldElement is deserialized in the BigEndian format; Skipping the bits which are non-related to BVT-leaf
+        let second_bitvector: Vec<bool> = second_leaf_bits.iter().skip(BVT_LEAF_START_OFFSET as usize).map(|b|*b).collect();
         for pos in 0..BVT_LEAF_SIZE {
             assert_eq!(second_bitvector[pos as usize], bit_by_position(pos));
         }
@@ -314,13 +312,13 @@ mod test {
         assert_eq!(get_bvt_leaf(&bvt, second_leaf_lsb_pos).unwrap(),
                    get_bvt_leaf_by_index(&bvt, 1).unwrap());
 
-        // Checking that Merkle Paths are the same for bits from the same leafs
+        // Checking that Merkle Paths are the same for bits from the same leaves
         assert_eq!(get_bvt_path(&mut bvt, 0),
                    get_bvt_path(&mut bvt, BVT_LEAF_SIZE - 1));
         assert_eq!(get_bvt_path(&mut bvt, second_leaf_lsb_pos),
                    get_bvt_path(&mut bvt, second_leaf_lsb_pos + BVT_LEAF_SIZE - 1));
 
-        // Checking that Merkle Paths are different for bits from different leafs
+        // Checking that Merkle Paths are different for bits from different leaves
         assert_ne!(get_bvt_path(&mut bvt, BVT_LEAF_SIZE - 1),
                    get_bvt_path(&mut bvt, BVT_LEAF_SIZE));
 
