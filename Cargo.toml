@@ -1,7 +1,7 @@
 [workspace]
 
 members = [
-    "demo-circuit",
+    #"demo-circuit",
     #"ouroboros",
     "api"
 ]
@@ -17,7 +17,7 @@ opt-level = 3
 panic = "unwind"
 
 [profile.test]
-opt-level = 3
+opt-level = 0
 lto = "thin"
 incremental = true
 debug-assertions = false

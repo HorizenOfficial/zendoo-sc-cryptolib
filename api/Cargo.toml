@@ -7,13 +7,15 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "smt_with_tweedle"}
-primitives = {version = "0.1.0", features = ["tweedle", "smt"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "smt_with_tweedle"}
+#algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "smt_with_tweedle"}
+#primitives = {version = "0.1.0", features = ["tweedle", "smt"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "smt_with_tweedle"}
+algebra = { path = "../../ginger-lib/algebra", features = ["tweedle"]  }
+primitives = { path = "../../ginger-lib/primitives", features = ["tweedle", "smt"] }
 
 cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "darlin" }
 
 #ouroboros = {path = "../ouroboros"}
-demo-circuit = {path = "../demo-circuit"}
+#demo-circuit = {path = "../demo-circuit"}
 
 jni = "0.6.1"
 derivative = "1"
