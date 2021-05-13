@@ -24,10 +24,12 @@ use lazy_static::*;
 
 use cctp_primitives::{
     proving_system::{
+        init::get_g1_committer_key,
         verifier::{
             certificate::CertificateProofUserInputs, verify_zendoo_proof
         },
-        ZendooProof, ZendooVerifierKey, ZendooProverKey,
+        error::ProvingSystemError,
+        ZendooProof, ZendooVerifierKey, ZendooProverKey, ProvingSystem
     },
     utils::{
         get_bt_merkle_root,
@@ -38,7 +40,6 @@ use cctp_primitives::{
 };
 
 use std::path::Path;
-use cctp_primitives::proving_system::init::get_g1_committer_key;
 
 //*******************************Generic functions**********************************************
 
@@ -128,6 +129,7 @@ pub fn compute_msg_to_sign(
 }
 
 pub fn create_naive_threshold_sig_proof(
+    proving_system:                      ProvingSystem,
     pks:                                 &[SchnorrPk],
     mut sigs:                            Vec<Option<SchnorrSig>>,
     epoch_number:                        u32,
@@ -181,6 +183,13 @@ pub fn create_naive_threshold_sig_proof(
         *end_cumulative_sc_tx_comm_tree_root, mr_bt, ft_min_amount, btr_fee, max_pks,
     );
 
+    // Check that the proving system type of the pk is the expected one
+    // (as optimization, we do it before deserializing the whole key)
+    let pk_ps_type = read_from_file::<ProvingSystem>(proving_key_path)?;
+    if pk_ps_type != proving_system {
+        Err(ProvingSystemError::ProvingSystemMismatch)?
+    }
+
     let pk: ZendooProverKey = if enforce_membership {
         read_from_file_checked(proving_key_path)
     } else {
@@ -207,6 +216,7 @@ pub fn create_naive_threshold_sig_proof(
 
 
 pub fn verify_naive_threshold_sig_proof(
+    proving_system:                             ProvingSystem,
     constant:                                   &FieldElement,
     epoch_number:                               u32,
     end_cumulative_sc_tx_commitment_tree_root:  &FieldElement,
@@ -231,7 +241,20 @@ pub fn verify_naive_threshold_sig_proof(
         ft_min_amount
     };
 
+    // Check that the proving system type of the vk is the expected one
+    // (as optimization, we do it before deserializing the whole key)
+    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path)?;
+    if vk_ps_type != proving_system {
+        Err(ProvingSystemError::ProvingSystemMismatch)?
+    }
     let vk: ZendooVerifierKey = if check_vk { read_from_file_checked(vk_path) } else { read_from_file(vk_path) }?;
+
+    // Check that the proving system type of the proof is the expected one
+    // (as optimization, we do it before deserializing the whole proof)
+    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1])?;
+    if proof_ps_type != proving_system {
+        Err(ProvingSystemError::ProvingSystemMismatch)?
+    }
     let proof: ZendooProof = if check_proof { deserialize_from_buffer_checked(proof.as_slice()) } else { deserialize_from_buffer(proof.as_slice()) }?;
 
     let rng = &mut OsRng;
@@ -326,9 +349,10 @@ mod test {
     use demo_circuit::generate_circuit_keypair;
 
     fn create_sample_naive_threshold_sig_circuit(
-        bt_num: usize,
-        pk_path: &Path,
-        vk_path: &Path,
+        ps_type:    ProvingSystem,
+        bt_num:     usize,
+        pk_path:    &Path,
+        vk_path:    &Path,
         proof_path: &Path,
     ) {
         //assume to have 3 pks, threshold = 2
@@ -401,6 +425,7 @@ mod test {
 
         //Create and serialize proof
         let (proof, quality) = create_naive_threshold_sig_proof(
+            ps_type,
             pks.as_slice(),
             sigs,
             epoch_number,
@@ -417,6 +442,7 @@ mod test {
 
         //Verify proof
         assert!(verify_naive_threshold_sig_proof(
+            ps_type,
             &constant,
             epoch_number,
             &end_cumulative_sc_tx_comm_tree_root_f,
@@ -433,6 +459,7 @@ mod test {
 
         //Generate wrong public inputs by changing quality and assert proof verification doesn't pass
         assert!(!verify_naive_threshold_sig_proof(
+            ps_type,
             &constant,
             epoch_number,
             &end_cumulative_sc_tx_comm_tree_root_f,
@@ -450,6 +477,7 @@ mod test {
     #[test]
     fn sample_calls_naive_threshold_sig_circuit() {
         let tmp_dir = std::env::temp_dir();
+        let ps_type = ProvingSystem::CoboundaryMarlin;
 
         let mut g1_ck_path = tmp_dir.clone();
         g1_ck_path.push("ck_g1");
@@ -458,7 +486,7 @@ mod test {
         g2_ck_path.push("ck_g2");
 
         init_dlog_keys(
-            ProvingSystem::CoboundaryMarlin,
+            ps_type,
             1 << 14,
             &g1_ck_path,
             &g2_ck_path
@@ -475,7 +503,7 @@ mod test {
         let mut proof_path = tmp_dir.clone();
         proof_path.push("sample_proof");
 
-        create_sample_naive_threshold_sig_circuit(10, &pk_path, &vk_path, &proof_path);
+        create_sample_naive_threshold_sig_circuit(ps_type, 10, &pk_path, &vk_path, &proof_path);
 
         println!("****************Without BWT*******************");
 
@@ -488,7 +516,7 @@ mod test {
         let mut proof_path_no_bwt = tmp_dir.clone();
         proof_path_no_bwt.push("sample_proof_no_bwt");
 
-        create_sample_naive_threshold_sig_circuit(0, &pk_path_no_bwt, &vk_path_no_bwt, &proof_path_no_bwt);
+        create_sample_naive_threshold_sig_circuit(ps_type, 0, &pk_path_no_bwt, &vk_path_no_bwt, &proof_path_no_bwt);
 
         println!("*************** Clean up **********************");
         std::fs::remove_file(pk_path).unwrap();

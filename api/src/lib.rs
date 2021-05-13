@@ -1550,6 +1550,93 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     return_field_element(&_env, msg)
 }
 
+fn get_proving_system_type(_env: &JNIEnv, _proving_system: JObject) -> ProvingSystem {
+
+    // Extract proving system type
+    let proving_system = _env
+        .call_method(_proving_system, "ordinal", "()I", &[])
+        .expect("Should be able to call ordinal() on ProvingSystem enum")
+        .i()
+        .unwrap() as usize;
+
+    // Convert to Rust enum
+    match proving_system {
+        0 => ProvingSystem::Undefined,
+        1 => ProvingSystem::Darlin,
+        2 => ProvingSystem::CoboundaryMarlin,
+        _ => unreachable!()
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGenerateDLogKeys(
+    _env: JNIEnv,
+    _class: JClass,
+    _proving_system: JObject,
+    _segment_size: jint,
+    _g1_key_path: JString,
+    _g2_key_path: JString,
+) -> jboolean
+{
+    // Get proving system type
+    let proving_system = get_proving_system_type(&_env, _proving_system);
+
+    // Read paths
+    let g1_key_path = _env.get_string(_g1_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    let g2_key_path = _env.get_string(_g2_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Generate DLOG keypair
+    match init_dlog_keys(
+        proving_system,
+        _segment_size as usize,
+        Path::new(g1_key_path.to_str().unwrap()),
+        Path::new(g2_key_path.to_str().unwrap()),
+    ) {
+        Ok(_) => JNI_TRUE,
+        Err(_) => JNI_FALSE,
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeSetup(
+    _env: JNIEnv,
+    _class: JClass,
+    _proving_system: JObject,
+    _max_pks: jlong,
+    _proving_key_path: JString,
+    _verification_key_path: JString,
+) -> jboolean
+{
+    // Get proving system type
+    let proving_system = get_proving_system_type(&_env, _proving_system);
+
+    // Read paths
+    let proving_key_path = _env.get_string(_proving_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    let verification_key_path = _env.get_string(_verification_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    let max_pks = _max_pks as usize;
+
+    let circ = get_instance_for_setup(max_pks);
+
+    // Generate snark keypair
+    match generate_circuit_keypair(
+        circ,
+        proving_system,
+        Path::new(proving_key_path.to_str().unwrap()),
+        Path::new(verification_key_path.to_str().unwrap())
+    ) {
+        Ok(_) => JNI_TRUE,
+        Err(_) => JNI_FALSE,
+    }
+}
+
+
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateProof(
     _env: JNIEnv,
@@ -1558,6 +1645,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // used, but still needs to have
     // an argument slot
     _class: JClass,
+    _proving_system: JObject,
     _bt_list: jobjectArray,
     _epoch_number: jint,
     _end_cumulative_sc_tx_comm_tree_root: JObject,
@@ -1571,6 +1659,9 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _zk: jboolean,
 ) -> jobject
 {
+    // Get proving system type
+    let proving_system = get_proving_system_type(&_env, _proving_system);
+
     // Extract backward transfers
     let mut bt_list = vec![];
 
@@ -1663,6 +1754,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //create proof
     let (proof, quality) = match create_naive_threshold_sig_proof(
+        proving_system,
         pks.as_slice(),
         sigs,
         _epoch_number as u32,
@@ -1697,96 +1789,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGenerateDLogKeys(
-    _env: JNIEnv,
-    _class: JClass,
-    _proving_system: JObject,
-    _segment_size: jint,
-    _g1_key_path: JString,
-    _g2_key_path: JString,
-) -> jboolean
-{
-    // Extract proving system type
-    let proving_system= _env
-        .call_method(_proving_system, "ordinal", "()I", &[])
-        .expect("Should be able to call ordinal() on ProvingSystem enum")
-        .i()
-        .unwrap() as usize;
-
-    let proving_system = match proving_system {
-        0 => ProvingSystem::Undefined,
-        1 => ProvingSystem::Darlin,
-        2 => ProvingSystem::CoboundaryMarlin,
-        _ => unreachable!()
-    };
-
-    // Read paths
-    let g1_key_path = _env.get_string(_g1_key_path)
-        .expect("Should be able to read jstring as Rust String");
-
-    let g2_key_path = _env.get_string(_g2_key_path)
-        .expect("Should be able to read jstring as Rust String");
-
-    // Generate DLOG keypair
-    match init_dlog_keys(
-        proving_system,
-        _segment_size as usize,
-        Path::new(g1_key_path.to_str().unwrap()),
-        Path::new(g2_key_path.to_str().unwrap()),
-    ) {
-        Ok(_) => JNI_TRUE,
-        Err(_) => JNI_FALSE,
-    }
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeSetup(
-    _env: JNIEnv,
-    _class: JClass,
-    _proving_system: JObject,
-    _max_pks: jlong,
-    _proving_key_path: JString,
-    _verification_key_path: JString,
-) -> jboolean
-{
-    // Extract proving system type
-    let proving_system= _env
-        .call_method(_proving_system, "ordinal", "()I", &[])
-        .expect("Should be able to call ordinal() on ProvingSystem enum")
-        .i()
-        .unwrap() as usize;
-
-    let proving_system = match proving_system {
-        0 => ProvingSystem::Undefined,
-        1 => ProvingSystem::Darlin,
-        2 => ProvingSystem::CoboundaryMarlin,
-        _ => unreachable!()
-    };
-
-    // Read paths
-    let proving_key_path = _env.get_string(_proving_key_path)
-        .expect("Should be able to read jstring as Rust String");
-
-    let verification_key_path = _env.get_string(_verification_key_path)
-        .expect("Should be able to read jstring as Rust String");
-
-    let max_pks = _max_pks as usize;
-
-    let circ = get_instance_for_setup(max_pks);
-
-    // Generate snark keypair
-    match generate_circuit_keypair(
-        circ,
-        proving_system,
-        Path::new(proving_key_path.to_str().unwrap()),
-        Path::new(verification_key_path.to_str().unwrap())
-    ) {
-        Ok(_) => JNI_TRUE,
-        Err(_) => JNI_FALSE,
-    }
-}
-
-#[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeVerifyProof(
     _env: JNIEnv,
     // this is the class that owns our
@@ -1794,6 +1796,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // used, but still needs to have
     // an argument slot
     _class: JClass,
+    _proving_system: JObject,
     _bt_list: jobjectArray,
     _epoch_number: jint,
     _end_cumulative_sc_tx_comm_tree_root: JObject,
@@ -1807,6 +1810,9 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _check_vk: jboolean,
 ) -> jboolean
 {
+    // Get proving system type
+    let proving_system = get_proving_system_type(&_env, _proving_system);
+
     //Extract backward transfers
     let mut bt_list = vec![];
 
@@ -1871,6 +1877,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //Verify proof
     match verify_naive_threshold_sig_proof(
+        proving_system,
         constant,
         _epoch_number as u32,
         end_cumulative_sc_tx_comm_tree_root,

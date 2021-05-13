@@ -63,7 +63,15 @@ public class NaiveThresholdSigProof {
             String verificationKeyPath
     );
 
+    /*
+    private static native byte[] nativeGetVerificationKeyBytes(String verificationKeyPath);
+
+    public static byte[] getVerificationKeyBytes(String verificationKeyPath) {
+        return nativeGetVerificationKeyBytes(verificationKeyPath);
+    }*/
+
     private static native CreateProofResult nativeCreateProof(
+            ProvingSystemType psType,
             BackwardTransfer[] bt,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
@@ -78,6 +86,7 @@ public class NaiveThresholdSigProof {
     );
 
     public static CreateProofResult createProof(
+            ProvingSystemType psType,
             List<BackwardTransfer> btList,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
@@ -91,7 +100,7 @@ public class NaiveThresholdSigProof {
             boolean zk
     ) {
         return nativeCreateProof(
-            btList.toArray(new BackwardTransfer[0]), epochNumber,
+            psType, btList.toArray(new BackwardTransfer[0]), epochNumber,
             endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
             schnorrSignatureList.toArray(new SchnorrSignature[0]),
             schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
@@ -100,6 +109,7 @@ public class NaiveThresholdSigProof {
     }
 
     private static native boolean nativeVerifyProof(
+            ProvingSystemType psType,
             BackwardTransfer[] btList,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
@@ -114,6 +124,7 @@ public class NaiveThresholdSigProof {
     );
 
     public static boolean verifyProof(
+            ProvingSystemType psType,
             List<BackwardTransfer> btList,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
@@ -127,7 +138,7 @@ public class NaiveThresholdSigProof {
             boolean checkVerificationKey
     ){
         return nativeVerifyProof(
-            btList.toArray(new BackwardTransfer[0]), epochNumber,
+            psType, btList.toArray(new BackwardTransfer[0]), epochNumber,
             endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
             constant, quality, proof, checkProof, verificationKeyPath,
             checkVerificationKey
