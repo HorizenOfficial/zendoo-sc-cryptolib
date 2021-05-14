@@ -4,12 +4,15 @@ import com.horizen.librustsidechains.Library;
 
 public class VRFSecretKey implements AutoCloseable
 {
-    public static final int SECRET_KEY_LENGTH = 32;
+    public static final int SECRET_KEY_LENGTH;
 
     private long secretKeyPointer;
 
+    private static native int nativeGetSecretKeySize();
+
     static {
         Library.load();
+        SECRET_KEY_LENGTH = nativeGetSecretKeySize();
     }
 
     private VRFSecretKey(long secretKeyPointer) {
@@ -17,8 +20,6 @@ public class VRFSecretKey implements AutoCloseable
             throw new IllegalArgumentException("Secret key pointer must be not null.");
         this.secretKeyPointer = secretKeyPointer;
     }
-
-    private static native int nativeGetSecretKeySize();
 
     private static native VRFSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
 
