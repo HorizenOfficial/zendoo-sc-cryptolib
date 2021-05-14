@@ -114,7 +114,7 @@ fn parse_jbyte_array_to_vec(_env: &JNIEnv, java_byte_array: &jbyteArray, length:
 }
 
 fn get_byte_array(_env: &JNIEnv, java_byte_array: &jbyteArray, buffer: &mut [u8]) {
-    let vec = _env.convert_byte_array(*java_byte_array)
+    let mut vec = _env.convert_byte_array(*java_byte_array)
         .expect("Should be able to convert to Rust array");
 
     vec.write(&mut buffer[..])
@@ -1969,8 +1969,6 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
     _tx_hash: jbyteArray,
     _out_idx: jint,
     _withdrawal_epoch_length: jint,
-    _cert_proving_system: jbyte,
-    _csw_proving_system_nullable: JObject, // java.lang.Byte can be null if there is no csw_proving_system
     _mc_btr_request_data_length: jbyte,
     _custom_field_elements_configs: jobjectArray,
     _custom_bitvector_elements_configs: jobjectArray,
@@ -1983,8 +1981,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
 ) -> jboolean
 {
 
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let amount = _amount as u64;
 
@@ -1997,15 +1997,6 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
     let out_idx = _out_idx as u32;
 
     let withdrawal_epoch_length = _withdrawal_epoch_length as u32;
-
-    let cert_proving_system = _cert_proving_system as u8;
-
-    let csw_proving_system_opt = if _csw_proving_system_nullable.is_null() {
-        Option::None
-    } else {
-        Some(_env.call_method(_csw_proving_system_nullable, "byteValue", "()B", &[])
-            .expect("Should be able to call getBitVectorSizeBits method").b().unwrap() as u8)
-    };
 
     let mc_btr_request_data_length = _mc_btr_request_data_length as u8;
 
@@ -2035,10 +2026,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
             let bit_vector_size_bits = _env.call_method(custom_bitvector_element_config, "getBitVectorSizeBits", "()I", &[])
                 .expect("Should be able to call getBitVectorSizeBits method").i().unwrap() as u32;
 
-            let max_compressed_size_bytes = _env.call_method(custom_bitvector_element_config, "getMaxCompressedSizeBytes", "()I", &[])
-                .expect("Should be able to call getMaxCompressedSizeBytes method").i().unwrap() as u32;
+            let max_compressed_byte_size = _env.call_method(custom_bitvector_element_config, "getMaxCompressedByteSize", "()I", &[])
+                .expect("Should be able to call getMaxCompressedByteSize method").i().unwrap() as u32;
 
-            custom_bitvector_elements_configs.push((bit_vector_size_bits, max_compressed_size_bytes));
+            custom_bitvector_elements_configs.push(BitVectorElementsConfig {bit_vector_size_bits, max_compressed_byte_size});
         }
     }
 
@@ -2049,12 +2040,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
     let custom_creation_data = _env.convert_byte_array(_custom_creation_data)
         .expect("Should be able to convert to Rust array");
 
-    let mut constant_nullable = [0u8; FIELD_SIZE];
+    let constant_fe;
     let constant = if _constant_nullable.is_null() {
         Option::None
     } else {
-        get_byte_array(&_env, &_constant_nullable, &mut constant_nullable[..]);
-        Some(&constant_nullable)
+        let constant_bytes = parse_jbyte_array_to_vec(&_env, &_constant_nullable, FIELD_SIZE);
+        constant_fe = FieldElement::deserialize(constant_bytes.as_slice()).expect("Can't parse the input constant_bytes into FieldElement");
+        Some(&constant_fe)
     };
 
     let cert_verification_key = _env.convert_byte_array(_cert_verification_key)
@@ -2083,8 +2075,6 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
                                &tx_hash,
                                out_idx,
                                withdrawal_epoch_length,
-                               cert_proving_system,
-                               csw_proving_system_opt,
                                mc_btr_request_data_length,
                                custom_field_elements_configs.as_slice(),
                                custom_bitvector_elements_configs.as_slice(),
@@ -2112,8 +2102,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddF
     _out_idx: jint
 ) -> jboolean
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let amount = _amount as u64;
 
@@ -2157,8 +2149,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddB
     _out_idx: jint
 ) -> jboolean
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let sc_fee = _sc_fee as u64;
 
@@ -2173,14 +2167,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddB
             let o = _env.get_object_array_element(_sc_request_data, i)
                 .expect(format!("Should be able to get elem {} of custom_field_elements_configs array", i).as_str());
 
-            let mut data = [0u8; FIELD_SIZE];
+            let data = _env.convert_byte_array(o.cast())
+                .expect("Should be able to convert to Rust byte array");
 
-            _env.convert_byte_array(o.cast())
-                .expect("Should be able to convert to Rust byte array")
-                .write(&mut data[..])
-                .expect("Should be able to write into byte array of fixed size");
-
-            sc_request_data.push(data);
+            sc_request_data.push(FieldElement::deserialize(data.as_slice()).expect("Can't parse the input sc_request_data into FieldElement"));
         }
     }
 
@@ -2199,7 +2189,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddB
 
     if commitment_tree.add_bwtr(&sc_id,
                                 sc_fee,
-                                &sc_request_data,
+                                sc_request_data.iter().collect(),
                                 &mc_destination_address,
                                 &tx_hash,
                                 out_idx) {
@@ -2223,8 +2213,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
     _ft_min_amount: jlong
 ) -> jboolean
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let epoch_number = _epoch_number as u32;
 
@@ -2245,7 +2237,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
                 let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
                     .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-                let mut pk_bytes = [0u8; 20];
+                let mut pk_bytes = [0u8; MC_PK_SIZE];
 
                 _env.convert_byte_array(p)
                     .expect("Should be able to convert to Rust byte array")
@@ -2258,7 +2250,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
             let a = _env.call_method(o, "getAmount", "()J", &[])
                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
 
-            bt_list.push((a, pk));
+            bt_list.push(BackwardTransfer{pk_dest: pk, amount: a});
         }
     }
 
@@ -2274,21 +2266,19 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
                 let o = _env.get_object_array_element(_custom_fields_nullable, i)
                     .expect(format!("Should be able to get elem {} of custom_fields array", i).as_str());
 
-                let mut ce = [0u8; FIELD_SIZE];
+                let cf = _env.convert_byte_array(o.cast())
+                    .expect("Should be able to convert to Rust byte array");
 
-                _env.convert_byte_array(o.cast())
-                    .expect("Should be able to convert to Rust byte array")
-                    .write(&mut ce[..])
-                    .expect("Should be able to write into byte array of fixed size");
-
-                custom_fields.push(ce);
+                custom_fields.push(FieldElement::deserialize(cf.as_slice()).expect("Can't parse the input custom_field into FieldElement"));
             }
         }
-        Some(custom_fields.as_slice())
+        Some(custom_fields.iter().collect())
     };
 
-    let mut end_cumulative_sc_tx_commitment_tree_root = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_end_cumulative_sc_tx_commitment_tree_root, &mut end_cumulative_sc_tx_commitment_tree_root[..]);
+    let end_cumulative_sc_tx_commitment_tree_root = {
+        let tree_root_bytes = parse_jbyte_array_to_vec(&_env, &_end_cumulative_sc_tx_commitment_tree_root, FIELD_SIZE);
+        FieldElement::deserialize(tree_root_bytes.as_slice()).expect("Can't parse the input end_cumulative_sc_tx_commitment_tree_root into FieldElement")
+    };
 
     let btr_fee = _btr_fee as u64;
 
@@ -2324,13 +2314,14 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
     _leaf: jbyteArray
 ) -> jboolean
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let leaf_fe = {
         let leaf_bytes = parse_jbyte_array_to_vec(&_env, &_leaf, FIELD_SIZE);
-
-        FieldElement::read(leaf_bytes.as_slice()).expect("Can't parse the input leaf_bytes into FieldElement")
+        FieldElement::deserialize(leaf_bytes.as_slice()).expect("Can't parse the input leaf_bytes into FieldElement")
     };
 
     let commitment_tree = {
@@ -2355,8 +2346,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let commitment_tree = {
 
@@ -2416,15 +2409,19 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
     _mc_pk_hash: jbyteArray
 ) -> jboolean
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let amount = _amount as u64;
 
-    let mut nullifier = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_nullifier, &mut nullifier[..]);
+    let nullifier = {
+        let nullifier_bytes = parse_jbyte_array_to_vec(&_env, &_nullifier, FIELD_SIZE);
+        FieldElement::deserialize(nullifier_bytes.as_slice()).expect("Can't parse the input nullifier_bytes into FieldElement")
+    };
 
-    let mut mc_pk_hash = [0u8; 20];
+    let mut mc_pk_hash = [0u8; MC_PK_SIZE];
     get_byte_array(&_env, &_mc_pk_hash, &mut mc_pk_hash[..]);
 
     let commitment_tree = {
@@ -2452,8 +2449,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let commitment_tree = {
 
@@ -2494,8 +2493,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetF
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let commitment_tree = {
 
@@ -2536,8 +2537,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeBtrC
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let commitment_tree = {
 
@@ -2578,8 +2581,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let commitment_tree = {
 
@@ -2620,8 +2625,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let commitment_tree = {
 
@@ -2662,8 +2669,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let commitment_tree = {
 
@@ -2743,8 +2752,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let commitment_tree = {
 
@@ -2781,21 +2792,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeSerialize(
     _env: JNIEnv,
-    _path: JObject,
+    _proof: JObject,
 ) -> jbyteArray
 {
-    let existence_proof = {
-
-        let t =_env.get_field(_path, "existenceProofPointer", "J")
-            .expect("Should be able to get field existenceProofPointer");
-
-        read_raw_pointer(t.j().unwrap() as *const ScExistenceProof)
-    };
-
-    let proof_bytes = to_bytes!(existence_proof).unwrap();
-
-    _env.byte_array_from_slice(proof_bytes.as_slice())
-        .expect("Cannot write Existence Proof to jbyteArray.")
+    serialize_from_jobject::<ScExistenceProof>(&_env, _proof, "existenceProofPointer")
 }
 
 #[no_mangle]
@@ -2808,7 +2808,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeDe
     let proof_bytes = _env.convert_byte_array(_proof_bytes)
         .expect("Should be able to convert to Rust byte array");
 
-    match ScExistenceProof::read(proof_bytes.as_slice()) {
+    match ScExistenceProof::deserialize(proof_bytes.as_slice()) {
         Ok(sc_existence_proof) => {
             let proof_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_existence_proof)) as i64);
 
@@ -2844,8 +2844,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     let commitment_tree = {
 
@@ -2882,21 +2884,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeSerialize(
     _env: JNIEnv,
-    _path: JObject,
+    _proof: JObject,
 ) -> jbyteArray
 {
-    let absence_proof = {
-
-        let t =_env.get_field(_path, "absenceProofPointer", "J")
-            .expect("Should be able to get field absenceProofPointer");
-
-        read_raw_pointer(t.j().unwrap() as *const ScAbsenceProof)
-    };
-
-    let proof_bytes = to_bytes!(absence_proof).unwrap();
-
-    _env.byte_array_from_slice(proof_bytes.as_slice())
-        .expect("Cannot write Absence Proof to jbyteArray.")
+    serialize_from_jobject::<ScAbsenceProof>(&_env, _proof, "absenceProofPointer")
 }
 
 #[no_mangle]
@@ -2909,7 +2900,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeDese
     let proof_bytes = _env.convert_byte_array(_proof_bytes)
         .expect("Should be able to convert to Rust byte array");
 
-    match ScAbsenceProof::read(proof_bytes.as_slice()) {
+    match ScAbsenceProof::deserialize(proof_bytes.as_slice()) {
         Ok(sc_absence_proof) => {
             let proof_ptr: jlong = jlong::from(Box::into_raw(Box::new(sc_absence_proof)) as i64);
 
@@ -2986,8 +2977,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
 ) -> bool
 {
     // Read sidechain id
-    let mut sc_id = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_sc_id, &mut sc_id[..]);
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
 
     //Read commitment proof
     let sc_absence_proof = {

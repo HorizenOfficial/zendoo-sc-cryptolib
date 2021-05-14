@@ -43,21 +43,21 @@ public class CommitmentTree implements AutoCloseable {
     }
 
     private native boolean nativeAddScCr(byte[] scId, long amount, byte[] pubKey, byte[] txHash, int outIdx,
-                                         int withdrawalEpochLength, byte certProvingSystem, Byte cswProvingSystemNullable,
-                                         byte mcBtrRequestDataLength, CustomFieldElementsConfig[] customFieldElementsConfigs,
+                                         int withdrawalEpochLength, byte mcBtrRequestDataLength,
+                                         CustomFieldElementsConfig[] customFieldElementsConfigs,
                                          CustomBitvectorElementsConfig[] customBitvectorElementsConfigs,
                                          long btrFee, long ftMinAmount, byte[] customCreationData,
                                          byte[] constantNullable, byte[] certVerificationKey, byte[] cswVerificationKeyNullable);
     
     public boolean addScCr(byte[] scId, long amount, byte[] pubKey, byte[] txHash, int outIdx, int withdrawalEpochLength,
-                           byte certProvingSystem, Optional<Byte> cswProvingSystemOpt, byte mcBtrRequestDataLength,
-                           CustomFieldElementsConfig[] customFieldElementsConfigs, CustomBitvectorElementsConfig[] customBitvectorElementsConfigs,
-                           long btrFee, long ftMinAmount, byte[] customCreationData, Optional<byte[]> constantOpt,
+                           byte mcBtrRequestDataLength, CustomFieldElementsConfig[] customFieldElementsConfigs,
+                           CustomBitvectorElementsConfig[] customBitvectorElementsConfigs, long btrFee,
+                           long ftMinAmount, byte[] customCreationData, Optional<byte[]> constantOpt,
                            byte[] certVerificationKey, Optional<byte[]> cswVerificationKeyOpt) {
         if (commitmentTreePointer == 0)
             throw new IllegalStateException("CommitmentTree instance was freed.");
-        return nativeAddScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength, certProvingSystem,
-                cswProvingSystemOpt.orElse(null), mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
+        return nativeAddScCr(scId, amount, pubKey, txHash, outIdx, withdrawalEpochLength,
+                mcBtrRequestDataLength, customFieldElementsConfigs, customBitvectorElementsConfigs,
                 btrFee, ftMinAmount, customCreationData, constantOpt.orElse(null), certVerificationKey,
                 cswVerificationKeyOpt.orElse(null));
     }

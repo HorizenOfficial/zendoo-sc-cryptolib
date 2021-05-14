@@ -3,18 +3,18 @@ package com.horizen.commitmenttree;
 public class CustomBitvectorElementsConfig {
     
     private final int bitVectorSizeBits;
-    private final int maxCompressedSizeBytes;
+    private final int maxCompressedByteSize;
 
-    public CustomBitvectorElementsConfig(int bitVectorSizeBits, int maxCompressedSizeBytes) {
+    public CustomBitvectorElementsConfig(int bitVectorSizeBits, int maxCompressedByteSize) {
         this.bitVectorSizeBits = bitVectorSizeBits;
-        this.maxCompressedSizeBytes = maxCompressedSizeBytes;
+        this.maxCompressedByteSize = maxCompressedByteSize;
     }
 
     public int getBitVectorSizeBits() {
         return bitVectorSizeBits;
     }
     
-    public int getMaxCompressedSizeBytes() {
-        return maxCompressedSizeBytes;
+    public int getMaxCompressedByteSize() {
+        return maxCompressedByteSize;
     }
 }
