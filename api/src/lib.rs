@@ -1636,6 +1636,48 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     }
 }
 
+fn get_proving_system_type_as_jint(_env: &JNIEnv, ps: ProvingSystem) -> jint {
+    match ps {
+        ProvingSystem::Undefined => 0i32 as jint,
+        ProvingSystem::Darlin => 1i32 as jint,
+        ProvingSystem::CoboundaryMarlin => 2i32 as jint,
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeGetProverKeyProvingSystemType(
+    _env: JNIEnv,
+    _class: JClass,
+    _proving_key_path: JString,
+) -> jint
+{
+    // Read paths
+    let proving_key_path = _env.get_string(_proving_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    match read_from_file::<ProvingSystem>(Path::new(proving_key_path.to_str().unwrap())) {
+        Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
+        Err(_) => -1i32 as jint,
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeGetVerifierKeyProvingSystemType(
+    _env: JNIEnv,
+    _class: JClass,
+    _verifier_key_path: JString,
+) -> jint
+{
+    // Read paths
+    let verifier_key_path = _env.get_string(_verifier_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    match read_from_file::<ProvingSystem>(Path::new(verifier_key_path.to_str().unwrap())) {
+        Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
+        Err(_) => -1i32 as jint,
+    }
+}
+
 
 #[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateProof(
@@ -1645,7 +1687,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // used, but still needs to have
     // an argument slot
     _class: JClass,
-    _proving_system: JObject,
     _bt_list: jobjectArray,
     _epoch_number: jint,
     _end_cumulative_sc_tx_comm_tree_root: JObject,
@@ -1659,9 +1700,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _zk: jboolean,
 ) -> jobject
 {
-    // Get proving system type
-    let proving_system = get_proving_system_type(&_env, _proving_system);
-
     // Extract backward transfers
     let mut bt_list = vec![];
 
@@ -1754,7 +1792,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //create proof
     let (proof, quality) = match create_naive_threshold_sig_proof(
-        proving_system,
         pks.as_slice(),
         sigs,
         _epoch_number as u32,
@@ -1789,6 +1826,23 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeGetProofProvingSystemType(
+    _env: JNIEnv,
+    _class: JClass,
+    _proof: jbyteArray,
+) -> jint
+{
+    //Extract proof
+    let proof_bytes = _env.convert_byte_array(_proof)
+        .expect("Should be able to convert to Rust byte array");
+
+    match deserialize_from_buffer::<ProvingSystem>(&proof_bytes[..1]) {
+        Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
+        Err(_) => -1i32 as jint,
+    }
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeVerifyProof(
     _env: JNIEnv,
     // this is the class that owns our
@@ -1796,7 +1850,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // used, but still needs to have
     // an argument slot
     _class: JClass,
-    _proving_system: JObject,
     _bt_list: jobjectArray,
     _epoch_number: jint,
     _end_cumulative_sc_tx_comm_tree_root: JObject,
@@ -1810,9 +1863,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _check_vk: jboolean,
 ) -> jboolean
 {
-    // Get proving system type
-    let proving_system = get_proving_system_type(&_env, _proving_system);
-
     //Extract backward transfers
     let mut bt_list = vec![];
 
@@ -1877,7 +1927,6 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //Verify proof
     match verify_naive_threshold_sig_proof(
-        proving_system,
         constant,
         _epoch_number as u32,
         end_cumulative_sc_tx_comm_tree_root,

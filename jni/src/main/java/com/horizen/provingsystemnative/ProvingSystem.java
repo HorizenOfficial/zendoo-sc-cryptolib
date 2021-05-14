@@ -9,12 +9,6 @@ public class ProvingSystem {
         Library.load();
     }
 
-    public enum ProvingSystemType {
-        UNDEFINED,
-        DARLIN,
-        COBOUNDARY_MARLIN,
-    }
-
     private static native boolean nativeGenerateDLogKeys(
             ProvingSystemType psType,
             int segmentSize,
