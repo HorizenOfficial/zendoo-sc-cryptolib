@@ -7,7 +7,7 @@ import com.horizen.schnorrnative.SchnorrSecretKey;
 import com.horizen.schnorrnative.SchnorrSignature;
 import com.horizen.sigproofnative.*;
 import com.horizen.provingsystemnative.ProvingSystem;
-import com.horizen.provingsystemnative.ProvingSystem.ProvingSystemType;
+import com.horizen.provingsystemnative.ProvingSystemType;
 import org.junit.BeforeClass;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -23,6 +23,7 @@ import java.util.Optional;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertEquals;
 
 public class NaiveThresholdSigProofTest {
 
@@ -240,6 +241,14 @@ public class NaiveThresholdSigProofTest {
     public static void initKeys() {
         assertTrue(ProvingSystem.generateDLogKeys(psType, segmentSize, dlogKeyPath, Optional.empty()));
         assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath));
+        assertEquals(
+                psType,
+                NaiveThresholdSigProof.getVerifierKeyProvingSystemType(snarkPkPath)
+        );
+        assertEquals(
+                NaiveThresholdSigProof.getProverKeyProvingSystemType(snarkPkPath),
+                NaiveThresholdSigProof.getVerifierKeyProvingSystemType(snarkVkPath)
+        );
     }
 
     @Test
@@ -296,7 +305,7 @@ public class NaiveThresholdSigProofTest {
     private void createAndVerifyProof() {
 
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
-            psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
+            btList, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
             snarkPkPath, false, false
         );
@@ -304,13 +313,15 @@ public class NaiveThresholdSigProofTest {
         assertNotNull("Proof creation must be successful", proofResult);
 
         byte[] proof = proofResult.getProof();
+        assertEquals(psType, NaiveThresholdSigProof.getProofProvingSystemType(proof));
+
         long quality = proofResult.getQuality();
 
         FieldElement constant = NaiveThresholdSigProof.getConstant(publicKeyList, threshold);
         assertNotNull("Constant creation must be successful", constant);
 
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(
-            psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
+            btList, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, constant, quality, proof, true, snarkVkPath, true
         );
 
@@ -318,7 +329,7 @@ public class NaiveThresholdSigProofTest {
 
         quality = threshold - 1;
         isProofVerified = NaiveThresholdSigProof.verifyProof(
-            psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
+            btList, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, constant, quality, proof, true, snarkVkPath, true
         );
 
