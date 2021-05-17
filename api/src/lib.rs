@@ -126,6 +126,7 @@ use jni::JNIEnv;
 use jni::objects::{JClass, JString, JObject, JValue};
 use jni::sys::{jbyteArray, jboolean, jint, jlong, jobject, jobjectArray, jbyte};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
+use cctp_primitives::utils::compute_sc_id;
 
 //Field element related functions
 
@@ -3048,4 +3049,26 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
     };
 
     CommitmentTree::verify_sc_absence(&sc_id, sc_absence_proof, commitment_fe)
+}
+
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCalculateSidechainId(
+    _env: JNIEnv,
+    _utils: JClass,
+    _tx_hash: jbyteArray,
+    _idx: jint
+) -> jbyteArray
+{
+    let mut tx_hash = [0u8; 32];
+    get_byte_array(&_env, &_tx_hash, &mut tx_hash[..]);
+
+    let idx = _idx as u32;
+
+    let res = compute_sc_id(&tx_hash, idx).expect("Cannot compute sc id.");
+
+    let mut res_bytes = [0u8; FIELD_SIZE];
+    res.serialize(&mut res_bytes[..]).expect("Cannot write sc id bytes result.");
+
+    _env.byte_array_from_slice(&res_bytes).expect("Cannot write jobject.")
 }
