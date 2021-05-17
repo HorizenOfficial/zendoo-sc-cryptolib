@@ -317,6 +317,7 @@ public class CommitmentTreeTest {
         assertArrayEquals("Deserialized existence proof should be serialized to same bytes", deserializedExistanceProof.serialize(), existenceProofBytes);
         assertTrue("Commitment verification of original proof expected to be successful", CommitmentTree.verifyScCommitment(scCommitmentOpt.get(), existenceOpt.get(), commitmentOpt.get()));
         assertTrue("Commitment verification of deserialized proof expected to be successful", CommitmentTree.verifyScCommitment(scCommitmentOpt.get(), deserializedExistanceProof, commitmentOpt.get()));
+
         commitmentOpt.get().freeFieldElement();
         existenceOpt.get().freeScExistenceProof();
         scCommitmentOpt.get().freeFieldElement();
@@ -343,6 +344,7 @@ public class CommitmentTreeTest {
         Optional<ScAbsenceProof> absenceOpt = commTree.getScAbsenceProof(scId[0]);
         assertTrue("Absence proof expected to be present.", absenceOpt.isPresent());
         assertTrue("Absence verification expected to be successful", CommitmentTree.verifyScAbsence(scId[0], absenceOpt.get() ,commitmentOpt.get()));
+        absenceOpt.get().freeScAbsenceProof();
 
         long ftrAmount = 100;
         byte[] ftrPublicKey = generateFieldElementBytes();
@@ -370,6 +372,7 @@ public class CommitmentTreeTest {
         commitmentOpt = commTree.getCommitment();
         assertTrue("Absence proof expected to be present.", absenceOpt.isPresent());
         assertTrue("Absence verification expected to be successful", CommitmentTree.verifyScAbsence(scId[0], absenceOpt.get() ,commitmentOpt.get()));
+        absenceOpt.get().freeScAbsenceProof();
 
         // Get absence proof with both neighbors
         assertFalse("Existance proof should not be present", commTree.getScExistenceProof(scId[2]).isPresent());
@@ -377,6 +380,7 @@ public class CommitmentTreeTest {
         commitmentOpt = commTree.getCommitment();
         assertTrue("Absence proof expected to be present.", absenceOpt.isPresent());
         assertTrue("Absence verification expected to be successful", CommitmentTree.verifyScAbsence(scId[2], absenceOpt.get() ,commitmentOpt.get()));
+        absenceOpt.get().freeScAbsenceProof();
 
         // Get absence proof with left neighbor
         assertFalse("Existance proof should not be present", commTree.getScExistenceProof(scId[4]).isPresent());
@@ -384,6 +388,7 @@ public class CommitmentTreeTest {
         commitmentOpt = commTree.getCommitment();
         assertTrue("Absence proof expected to be present.", absenceOpt.isPresent());
         assertTrue("Absence verification expected to be successful", CommitmentTree.verifyScAbsence(scId[4], absenceOpt.get() ,commitmentOpt.get()));
+        absenceOpt.get().freeScAbsenceProof();
 
         commTree.freeCommitmentTree();
     }
@@ -427,6 +432,9 @@ public class CommitmentTreeTest {
         assertTrue("Absence verification of original proof expected to be successful", CommitmentTree.verifyScAbsence(scId[1], absenceOpt.get() ,commitmentOpt.get()));
         assertTrue("Absence verification of deserialized proof expected to be successful", CommitmentTree.verifyScAbsence(scId[1], deserializedAbsenceProof ,commitmentOpt.get()));
 
+        commitmentOpt.get().freeFieldElement();
+        absenceOpt.get().freeScAbsenceProof();
+        deserializedAbsenceProof.freeScAbsenceProof();
         commTree.freeCommitmentTree();
     }
 

@@ -2966,7 +2966,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeDese
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeFreeScAbsenceProof(
+pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeFreeScAbsenceProof(
     _env: JNIEnv,
     _class: JClass,
     _sc_absence_proof: *mut ScAbsenceProof
