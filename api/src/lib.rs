@@ -114,11 +114,12 @@ fn parse_jbyte_array_to_vec(_env: &JNIEnv, java_byte_array: &jbyteArray, length:
 }
 
 fn get_byte_array(_env: &JNIEnv, java_byte_array: &jbyteArray, buffer: &mut [u8]) {
-    let mut vec = _env.convert_byte_array(*java_byte_array)
+    let vec = _env.convert_byte_array(*java_byte_array)
         .expect("Should be able to convert to Rust array");
 
-    vec.write(&mut buffer[..])
-        .expect("Should be able to write into byte array of fixed size");
+    for (pos, e) in vec.iter().enumerate() {
+        buffer[pos] = *e;
+    }
 }
 
 
