@@ -3061,15 +3061,20 @@ pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCalculateS
     _idx: jint
 ) -> jbyteArray
 {
-    let mut tx_hash = [0u8; 32];
-    get_byte_array(&_env, &_tx_hash, &mut tx_hash[..]);
+    use std::convert::TryInto;
+
+    // Parse tx_hash into a [u8; 32]
+    let tx_hash: [u8; 32] = _env.convert_byte_array(_tx_hash)
+        .expect("Should be able to convert to Rust byte array")
+        .try_into()
+        .expect("Should be able to write into fixed buffer of size 32");
 
     let idx = _idx as u32;
 
-    let res = compute_sc_id(&tx_hash, idx).expect("Cannot compute sc id.");
+    // Compute sc_id
+    let sc_id = compute_sc_id(&tx_hash, idx).expect("Cannot compute sc id.");
 
-    let mut res_bytes = [0u8; FIELD_SIZE];
-    res.serialize(&mut res_bytes[..]).expect("Cannot write sc id bytes result.");
-
-    _env.byte_array_from_slice(&res_bytes).expect("Cannot write jobject.")
+    // Return sc_id bytes
+    let sc_id_bytes = serialize_to_buffer(&sc_id).expect("Should be able to serialize sc_id");
+    _env.byte_array_from_slice(sc_id_bytes.as_slice()).expect("Cannot write jobject.")
 }

@@ -31,4 +31,21 @@ public class UtilsTest {
         byte[] scId3 = Utils.calculateSidechainId(txHash1, anotherIndex);
         assertFalse("Sidechain Ids expected to be different", Arrays.equals(scId1, scId3));
     }
+
+    @Test
+    public void scIdRegTest() {
+        byte[] txHash = new byte[32];
+        Arrays.fill(txHash, (byte)0);
+
+        int index = 0;
+
+        byte[] scId = Utils.calculateSidechainId(txHash, index);
+
+        StringBuilder sb = new StringBuilder(scId.length * 2);
+        for(byte b: scId)
+            sb.append(String.format("%02x", b));
+
+        assertEquals(sb.toString(), "e5898923c5501dbecd48456555cf9225aa44bf3a4e84bc20ec069b4a4dcf972a");
+    }
+
 }
