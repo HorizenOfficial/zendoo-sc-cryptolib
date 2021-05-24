@@ -2065,6 +2065,11 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
             custom_field_elements_configs.push(bits);
         }
     }
+    let custom_field_elements_configs_opt = if custom_field_elements_configs.len() > 0 {
+        Some(custom_field_elements_configs.as_slice())
+    } else {
+        None
+    };
 
     let mut custom_bitvector_elements_configs = vec![];
     let custom_bitvector_elements_size = _env.get_array_length(_custom_bitvector_elements_configs)
@@ -2084,12 +2089,25 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
         }
     }
 
+    let custom_bitvector_elements_configs_opt = if custom_bitvector_elements_configs.len() > 0 {
+        Some(custom_bitvector_elements_configs.as_slice())
+    } else {
+        None
+    };
+
     let btr_fee = _btr_fee as u64;
 
     let ft_min_amount = _ft_min_amount as u64;
 
     let custom_creation_data = _env.convert_byte_array(_custom_creation_data)
         .expect("Should be able to convert to Rust array");
+
+    let custom_creation_data_opt = if custom_creation_data.len() > 0 {
+        Some(custom_creation_data.as_slice())
+    } else {
+        None
+    };
+
 
     let constant_fe;
     let constant = if _constant_nullable.is_null() {
@@ -2127,11 +2145,11 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
                                out_idx,
                                withdrawal_epoch_length,
                                mc_btr_request_data_length,
-                               custom_field_elements_configs.as_slice(),
-                               custom_bitvector_elements_configs.as_slice(),
+                               custom_field_elements_configs_opt,
+                               custom_bitvector_elements_configs_opt,
                                btr_fee,
                                ft_min_amount,
-                               custom_creation_data.as_slice(),
+                               custom_creation_data_opt,
                                constant,
                                cert_verification_key.as_slice(),
                                csw_verification_key_opt
@@ -2305,6 +2323,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
         }
     }
 
+    let bt_list_opt = if bt_list.len() > 0 {
+        Some(bt_list.as_slice())
+    } else {
+        None
+    };
+
+
     let mut custom_fields = vec![];
     let custom_fields_opt = if _custom_fields_nullable.is_null() {
         Option::None
@@ -2346,7 +2371,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
     if commitment_tree.add_cert(&sc_id,
                                 epoch_number,
                                 quality,
-                                bt_list.as_slice(),
+                                bt_list_opt,
                                 custom_fields_opt,
                                 &end_cumulative_sc_tx_commitment_tree_root,
                                 btr_fee,

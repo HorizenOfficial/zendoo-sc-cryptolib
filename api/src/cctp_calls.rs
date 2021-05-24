@@ -106,7 +106,12 @@ pub fn compute_msg_to_sign(
     let epoch_number = FieldElement::from(epoch_number);
 
     //Compute bt_list merkle_root
-    let mr_bt = get_bt_merkle_root(bt_list.as_slice())?;
+    let bt_list_opt = if bt_list.len() > 0 {
+        Some(bt_list.as_slice())
+    } else {
+        None
+    };
+    let mr_bt = get_bt_merkle_root(bt_list_opt)?;
 
     let fees_field_element = {
         let fes = ByteAccumulator::init()
@@ -221,11 +226,17 @@ pub fn verify_naive_threshold_sig_proof(
     check_vk:                                   bool
 ) -> Result<bool, Error>
 {
+    let bt_list_opt = if bt_list.len() > 0 {
+        Some(bt_list.as_slice())
+    } else {
+        None
+    };
+
     let ins = CertificateProofUserInputs {
         constant: Some(constant),
         epoch_number,
         quality: valid_sigs,
-        bt_list: bt_list.as_slice(),
+        bt_list: bt_list_opt,
         custom_fields: None,
         end_cumulative_sc_tx_commitment_tree_root,
         btr_fee,
