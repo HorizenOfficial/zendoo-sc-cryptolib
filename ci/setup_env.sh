@@ -29,7 +29,7 @@ if [ ! -z "${TRAVIS_TAG}" ]; then
         echo "Aborting, tag differs from the pom file."
         exit 1
       else
-        export CONTAINER_PUBLISH="yes"
+        export CONTAINER_PUBLISH="true"
         echo "Fetching gpg signing keys."
         curl -sLH "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3.raw" "$MAVEN_KEY_ARCHIVE_URL" |
           openssl enc -d -aes-256-cbc -md sha256 -pass pass:$MAVEN_KEY_ARCHIVE_PASSWORD |
