@@ -16,18 +16,25 @@ if [ ! -z "${TRAVIS_TAG}" ]; then
   echo "Tagged build, fetching maintainer keys."
     gpg -v --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys $MAINTAINER_KEYS ||
     gpg -v --batch --keyserver hkp://ipv4.pool.sks-keyservers.net --recv-keys $MAINTAINER_KEYS ||
-    gpg -v --batch --keyserver hkp://pgp.mit.edu:80 --recv-keys $MAINTAINER_KEYS
+    gpg -v --batch --keyserver hkp://pgp.mit.edu:80 --recv-keys $MAINTAINER_KEYS ||
+    gpg -v --batch --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys $MAINTAINER_KEYS || 
+    gpg -v --batch --keyserver hkp://ha.pool.sks-keyservers.net --recv-keys $MAINTAINER_KEYS ||
+    gpg -v --batch --keyserver keyserver.pgp.com --recv-keys $MAINTAINER_KEYS ||
+    gpg -v --batch --keyserver pgp.key-server.io --recv-keys $MAINTAINER_KEYS
   if git verify-tag -v "${TRAVIS_TAG}"; then
     echo "Valid signed tag"
-    if [ "${TRAVIS_TAG}" != "${pom_version}" ]; then
-       echo "Aborting, tag differs from the pom file."
-       exit 1
-    else
-      export CONTAINER_PUBLISH="true"
-      echo "Fetching gpg signing keys."
-      curl -sLH "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3.raw" "$MAVEN_KEY_ARCHIVE_URL" |
-        openssl enc -d -aes-256-cbc -md sha256 -pass pass:$MAVEN_KEY_ARCHIVE_PASSWORD |
-        tar -xzf- -C "${HOME}"
+    if [[ "${CONTAINER_RUST_VER}" != *"nightly"* ]]; then
+      echo "Publishing - this is a release"
+      if [ "${TRAVIS_TAG}" != "${pom_version}" ]; then
+        echo "Aborting, tag differs from the pom file."
+        exit 1
+      else
+        export CONTAINER_PUBLISH="yes"
+        echo "Fetching gpg signing keys."
+        curl -sLH "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3.raw" "$MAVEN_KEY_ARCHIVE_URL" |
+          openssl enc -d -aes-256-cbc -md sha256 -pass pass:$MAVEN_KEY_ARCHIVE_PASSWORD |
+          tar -xzf- -C "${HOME}"
+      fi
     fi
   fi
 fi
