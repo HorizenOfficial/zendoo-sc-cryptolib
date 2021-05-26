@@ -1608,7 +1608,8 @@ pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_native
     _env: JNIEnv,
     _class: JClass,
     _proving_system: JObject,
-    _segment_size: jint,
+    _max_segment_size: jint,
+    _supported_segment_size: jint,
     _g1_key_path: JString,
     _g2_key_path: JString,
 ) -> jboolean
@@ -1626,7 +1627,8 @@ pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_native
     // Generate DLOG keypair
     match init_dlog_keys(
         proving_system,
-        _segment_size as usize,
+        _max_segment_size as usize,
+        _supported_segment_size as usize,
         Path::new(g1_key_path.to_str().unwrap()),
         Path::new(g2_key_path.to_str().unwrap()),
     ) {
@@ -1667,7 +1669,10 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         Path::new(verification_key_path.to_str().unwrap())
     ) {
         Ok(_) => JNI_TRUE,
-        Err(_) => JNI_FALSE,
+        Err(e) => {
+            println!("{:?}", e);
+            JNI_FALSE
+        },
     }
 }
 

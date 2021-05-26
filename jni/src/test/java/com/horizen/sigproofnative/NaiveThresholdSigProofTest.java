@@ -43,7 +43,8 @@ public class NaiveThresholdSigProofTest {
     static String dlogKeyPath = "./test_dlog_pk";
     static String snarkPkPath = "./test_snark_pk";
     static String snarkVkPath = "./test_snark_vk";
-    static int segmentSize = 1 << 17;
+    static int maxSegmentSize = 1 << 17;
+    static int supportedSegmentSize = 1 << 15;
     static ProvingSystemType psType = ProvingSystemType.COBOUNDARY_MARLIN;
 
 //    @Test
@@ -239,7 +240,7 @@ public class NaiveThresholdSigProofTest {
     
     @BeforeClass
     public static void initKeys() {
-        assertTrue(ProvingSystem.generateDLogKeys(psType, segmentSize, dlogKeyPath, Optional.empty()));
+        assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize, dlogKeyPath, Optional.empty()));
         assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath));
         assertEquals(
                 psType,

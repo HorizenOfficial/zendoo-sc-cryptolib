@@ -492,6 +492,7 @@ mod test {
 
         init_dlog_keys(
             ps_type,
+            1 << 17,
             1 << 14,
             &g1_ck_path,
             &g2_ck_path
