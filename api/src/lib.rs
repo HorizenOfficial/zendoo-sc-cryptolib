@@ -128,6 +128,7 @@ use jni::objects::{JClass, JString, JObject, JValue};
 use jni::sys::{jbyteArray, jboolean, jint, jlong, jobject, jobjectArray, jbyte};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
 use cctp_primitives::utils::compute_sc_id;
+use std::convert::TryInto;
 
 //Field element related functions
 
@@ -1536,19 +1537,14 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
             let o = _env.get_object_array_element(_bt_list, i)
                 .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
 
-            let pk: [u8; MC_PK_SIZE] = {
-                let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
-                    .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+            let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-                let mut pk_bytes = [0u8; MC_PK_SIZE];
+            let pk: [u8; 20] = _env.convert_byte_array(p)
+                .expect("Should be able to convert to Rust byte array")
+                .try_into()
+                .expect("Should be able to write into fixed buffer of size 20");
 
-                _env.convert_byte_array(p)
-                    .expect("Should be able to convert to Rust byte array")
-                    .write(&mut pk_bytes[..])
-                    .expect("Should be able to write into byte array of fixed size");
-
-                pk_bytes
-            };
 
             let a = _env.call_method(o, "getAmount", "()J", &[])
                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
@@ -1752,19 +1748,14 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
                 .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
 
 
-            let pk: [u8; MC_PK_SIZE] = {
-                let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
-                    .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+            let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-                let mut pk_bytes = [0u8; MC_PK_SIZE];
+            let pk: [u8; 20] = _env.convert_byte_array(p)
+                .expect("Should be able to convert to Rust byte array")
+                .try_into()
+                .expect("Should be able to write into fixed buffer of size 20");
 
-                _env.convert_byte_array(p)
-                    .expect("Should be able to convert to Rust byte array")
-                    .write(&mut pk_bytes[..])
-                    .expect("Should be able to write into byte array of fixed size");
-
-                pk_bytes
-            };
 
             let a = _env.call_method(o, "getAmount", "()J", &[])
                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
@@ -1914,20 +1905,14 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
             let o = _env.get_object_array_element(_bt_list, i)
                 .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
 
+            let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-            let pk: [u8; MC_PK_SIZE] = {
-                let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
-                    .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+            let pk: [u8; 20] = _env.convert_byte_array(p)
+                .expect("Should be able to convert to Rust byte array")
+                .try_into()
+                .expect("Should be able to write into fixed buffer of size 20");
 
-                let mut pk_bytes = [0u8; MC_PK_SIZE];
-
-                _env.convert_byte_array(p)
-                    .expect("Should be able to convert to Rust byte array")
-                    .write(&mut pk_bytes[..])
-                    .expect("Should be able to write into byte array of fixed size");
-
-                pk_bytes
-            };
 
             let a = _env.call_method(o, "getAmount", "()J", &[])
                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
@@ -2307,19 +2292,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
             let o = _env.get_object_array_element(_bt_list, i)
                 .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
 
-            let pk: [u8; 20] = {
-                let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
-                    .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
+            let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
+                .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-                let mut pk_bytes = [0u8; MC_PK_SIZE];
-
-                _env.convert_byte_array(p)
-                    .expect("Should be able to convert to Rust byte array")
-                    .write(&mut pk_bytes[..])
-                    .expect("Should be able to write into byte array of fixed size");
-
-                pk_bytes
-            };
+            let pk: [u8; 20] = _env.convert_byte_array(p)
+                .expect("Should be able to convert to Rust byte array")
+                .try_into()
+                .expect("Should be able to write into fixed buffer of size 20");
 
             let a = _env.call_method(o, "getAmount", "()J", &[])
                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
@@ -3091,8 +3070,6 @@ pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCalculateS
     _idx: jint
 ) -> jbyteArray
 {
-    use std::convert::TryInto;
-
     // Parse tx_hash into a [u8; 32]
     let tx_hash: [u8; 32] = _env.convert_byte_array(_tx_hash)
         .expect("Should be able to convert to Rust byte array")
