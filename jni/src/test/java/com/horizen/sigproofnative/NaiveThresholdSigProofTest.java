@@ -40,7 +40,6 @@ public class NaiveThresholdSigProofTest {
     List<SchnorrSignature> signatureList = new ArrayList<>();
     List<BackwardTransfer> btList = new ArrayList<>();
     
-    static String dlogKeyPath = "./test_dlog_pk";
     static String snarkPkPath = "./test_snark_pk";
     static String snarkVkPath = "./test_snark_vk";
     static int maxSegmentSize = 1 << 17;
@@ -240,7 +239,7 @@ public class NaiveThresholdSigProofTest {
     
     @BeforeClass
     public static void initKeys() {
-        assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize, dlogKeyPath, Optional.empty()));
+        assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
         assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath));
         assertEquals(
                 psType,
@@ -352,9 +351,6 @@ public class NaiveThresholdSigProofTest {
 
     @AfterClass
     public static void deleteKeys(){
-        // Delete dlog key
-        new File(dlogKeyPath).delete();
-
         // Delete proving key and verification key
         new File(snarkPkPath).delete();
         new File(snarkVkPath).delete();

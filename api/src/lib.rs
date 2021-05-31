@@ -107,7 +107,7 @@ fn parse_jbyte_array_to_vec(_env: &JNIEnv, java_byte_array: &jbyteArray, length:
         .expect("Should be able to convert to Rust array");
 
     if vec.len() != length {
-        panic!(format!("Retrieved array size {} expected to be {}.", vec.len(), length));
+        panic!("Retrieved array size {} expected to be {}.", vec.len(), length);
     }
 
     vec
@@ -1607,27 +1607,16 @@ pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_native
     _proving_system: JObject,
     _max_segment_size: jint,
     _supported_segment_size: jint,
-    _g1_key_path: JString,
-    _g2_key_path: JString,
 ) -> jboolean
 {
     // Get proving system type
     let proving_system = get_proving_system_type(&_env, _proving_system);
-
-    // Read paths
-    let g1_key_path = _env.get_string(_g1_key_path)
-        .expect("Should be able to read jstring as Rust String");
-
-    let g2_key_path = _env.get_string(_g2_key_path)
-        .expect("Should be able to read jstring as Rust String");
 
     // Generate DLOG keypair
     match init_dlog_keys(
         proving_system,
         _max_segment_size as usize,
         _supported_segment_size as usize,
-        Path::new(g1_key_path.to_str().unwrap()),
-        Path::new(g2_key_path.to_str().unwrap()),
     ) {
         Ok(_) => JNI_TRUE,
         Err(_) => JNI_FALSE,

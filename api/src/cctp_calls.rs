@@ -484,18 +484,10 @@ mod test {
         let tmp_dir = std::env::temp_dir();
         let ps_type = ProvingSystem::CoboundaryMarlin;
 
-        let mut g1_ck_path = tmp_dir.clone();
-        g1_ck_path.push("ck_g1");
-
-        let mut g2_ck_path = tmp_dir.clone();
-        g2_ck_path.push("ck_g2");
-
         init_dlog_keys(
             ps_type,
             1 << 17,
             1 << 14,
-            &g1_ck_path,
-            &g2_ck_path
         ).unwrap();
 
         println!("****************With BWT**********************");
@@ -531,7 +523,6 @@ mod test {
         std::fs::remove_file(pk_path_no_bwt).unwrap();
         std::fs::remove_file(vk_path_no_bwt).unwrap();
         std::fs::remove_file(proof_path_no_bwt).unwrap();
-        std::fs::remove_file(g1_ck_path).unwrap();
     }
 
     #[test]
