@@ -129,6 +129,7 @@ use jni::sys::{jbyteArray, jboolean, jint, jlong, jobject, jobjectArray, jbyte};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
 use cctp_primitives::utils::compute_sc_id;
 use std::convert::TryInto;
+use cctp_primitives::bit_vector::merkle_tree::merkle_root_from_compressed_bytes_without_checks;
 
 //Field element related functions
 
@@ -3084,4 +3085,24 @@ pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCalculateS
     // Return sc_id bytes
     let sc_id_bytes = serialize_to_buffer(&sc_id).expect("Should be able to serialize sc_id");
     _env.byte_array_from_slice(sc_id_bytes.as_slice()).expect("Cannot write jobject.")
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCompressedBitvectorMerkleRoot(
+    _env: JNIEnv,
+    _utils: JClass,
+    _compressed_bit_vector: jbyteArray,
+) -> jbyteArray
+{
+    // Parse compressed_bit_vector into a vector
+    let compressed_bit_vector = _env.convert_byte_array(_compressed_bit_vector)
+        .expect("Should be able to convert to Rust byte array");
+
+    // Compute merkle_root
+    let merkle_root = merkle_root_from_compressed_bytes_without_checks(compressed_bit_vector.as_slice())
+        .expect("Cannot compute merkle root.");
+
+    // Return merkle_root bytes
+    let merkle_root_bytes = serialize_to_buffer(&merkle_root).expect("Should be able to serialize merkle_root");
+    _env.byte_array_from_slice(merkle_root_bytes.as_slice()).expect("Cannot write jobject.")
 }

@@ -10,7 +10,7 @@ edition = "2018"
 algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development_tmp_fixes"}
 primitives = {version = "0.1.0", features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development_tmp_fixes"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "dev_integration" }
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "sc_bitvector_merkle_root" }
 
 #ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
