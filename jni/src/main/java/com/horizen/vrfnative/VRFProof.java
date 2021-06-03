@@ -4,13 +4,15 @@ import com.horizen.librustsidechains.Library;
 
 public class VRFProof implements AutoCloseable
 {
-
-  public static int PROOF_LENGTH = 385;
+  public static final int PROOF_LENGTH;
 
   private long proofPointer;
 
+  private static native int nativeGetProofSize();
+
   static {
     Library.load();
+    PROOF_LENGTH = nativeGetProofSize();
   }
 
   private VRFProof(long proofPointer) {
@@ -19,7 +21,7 @@ public class VRFProof implements AutoCloseable
     this.proofPointer = proofPointer;
   }
 
-  private static native byte[] nativeSerializeProof(long proofPointer);
+  private native byte[] nativeSerializeProof();
 
   private static native VRFProof nativeDeserializeProof(byte[] proofBytes, boolean checkVRFProof);
 
@@ -33,7 +35,7 @@ public class VRFProof implements AutoCloseable
   }
 
   public byte[] serializeProof() {
-    return nativeSerializeProof(this.proofPointer);
+    return nativeSerializeProof();
   }
 
   private native boolean nativeIsValidVRFProof(); // jni call to Rust impl

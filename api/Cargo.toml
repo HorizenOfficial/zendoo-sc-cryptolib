@@ -7,10 +7,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
-primitives = {version = "0.1.0", features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
-poly-commit = { git = "https://github.com/HorizenLabs/poly-commit", branch = "dev_serializations" }
-marlin = {version = "0.1.0", git = "https://github.com/HorizenLabs/marlin", branch = "dev_serializations", features = [ "asm", "parallel" ] }
+algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development_tmp"}
+primitives = {version = "0.1.0", features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development_tmp"}
+
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "sc_bitvector_merkle_root" }
 
 #ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
@@ -22,6 +22,9 @@ radix_trie = "0.1"
 rand = { version = "0.7" }
 rand_xorshift = { version = "0.2" }
 blake2 = { version = "0.8", default-features = false }
+
+[features]
+asm = ["algebra/llvm_asm"]
 
 [lib]
 name = "zendoo_sc"

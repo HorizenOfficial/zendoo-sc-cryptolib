@@ -13,8 +13,12 @@ incremental = true
 panic = "unwind"
 
 [profile.dev]
-opt-level = 3
+opt-level = 0
 panic = "unwind"
+lto = "thin"
+incremental = true
+debug-assertions = false
+debug = false
 
 [profile.test]
 opt-level = 3
@@ -28,14 +32,10 @@ panic = "unwind"
 
 #[patch.'https://github.com/HorizenOfficial/ginger-lib.git']
 #algebra = { path = '../ginger-lib/algebra' }
-#algebra-utils = { path = '../ginger-lib/algebra-utils' }
 #primitives = { path = '../ginger-lib/primitives' }
 #r1cs-core = { path = '../ginger-lib/r1cs/core' }
 #r1cs-crypto = { path = '../ginger-lib/r1cs/gadgets/crypto' }
 #r1cs-std = { path = '../ginger-lib/r1cs/gadgets/std' }
 #
-#[patch.'https://github.com/HorizenLabs/marlin.git']
-#marlin = { path = '../marlin' }
-#
-#[patch.'https://github.com/HorizenLabs/poly-commit.git']
-#poly-commit = { path = '../poly-commit' }
+#[patch.'https://github.com/HorizenOfficial/zendoo-cctp-lib.git']
+#cctp_primitives = { path = '../zendoo-cctp-lib/cctp_primitives' }

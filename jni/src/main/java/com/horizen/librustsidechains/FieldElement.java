@@ -4,12 +4,15 @@ import java.util.Random;
 
 public class FieldElement implements AutoCloseable {
 
-    public static int FIELD_ELEMENT_LENGTH = 32;
+    public static final int FIELD_ELEMENT_LENGTH;
 
     private long fieldElementPointer;
 
+    private static native int nativeGetFieldElementSize();
+
     static {
         Library.load();
+        FIELD_ELEMENT_LENGTH = nativeGetFieldElementSize();
     }
 
     private FieldElement(long fieldElementPointer) {
@@ -34,10 +37,6 @@ public class FieldElement implements AutoCloseable {
         return nativeCreateRandom(seed);
     }
 
-    private static native int nativeGetFieldElementSize();
-
-    public static int getFieldElementSize() {return  nativeGetFieldElementSize();}
-
     private native byte[] nativeSerializeFieldElement();
 
     public byte[] serializeFieldElement() {
@@ -55,6 +54,14 @@ public class FieldElement implements AutoCloseable {
                     FIELD_ELEMENT_LENGTH, fieldElementBytes.length));
 
         return nativeDeserializeFieldElement(fieldElementBytes);
+    }
+
+    private native void nativePrintFieldElementBytes();
+
+    public void printFieldElementBytes() {
+        if (fieldElementPointer == 0)
+            throw new IllegalStateException("Field element was freed.");
+        nativePrintFieldElementBytes();
     }
 
     private static native void nativeFreeFieldElement(long fieldElementPointer);
@@ -83,7 +90,7 @@ public class FieldElement implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         freeFieldElement();
     }
 }
