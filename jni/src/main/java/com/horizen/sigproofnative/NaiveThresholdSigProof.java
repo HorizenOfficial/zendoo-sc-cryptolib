@@ -132,6 +132,7 @@ public class NaiveThresholdSigProof {
             boolean checkVerificationKey
     );
 
+    // TODO: check type of `constant` and `endCumulativeScTxCommTreeRoot`. Why not a byte[]?
     public static boolean verifyProof(
             List<BackwardTransfer> btList,
             int epochNumber,

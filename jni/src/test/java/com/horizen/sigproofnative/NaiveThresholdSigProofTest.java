@@ -40,10 +40,10 @@ public class NaiveThresholdSigProofTest {
     List<SchnorrSignature> signatureList = new ArrayList<>();
     List<BackwardTransfer> btList = new ArrayList<>();
     
-    static String dlogKeyPath = "./test_dlog_pk";
     static String snarkPkPath = "./test_snark_pk";
     static String snarkVkPath = "./test_snark_vk";
-    static int segmentSize = 1 << 17;
+    static int maxSegmentSize = 1 << 17;
+    static int supportedSegmentSize = 1 << 15;
     static ProvingSystemType psType = ProvingSystemType.COBOUNDARY_MARLIN;
 
 //    @Test
@@ -239,7 +239,7 @@ public class NaiveThresholdSigProofTest {
     
     @BeforeClass
     public static void initKeys() {
-        assertTrue(ProvingSystem.generateDLogKeys(psType, segmentSize, dlogKeyPath, Optional.empty()));
+        assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
         assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath));
         assertEquals(
                 psType,
@@ -310,7 +310,7 @@ public class NaiveThresholdSigProofTest {
             snarkPkPath, false, false
         );
 
-        assertNotNull("Proof creation must be successfull", proofResult);
+        assertNotNull("Proof creation must be successful", proofResult);
 
         byte[] proof = proofResult.getProof();
         assertEquals(psType, NaiveThresholdSigProof.getProofProvingSystemType(proof));
@@ -318,7 +318,7 @@ public class NaiveThresholdSigProofTest {
         long quality = proofResult.getQuality();
 
         FieldElement constant = NaiveThresholdSigProof.getConstant(publicKeyList, threshold);
-        assertNotNull("Constant creation must be successfull", constant);
+        assertNotNull("Constant creation must be successful", constant);
 
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(
             btList, epochNumber, endCumulativeScTxCommTreeRoot,
@@ -351,9 +351,6 @@ public class NaiveThresholdSigProofTest {
 
     @AfterClass
     public static void deleteKeys(){
-        // Delete dlog key
-        new File(dlogKeyPath).delete();
-
         // Delete proving key and verification key
         new File(snarkPkPath).delete();
         new File(snarkVkPath).delete();

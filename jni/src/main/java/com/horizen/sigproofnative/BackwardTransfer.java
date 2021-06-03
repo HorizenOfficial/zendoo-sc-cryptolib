@@ -6,8 +6,8 @@ public class BackwardTransfer {
 
     public static final int MC_PK_HASH_SIZE;
 
-    private byte[] publicKeyHash;
-    private long amount;
+    private final byte[] publicKeyHash;
+    private final long amount;
 
     private static native int nativeGetMcPkHashSize();
 
@@ -21,7 +21,11 @@ public class BackwardTransfer {
         this.amount = amount;
     }
 
-    byte[] getPublicKeyHash() {return this.publicKeyHash;}
+    public byte[] getPublicKeyHash() {
+        return this.publicKeyHash;
+    }
 
-    long getAmount() {return this.amount;}
+    public long getAmount() {
+        return this.amount;
+    }
 }

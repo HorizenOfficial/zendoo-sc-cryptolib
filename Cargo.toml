@@ -13,8 +13,12 @@ incremental = true
 panic = "unwind"
 
 [profile.dev]
-opt-level = 3
+opt-level = 0
 panic = "unwind"
+lto = "thin"
+incremental = true
+debug-assertions = false
+debug = false
 
 [profile.test]
 opt-level = 3

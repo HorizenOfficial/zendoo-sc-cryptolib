@@ -473,9 +473,7 @@ mod test {
         let n = 6;
         let zk = false;
 
-        let mut g1_ck_path = std::env::temp_dir();
-        g1_ck_path.push("naive_threshold_sig_test_ck");
-        load_g1_committer_key(1 << 15, &g1_ck_path).unwrap();
+        load_g1_committer_key(1 << 17, 1 << 15).unwrap();
         let ck = get_g1_committer_key().unwrap();
         let circ = get_instance_for_setup(n);
 
@@ -500,7 +498,5 @@ mod test {
         let (proof, public_inputs) =
             generate_test_proof(n, 5, 4, false, true, params.0.clone(), zk).unwrap();
         assert!(!CoboundaryMarlin::verify(&params.1, ck.as_ref().unwrap(),public_inputs.as_slice(), &proof).unwrap());
-
-        std::fs::remove_file(&g1_ck_path).unwrap()
     }
 }
