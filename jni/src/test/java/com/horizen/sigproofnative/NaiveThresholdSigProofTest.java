@@ -34,6 +34,7 @@ public class NaiveThresholdSigProofTest {
     static int epochNumber = 10;
     static long btrFee = 100L;
     static long ftMinAmount = 200L;
+    FieldElement scId;
     FieldElement endCumulativeScTxCommTreeRoot;
 
     List<SchnorrPublicKey> publicKeyList = new ArrayList<>();
@@ -255,6 +256,7 @@ public class NaiveThresholdSigProofTest {
     public void testCreateRandomProof() throws Exception {
         Random r = new Random();
 
+        scId = FieldElement.createRandom();
         endCumulativeScTxCommTreeRoot = FieldElement.createRandom();
 
         backwardTransferCout = r.nextInt(backwardTransferCout + 1);
@@ -284,6 +286,7 @@ public class NaiveThresholdSigProofTest {
             if (i < threshold) {
                 FieldElement msgToSign = NaiveThresholdSigProof.createMsgToSign(
                     btList.toArray(new BackwardTransfer[0]),
+                    scId,
                     epochNumber,
                     endCumulativeScTxCommTreeRoot,
                     btrFee,
@@ -305,7 +308,7 @@ public class NaiveThresholdSigProofTest {
     private void createAndVerifyProof() {
 
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
-            btList, epochNumber, endCumulativeScTxCommTreeRoot,
+            btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
             snarkPkPath, false, false
         );
@@ -321,7 +324,7 @@ public class NaiveThresholdSigProofTest {
         assertNotNull("Constant creation must be successful", constant);
 
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(
-            btList, epochNumber, endCumulativeScTxCommTreeRoot,
+            btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, constant, quality, proof, true, snarkVkPath, true
         );
 
@@ -329,7 +332,7 @@ public class NaiveThresholdSigProofTest {
 
         quality = threshold - 1;
         isProofVerified = NaiveThresholdSigProof.verifyProof(
-            btList, epochNumber, endCumulativeScTxCommTreeRoot,
+            btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, constant, quality, proof, true, snarkVkPath, true
         );
 
@@ -346,6 +349,7 @@ public class NaiveThresholdSigProofTest {
             sig.freeSignature();
         signatureList.clear();
 
+        scId.freeFieldElement();
         endCumulativeScTxCommTreeRoot.freeFieldElement();
     }
 

@@ -58,6 +58,7 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
     sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>>,
     threshold:                            Option<FieldElement>,
     b:                                    Vec<Option<bool>>,
+    sc_id:                                Option<FieldElement>,
     epoch_number:                         Option<FieldElement>,
     end_cumulative_sc_tx_comm_tree_root:  Option<FieldElement>,
     mr_bt:                                Option<FieldElement>,
@@ -75,6 +76,7 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
         sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>>,
         threshold:                            FieldElement,
         b:                                    FieldElement,
+        sc_id:                                FieldElement,
         epoch_number:                         FieldElement,
         end_cumulative_sc_tx_comm_tree_root:  FieldElement,
         mr_bt:                                FieldElement,
@@ -96,6 +98,7 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
             threshold: Some(threshold),
             b: b_bool,
             epoch_number: Some(epoch_number),
+            sc_id: Some(sc_id),
             end_cumulative_sc_tx_comm_tree_root: Some(end_cumulative_sc_tx_comm_tree_root),
             mr_bt: Some(mr_bt),
             ft_min_amount: Some(ft_min_amount),
@@ -150,9 +153,14 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
 
         //Check signatures
 
-        //Reconstruct message as H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)
+        //Reconstruct message as H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)
 
         // Alloc field elements
+        let sc_id_g = FrGadget::alloc(
+            cs.ns(|| "alloc sc id"),
+            || self.sc_id.ok_or(SynthesisError::AssignmentMissing)
+        )?;
+
         let epoch_number_g = FrGadget::alloc(
             cs.ns(|| "alloc epoch number"),
             || self.epoch_number.ok_or(SynthesisError::AssignmentMissing)
@@ -197,8 +205,8 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
         )?;
 
         let message_g = PoseidonHashGadget::enforce_hash_constant_length(
-            cs.ns(|| "H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)"),
-            &[epoch_number_g.clone(), mr_bt_g.clone(), end_cumulative_sc_tx_comm_tree_root_g.clone(), fees_g.clone()],
+            cs.ns(|| "H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)"),
+            &[sc_id_g.clone(), epoch_number_g.clone(), mr_bt_g.clone(), end_cumulative_sc_tx_comm_tree_root_g.clone(), fees_g.clone()],
         )?;
 
         let mut sigs_g = Vec::with_capacity(self.max_pks);
@@ -240,8 +248,8 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
         //Enforce cert_data_hash
         let cert_data_hash_g =  {
             let wcert_sysdata_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
-                cs.ns(|| "H(epoch_number, bt_root, valid_sigs, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)"),
-                &[epoch_number_g, mr_bt_g, valid_signatures.clone(), end_cumulative_sc_tx_comm_tree_root_g, fees_g],
+                cs.ns(|| "H(sc_id, epoch_number, bt_root, valid_sigs, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)"),
+                &[sc_id_g, epoch_number_g, mr_bt_g, valid_signatures.clone(), end_cumulative_sc_tx_comm_tree_root_g, fees_g],
             )?;
             PoseidonHashGadget::enforce_hash_constant_length(
                 cs.ns(|| "H(proof_data (not present), cert_data_hash)"),
@@ -316,6 +324,7 @@ pub fn get_instance_for_setup(max_pks: usize) -> NaiveTresholdSignature<FieldEle
         sigs:                                   vec![None; max_pks],
         threshold:                              None,
         b:                                      vec![None; log_max_pks + 1],
+        sc_id:                                  None,
         epoch_number:                           None,
         end_cumulative_sc_tx_comm_tree_root:    None,
         mr_bt:                                  None,
@@ -358,9 +367,10 @@ mod test {
 
         //Istantiate rng
         let mut rng = OsRng::default();
-        let mut h = FieldHash::init_constant_length(4, None);
+        let mut h = FieldHash::init_constant_length(5, None);
 
         //Generate message to sign
+        let sc_id: FieldElement = rng.gen();
         let epoch_number: FieldElement = rng.gen();
         let mr_bt: FieldElement = rng.gen();
         let end_cumulative_sc_tx_comm_tree_root: FieldElement = rng.gen();
@@ -375,6 +385,7 @@ mod test {
             fes[0]
         };
         let message = h
+            .update(sc_id)
             .update(epoch_number)
             .update(mr_bt)
             .update(end_cumulative_sc_tx_comm_tree_root)
@@ -431,7 +442,8 @@ mod test {
 
         //Compute cert_data_hash
         let cert_data_hash = if !wrong_cert_data_hash {
-            let wcert_sysdata_hash = FieldHash::init_constant_length(5, None)
+            let wcert_sysdata_hash = FieldHash::init_constant_length(6, None)
+                .update(sc_id)
                 .update(epoch_number)
                 .update(mr_bt)
                 .update(valid_field)
@@ -449,7 +461,7 @@ mod test {
 
         //Create proof for our circuit
         let c = NaiveTresholdSignature::<FieldElement>::new(
-            pks, sigs, t_field, b_field, epoch_number, end_cumulative_sc_tx_comm_tree_root,
+            pks, sigs, t_field, b_field, sc_id, epoch_number, end_cumulative_sc_tx_comm_tree_root,
             mr_bt, ft_min_amount, btr_fee, max_pks
         );
 
@@ -467,7 +479,6 @@ mod test {
         }
     }
 
-    #[ignore]
     #[test]
     fn test_naive_threshold_circuit() {
         let n = 6;
@@ -485,9 +496,11 @@ mod test {
         assert!(CoboundaryMarlin::verify(&params.1, ck.as_ref().unwrap(), public_inputs.as_slice(), &proof).unwrap());
 
         //Generate proof with insufficient valid signatures
-        let (proof, public_inputs) =
+        //TODO: Restore after fixing https://github.com/HorizenLabs/marlin/issues/12
+        /*let (proof, public_inputs) =
             generate_test_proof(n, 4, 5, false, false, params.0.clone(), zk).unwrap();
         assert!(!CoboundaryMarlin::verify(&params.1, ck.as_ref().unwrap(),public_inputs.as_slice(), &proof).unwrap());
+        */
 
         //Generate proof with bad pks_threshold_hash
         let (proof, public_inputs) =
