@@ -34,6 +34,10 @@ public class VRFProof implements AutoCloseable
     return nativeDeserializeProof(proofBytes, checkVRFProof);
   }
 
+  public static VRFProof deserialize(byte[] proofBytes) {
+    return deserialize(proofBytes, true);
+  }
+
   public byte[] serializeProof() {
     return nativeSerializeProof();
   }
