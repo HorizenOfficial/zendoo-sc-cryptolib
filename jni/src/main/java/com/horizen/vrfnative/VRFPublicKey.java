@@ -32,6 +32,10 @@ public class VRFPublicKey implements AutoCloseable
     return nativeDeserializePublicKey(publicKeyBytes, checkPublicKey);
   }
 
+  public static VRFPublicKey deserialize(byte[] publicKeyBytes) {
+    return deserialize(publicKeyBytes, true);
+  }
+
   private native byte[] nativeSerializePublicKey();
 
   public byte[] serializePublicKey() {

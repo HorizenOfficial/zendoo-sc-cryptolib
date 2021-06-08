@@ -31,6 +31,10 @@ public class SchnorrPublicKey implements AutoCloseable
     return nativeDeserializePublicKey(publicKeyBytes, checkPublicKey);
   }
 
+  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes) {
+    return deserialize(publicKeyBytes, true);
+  }
+
   private native byte[] nativeSerializePublicKey();
 
   public byte[] serializePublicKey() {
