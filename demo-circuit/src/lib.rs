@@ -61,6 +61,8 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
     proving_system: ProvingSystem,
     pk_path: &Path,
     vk_path: &Path,
+    compress_pk: bool,
+    compress_vk: bool,
 ) -> Result<(), Error>
 {
     let g1_ck = get_g1_committer_key()?;
@@ -68,8 +70,8 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
         ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
         ProvingSystem::CoboundaryMarlin => {
             let (pk, vk) = CoboundaryMarlin::index(g1_ck.as_ref().unwrap(), circ)?;
-            write_to_file(&ZendooProverKey::CoboundaryMarlin(pk), pk_path)?;
-            write_to_file(&ZendooVerifierKey::CoboundaryMarlin(vk), vk_path)?;
+            write_to_file(&ZendooProverKey::CoboundaryMarlin(pk), pk_path, compress_pk)?;
+            write_to_file(&ZendooVerifierKey::CoboundaryMarlin(vk), vk_path, compress_vk)?;
         },
         ProvingSystem::Darlin => unimplemented!()
     }
