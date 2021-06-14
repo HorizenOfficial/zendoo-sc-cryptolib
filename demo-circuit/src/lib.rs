@@ -61,8 +61,8 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
     proving_system: ProvingSystem,
     pk_path: &Path,
     vk_path: &Path,
-    compress_pk: bool,
-    compress_vk: bool,
+    compress_pk: Option<bool>,
+    compress_vk: Option<bool>,
 ) -> Result<(), Error>
 {
     let g1_ck = get_g1_committer_key()?;

@@ -38,7 +38,7 @@ fn read_nullable_raw_pointer<'a, T>(input: *const T) -> Option<&'a T> {
 
 fn serialize_from_raw_pointer<T: CanonicalSerialize>(
     to_write: *const T,
-    compressed: bool,
+    compressed: Option<bool>,
 ) -> Vec<u8> {
     serialize_to_buffer(read_raw_pointer(to_write), compressed)
         .expect(format!("unable to write {} to buffer", type_name::<T>()).as_str())
@@ -58,8 +58,8 @@ fn return_jobject<'a, T: Sized>(_env: &'a JNIEnv, obj: T, class_path: &str) -> J
 fn deserialize_to_jobject<T: CanonicalDeserialize + SemanticallyValid>(
     _env: &JNIEnv,
     obj_bytes: jbyteArray,
-    checked: jboolean,
-    compressed: jboolean,
+    checked: Option<jboolean>, // Can be none for types with trivial checks or without themn
+    compressed: Option<jboolean>, // Can be none for uncompressable types
     class_path: &str,
 ) -> jobject
 {
@@ -68,8 +68,8 @@ fn deserialize_to_jobject<T: CanonicalDeserialize + SemanticallyValid>(
 
     let obj = deserialize_from_buffer::<T>(
         obj_bytes.as_slice(),
-        checked == JNI_TRUE,
-        compressed == JNI_TRUE
+        checked.map(|jni_bool| jni_bool == JNI_TRUE),
+        compressed.map(|jni_bool| jni_bool == JNI_TRUE)
     );
 
     match obj {
@@ -82,7 +82,7 @@ fn serialize_from_jobject<T: CanonicalSerialize>(
     _env: &JNIEnv,
     obj: JObject,
     ptr_name: &str,
-    compressed: jboolean,
+    compressed: Option<jboolean>, // Can be none for uncompressable types
 ) -> jbyteArray
 {
     let pointer = _env.get_field(obj, ptr_name, "J")
@@ -90,7 +90,7 @@ fn serialize_from_jobject<T: CanonicalSerialize>(
 
     let obj = read_raw_pointer(pointer.j().unwrap() as *const T);
 
-    let obj_bytes = serialize_from_raw_pointer(obj, compressed == JNI_TRUE);
+    let obj_bytes = serialize_from_raw_pointer(obj, compressed.map(|jni_bool| jni_bool == JNI_TRUE));
 
     _env.byte_array_from_slice(obj_bytes.as_slice())
         .expect("Cannot write object.")
@@ -149,7 +149,7 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeSer
         &_env,
         _field_element,
         "fieldElementPointer",
-        JNI_TRUE // It doesn't matter: uncompressable type
+        None
     )
 }
 
@@ -163,8 +163,8 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeDes
     deserialize_to_jobject::<FieldElement>(
         &_env,
         _field_element_bytes,
-        JNI_TRUE, // It doesn't matter: basic below-the-modulus check is performed anyway
-        JNI_TRUE, // It doesn't matter: uncompressable type
+        None,
+        None,
         "com/horizen/librustsidechains/FieldElement",
     )
 }
@@ -216,7 +216,7 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativePri
 
     let obj_bytes = serialize_from_raw_pointer(
         obj,
-        true // It doesn't matter: uncompressable type
+        None,
     );
 
     println!("{:?}", into_i8(obj_bytes));
@@ -282,7 +282,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSer
     _compressed: jboolean,
 ) -> jbyteArray
 {
-    serialize_from_jobject::<SchnorrPk>(&_env, _schnorr_public_key, "publicKeyPointer", _compressed)
+    serialize_from_jobject::<SchnorrPk>(&_env, _schnorr_public_key, "publicKeyPointer", Some(_compressed))
 }
 
 #[no_mangle]
@@ -297,8 +297,8 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeDes
     deserialize_to_jobject::<SchnorrPk>(
         &_env,
         _public_key_bytes,
-        _check_public_key,
-        _compressed,
+        Some(_check_public_key),
+        Some(_compressed),
         "com/horizen/schnorrnative/SchnorrPublicKey"
     )
 }
@@ -335,7 +335,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSer
         &_env,
         _schnorr_secret_key,
         "secretKeyPointer",
-        JNI_TRUE  // It doesn't matter: uncompressable type
+        None
     )
 }
 
@@ -349,8 +349,8 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeDes
     deserialize_to_jobject::<SchnorrSk>(
         &_env,
         _secret_key_bytes,
-        JNI_TRUE, // It doesn't matter: basic below-the-modulus check is performed anyway
-        JNI_TRUE, // It doesn't matter: uncompressable type
+        None,
+        None,
         "com/horizen/schnorrnative/SchnorrSecretKey",
     )
 }
@@ -384,7 +384,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePu
     _compressed: jboolean,
 ) -> jbyteArray
 {
-    serialize_from_jobject::<VRFPk>(&_env, _vrf_public_key, "publicKeyPointer", _compressed)
+    serialize_from_jobject::<VRFPk>(&_env, _vrf_public_key, "publicKeyPointer", Some(_compressed))
 }
 
 #[no_mangle]
@@ -399,8 +399,8 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeDeserialize
     deserialize_to_jobject::<VRFPk>(
         &_env,
         _public_key_bytes,
-        _check_public_key,
-        _compressed,
+        Some(_check_public_key),
+        Some(_compressed),
         "com/horizen/vrfnative/VRFPublicKey"
     )
 }
@@ -437,7 +437,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSe
         &_env,
         _vrf_secret_key,
         "secretKeyPointer",
-        JNI_TRUE // It doesn't matter: uncompressable type
+        None
     )
 }
 
@@ -451,8 +451,8 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeDeserialize
     deserialize_to_jobject::<VRFSk>(
         &_env,
         _secret_key_bytes,
-        JNI_TRUE, // It doesn't matter: basic below-the-modulus check is performed anyway
-        JNI_TRUE, // It doesn't matter: uncompressable type
+        None,
+        None,
         "com/horizen/vrfnative/VRFSecretKey"
     )
 }
@@ -489,7 +489,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSer
         &_env,
         _schnorr_sig,
         "signaturePointer",
-        JNI_TRUE // It doesn't matter: uncompressable type
+        None
     )
 }
 
@@ -504,8 +504,8 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDes
     deserialize_to_jobject::<SchnorrSig>(
         &_env,
         _sig_bytes,
-        _check_sig,
-        JNI_TRUE, // It doesn't matter: uncompressable type
+        Some(_check_sig),
+        None,
         "com/horizen/schnorrnative/SchnorrSignature"
     )
 }
@@ -1077,7 +1077,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeSerial
         &_env,
         _path,
         "merklePathPointer",
-        JNI_TRUE // It doesn't matter: uncompressable type
+        None
     )
 }
 
@@ -1092,8 +1092,8 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeDeseri
     deserialize_to_jobject::<GingerMHTPath>(
         &_env,
         _path_bytes,
-        _checked,
-        JNI_TRUE, // It doesn't matter: uncompressable type
+        Some(_checked),
+        None,
         "com/horizen/merkletreenative/MerklePath"
     )
 }
@@ -1279,7 +1279,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
     _compressed: jboolean,
 ) -> jbyteArray
 {
-    serialize_from_jobject::<VRFProof>(&_env, _proof, "proofPointer", _compressed)
+    serialize_from_jobject::<VRFProof>(&_env, _proof, "proofPointer", Some(_compressed))
 }
 
 #[no_mangle]
@@ -1294,8 +1294,8 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProo
     deserialize_to_jobject::<VRFProof>(
         &_env,
         _proof_bytes,
-        _check_proof,
-        _compressed,
+        Some(_check_proof),
+        Some(_compressed),
         "com/horizen/vrfnative/VRFProof"
     )
 }
@@ -1692,8 +1692,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         proving_system,
         Path::new(proving_key_path.to_str().unwrap()),
         Path::new(verification_key_path.to_str().unwrap()),
-        _compress_pk == JNI_TRUE,
-        _compress_vk == JNI_TRUE,
+        Some(_compress_pk == JNI_TRUE),
+        Some(_compress_vk == JNI_TRUE),
     ) {
         Ok(_) => JNI_TRUE,
         Err(e) => {
@@ -1724,8 +1724,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     match read_from_file::<ProvingSystem>(
         Path::new(proving_key_path.to_str().unwrap()),
-        true, // It doesn't matter: no semantic checks to be done
-        true // It doesn't matter: uncompressable type
+        None,
+        None,
     ) {
         Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
         Err(_) => -1i32 as jint,
@@ -1745,8 +1745,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     match read_from_file::<ProvingSystem>(
         Path::new(verifier_key_path.to_str().unwrap()),
-        true, // It doesn't matter: no semantic checks to be done
-        true, // It doesn't matter: uncompressable type
+        None,
+        None,
     ) {
         Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
         Err(_) => -1i32 as jint,
@@ -1912,8 +1912,8 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     match deserialize_from_buffer::<ProvingSystem>(
         &proof_bytes[..1],
-        true, // It doesn't matter: no semantic checks to be done
-        true, // It doesn't matter: uncompressable type
+        None,
+        None
     ) {
         Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
         Err(_) => -1i32 as jint,
@@ -2910,7 +2910,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeSe
         &_env,
         _proof,
         "existenceProofPointer",
-        JNI_TRUE //It doesn't matter: uncompressable type
+        None
     )
 }
 
@@ -3007,7 +3007,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeSeri
         &_env,
         _proof,
         "absenceProofPointer",
-        JNI_TRUE, // It doesn't matter: uncompressable type
+        None
     )
 }
 
@@ -3145,7 +3145,7 @@ pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCalculateS
     // Return sc_id bytes
     let sc_id_bytes = serialize_to_buffer(
         &sc_id,
-        true // It doesn't matter: uncompressable type
+        None,
     ).expect("Should be able to serialize sc_id");
     _env.byte_array_from_slice(sc_id_bytes.as_slice()).expect("Cannot write jobject.")
 }
@@ -3168,7 +3168,7 @@ pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCompressed
     // Return merkle_root bytes
     let merkle_root_bytes = serialize_to_buffer(
         &merkle_root,
-        true // It doesn't matter: uncompressable type
+        None,
     ).expect("Should be able to serialize merkle_root");
     _env.byte_array_from_slice(merkle_root_bytes.as_slice()).expect("Cannot write jobject.")
 }
@@ -3193,7 +3193,7 @@ pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCompressed
             // Return merkle_root bytes
             let merkle_root_bytes = serialize_to_buffer(
                 &merkle_root,
-                true, // It doesn't matter: uncompressable type
+                None,
             ).expect("Should be able to serialize merkle_root");
             _env.byte_array_from_slice(merkle_root_bytes.as_slice()).expect("Cannot write jobject.")
         }
