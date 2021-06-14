@@ -108,10 +108,14 @@ public class MerklePath implements AutoCloseable {
         return nativeSerialize();
     }
 
-    private static native MerklePath nativeDeserialize(byte[] merklePathBytes);
+    private static native MerklePath nativeDeserialize(byte[] merklePathBytes, boolean semanticChecks);
+
+    public static MerklePath deserialize(byte[] merklePathBytes, boolean semanticChecks) {
+        return nativeDeserialize(merklePathBytes, semanticChecks);
+    }
 
     public static MerklePath deserialize(byte[] merklePathBytes) {
-        return nativeDeserialize(merklePathBytes);
+        return nativeDeserialize(merklePathBytes, true);
     }
 
     private native void nativeFreeMerklePath(long merklePathPointer);

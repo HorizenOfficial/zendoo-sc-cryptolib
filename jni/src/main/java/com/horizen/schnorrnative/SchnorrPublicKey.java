@@ -22,26 +22,34 @@ public class SchnorrPublicKey implements AutoCloseable
     this.publicKeyPointer = publicKeyPointer;
   }
 
-  private static native SchnorrPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes, boolean checkPublicKey);
+  private static native SchnorrPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes, boolean checkPublicKey, boolean compressed);
 
-  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes, boolean checkPublicKey) {
+  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes, boolean checkPublicKey, boolean compressed) {
     if (publicKeyBytes.length != PUBLIC_KEY_LENGTH)
       throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PUBLIC_KEY_LENGTH, publicKeyBytes.length));
 
-    return nativeDeserializePublicKey(publicKeyBytes, checkPublicKey);
+    return nativeDeserializePublicKey(publicKeyBytes, checkPublicKey, compressed);
+  }
+
+  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes, boolean checkPublicKey) {
+    return deserialize(publicKeyBytes, checkPublicKey, true);
   }
 
   public static SchnorrPublicKey deserialize(byte[] publicKeyBytes) {
-    return deserialize(publicKeyBytes, true);
+    return deserialize(publicKeyBytes, true, true);
   }
 
-  private native byte[] nativeSerializePublicKey();
+  private native byte[] nativeSerializePublicKey(boolean compressed);
 
-  public byte[] serializePublicKey() {
+  public byte[] serializePublicKey(boolean compressed) {
     if (publicKeyPointer == 0)
       throw new IllegalStateException("Public key was freed.");
 
-    return nativeSerializePublicKey();
+    return nativeSerializePublicKey(compressed);
+  }
+
+  public byte[] serializePublicKey() {
+    return serializePublicKey(true);
   }
 
   private native void nativeFreePublicKey();
