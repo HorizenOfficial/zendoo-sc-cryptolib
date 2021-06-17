@@ -18,4 +18,10 @@ public class Utils {
     public static byte[] compressedBitvectorMerkleRoot(byte[] compressedBitvector){
         return nativeCompressedBitvectorMerkleRoot(compressedBitvector);
     }
+
+    private static native byte[] nativeCompressedBitvectorMerkleRootWithSizeCheck(byte[] compressedBitvector, int expectedUncompressedSize);
+
+    public static byte[] compressedBitvectorMerkleRoot(byte[] compressedBitvector, int expectedUncompressedSize) throws Exception {
+        return nativeCompressedBitvectorMerkleRootWithSizeCheck(compressedBitvector, expectedUncompressedSize);
+    }
 }

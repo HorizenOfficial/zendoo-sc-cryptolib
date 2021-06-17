@@ -129,7 +129,7 @@ use jni::sys::{jbyteArray, jboolean, jint, jlong, jobject, jobjectArray, jbyte};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
 use cctp_primitives::utils::compute_sc_id;
 use std::convert::TryInto;
-use cctp_primitives::bit_vector::merkle_tree::merkle_root_from_compressed_bytes_without_checks;
+use cctp_primitives::bit_vector::merkle_tree::{merkle_root_from_compressed_bytes_without_checks, merkle_root_from_compressed_bytes};
 
 //Field element related functions
 
@@ -1280,7 +1280,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeIsValidVRFProof
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativefreeProof(
+pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeFreeProof(
     _env: JNIEnv,
     _class: JClass,
     _proof: *mut VRFProof,
@@ -3121,4 +3121,34 @@ pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCompressed
     // Return merkle_root bytes
     let merkle_root_bytes = serialize_to_buffer(&merkle_root).expect("Should be able to serialize merkle_root");
     _env.byte_array_from_slice(merkle_root_bytes.as_slice()).expect("Cannot write jobject.")
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCompressedBitvectorMerkleRootWithSizeCheck(
+    _env: JNIEnv,
+    _utils: JClass,
+    _compressed_bit_vector: jbyteArray,
+    _expected_uncompressed_size: jint
+) -> jbyteArray
+{
+    // Parse compressed_bit_vector into a vector
+    let compressed_bit_vector = _env.convert_byte_array(_compressed_bit_vector)
+        .expect("Should be able to convert to Rust byte array");
+
+    let expected_uncompressed_size = _expected_uncompressed_size as usize;
+
+    // Compute merkle_root
+    match merkle_root_from_compressed_bytes(compressed_bit_vector.as_slice(), expected_uncompressed_size) {
+        Ok(merkle_root) => {
+            // Return merkle_root bytes
+            let merkle_root_bytes = serialize_to_buffer(&merkle_root).expect("Should be able to serialize merkle_root");
+            _env.byte_array_from_slice(merkle_root_bytes.as_slice()).expect("Cannot write jobject.")
+        }
+        Err(_) => {
+            _env.throw_new("java/lang/Exception", "Cannot compute merkle root with size check.").expect("Exception expected.");
+            JObject::null().into_inner()
+        }
+    }
+
+
 }
