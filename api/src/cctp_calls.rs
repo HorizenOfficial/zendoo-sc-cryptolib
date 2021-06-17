@@ -145,6 +145,8 @@ pub fn create_naive_threshold_sig_proof(
     proving_key_path:                    &Path,
     enforce_membership:                  bool,
     zk:                                  bool,
+    compressed_pk:                       bool,
+    compress_proof:                      bool,
 ) -> Result<(Vec<u8>, u64), Error> {
 
     //Get max pks
@@ -187,11 +189,11 @@ pub fn create_naive_threshold_sig_proof(
         *end_cumulative_sc_tx_comm_tree_root, mr_bt, ft_min_amount, btr_fee, max_pks,
     );
 
-    let pk: ZendooProverKey = if enforce_membership {
-        read_from_file_checked(proving_key_path)
-    } else {
-        read_from_file(proving_key_path)
-    }?;
+    let pk: ZendooProverKey = read_from_file(
+        proving_key_path,
+        Some(enforce_membership),
+        Some(compressed_pk)
+    )?;
 
     let proof = match pk {
         ZendooProverKey::Darlin(_) => unimplemented!(),
@@ -205,7 +207,7 @@ pub fn create_naive_threshold_sig_proof(
                 zk,
                 if zk { Some(rng) } else { None },
             )?;
-            serialize_to_buffer(&ZendooProof::CoboundaryMarlin(MarlinProof(proof)))?
+            serialize_to_buffer(&ZendooProof::CoboundaryMarlin(MarlinProof(proof)), Some(compress_proof))?
         },
     };
     Ok((proof, valid_signatures))
@@ -222,8 +224,10 @@ pub fn verify_naive_threshold_sig_proof(
     valid_sigs:                                 u64,
     proof:                                      Vec<u8>,
     check_proof:                                bool,
+    compressed_proof:                           bool,
     vk_path:                                    &Path,
-    check_vk:                                   bool
+    check_vk:                                   bool,
+    compressed_vk:                              bool,
 ) -> Result<bool, Error>
 {
     let bt_list_opt = if bt_list.len() > 0 {
@@ -245,25 +249,26 @@ pub fn verify_naive_threshold_sig_proof(
 
     // Check that the proving system type of the vk and proof are the same, before
     // deserializing them all
-    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path)?;
-    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1])?;
+    let vk_ps_type = read_from_file::<ProvingSystem>(
+        vk_path,
+        None,
+        None,
+    )?;
+
+    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(
+        &proof[..1],
+        None,
+        None,
+    )?;
 
     if vk_ps_type != proof_ps_type {
         Err(ProvingSystemError::ProvingSystemMismatch)?
     }
 
     // Deserialize proof and vk
-    let vk: ZendooVerifierKey = if check_vk {
-        read_from_file_checked(vk_path)
-    } else {
-        read_from_file(vk_path)
-    }?;
+    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))?;
 
-    let proof: ZendooProof = if check_proof {
-        deserialize_from_buffer_checked(proof.as_slice())
-    } else {
-        deserialize_from_buffer(proof.as_slice())
-    }?;
+    let proof: ZendooProof = deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))?;
 
     // Verify proof
     let rng = &mut OsRng;
@@ -378,7 +383,9 @@ mod test {
             bt_list.push(BackwardTransfer::default());
         }
 
-        let end_cumulative_sc_tx_comm_tree_root_f = deserialize_from_buffer::<FieldElement>(&end_cumulative_sc_tx_comm_tree_root).unwrap();
+        let end_cumulative_sc_tx_comm_tree_root_f = deserialize_from_buffer::<FieldElement>(
+            &end_cumulative_sc_tx_comm_tree_root, None, None
+        ).unwrap();
 
         let epoch_number: u32 = rng.gen();
         let btr_fee: u64 = rng.gen();
@@ -400,7 +407,9 @@ mod test {
             circ,
             ProvingSystem::CoboundaryMarlin,
             pk_path,
-            vk_path
+            vk_path,
+            Some(true),
+            Some(true)
         ).unwrap();
         println!("generate_parameters finished");
 
@@ -412,7 +421,7 @@ mod test {
             let keypair = schnorr_generate_key();
             pks.push(keypair.0);
             sks.push(keypair.1);
-            println!("sk: {:?}", into_i8(serialize_to_buffer(&keypair.1).unwrap()));
+            println!("sk: {:?}", into_i8(serialize_to_buffer(&keypair.1, None).unwrap()));
         }
         println!("pks / sks finished");
 
@@ -421,15 +430,15 @@ mod test {
         sigs.push(None);
         sigs.push(Some(schnorr_sign(&msg, &sks[2], &pks[2]).unwrap()));
 
-        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[0]).unwrap()));
-        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[2]).unwrap()));
-        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[1]).unwrap()));
+        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[0], None).unwrap()));
+        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[2], None).unwrap()));
+        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[1], None).unwrap()));
 
-        println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[0]).unwrap()));
-        println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[2]).unwrap()));
+        println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[0], None).unwrap()));
+        println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[2], None).unwrap()));
 
         let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
-        println!("Constant u8: {:?}", serialize_to_buffer(&constant).unwrap());
+        println!("Constant u8: {:?}", serialize_to_buffer(&constant, None).unwrap());
 
         //Create and serialize proof
         let (proof, quality) = create_naive_threshold_sig_proof(
@@ -444,8 +453,10 @@ mod test {
             pk_path,
             false,
             false,
+            true,
+            true
         ).unwrap();
-        write_to_file(&proof, proof_path).unwrap();
+        write_to_file(&proof, proof_path, Some(true)).unwrap();
 
         //Verify proof
         assert!(verify_naive_threshold_sig_proof(
@@ -458,7 +469,9 @@ mod test {
             quality,
             proof.clone(),
             true,
+            true,
             vk_path,
+            true,
             true,
         ).unwrap());
 
@@ -474,7 +487,9 @@ mod test {
             quality - 1,
             proof,
             true,
+            true,
             vk_path,
+            true,
             true,
         ).unwrap());
     }
@@ -535,24 +550,24 @@ mod test {
         assert!(schnorr_verify_public_key(&pk)); //Verify pk
 
         //Serialize/deserialize pk
-        let pk_serialized = serialize_to_buffer(&pk).unwrap();
+        let pk_serialized = serialize_to_buffer(&pk, Some(true)).unwrap();
         assert_eq!(pk_serialized.len(), SCHNORR_PK_SIZE);
-        let pk_deserialized: SchnorrPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
+        let pk_deserialized: SchnorrPk = deserialize_from_buffer(&pk_serialized, Some(true), Some(true)).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
-        let sk_serialized = serialize_to_buffer(&sk).unwrap();
+        let sk_serialized = serialize_to_buffer(&sk, None).unwrap();
         assert_eq!(sk_serialized.len(), SCHNORR_SK_SIZE);
-        let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
+        let sk_deserialized = deserialize_from_buffer(&sk_serialized, None, None).unwrap();
         assert_eq!(sk, sk_deserialized);
 
         let sig = schnorr_sign(&msg, &sk, &pk).unwrap(); //Sign msg
         assert!(is_valid(&sig));
 
         //Serialize/deserialize sig
-        let sig_serialized = serialize_to_buffer(&sig).unwrap();
+        let sig_serialized = serialize_to_buffer(&sig, None).unwrap();
         assert_eq!(sig_serialized.len(), SCHNORR_SIG_SIZE);
-        let sig_deserialized = deserialize_from_buffer(&sig_serialized).unwrap();
+        let sig_deserialized = deserialize_from_buffer(&sig_serialized, Some(true), None).unwrap();
         assert_eq!(sig, sig_deserialized);
 
         assert!(schnorr_verify_signature(&msg, &pk, &sig).unwrap()); //Verify sig
@@ -572,29 +587,29 @@ mod test {
         assert!(vrf_verify_public_key(&pk)); //Verify pk
 
         //Serialize/deserialize pk
-        let pk_serialized = serialize_to_buffer(&pk).unwrap();
+        let pk_serialized = serialize_to_buffer(&pk, Some(true)).unwrap();
         assert_eq!(pk_serialized.len(), VRF_PK_SIZE);
-        let pk_deserialized: VRFPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
+        let pk_deserialized: VRFPk = deserialize_from_buffer(&pk_serialized, Some(true), Some(true)).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
-        let sk_serialized = serialize_to_buffer(&sk).unwrap();
+        let sk_serialized = serialize_to_buffer(&sk, None).unwrap();
         assert_eq!(sk_serialized.len(), VRF_SK_SIZE);
-        let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
+        let sk_deserialized = deserialize_from_buffer(&sk_serialized, None, None).unwrap();
         assert_eq!(sk, sk_deserialized);
 
         let (vrf_proof, vrf_out) = vrf_prove(&msg, &sk, &pk).unwrap(); //Create vrf proof for msg
         assert!(is_valid(&vrf_proof));
 
         //Serialize/deserialize vrf proof
-        let proof_serialized = serialize_to_buffer(&vrf_proof).unwrap();
+        let proof_serialized = serialize_to_buffer(&vrf_proof, Some(true)).unwrap();
         assert_eq!(proof_serialized.len(), VRF_PROOF_SIZE);
-        let proof_deserialized = deserialize_from_buffer_checked(&proof_serialized).unwrap();
+        let proof_deserialized = deserialize_from_buffer(&proof_serialized, Some(true), Some(true)).unwrap();
         assert_eq!(vrf_proof, proof_deserialized);
 
         //Serialize/deserialize vrf out (i.e. a field element)
-        let vrf_out_serialized = serialize_to_buffer(&vrf_out).unwrap();
-        let vrf_out_deserialized = deserialize_from_buffer(&vrf_out_serialized).unwrap();
+        let vrf_out_serialized = serialize_to_buffer(&vrf_out, None).unwrap();
+        let vrf_out_deserialized = deserialize_from_buffer(&vrf_out_serialized, None, None).unwrap();
         assert_eq!(vrf_out, vrf_out_deserialized);
 
         let vrf_out_dup = vrf_proof_to_hash(&msg, &pk, &vrf_proof).unwrap(); //Verify vrf proof and get vrf out for msg
@@ -656,8 +671,8 @@ mod test {
             }
 
             // Serialization/deserialization test
-            let path_serialized = serialize_to_buffer(&path).unwrap();
-            let path_deserialized: GingerMHTPath = deserialize_from_buffer(&path_serialized).unwrap();
+            let path_serialized = serialize_to_buffer(&path, None).unwrap();
+            let path_deserialized: GingerMHTPath = deserialize_from_buffer(&path_serialized, Some(true), None).unwrap();
             assert_eq!(path, path_deserialized);
         }
     }
