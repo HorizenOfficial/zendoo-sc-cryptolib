@@ -94,8 +94,9 @@ pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<F
         .finalize()
 }
 
-//Compute and return (MR(bt_list), H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount))
+//Compute and return (MR(bt_list), H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount))
 pub fn compute_msg_to_sign(
+    sc_id:                               &FieldElement,
     epoch_number:                        u32,
     end_cumulative_sc_tx_comm_tree_root: &FieldElement,
     btr_fee:                             u64,
@@ -123,7 +124,8 @@ pub fn compute_msg_to_sign(
     };
 
     //Compute message to be verified
-    let msg = FieldHash::init_constant_length(4, None)
+    let msg = FieldHash::init_constant_length(5, None)
+        .update(*sc_id)
         .update(epoch_number)
         .update(mr_bt)
         .update(*end_cumulative_sc_tx_comm_tree_root)
@@ -136,6 +138,7 @@ pub fn compute_msg_to_sign(
 pub fn create_naive_threshold_sig_proof(
     pks:                                 &[SchnorrPk],
     mut sigs:                            Vec<Option<SchnorrSig>>,
+    sc_id:                               &FieldElement,
     epoch_number:                        u32,
     end_cumulative_sc_tx_comm_tree_root: &FieldElement,
     btr_fee:                             u64,
@@ -155,6 +158,7 @@ pub fn create_naive_threshold_sig_proof(
 
     // Compute msg to sign
     let (mr_bt, msg) = compute_msg_to_sign(
+        sc_id,
         epoch_number,
         end_cumulative_sc_tx_comm_tree_root,
         btr_fee,
@@ -185,7 +189,7 @@ pub fn create_naive_threshold_sig_proof(
     let threshold = FieldElement::from(threshold);
 
     let c = NaiveTresholdSignature::<FieldElement>::new(
-        pks, sigs, threshold, b, FieldElement::from(epoch_number),
+        pks, sigs, threshold, b, *sc_id, FieldElement::from(epoch_number),
         *end_cumulative_sc_tx_comm_tree_root, mr_bt, ft_min_amount, btr_fee, max_pks,
     );
 
@@ -216,6 +220,7 @@ pub fn create_naive_threshold_sig_proof(
 
 pub fn verify_naive_threshold_sig_proof(
     constant:                                   &FieldElement,
+    sc_id:                                      &FieldElement,
     epoch_number:                               u32,
     end_cumulative_sc_tx_commitment_tree_root:  &FieldElement,
     btr_fee:                                    u64,
@@ -238,6 +243,7 @@ pub fn verify_naive_threshold_sig_proof(
 
     let ins = CertificateProofUserInputs {
         constant: Some(constant),
+        sc_id,
         epoch_number,
         quality: valid_sigs,
         bt_list: bt_list_opt,
@@ -354,7 +360,7 @@ pub(crate) fn into_i8(v: Vec<u8>) -> Vec<i8> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rand::{RngCore, Rng};
+    use rand::Rng;
     use algebra::Field;
     use cctp_primitives::utils::{
         poseidon_hash::*, mht::*
@@ -371,30 +377,23 @@ mod test {
         //assume to have 3 pks, threshold = 2
         let mut rng = OsRng;
 
-        //Generate random mc block hashes and bt list
-        let mut end_cumulative_sc_tx_comm_tree_root = [0u8; 32];
-        rng.fill_bytes(&mut end_cumulative_sc_tx_comm_tree_root);
-        end_cumulative_sc_tx_comm_tree_root[31] = 0u8; // Mask away last byte
-        println!("end_cumulative_sc_tx_comm_tree_root u8: {:?}", end_cumulative_sc_tx_comm_tree_root);
-        println!("end_cumulative_sc_tx_comm_tree_root i8: {:?}", into_i8(end_cumulative_sc_tx_comm_tree_root.to_vec()));
-
+        // Generate random data
         let mut bt_list = vec![];
         for _ in 0..bt_num {
             bt_list.push(BackwardTransfer::default());
         }
 
-        let end_cumulative_sc_tx_comm_tree_root_f = deserialize_from_buffer::<FieldElement>(
-            &end_cumulative_sc_tx_comm_tree_root, None, None
-        ).unwrap();
-
+        let end_cumulative_sc_tx_comm_tree_root = FieldElement::rand(&mut rng);
+        let sc_id = FieldElement::rand(&mut rng);
         let epoch_number: u32 = rng.gen();
         let btr_fee: u64 = rng.gen();
         let ft_min_amount: u64 = rng.gen();
 
         //Compute msg to sign
         let (_, msg) = compute_msg_to_sign(
+            &sc_id,
             epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root_f,
+            &end_cumulative_sc_tx_comm_tree_root,
             btr_fee,
             ft_min_amount,
             bt_list.clone()
@@ -444,8 +443,9 @@ mod test {
         let (proof, quality) = create_naive_threshold_sig_proof(
             pks.as_slice(),
             sigs,
+            &sc_id,
             epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root_f,
+            &end_cumulative_sc_tx_comm_tree_root,
             btr_fee,
             ft_min_amount,
             bt_list.clone(),
@@ -461,8 +461,9 @@ mod test {
         //Verify proof
         assert!(verify_naive_threshold_sig_proof(
             &constant,
+            &sc_id,
             epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root_f,
+            &end_cumulative_sc_tx_comm_tree_root,
             btr_fee,
             ft_min_amount,
             bt_list.clone(),
@@ -479,8 +480,9 @@ mod test {
         //Generate wrong public inputs by changing quality and assert proof verification doesn't pass
         assert!(!verify_naive_threshold_sig_proof(
             &constant,
+            &sc_id,
             epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root_f,
+            &end_cumulative_sc_tx_comm_tree_root,
             btr_fee,
             ft_min_amount,
             bt_list,
