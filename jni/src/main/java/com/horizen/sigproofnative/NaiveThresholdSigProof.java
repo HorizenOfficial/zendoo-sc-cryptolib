@@ -29,6 +29,7 @@ public class NaiveThresholdSigProof {
 
     private static native FieldElement nativeCreateMsgToSign(
             BackwardTransfer[] bt,
+            FieldElement scId,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
@@ -37,13 +38,14 @@ public class NaiveThresholdSigProof {
 
     public static FieldElement createMsgToSign(
             BackwardTransfer[] bt,
+            FieldElement scId,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
             long ftMinAmount
     )
     {
-        return nativeCreateMsgToSign(bt, epochNumber, endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount);
+        return nativeCreateMsgToSign(bt, scId, epochNumber, endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount);
     }
 
     private static native boolean nativeSetup(
@@ -78,6 +80,7 @@ public class NaiveThresholdSigProof {
 
     private static native CreateProofResult nativeCreateProof(
             BackwardTransfer[] bt,
+            FieldElement scId,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
@@ -92,6 +95,7 @@ public class NaiveThresholdSigProof {
 
     public static CreateProofResult createProof(
             List<BackwardTransfer> btList,
+            FieldElement scId,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
@@ -104,7 +108,7 @@ public class NaiveThresholdSigProof {
             boolean zk
     ) {
         return nativeCreateProof(
-            btList.toArray(new BackwardTransfer[0]), epochNumber,
+            btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
             endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
             schnorrSignatureList.toArray(new SchnorrSignature[0]),
             schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
@@ -120,6 +124,7 @@ public class NaiveThresholdSigProof {
 
     private static native boolean nativeVerifyProof(
             BackwardTransfer[] btList,
+            FieldElement scId,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
@@ -135,6 +140,7 @@ public class NaiveThresholdSigProof {
     // TODO: check type of `constant` and `endCumulativeScTxCommTreeRoot`. Why not a byte[]?
     public static boolean verifyProof(
             List<BackwardTransfer> btList,
+            FieldElement scId,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
@@ -147,7 +153,7 @@ public class NaiveThresholdSigProof {
             boolean checkVerificationKey
     ){
         return nativeVerifyProof(
-            btList.toArray(new BackwardTransfer[0]), epochNumber,
+            btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
             endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
             constant, quality, proof, checkProof, verificationKeyPath,
             checkVerificationKey

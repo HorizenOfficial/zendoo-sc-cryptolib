@@ -1520,6 +1520,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // an argument slot
     _class: JClass,
     _bt_list: jobjectArray,
+    _sc_id: JObject,
     _epoch_number: jint,
     _end_cumulative_sc_tx_comm_tree_root: JObject,
     _btr_fee: jlong,
@@ -1559,6 +1560,13 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         amount: bt_raw.0
     }).collect::<Vec<_>>();
 
+    let sc_id = {
+        let f =_env.get_field(_sc_id, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+    };
+
     let end_cumulative_sc_tx_comm_tree_root = {
         let f =_env.get_field(_end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
@@ -1568,8 +1576,9 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //Compute message to sign:
     let msg = match compute_msg_to_sign(
+        sc_id,
         _epoch_number as u32,
-        &end_cumulative_sc_tx_comm_tree_root,
+        end_cumulative_sc_tx_comm_tree_root,
         _btr_fee as u64,
         _ft_min_amount as u64,
         bt_list
@@ -1714,6 +1723,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // an argument slot
     _class: JClass,
     _bt_list: jobjectArray,
+    _sc_id: JObject,
     _epoch_number: jint,
     _end_cumulative_sc_tx_comm_tree_root: JObject,
     _btr_fee: jlong,
@@ -1800,6 +1810,13 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         pks.push(*public_key);
     }
 
+    let sc_id = {
+        let f =_env.get_field(_sc_id, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+    };
+
     let end_cumulative_sc_tx_comm_tree_root = {
         let f =_env.get_field(_end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
@@ -1815,8 +1832,9 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     let (proof, quality) = match create_naive_threshold_sig_proof(
         pks.as_slice(),
         sigs,
+        sc_id,
         _epoch_number as u32,
-        &end_cumulative_sc_tx_comm_tree_root,
+        end_cumulative_sc_tx_comm_tree_root,
         _btr_fee as u64,
         _ft_min_amount as u64,
         bt_list,
@@ -1872,6 +1890,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     // an argument slot
     _class: JClass,
     _bt_list: jobjectArray,
+    _sc_id: JObject,
     _epoch_number: jint,
     _end_cumulative_sc_tx_comm_tree_root: JObject,
     _btr_fee: jlong,
@@ -1916,6 +1935,13 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         amount: bt_raw.0
     }).collect::<Vec<_>>();
 
+    let sc_id = {
+        let f =_env.get_field(_sc_id, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+    };
+
     let end_cumulative_sc_tx_comm_tree_root = {
         let f =_env.get_field(_end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
@@ -1943,6 +1969,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     //Verify proof
     match verify_naive_threshold_sig_proof(
         constant,
+        sc_id,
         _epoch_number as u32,
         end_cumulative_sc_tx_comm_tree_root,
         _btr_fee as u64,
