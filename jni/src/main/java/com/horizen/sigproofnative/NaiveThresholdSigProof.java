@@ -138,6 +138,7 @@ public class NaiveThresholdSigProof {
 
     public static CreateProofResult createProof(
             List<BackwardTransfer> btList,
+            FieldElement scId,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
@@ -151,7 +152,7 @@ public class NaiveThresholdSigProof {
     )
     {
         return nativeCreateProof(
-                btList.toArray(new BackwardTransfer[0]), epochNumber,
+                btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
                 endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
                 schnorrSignatureList.toArray(new SchnorrSignature[0]),
                 schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
@@ -162,6 +163,7 @@ public class NaiveThresholdSigProof {
 
     public static CreateProofResult createProof(
             List<BackwardTransfer> btList,
+            FieldElement scId,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
@@ -174,7 +176,7 @@ public class NaiveThresholdSigProof {
     )
     {
         return nativeCreateProof(
-                btList.toArray(new BackwardTransfer[0]), epochNumber,
+                btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
                 endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
                 schnorrSignatureList.toArray(new SchnorrSignature[0]),
                 schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
@@ -232,6 +234,7 @@ public class NaiveThresholdSigProof {
 
     public static boolean verifyProof(
             List<BackwardTransfer> btList,
+            FieldElement scId,
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
@@ -243,7 +246,7 @@ public class NaiveThresholdSigProof {
     )
     {
         return nativeVerifyProof(
-                btList.toArray(new BackwardTransfer[0]), epochNumber,
+                btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
                 endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
                 constant, quality, proof, true, true,
                 verificationKeyPath, false, true
