@@ -27,8 +27,8 @@ import static org.junit.Assert.assertEquals;
 
 public class NaiveThresholdSigProofTest {
 
-    static int keyCount = 3;
-    static long threshold = 2;
+    static int keyCount = 7;
+    static long threshold = 5;
     static int backwardTransferCout = 10;
     static boolean zk = false;
 
@@ -246,11 +246,9 @@ public class NaiveThresholdSigProofTest {
     @BeforeClass
     public static void initKeys() {
         assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
-        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath));
-        assertTrue(ProvingSystem.checkProofVkSize(zk, supportedSegmentSize, maxProofSize, maxVkSize, snarkVkPath));
-        assertFalse(ProvingSystem.checkProofVkSize(zk, 1, maxProofSize, maxVkSize, snarkVkPath));
-        assertFalse(ProvingSystem.checkProofVkSize(zk, supportedSegmentSize, 1, maxVkSize, snarkVkPath));
-        assertFalse(ProvingSystem.checkProofVkSize(zk, supportedSegmentSize, maxProofSize, 1, snarkVkPath));
+        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath, zk, maxProofSize, maxVkSize));
+        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath, zk, 1, maxVkSize));
+        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath, zk, maxProofSize, 1));
         assertEquals(
                 psType,
                 ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)

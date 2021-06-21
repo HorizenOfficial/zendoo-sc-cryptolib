@@ -50,70 +50,63 @@ public class NaiveThresholdSigProof {
     }
 
     private static native boolean nativeSetup(
-            ProvingSystemType psType,
-            long maxPks,
-            String provingKeyPath,
-            String verificationKeyPath,
-            boolean compressPk,
-            boolean compressVk
+        ProvingSystemType psType,
+        long maxPks,
+        String provingKeyPath,
+        String verificationKeyPath,
+        boolean zk,
+        int maxProofSize,
+        int maxVkSize,
+        boolean compressPk,
+        boolean compressVk
     );
 
     public static boolean setup(
-            ProvingSystemType psType,
-            long maxPks,
-            String provingKeyPath,
-            String verificationKeyPath,
-            boolean compressPk,
-            boolean compressVk
+        ProvingSystemType psType,
+        long maxPks,
+        String provingKeyPath,
+        String verificationKeyPath,
+        boolean zk,
+        int maxProofSize,
+        int maxVkSize,
+        boolean compressPk,
+        boolean compressVk
     )
     {
-        return nativeSetup(psType, maxPks, provingKeyPath, verificationKeyPath, compressPk, compressVk);
+        return nativeSetup(
+            psType, maxPks, provingKeyPath, verificationKeyPath,
+            zk, maxProofSize, maxVkSize, compressPk, compressVk
+        );
     }
 
     public static boolean setup(
-            ProvingSystemType psType,
-            long maxPks,
-            String provingKeyPath,
-            String verificationKeyPath
+        ProvingSystemType psType,
+        long maxPks,
+        String provingKeyPath,
+        String verificationKeyPath,
+        boolean zk,
+        int maxProofSize,
+        int maxVkSize
     )
     {
-        return nativeSetup(psType, maxPks, provingKeyPath, verificationKeyPath, true, true);
+        return nativeSetup(
+            psType, maxPks, provingKeyPath, verificationKeyPath,
+            zk, maxProofSize, maxVkSize, true, true
+        );
     }
 
-    public static boolean setupAndCheckProofVkSize(
-            ProvingSystemType psType,
-            long maxPks,
-            String provingKeyPath,
-            String verificationKeyPath,
-            boolean zk,
-            int supportedSegmentSize,
-            int maxProofSize,
-            int maxVkSize,
-            boolean compressPk,
-            boolean compressVk
+    public static boolean setup(
+        ProvingSystemType psType,
+        long maxPks,
+        String provingKeyPath,
+        String verificationKeyPath,
+        int maxProofSize,
+        int maxVkSize
     )
     {
-        if (!nativeSetup(psType, maxPks, provingKeyPath, verificationKeyPath, compressPk, compressVk)) {
-            return false;
-        }
-
-        return ProvingSystem.checkProofVkSize(zk, supportedSegmentSize, maxProofSize, maxVkSize, verificationKeyPath);
-    }
-
-    public static boolean setupAndCheckProofVkSize(
-            ProvingSystemType psType,
-            long maxPks,
-            String provingKeyPath,
-            String verificationKeyPath,
-            boolean zk,
-            int supportedSegmentSize,
-            int maxProofSize,
-            int maxVkSize
-    )
-    {
-        return setupAndCheckProofVkSize(
-            psType, maxPks, provingKeyPath, verificationKeyPath, zk,
-            supportedSegmentSize, maxProofSize, maxVkSize, true, true
+        return nativeSetup(
+            psType, maxPks, provingKeyPath, verificationKeyPath,
+            false, maxProofSize, maxVkSize, true, true
         );
     }
 

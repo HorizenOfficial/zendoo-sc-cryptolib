@@ -1729,6 +1729,9 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _max_pks: jlong,
     _proving_key_path: JString,
     _verification_key_path: JString,
+    _zk: jboolean,
+    _max_proof_size: jint,
+    _max_vk_size: jint,
     _compress_pk: jboolean,
     _compress_vk: jboolean,
 ) -> jboolean
@@ -1747,12 +1750,18 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     let circ = get_instance_for_setup(max_pks);
 
+    // Read zk value
+    let zk = _zk == JNI_TRUE;
+
     // Generate snark keypair
     match generate_circuit_keypair(
         circ,
         proving_system,
         Path::new(proving_key_path.to_str().unwrap()),
         Path::new(verification_key_path.to_str().unwrap()),
+        _max_proof_size as usize,
+        _max_vk_size as usize,
+        zk,
         Some(_compress_pk == JNI_TRUE),
         Some(_compress_vk == JNI_TRUE),
     ) {
