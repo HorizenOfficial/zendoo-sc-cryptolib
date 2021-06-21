@@ -31,5 +31,5 @@ panic = "unwind"
 #r1cs-crypto = { path = '../ginger-lib/r1cs/gadgets/crypto' }
 #r1cs-std = { path = '../ginger-lib/r1cs/gadgets/std' }
 #
-[patch.'https://github.com/HorizenOfficial/zendoo-cctp-lib.git']
-cctp_primitives = { path = '../zendoo-cctp-lib/cctp_primitives' }
+#[patch.'https://github.com/HorizenOfficial/zendoo-cctp-lib.git']
+#cctp_primitives = { path = '../zendoo-cctp-lib/cctp_primitives' }
