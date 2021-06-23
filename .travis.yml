@@ -12,14 +12,14 @@ env:
   global:
     - CONTAINER_JAVA_VER="openjdk-8-jdk"
 jobs:
-    - name: rust_1.51
-      env: CONTAINER_RUST_VER='1.51.0'
-    - name: rust_1.51_asm
-      env: CONTAINER_RUST_VER='1.51.0' RUSTFLAGS='--emit=asm'
+    #- name: rust_1.51
+    #  env: CONTAINER_RUST_VER='1.51.0'
+    #- name: rust_1.51_asm
+    #  env: CONTAINER_RUST_VER='1.51.0' RUSTFLAGS='--emit=asm'
     - name: rust_1.51_asm_target-feature
       env: CONTAINER_RUST_VER='1.51.0' RUSTFLAGS='-C target-feature=+bmi2,+adx --emit=asm'
-    - name: rust_nightly
-      env: CONTAINER_RUST_VER='nightly-2021-04-25' RUSTFLAGS='-C target-feature=+bmi2,+adx --emit=asm'
+    #- name: rust_nightly
+    #  env: CONTAINER_RUST_VER='nightly-2021-04-25' RUSTFLAGS='-C target-feature=+bmi2,+adx --emit=asm'
 
 script: >-
   source ci/setup_env.sh &&
