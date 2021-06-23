@@ -7,21 +7,21 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "misc_changes"}
-primitives = {version = "0.1.0", features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "misc_changes"}
+algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "audit_fixes"}
+primitives = {version = "0.1.0", features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "audit_fixes"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "proofs_idx" }
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "audit_fixes" }
 
 #ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
 
-jni = "0.6.1"
-derivative = "1"
+jni = "0.19.0"
+derivative = "2.2.0"
 lazy_static = "1"
-radix_trie = "0.1"
-rand = { version = "0.7" }
-rand_xorshift = { version = "0.2" }
-blake2 = { version = "0.8", default-features = false }
+radix_trie = "0.2.1"
+rand = { version = "0.8.4" }
+rand_xorshift = { version = "0.3.0" }
+blake2 = { version = "0.8.1", default-features = false }
 
 [features]
 asm = ["algebra/llvm_asm"]
