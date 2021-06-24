@@ -2,10 +2,12 @@
 
 set -euo pipefail
 
+cargo test --all-features  
+
 cargo clean
 
-RUSTFLAGS="-C target-feature=+bmi2,+adx --emit=asm" cargo +nightly-2021-04-25 build -j$(($(nproc)+1)) --release --target=x86_64-pc-windows-gnu
-RUSTFLAGS="-C target-feature=+bmi2,+adx --emit=asm" cargo +nightly-2021-04-25 build -j$(($(nproc)+1)) --release --target=x86_64-unknown-linux-gnu
+cargo build -j$(($(nproc)+1)) --release --target=x86_64-pc-windows-gnu
+cargo build -j$(($(nproc)+1)) --release --target=x86_64-unknown-linux-gnu
 
 mkdir -p jni/src/main/resources/native/linux64
 cp target/x86_64-unknown-linux-gnu/release/libzendoo_sc.so jni/src/main/resources/native/linux64/libzendoo_sc.so
