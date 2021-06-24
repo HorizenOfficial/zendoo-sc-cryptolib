@@ -7,7 +7,7 @@ import com.horizen.schnorrnative.SchnorrSecretKey;
 import com.horizen.schnorrnative.SchnorrSignature;
 import com.horizen.sigproofnative.*;
 import com.horizen.provingsystemnative.ProvingSystem;
-import com.horizen.provingsystemnative.ProvingSystem.ProvingSystemType;
+import com.horizen.provingsystemnative.ProvingSystemType;
 import org.junit.BeforeClass;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -23,6 +23,7 @@ import java.util.Optional;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertEquals;
 
 public class NaiveThresholdSigProofTest {
 
@@ -32,17 +33,18 @@ public class NaiveThresholdSigProofTest {
 
     static int epochNumber = 10;
     static long btrFee = 100L;
-    static long ftMinFee = 200L;
+    static long ftMinAmount = 200L;
+    FieldElement scId;
     FieldElement endCumulativeScTxCommTreeRoot;
 
     List<SchnorrPublicKey> publicKeyList = new ArrayList<>();
     List<SchnorrSignature> signatureList = new ArrayList<>();
     List<BackwardTransfer> btList = new ArrayList<>();
     
-    static String dlogKeyPath = "./test_dlog_pk";
     static String snarkPkPath = "./test_snark_pk";
     static String snarkVkPath = "./test_snark_vk";
-    static int segmentSize = 1 << 17;
+    static int maxSegmentSize = 1 << 17;
+    static int supportedSegmentSize = 1 << 15;
     static ProvingSystemType psType = ProvingSystemType.COBOUNDARY_MARLIN;
 
 //    @Test
@@ -238,14 +240,23 @@ public class NaiveThresholdSigProofTest {
     
     @BeforeClass
     public static void initKeys() {
-        assertTrue(ProvingSystem.generateDLogKeys(psType, segmentSize, dlogKeyPath, Optional.empty()));
+        assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
         assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath));
+        assertEquals(
+                psType,
+                NaiveThresholdSigProof.getVerifierKeyProvingSystemType(snarkPkPath)
+        );
+        assertEquals(
+                NaiveThresholdSigProof.getProverKeyProvingSystemType(snarkPkPath),
+                NaiveThresholdSigProof.getVerifierKeyProvingSystemType(snarkVkPath)
+        );
     }
 
     @Test
     public void testCreateRandomProof() throws Exception {
         Random r = new Random();
 
+        scId = FieldElement.createRandom();
         endCumulativeScTxCommTreeRoot = FieldElement.createRandom();
 
         backwardTransferCout = r.nextInt(backwardTransferCout + 1);
@@ -275,10 +286,11 @@ public class NaiveThresholdSigProofTest {
             if (i < threshold) {
                 FieldElement msgToSign = NaiveThresholdSigProof.createMsgToSign(
                     btList.toArray(new BackwardTransfer[0]),
+                    scId,
                     epochNumber,
                     endCumulativeScTxCommTreeRoot,
                     btrFee,
-                    ftMinFee
+                    ftMinAmount
                 );
                 signatureList.add(keyPairList.get(i).signMessage(msgToSign));
             } else {
@@ -296,30 +308,32 @@ public class NaiveThresholdSigProofTest {
     private void createAndVerifyProof() {
 
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
-            psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
-            btrFee, ftMinFee, signatureList, publicKeyList, threshold,
+            btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
+            btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
             snarkPkPath, false, false
         );
 
-        assertNotNull("Proof creation must be successfull", proofResult);
+        assertNotNull("Proof creation must be successful", proofResult);
 
         byte[] proof = proofResult.getProof();
+        assertEquals(psType, NaiveThresholdSigProof.getProofProvingSystemType(proof));
+
         long quality = proofResult.getQuality();
 
         FieldElement constant = NaiveThresholdSigProof.getConstant(publicKeyList, threshold);
-        assertNotNull("Constant creation must be successfull", constant);
+        assertNotNull("Constant creation must be successful", constant);
 
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(
-            psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
-            btrFee, ftMinFee, constant, quality, proof, true, snarkVkPath, true
+            btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
+            btrFee, ftMinAmount, constant, quality, proof, true, snarkVkPath, true
         );
 
         assertTrue("Proof must be verified", isProofVerified);
 
         quality = threshold - 1;
         isProofVerified = NaiveThresholdSigProof.verifyProof(
-            psType, btList, epochNumber, endCumulativeScTxCommTreeRoot,
-            btrFee, ftMinFee, constant, quality, proof, true, snarkVkPath, true
+            btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
+            btrFee, ftMinAmount, constant, quality, proof, true, snarkVkPath, true
         );
 
         assertFalse("Proof must not be verified", isProofVerified);
@@ -335,14 +349,12 @@ public class NaiveThresholdSigProofTest {
             sig.freeSignature();
         signatureList.clear();
 
+        scId.freeFieldElement();
         endCumulativeScTxCommTreeRoot.freeFieldElement();
     }
 
     @AfterClass
     public static void deleteKeys(){
-        // Delete dlog key
-        new File(dlogKeyPath).delete();
-
         // Delete proving key and verification key
         new File(snarkPkPath).delete();
         new File(snarkVkPath).delete();

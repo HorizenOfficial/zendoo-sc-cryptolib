@@ -1,4 +1,4 @@
-use algebra::curves::tweedle::dum::Projective;
+use algebra::curves::tweedle::dum::G2Projective;
 use algebra::fields::tweedle::{Fq as Fs, Fr};
 use primitives::{crh::{
     TweedleFrPoseidonHash as PoseidonHash,
@@ -22,11 +22,11 @@ impl PedersenWindow for TestWindow {
     const NUM_WINDOWS: usize = 2;
 }
 
-type GroupHash = BoweHopwoodPedersenCRH<Projective, TestWindow>;
-type GroupHashParameters = BoweHopwoodPedersenParameters<Projective>;
-type EcVrfScheme = FieldBasedEcVrf<Fr, Projective, PoseidonHash, GroupHash>;
-type EcVrfProof = FieldBasedEcVrfProof<Fr, Projective>;
-type EcVrfPk = FieldBasedEcVrfPk<Projective>;
+type GroupHash = BoweHopwoodPedersenCRH<G2Projective, TestWindow>;
+type GroupHashParameters = BoweHopwoodPedersenParameters<G2Projective>;
+type EcVrfScheme = FieldBasedEcVrf<Fr, G2Projective, PoseidonHash, GroupHash>;
+type EcVrfProof = FieldBasedEcVrfProof<Fr, G2Projective>;
+type EcVrfPk = FieldBasedEcVrfPk<G2Projective>;
 
 pub fn ouroboros_create_proof
 (

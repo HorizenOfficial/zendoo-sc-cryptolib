@@ -33,8 +33,8 @@ use rand::{
 };
 
 use lazy_static::*;
-use cctp_primitives::utils::commitment_tree::bytes_to_field_elements;
 use r1cs_std::bits::uint64::UInt64;
+use cctp_primitives::utils::commitment_tree::ByteAccumulator;
 
 lazy_static! {
     pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
@@ -43,18 +43,20 @@ lazy_static! {
 struct NaiveTresholdSignatureTest {
 
     //Witnesses
-    pks:                                    Vec<FieldBasedSchnorrPk<Projective>>,
-    sigs:                                   Vec<FieldBasedSchnorrSignature<FieldElement, Projective>>,
+    pks:                                    Vec<FieldBasedSchnorrPk<G2Projective>>,
+    sigs:                                   Vec<FieldBasedSchnorrSignature<FieldElement, G2Projective>>,
     threshold:                              FieldElement,
     b:                                      Vec<bool>,
+    sc_id:                                  FieldElement,
     epoch_number:                           FieldElement,
     end_cumulative_sc_tx_comm_tree_root:    FieldElement,
     mr_bt:                                  FieldElement,
-    ft_min_fee:                             u64,
+    ft_min_amount:                          u64,
     btr_fee:                                u64,
 
     //Public inputs
-    aggregated_input:                       FieldElement,
+    pks_threshold_hash:                     FieldElement,
+    cert_data_hash:                         FieldElement,
 
     //Other
     max_pks:                                usize,
@@ -66,25 +68,30 @@ fn generate_inputs
     valid_sigs:               usize,
     threshold:                usize,
     wrong_pks_threshold_hash: bool,
-    wrong_wcert_sysdata_hash: bool,
+    wrong_cert_data_hash:     bool,
 ) -> NaiveTresholdSignatureTest
 {
     //Istantiate rng
     let mut rng = OsRng::default();
-    let mut h = FieldHash::init_constant_length(4, None);
+    let mut h = FieldHash::init_constant_length(5, None);
 
     //Generate message to sign
+    let sc_id: FieldElement = rng.gen();
     let epoch_number: FieldElement = rng.gen();
     let mr_bt: FieldElement = rng.gen();
     let end_cumulative_sc_tx_comm_tree_root: FieldElement = rng.gen();
     let btr_fee: u64 = rng.gen();
-    let ft_min_fee: u64 = rng.gen();
+    let ft_min_amount: u64 = rng.gen();
     let fees_field_elements = {
-        let fes = bytes_to_field_elements(vec![btr_fee, ft_min_fee]).unwrap();
+        let fes = ByteAccumulator::init()
+            .update(btr_fee).unwrap()
+            .update(ft_min_amount).unwrap()
+            .get_field_elements().unwrap();
         assert_eq!(fes.len(), 1);
         fes[0]
     };
     let message = h
+        .update(sc_id)
         .update(epoch_number)
         .update(mr_bt)
         .update(end_cumulative_sc_tx_comm_tree_root)
@@ -143,26 +150,24 @@ fn generate_inputs
         rng.gen()
     };
 
-    //Compute wcert_sysdata_hash
-    let wcert_sysdata_hash = if !wrong_wcert_sysdata_hash {
-        FieldHash::init_constant_length(5, None)
+    //Compute cert_data_hash
+    let cert_data_hash = if !wrong_cert_data_hash {
+        let wcert_sysdata_hash = FieldHash::init_constant_length(6, None)
+            .update(sc_id)
             .update(epoch_number)
             .update(mr_bt)
             .update(valid_field)
             .update(end_cumulative_sc_tx_comm_tree_root)
             .update(fees_field_elements)
             .finalize()
+            .unwrap();
+        FieldHash::init_constant_length(1, None)
+            .update(wcert_sysdata_hash)
+            .finalize()
             .unwrap()
     } else {
         rng.gen()
     };
-
-    // Compute aggregated input
-    let aggregated_input = FieldHash::init_constant_length(2, None)
-        .update(pks_threshold_hash)
-        .update(wcert_sysdata_hash)
-        .finalize()
-        .unwrap();
 
     //Create instance of the circuit
     NaiveTresholdSignatureTest {
@@ -170,12 +175,14 @@ fn generate_inputs
         sigs,
         threshold: t_field,
         b: b_bool,
+        sc_id,
         epoch_number,
         end_cumulative_sc_tx_comm_tree_root,
         mr_bt,
-        ft_min_fee,
+        ft_min_amount,
         btr_fee,
-        aggregated_input,
+        pks_threshold_hash,
+        cert_data_hash,
         max_pks,
     }
 }
@@ -226,9 +233,14 @@ fn generate_constraints(
     ).unwrap();
 
     //Check signatures
-    //Reconstruct message as H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee)
+    //Reconstruct message as H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)
 
     // Alloc field elements
+    let sc_id_g = FrGadget::alloc(
+        cs.ns(|| "alloc sc id"),
+        || Ok(c.sc_id)
+    ).unwrap();
+
     let epoch_number_g = FrGadget::alloc(
         cs.ns(|| "alloc epoch number"),
         || Ok(c.epoch_number)
@@ -244,30 +256,37 @@ fn generate_constraints(
         || Ok(c.end_cumulative_sc_tx_comm_tree_root)
     ).unwrap();
 
-    // Alloc btr_fee and ft_min_fee
+    // Alloc btr_fee and ft_min_amount
     let btr_fee_g = UInt64::alloc(
         cs.ns(|| "alloc btr_fee"),
         Some(c.btr_fee)
     ).unwrap();
 
-    let ft_min_fee_g = UInt64::alloc(
-        cs.ns(|| "alloc ft_min_fee"),
-        Some(c.ft_min_fee)
+    let ft_min_amount_g = UInt64::alloc(
+        cs.ns(|| "alloc ft_min_amount"),
+        Some(c.ft_min_amount)
     ).unwrap();
 
     // Pack them into a single field element
-    let mut fees_bits = btr_fee_g.to_bits_le();
-    fees_bits.append(&mut ft_min_fee_g.to_bits_le());
-    fees_bits.reverse();
+    let fees_bits = {
+        let mut bits = btr_fee_g.to_bits_le();
+        bits.reverse();
+
+        let mut ft_min_amount_bits = ft_min_amount_g.to_bits_le();
+        ft_min_amount_bits.reverse();
+
+        bits.append(&mut ft_min_amount_bits);
+        bits
+    };
 
     let fees_g = FrGadget::from_bits(
-        cs.ns(|| "pack(btr_fee, ft_min_fee)"),
+        cs.ns(|| "pack(btr_fee, ft_min_amount)"),
         fees_bits.as_slice()
     ).unwrap();
 
     let message_g = PoseidonHashGadget::enforce_hash_constant_length(
-        cs.ns(|| "H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee)"),
-        &[epoch_number_g.clone(), mr_bt_g.clone(), end_cumulative_sc_tx_comm_tree_root_g.clone(), fees_g.clone()],
+        cs.ns(|| "H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)"),
+        &[sc_id_g.clone(), epoch_number_g.clone(), mr_bt_g.clone(), end_cumulative_sc_tx_comm_tree_root_g.clone(), fees_g.clone()],
     ).unwrap();
 
     let mut sigs_g = Vec::with_capacity(c.max_pks);
@@ -306,28 +325,41 @@ fn generate_constraints(
         ).unwrap();
     }
 
-    //Enforce wcert_sysdata_hash
-    let wcert_sysdata_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
-        cs.ns(|| "H(epoch_number, bt_root, valid_sigs, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee)"),
-        &[epoch_number_g, mr_bt_g, valid_signatures.clone(), end_cumulative_sc_tx_comm_tree_root_g, fees_g],
+    //Enforce cert_data_hash
+    let cert_data_hash_g =  {
+        let wcert_sysdata_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "H(sc_id, epoch_number, bt_root, valid_sigs, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)"),
+            &[sc_id_g, epoch_number_g, mr_bt_g, valid_signatures.clone(), end_cumulative_sc_tx_comm_tree_root_g, fees_g],
+        ).unwrap();
+        PoseidonHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "H(proof_data (not present), cert_data_hash)"),
+            &[wcert_sysdata_hash_g]
+        )
+    }.unwrap();
+
+
+    //Check pks_threshold_hash (constant)
+    let expected_pks_threshold_hash_g = FrGadget::alloc_input(
+        cs.ns(|| "alloc constant as input"),
+        || Ok(c.pks_threshold_hash)
     ).unwrap();
 
-    //Check pks_threshold_hash and wcert_sysdata_hash
-    let expected_aggregated_input = FrGadget::alloc_input(
-        cs.ns(|| "alloc aggregated input"),
-        || Ok(c.aggregated_input)
+    pks_threshold_hash_g.enforce_equal(
+        cs.ns(|| "pks_threshold_hash: expected == actual"),
+        &expected_pks_threshold_hash_g
     ).unwrap();
 
-    let actual_aggregated_input = PoseidonHashGadget::enforce_hash_constant_length(
-        cs.ns(|| "H(pks_threshold_hash, wcert_sysdata_hash)"),
-        &[pks_threshold_hash_g, wcert_sysdata_hash_g]
+
+    // Check cert_data_hash
+    let expected_cert_data_hash_g = FrGadget::alloc_input(
+        cs.ns(|| "alloc input cert_data_hash_g"),
+        || Ok(c.cert_data_hash)
     ).unwrap();
 
-    expected_aggregated_input.enforce_equal(
-        cs.ns(|| "check aggregated input"),
-        &actual_aggregated_input
+    cert_data_hash_g.enforce_equal(
+        cs.ns(|| "cert_data_hash: expected == actual"),
+        &expected_cert_data_hash_g
     ).unwrap();
-
 
     //Alloc the b's as witnesses
     let mut bs_g = Vec::with_capacity(log_max_pks + 1);
@@ -360,11 +392,9 @@ fn generate_constraints(
 
 #[test]
 fn random_naive_threshold_sig_test() {
-    //let mut rng = OsRng::default();
 
     let n = 5;
-    for _ in 0..1 {
-        //let v: usize = rng.gen_range(0, n + 1);
+    for _ in 0..10 {
         let v = 5;
         let t = 4;
         let satisfiable = v >= t;

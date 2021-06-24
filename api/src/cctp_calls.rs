@@ -1,6 +1,6 @@
 use algebra::{
     ProjectiveCurve, AffineCurve,
-    ToConstraintField, UniformRand, serialize::*,
+    ToConstraintField, UniformRand,
 };
 use primitives::{crh::{
     FieldBasedHash,
@@ -24,18 +24,22 @@ use lazy_static::*;
 
 use cctp_primitives::{
     proving_system::{
+        init::get_g1_committer_key,
         verifier::{
-            certificate::{CertificateProofUserInputs, ZendooCertProofVerifier},
-            RawVerifierData, ZendooVerifier,
+            certificate::CertificateProofUserInputs, verify_zendoo_proof
         },
         error::ProvingSystemError,
+        ZendooProof, ZendooVerifierKey, ZendooProverKey, ProvingSystem
     },
     utils::{
-        proof_system::ProvingSystemUtils, get_bt_merkle_root,
+        get_bt_merkle_root,
         serialization::*,
-        commitment_tree::bytes_to_field_elements,
+        commitment_tree::ByteAccumulator,
+        data_structures::BackwardTransfer
     },
 };
+
+use std::path::Path;
 
 //*******************************Generic functions**********************************************
 
@@ -90,28 +94,38 @@ pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<F
         .finalize()
 }
 
-//Compute and return (MR(bt_list), H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_fee))
+//Compute and return (MR(bt_list), H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount))
 pub fn compute_msg_to_sign(
+    sc_id:                               &FieldElement,
     epoch_number:                        u32,
     end_cumulative_sc_tx_comm_tree_root: &FieldElement,
     btr_fee:                             u64,
-    ft_min_fee:                          u64,
-    bt_list:                             Vec<(u64, [u8; MC_PK_SIZE])>,
+    ft_min_amount:                       u64,
+    bt_list:                             Vec<BackwardTransfer>,
 ) -> Result<(FieldElement, FieldElement), Error> {
 
     let epoch_number = FieldElement::from(epoch_number);
 
     //Compute bt_list merkle_root
-    let mr_bt = get_bt_merkle_root(bt_list.as_slice())?;
+    let bt_list_opt = if bt_list.len() > 0 {
+        Some(bt_list.as_slice())
+    } else {
+        None
+    };
+    let mr_bt = get_bt_merkle_root(bt_list_opt)?;
 
     let fees_field_element = {
-        let fes = bytes_to_field_elements(vec![btr_fee, ft_min_fee])?;
+        let fes = ByteAccumulator::init()
+            .update(btr_fee)?
+            .update(ft_min_amount)?
+            .get_field_elements()?;
         assert_eq!(fes.len(), 1);
         fes[0]
     };
 
     //Compute message to be verified
-    let msg = FieldHash::init_constant_length(4, None)
+    let msg = FieldHash::init_constant_length(5, None)
+        .update(*sc_id)
         .update(epoch_number)
         .update(mr_bt)
         .update(*end_cumulative_sc_tx_comm_tree_root)
@@ -122,18 +136,20 @@ pub fn compute_msg_to_sign(
 }
 
 pub fn create_naive_threshold_sig_proof(
-    proving_system:                      ProvingSystem,
     pks:                                 &[SchnorrPk],
     mut sigs:                            Vec<Option<SchnorrSig>>,
+    sc_id:                               &FieldElement,
     epoch_number:                        u32,
     end_cumulative_sc_tx_comm_tree_root: &FieldElement,
     btr_fee:                             u64,
-    ft_min_fee:                          u64,
-    bt_list:                             Vec<(u64, [u8; MC_PK_SIZE])>,
+    ft_min_amount:                       u64,
+    bt_list:                             Vec<BackwardTransfer>,
     threshold:                           u64,
-    proving_key_path:                    &str,
+    proving_key_path:                    &Path,
     enforce_membership:                  bool,
     zk:                                  bool,
+    compressed_pk:                       bool,
+    compress_proof:                      bool,
 ) -> Result<(Vec<u8>, u64), Error> {
 
     //Get max pks
@@ -142,10 +158,11 @@ pub fn create_naive_threshold_sig_proof(
 
     // Compute msg to sign
     let (mr_bt, msg) = compute_msg_to_sign(
+        sc_id,
         epoch_number,
         end_cumulative_sc_tx_comm_tree_root,
         btr_fee,
-        ft_min_fee,
+        ft_min_amount,
         bt_list,
     )?;
 
@@ -172,45 +189,29 @@ pub fn create_naive_threshold_sig_proof(
     let threshold = FieldElement::from(threshold);
 
     let c = NaiveTresholdSignature::<FieldElement>::new(
-        pks, sigs, threshold, b, FieldElement::from(epoch_number),
-        *end_cumulative_sc_tx_comm_tree_root, mr_bt, ft_min_fee, btr_fee, max_pks,
+        pks, sigs, threshold, b, *sc_id, FieldElement::from(epoch_number),
+        *end_cumulative_sc_tx_comm_tree_root, mr_bt, ft_min_amount, btr_fee, max_pks,
     );
 
-    let proof = match proving_system {
-        ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
-        ProvingSystem::Darlin => {
-            // Read proving key
-            let pk: DarlinProverKey = if enforce_membership {
-                read_from_file_checked(proving_key_path)
-            } else {
-                read_from_file(proving_key_path)
-            }?;
+    let pk: ZendooProverKey = read_from_file(
+        proving_key_path,
+        Some(enforce_membership),
+        Some(compressed_pk)
+    )?;
 
+    let proof = match pk {
+        ZendooProverKey::Darlin(_) => unimplemented!(),
+        ZendooProverKey::CoboundaryMarlin(pk) => {
             // Call prover
             let rng = &mut OsRng;
-            serialize_to_buffer(&Darlin::create_proof(
-                c,
+            let proof = CoboundaryMarlin::prove(
                 &pk,
+                get_g1_committer_key().unwrap().as_ref().unwrap(),
+                c,
                 zk,
                 if zk { Some(rng) } else { None },
-            )?)?
-        },
-        ProvingSystem::CoboundaryMarlin => {
-            // Read proving key
-            let pk: CoboundaryMarlinProverKey = if enforce_membership {
-                read_from_file_checked(proving_key_path)
-            } else {
-                read_from_file(proving_key_path)
-            }?;
-
-            // Call prover
-            let rng = &mut OsRng;
-            serialize_to_buffer(&CoboundaryMarlin::create_proof(
-                c,
-                &pk,
-                zk,
-                if zk { Some(rng) } else { None },
-            )?)?
+            )?;
+            serialize_to_buffer(&ZendooProof::CoboundaryMarlin(MarlinProof(proof)), Some(compress_proof))?
         },
     };
     Ok((proof, valid_signatures))
@@ -218,64 +219,66 @@ pub fn create_naive_threshold_sig_proof(
 
 
 pub fn verify_naive_threshold_sig_proof(
-    proving_system:                      ProvingSystem,
-    constant:                            &FieldElement,
-    epoch_number:                        u32,
-    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
-    btr_fee:                             u64,
-    ft_min_fee:                          u64,
-    bt_list:                             Vec<(u64, [u8; MC_PK_SIZE])>,
-    valid_sigs:                          u64,
-    proof:                               Vec<u8>,
-    check_proof:                         bool,
-    vk_path:                             &str,
-    check_vk:                            bool
+    constant:                                   &FieldElement,
+    sc_id:                                      &FieldElement,
+    epoch_number:                               u32,
+    end_cumulative_sc_tx_commitment_tree_root:  &FieldElement,
+    btr_fee:                                    u64,
+    ft_min_amount:                              u64,
+    bt_list:                                    Vec<BackwardTransfer>,
+    valid_sigs:                                 u64,
+    proof:                                      Vec<u8>,
+    check_proof:                                bool,
+    compressed_proof:                           bool,
+    vk_path:                                    &Path,
+    check_vk:                                   bool,
+    compressed_vk:                              bool,
 ) -> Result<bool, Error>
 {
-    // TODO: These copies here are wasted, since most of the CertificateProofUserInputs are
-    //       already passed around in their deserialized form. Instead this representation is
-    //       useful in zendoo-mc-cryptolib. We should consider adding a "non raw" representation
-    //       in zendoo-cctp-lib to save some copies.
-    let constant = &{
-        let mut buffer = [0u8; FIELD_SIZE];
-        CanonicalSerialize::serialize(constant, &mut buffer[..])?;
-        buffer
-    };
-
-    let end_cumulative_sc_tx_commitment_tree_root = &{
-        let mut buffer = [0u8; FIELD_SIZE];
-        CanonicalSerialize::serialize(end_cumulative_sc_tx_comm_tree_root, &mut buffer[..])?;
-        buffer
+    let bt_list_opt = if bt_list.len() > 0 {
+        Some(bt_list.as_slice())
+    } else {
+        None
     };
 
     let ins = CertificateProofUserInputs {
         constant: Some(constant),
+        sc_id,
         epoch_number,
         quality: valid_sigs,
-        bt_list: bt_list.as_slice(),
+        bt_list: bt_list_opt,
         custom_fields: None,
         end_cumulative_sc_tx_commitment_tree_root,
         btr_fee,
-        ft_min_fee
+        ft_min_amount
     };
 
-    // Read verifier key
-    let vk: Vec<u8> = std::fs::read(vk_path)?;
-
-    let raw_verifier_data = match proving_system {
-        ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
-        ProvingSystem::Darlin => RawVerifierData::Darlin {proof, vk},
-        ProvingSystem::CoboundaryMarlin => RawVerifierData::CoboundaryMarlin {proof, vk},
-    };
-
-    let rng = &mut OsRng;
-    let is_verified = ZendooCertProofVerifier::verify_proof(
-        &ins,
-        raw_verifier_data,
-        check_proof,
-        check_vk,
-        Some(rng)
+    // Check that the proving system type of the vk and proof are the same, before
+    // deserializing them all
+    let vk_ps_type = read_from_file::<ProvingSystem>(
+        vk_path,
+        None,
+        None,
     )?;
+
+    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(
+        &proof[..1],
+        None,
+        None,
+    )?;
+
+    if vk_ps_type != proof_ps_type {
+        Err(ProvingSystemError::ProvingSystemMismatch)?
+    }
+
+    // Deserialize proof and vk
+    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))?;
+
+    let proof: ZendooProof = deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))?;
+
+    // Verify proof
+    let rng = &mut OsRng;
+    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))?;
 
     Ok(is_verified)
 }
@@ -283,9 +286,9 @@ pub fn verify_naive_threshold_sig_proof(
 //VRF types and functions
 
 lazy_static! {
-    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<Projective> = {
+    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<G2Projective> = {
         let params = VRFParams::new();
-        BoweHopwoodPedersenParameters::<Projective>{generators: params.group_hash_generators}
+        BoweHopwoodPedersenParameters::<G2Projective>{generators: params.group_hash_generators}
     };
 }
 
@@ -357,53 +360,55 @@ pub(crate) fn into_i8(v: Vec<u8>) -> Vec<i8> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rand::{RngCore, Rng};
+    use rand::Rng;
     use algebra::Field;
     use cctp_primitives::utils::{
-        poseidon_hash::*, mht::*, proof_system::*,
+        poseidon_hash::*, mht::*
     };
+    use cctp_primitives::proving_system::init_dlog_keys;
+    use demo_circuit::generate_circuit_keypair;
 
-    fn create_sample_naive_threshold_sig_circuit(bt_num: usize) {
+    fn create_sample_naive_threshold_sig_circuit(
+        bt_num:     usize,
+        pk_path:    &Path,
+        vk_path:    &Path,
+        proof_path: &Path,
+    ) {
         //assume to have 3 pks, threshold = 2
         let mut rng = OsRng;
 
-        //Generate random mc block hashes and bt list
-        let mut end_cumulative_sc_tx_comm_tree_root = [0u8; 32];
-        rng.fill_bytes(&mut end_cumulative_sc_tx_comm_tree_root);
-        end_cumulative_sc_tx_comm_tree_root[31] = 0u8; // Mask away last byte
-        println!("end_cumulative_sc_tx_comm_tree_root u8: {:?}", end_cumulative_sc_tx_comm_tree_root);
-        println!("end_cumulative_sc_tx_comm_tree_root i8: {:?}", into_i8(end_cumulative_sc_tx_comm_tree_root.to_vec()));
-
+        // Generate random data
         let mut bt_list = vec![];
         for _ in 0..bt_num {
-            bt_list.push((0u64, [0u8; MC_PK_SIZE]));
+            bt_list.push(BackwardTransfer::default());
         }
 
-        let end_cumulative_sc_tx_comm_tree_root_f = deserialize_from_buffer::<FieldElement>(&end_cumulative_sc_tx_comm_tree_root).unwrap();
-
+        let end_cumulative_sc_tx_comm_tree_root = FieldElement::rand(&mut rng);
+        let sc_id = FieldElement::rand(&mut rng);
         let epoch_number: u32 = rng.gen();
         let btr_fee: u64 = rng.gen();
-        let ft_min_fee: u64 = rng.gen();
+        let ft_min_amount: u64 = rng.gen();
 
         //Compute msg to sign
         let (_, msg) = compute_msg_to_sign(
+            &sc_id,
             epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root_f,
+            &end_cumulative_sc_tx_comm_tree_root,
             btr_fee,
-            ft_min_fee,
+            ft_min_amount,
             bt_list.clone()
         ).unwrap();
         println!("compute_msg_to_sign finished");
 
         //Generate params and write them to file
-        let proving_key_path = if bt_num != 0 {"./sample_pk"} else {"./sample_pk_no_bwt"};
-        let verifying_key_path = if bt_num != 0 {"./sample_vk"} else {"./sample_vk_no_bwt"};
         let circ = get_instance_for_setup(3);
         generate_circuit_keypair(
             circ,
             ProvingSystem::CoboundaryMarlin,
-            proving_key_path,
-            verifying_key_path
+            pk_path,
+            vk_path,
+            Some(true),
+            Some(true)
         ).unwrap();
         println!("generate_parameters finished");
 
@@ -415,7 +420,7 @@ mod test {
             let keypair = schnorr_generate_key();
             pks.push(keypair.0);
             sks.push(keypair.1);
-            println!("sk: {:?}", into_i8(serialize_to_buffer(&keypair.1).unwrap()));
+            println!("sk: {:?}", into_i8(serialize_to_buffer(&keypair.1, None).unwrap()));
         }
         println!("pks / sks finished");
 
@@ -424,89 +429,117 @@ mod test {
         sigs.push(None);
         sigs.push(Some(schnorr_sign(&msg, &sks[2], &pks[2]).unwrap()));
 
-        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[0]).unwrap()));
-        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[2]).unwrap()));
-        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[1]).unwrap()));
+        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[0], None).unwrap()));
+        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[2], None).unwrap()));
+        println!("sk: {:?}", into_i8(serialize_to_buffer(&sks[1], None).unwrap()));
 
-        println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[0]).unwrap()));
-        println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[2]).unwrap()));
+        println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[0], None).unwrap()));
+        println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[2], None).unwrap()));
 
         let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
-        println!("Constant u8: {:?}", serialize_to_buffer(&constant).unwrap());
+        println!("Constant u8: {:?}", serialize_to_buffer(&constant, None).unwrap());
 
         //Create and serialize proof
         let (proof, quality) = create_naive_threshold_sig_proof(
-            ProvingSystem::CoboundaryMarlin,
             pks.as_slice(),
             sigs,
+            &sc_id,
             epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root_f,
+            &end_cumulative_sc_tx_comm_tree_root,
             btr_fee,
-            ft_min_fee,
+            ft_min_amount,
             bt_list.clone(),
             threshold,
-            proving_key_path,
+            pk_path,
             false,
             false,
+            true,
+            true
         ).unwrap();
-        let proof_path = if bt_num != 0 {"./sample_proof"} else {"./sample_proof_no_bwt"};
-        write_to_file(&proof, proof_path).unwrap();
+        write_to_file(&proof, proof_path, Some(true)).unwrap();
 
         //Verify proof
         assert!(verify_naive_threshold_sig_proof(
-            ProvingSystem::CoboundaryMarlin,
             &constant,
+            &sc_id,
             epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root_f,
+            &end_cumulative_sc_tx_comm_tree_root,
             btr_fee,
-            ft_min_fee,
+            ft_min_amount,
             bt_list.clone(),
             quality,
             proof.clone(),
             true,
-            verifying_key_path,
+            true,
+            vk_path,
+            true,
             true,
         ).unwrap());
 
 
         //Generate wrong public inputs by changing quality and assert proof verification doesn't pass
         assert!(!verify_naive_threshold_sig_proof(
-            ProvingSystem::CoboundaryMarlin,
             &constant,
+            &sc_id,
             epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root_f,
+            &end_cumulative_sc_tx_comm_tree_root,
             btr_fee,
-            ft_min_fee,
+            ft_min_amount,
             bt_list,
             quality - 1,
             proof,
             true,
-            verifying_key_path,
+            true,
+            vk_path,
+            true,
             true,
         ).unwrap());
     }
 
     #[test]
     fn sample_calls_naive_threshold_sig_circuit() {
+        let tmp_dir = std::env::temp_dir();
+        let ps_type = ProvingSystem::CoboundaryMarlin;
+
         init_dlog_keys(
-            ProvingSystem::CoboundaryMarlin,
+            ps_type,
             1 << 17,
-            "./g1_ck",
-            "./g2_ck"
+            1 << 14,
         ).unwrap();
 
         println!("****************With BWT**********************");
-        create_sample_naive_threshold_sig_circuit(10);
-        println!("****************Without BWT*******************");
-        create_sample_naive_threshold_sig_circuit(0);
 
-        std::fs::remove_file("./sample_pk").unwrap();
-        std::fs::remove_file("./sample_vk").unwrap();
-        std::fs::remove_file("./sample_proof").unwrap();
-        std::fs::remove_file("./sample_pk_no_bwt").unwrap();
-        std::fs::remove_file("./sample_vk_no_bwt").unwrap();
-        std::fs::remove_file("./sample_proof_no_bwt").unwrap();
-        std::fs::remove_file("./g1_ck").unwrap();
+        let mut pk_path = tmp_dir.clone();
+        pk_path.push("sample_pk");
+
+        let mut vk_path = tmp_dir.clone();
+        vk_path.push("sample_vk");
+
+        let mut proof_path = tmp_dir.clone();
+        proof_path.push("sample_proof");
+
+        create_sample_naive_threshold_sig_circuit(10, &pk_path, &vk_path, &proof_path);
+
+        println!("****************Without BWT*******************");
+
+        let mut pk_path_no_bwt = tmp_dir.clone();
+        pk_path_no_bwt.push("sample_pk_no_bwt");
+
+        let mut vk_path_no_bwt = tmp_dir.clone();
+        vk_path_no_bwt.push("sample_vk_no_bwt");
+
+        let mut proof_path_no_bwt = tmp_dir.clone();
+        proof_path_no_bwt.push("sample_proof_no_bwt");
+
+        create_sample_naive_threshold_sig_circuit(0, &pk_path_no_bwt, &vk_path_no_bwt, &proof_path_no_bwt);
+
+        println!("*************** Clean up **********************");
+        std::fs::remove_file(pk_path).unwrap();
+        std::fs::remove_file(vk_path).unwrap();
+        std::fs::remove_file(proof_path).unwrap();
+        std::fs::remove_file(pk_path_no_bwt).unwrap();
+        std::fs::remove_file(vk_path_no_bwt).unwrap();
+        std::fs::remove_file(proof_path_no_bwt).unwrap();
     }
 
     #[test]
@@ -519,24 +552,24 @@ mod test {
         assert!(schnorr_verify_public_key(&pk)); //Verify pk
 
         //Serialize/deserialize pk
-        let pk_serialized = serialize_to_buffer(&pk).unwrap();
+        let pk_serialized = serialize_to_buffer(&pk, Some(true)).unwrap();
         assert_eq!(pk_serialized.len(), SCHNORR_PK_SIZE);
-        let pk_deserialized: SchnorrPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
+        let pk_deserialized: SchnorrPk = deserialize_from_buffer(&pk_serialized, Some(true), Some(true)).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
-        let sk_serialized = serialize_to_buffer(&sk).unwrap();
+        let sk_serialized = serialize_to_buffer(&sk, None).unwrap();
         assert_eq!(sk_serialized.len(), SCHNORR_SK_SIZE);
-        let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
+        let sk_deserialized = deserialize_from_buffer(&sk_serialized, None, None).unwrap();
         assert_eq!(sk, sk_deserialized);
 
         let sig = schnorr_sign(&msg, &sk, &pk).unwrap(); //Sign msg
         assert!(is_valid(&sig));
 
         //Serialize/deserialize sig
-        let sig_serialized = serialize_to_buffer(&sig).unwrap();
+        let sig_serialized = serialize_to_buffer(&sig, None).unwrap();
         assert_eq!(sig_serialized.len(), SCHNORR_SIG_SIZE);
-        let sig_deserialized = deserialize_from_buffer(&sig_serialized).unwrap();
+        let sig_deserialized = deserialize_from_buffer(&sig_serialized, Some(true), None).unwrap();
         assert_eq!(sig, sig_deserialized);
 
         assert!(schnorr_verify_signature(&msg, &pk, &sig).unwrap()); //Verify sig
@@ -556,29 +589,29 @@ mod test {
         assert!(vrf_verify_public_key(&pk)); //Verify pk
 
         //Serialize/deserialize pk
-        let pk_serialized = serialize_to_buffer(&pk).unwrap();
+        let pk_serialized = serialize_to_buffer(&pk, Some(true)).unwrap();
         assert_eq!(pk_serialized.len(), VRF_PK_SIZE);
-        let pk_deserialized: VRFPk = deserialize_from_buffer_checked(&pk_serialized).unwrap();
+        let pk_deserialized: VRFPk = deserialize_from_buffer(&pk_serialized, Some(true), Some(true)).unwrap();
         assert_eq!(pk, pk_deserialized);
 
         //Serialize/deserialize sk
-        let sk_serialized = serialize_to_buffer(&sk).unwrap();
+        let sk_serialized = serialize_to_buffer(&sk, None).unwrap();
         assert_eq!(sk_serialized.len(), VRF_SK_SIZE);
-        let sk_deserialized = deserialize_from_buffer(&sk_serialized).unwrap();
+        let sk_deserialized = deserialize_from_buffer(&sk_serialized, None, None).unwrap();
         assert_eq!(sk, sk_deserialized);
 
         let (vrf_proof, vrf_out) = vrf_prove(&msg, &sk, &pk).unwrap(); //Create vrf proof for msg
         assert!(is_valid(&vrf_proof));
 
         //Serialize/deserialize vrf proof
-        let proof_serialized = serialize_to_buffer(&vrf_proof).unwrap();
+        let proof_serialized = serialize_to_buffer(&vrf_proof, Some(true)).unwrap();
         assert_eq!(proof_serialized.len(), VRF_PROOF_SIZE);
-        let proof_deserialized = deserialize_from_buffer_checked(&proof_serialized).unwrap();
+        let proof_deserialized = deserialize_from_buffer(&proof_serialized, Some(true), Some(true)).unwrap();
         assert_eq!(vrf_proof, proof_deserialized);
 
         //Serialize/deserialize vrf out (i.e. a field element)
-        let vrf_out_serialized = serialize_to_buffer(&vrf_out).unwrap();
-        let vrf_out_deserialized = deserialize_from_buffer(&vrf_out_serialized).unwrap();
+        let vrf_out_serialized = serialize_to_buffer(&vrf_out, None).unwrap();
+        let vrf_out_deserialized = deserialize_from_buffer(&vrf_out_serialized, None, None).unwrap();
         assert_eq!(vrf_out, vrf_out_deserialized);
 
         let vrf_out_dup = vrf_proof_to_hash(&msg, &pk, &vrf_proof).unwrap(); //Verify vrf proof and get vrf out for msg
@@ -640,8 +673,8 @@ mod test {
             }
 
             // Serialization/deserialization test
-            let path_serialized = serialize_to_buffer(&path).unwrap();
-            let path_deserialized: GingerMHTPath = deserialize_from_buffer(&path_serialized).unwrap();
+            let path_serialized = serialize_to_buffer(&path, None).unwrap();
+            let path_deserialized: GingerMHTPath = deserialize_from_buffer(&path_serialized, Some(true), None).unwrap();
             assert_eq!(path, path_deserialized);
         }
     }
