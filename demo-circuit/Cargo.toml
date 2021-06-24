@@ -6,13 +6,13 @@ edition = "2018"
 include = ["Cargo.toml", "src"]
 
 [dependencies]
-algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
-primitives = {version = "0.1.0", features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
-r1cs-crypto = {version = "0.1.0", features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
-r1cs-core = {version = "0.1.0", git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
-r1cs-std = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "algebra_ocl_serializations"}
-poly-commit = { git = "https://github.com/HorizenLabs/poly-commit", branch = "dev_serializations", features = ["asm"]}
-marlin = {version = "0.1.0", git = "https://github.com/HorizenLabs/marlin", branch = "dev_serializations", features = [ "asm", "parallel" ] }
+algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development_asm"}
+primitives = {version = "0.1.0", features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development_asm"}
+r1cs-crypto = {version = "0.1.0", features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development_asm"}
+r1cs-core = {version = "0.1.0", git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development_asm"}
+r1cs-std = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development_asm"}
+
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "optimizations_asm" }
 
 derivative = "1"
 lazy_static = "1"
@@ -24,3 +24,7 @@ blake2 = { version = "0.8", default-features = false }
 digest = "0.7"
 blake2s_simd = "0.5"
 bit-vec = "0.6.1"
+
+[features]
+default = [ "asm" ]
+asm = [ "algebra/llvm_asm", "cctp_primitives/asm" ]
