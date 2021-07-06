@@ -23,10 +23,11 @@ rand = { version = "0.8.4" }
 rand_xorshift = { version = "0.3.0" }
 blake2 = { version = "0.8.1", default-features = false }
 
-[features]
-asm = ["algebra/llvm_asm"]
-
 [lib]
 name = "zendoo_sc"
 path = "src/lib.rs"
 crate_type = ["cdylib"]
+
+[features]
+default = [ "asm" ]
+asm = [ "algebra/llvm_asm", "cctp_primitives/asm", "demo-circuit/asm" ]
