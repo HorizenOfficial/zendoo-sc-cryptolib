@@ -367,7 +367,6 @@ mod test {
     };
     use cctp_primitives::proving_system::init_dlog_keys;
     use demo_circuit::generate_circuit_keypair;
-    use cctp_primitives::commitment_tree::CommitmentTree;
 
     fn create_sample_naive_threshold_sig_circuit(
         bt_num:     usize,
