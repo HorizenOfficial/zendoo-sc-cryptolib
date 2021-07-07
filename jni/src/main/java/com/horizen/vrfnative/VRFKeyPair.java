@@ -4,7 +4,7 @@ import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
 
-public class VRFKeyPair {
+public class VRFKeyPair implements AutoCloseable {
     private VRFSecretKey secretKey;
     private VRFPublicKey publicKey;
 
@@ -40,5 +40,11 @@ public class VRFKeyPair {
 
     public VRFPublicKey getPublicKey() {
         return this.publicKey;
+    }
+
+    @Override
+    public void close() throws Exception {
+        this.publicKey.close();
+        this.secretKey.close();
     }
 }

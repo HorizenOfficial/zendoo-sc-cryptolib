@@ -3,7 +3,7 @@ package com.horizen.schnorrnative;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
-public class SchnorrKeyPair {
+public class SchnorrKeyPair implements AutoCloseable {
     private SchnorrSecretKey secretKey;
     private SchnorrPublicKey publicKey;
 
@@ -39,5 +39,11 @@ public class SchnorrKeyPair {
 
     public SchnorrPublicKey getPublicKey() {
         return  this.publicKey;
+    }
+
+    @Override
+    public void close() throws Exception {
+        this.publicKey.close();
+        this.secretKey.close();
     }
 }

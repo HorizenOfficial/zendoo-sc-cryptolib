@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+cargo test --all-features  
+
 cargo clean
 
 cargo build -j$(($(nproc)+1)) --release --target=x86_64-pc-windows-gnu

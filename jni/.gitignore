@@ -4,3 +4,6 @@
 Cargo.lock
 .idea
 *.iml
+hs_err*
+proving_key
+verification_key

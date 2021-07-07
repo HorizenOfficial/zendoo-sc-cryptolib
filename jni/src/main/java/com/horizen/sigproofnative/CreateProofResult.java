@@ -1,8 +1,14 @@
 package com.horizen.sigproofnative;
 
+import com.horizen.librustsidechains.Library;
+
 public class CreateProofResult {
     private byte[] proof;
     private long quality;
+
+    static {
+        Library.load();
+    }
 
     public CreateProofResult(byte[] proof, long quality) {
         this.proof = proof;

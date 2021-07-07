@@ -7,7 +7,7 @@ In particular it exposes interfaces to:
 
 * handle the finite fields that are the alphabets of the zk Proving Systems
 * call the Poseidon function, a Snark friendly hashing algorithm
-* use a Poseidon-based Merkle Tree (calculate root, verify merkle path, ...)
+* use a Poseidon-based Merkle Tree coming in different variants (in-memory optimized, persistent sparse, persistent lazy sparse) 
 * compute and verify Schnorr signatures, handle associated keypairs
 * compute and verify a VRF proof, fetch a VRF output, handle associated keypairs (to support Ouroborous-style PoS sidechain consensus)
 * create and manage Zendoo Sidechain proofs
@@ -31,6 +31,29 @@ There are a few Rust tests that can be executed still with the usual Cargo comma
 ```
 	cargo test
 ```  
+
+
+## Java Jar build guide
+
+To be able to build a Java Jar package you can use the `build_jar.sh` script in `ci` folder.
+Requirements:
+1. Build on Linux (Ubuntu 18.04+, for example) with a cross compilation of a native Rust code for windows target as well.
+2. Install `rust` and `cargo` following the [official guide](https://www.rust-lang.org/tools/install). Restart the OS if needed.
+3. Add windows target support for `cargo`:
+    ```
+    rustup target add x86_64-pc-windows-gnu
+    rustup toolchain install stable-x86_64-pc-windows-gnu
+    ```
+4. Install maven, openjdk, clang, llvm, mingw:
+    ```
+    sudo apt-get install clang llvm maven gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+    ```
+5. Configure `mingw` to be able to cross compile the windows target of cryptolib dependencies:
+    ```
+    update-alternatives --install /usr/bin/x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix 100
+    update-alternatives --install /usr/bin/x86_64-w64-mingw32-g++ x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix 100
+    ``` 
+6. Run `./ci/build_jar.sh`
 
 
 ## Contributing
