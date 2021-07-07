@@ -48,19 +48,24 @@ use cctp_primitives::{
     proving_system::{
         ProvingSystem, ZendooProverKey, ZendooVerifierKey,
         init::get_g1_committer_key,
-        error::ProvingSystemError
+        error::ProvingSystemError,
+        compute_proof_vk_size
     },
     utils::serialization::write_to_file,
 };
 use std::path::Path;
 
 /// Utility function: generate and save to specified paths the SNARK proving and
-/// verification key associated to circuit `circ`.
+/// verification key associated to circuit `circ`. Check that their sizes are
+/// compatible with `max_proof_size` and `max_vk_size`.
 pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
     circ: C,
     proving_system: ProvingSystem,
     pk_path: &Path,
     vk_path: &Path,
+    max_proof_size: usize,
+    max_vk_size: usize,
+    zk: bool,
     compress_pk: Option<bool>,
     compress_vk: Option<bool>,
 ) -> Result<(), Error>
@@ -69,7 +74,25 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
     match proving_system {
         ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
         ProvingSystem::CoboundaryMarlin => {
-            let (pk, vk) = CoboundaryMarlin::index(g1_ck.as_ref().unwrap(), circ)?;
+            let index = CoboundaryMarlin::get_index_info(circ)?;
+            let (proof_size, vk_size) = compute_proof_vk_size(
+                g1_ck.as_ref().unwrap().comm_key.len().next_power_of_two(),
+                index.index_info,
+                zk,
+                proving_system,
+            );
+            if proof_size > max_proof_size || vk_size > max_vk_size
+            {
+                return Err(ProvingSystemError::SetupFailed(
+                    format!(
+                        "Circuit is too complex: \
+                        Max supported proof size: {}, Actual proof size: {} \
+                        Max supported vk size: {}, Actual vk size: {}",
+                        max_proof_size, proof_size, max_vk_size, vk_size
+                    )
+                ))?;
+            }
+            let (pk, vk) = CoboundaryMarlin::circuit_specific_setup(g1_ck.as_ref().unwrap(), index)?;
             write_to_file(&ZendooProverKey::CoboundaryMarlin(pk), pk_path, compress_pk)?;
             write_to_file(&ZendooVerifierKey::CoboundaryMarlin(vk), vk_path, compress_vk)?;
         },

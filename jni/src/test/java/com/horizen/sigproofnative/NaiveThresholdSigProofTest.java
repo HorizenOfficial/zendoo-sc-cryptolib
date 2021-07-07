@@ -27,13 +27,18 @@ import static org.junit.Assert.assertEquals;
 
 public class NaiveThresholdSigProofTest {
 
-    static int keyCount = 3;
-    static long threshold = 2;
+    static int keyCount = 7;
+    static long threshold = 5;
     static int backwardTransferCout = 10;
+    static boolean zk = false;
 
     static int epochNumber = 10;
     static long btrFee = 100L;
     static long ftMinAmount = 200L;
+
+    static int maxProofSize = 7000;
+    static int maxVkSize = 4000;
+
     FieldElement scId;
     FieldElement endCumulativeScTxCommTreeRoot;
 
@@ -50,14 +55,16 @@ public class NaiveThresholdSigProofTest {
     @BeforeClass
     public static void initKeys() {
         assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
-        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath));
+        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath, zk, maxProofSize, maxVkSize));
+        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath, zk, 1, maxVkSize));
+        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath, zk, maxProofSize, 1));
         assertEquals(
                 psType,
-                NaiveThresholdSigProof.getVerifierKeyProvingSystemType(snarkPkPath)
+                ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
         );
         assertEquals(
-                NaiveThresholdSigProof.getProverKeyProvingSystemType(snarkPkPath),
-                NaiveThresholdSigProof.getVerifierKeyProvingSystemType(snarkVkPath)
+                ProvingSystem.getProverKeyProvingSystemType(snarkPkPath),
+                ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
         );
     }
 
@@ -119,13 +126,13 @@ public class NaiveThresholdSigProofTest {
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
             btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
-            snarkPkPath, false, false
+            snarkPkPath, false, zk
         );
 
         assertNotNull("Proof creation must be successful", proofResult);
 
         byte[] proof = proofResult.getProof();
-        assertEquals(psType, NaiveThresholdSigProof.getProofProvingSystemType(proof));
+        assertEquals(psType, ProvingSystem.getProofProvingSystemType(proof));
 
         long quality = proofResult.getQuality();
 

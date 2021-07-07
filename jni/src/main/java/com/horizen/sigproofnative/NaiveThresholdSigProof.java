@@ -5,6 +5,7 @@ import com.horizen.librustsidechains.FieldElement;
 import com.horizen.schnorrnative.SchnorrPublicKey;
 import com.horizen.schnorrnative.SchnorrSignature;
 import com.horizen.provingsystemnative.ProvingSystemType;
+import com.horizen.provingsystemnative.ProvingSystem;
 
 import java.util.List;
 
@@ -49,47 +50,64 @@ public class NaiveThresholdSigProof {
     }
 
     private static native boolean nativeSetup(
-            ProvingSystemType psType,
-            long maxPks,
-            String provingKeyPath,
-            String verificationKeyPath,
-            boolean compressPk,
-            boolean compressVk
+        ProvingSystemType psType,
+        long maxPks,
+        String provingKeyPath,
+        String verificationKeyPath,
+        boolean zk,
+        int maxProofSize,
+        int maxVkSize,
+        boolean compressPk,
+        boolean compressVk
     );
 
     public static boolean setup(
-            ProvingSystemType psType,
-            long maxPks,
-            String provingKeyPath,
-            String verificationKeyPath,
-            boolean compressPk,
-            boolean compressVk
+        ProvingSystemType psType,
+        long maxPks,
+        String provingKeyPath,
+        String verificationKeyPath,
+        boolean zk,
+        int maxProofSize,
+        int maxVkSize,
+        boolean compressPk,
+        boolean compressVk
     )
     {
-        return nativeSetup(psType, maxPks, provingKeyPath, verificationKeyPath, compressPk, compressVk);
+        return nativeSetup(
+            psType, maxPks, provingKeyPath, verificationKeyPath,
+            zk, maxProofSize, maxVkSize, compressPk, compressVk
+        );
     }
 
     public static boolean setup(
-            ProvingSystemType psType,
-            long maxPks,
-            String provingKeyPath,
-            String verificationKeyPath
+        ProvingSystemType psType,
+        long maxPks,
+        String provingKeyPath,
+        String verificationKeyPath,
+        boolean zk,
+        int maxProofSize,
+        int maxVkSize
     )
     {
-        return nativeSetup(psType, maxPks, provingKeyPath, verificationKeyPath, true, true);
+        return nativeSetup(
+            psType, maxPks, provingKeyPath, verificationKeyPath,
+            zk, maxProofSize, maxVkSize, true, true
+        );
     }
 
-
-    private static native int nativeGetProverKeyProvingSystemType(String provingKeyPath);
-
-    public static ProvingSystemType getProverKeyProvingSystemType(String provingKeyPath) {
-        return ProvingSystemType.intToProvingSystemType(nativeGetProverKeyProvingSystemType(provingKeyPath));
-    }
-
-    private static native int nativeGetVerifierKeyProvingSystemType(String verifierKeyPath);
-
-    public static ProvingSystemType getVerifierKeyProvingSystemType(String verifierKeyPath) {
-        return ProvingSystemType.intToProvingSystemType(nativeGetVerifierKeyProvingSystemType(verifierKeyPath));
+    public static boolean setup(
+        ProvingSystemType psType,
+        long maxPks,
+        String provingKeyPath,
+        String verificationKeyPath,
+        int maxProofSize,
+        int maxVkSize
+    )
+    {
+        return nativeSetup(
+            psType, maxPks, provingKeyPath, verificationKeyPath,
+            false, maxProofSize, maxVkSize, true, true
+        );
     }
 
     private static native CreateProofResult nativeCreateProof(
@@ -183,12 +201,6 @@ public class NaiveThresholdSigProof {
                 threshold, provingKeyPath, false, zk,
                 true, true
         );
-    }
-
-    private static native int nativeGetProofProvingSystemType(byte[] proof);
-
-    public static ProvingSystemType getProofProvingSystemType(byte[] proof) {
-        return ProvingSystemType.intToProvingSystemType(nativeGetProofProvingSystemType(proof));
     }
 
     // TODO: check type of `constant` and `endCumulativeScTxCommTreeRoot`. Why not a byte[]?

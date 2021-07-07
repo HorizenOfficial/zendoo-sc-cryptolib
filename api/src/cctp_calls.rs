@@ -407,6 +407,9 @@ mod test {
             ProvingSystem::CoboundaryMarlin,
             pk_path,
             vk_path,
+            7000,
+            4000,
+            false,
             Some(true),
             Some(true)
         ).unwrap();
