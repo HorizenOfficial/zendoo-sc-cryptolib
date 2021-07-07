@@ -927,6 +927,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
         read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
     };
 
+    if !path.is_valid() {
+        return JNI_FALSE;
+    }
+
     match verify_ginger_merkle_path(path, _height as usize, leaf, root) {
         Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
         Err(_) => JNI_FALSE // CRYPTO_ERROR
@@ -964,6 +968,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
 
         read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
     };
+
+    if !path.is_valid() {
+        return JNI_FALSE;
+    }
 
     if verify_ginger_merkle_path_without_length_check(path, leaf, root) {
         JNI_TRUE
