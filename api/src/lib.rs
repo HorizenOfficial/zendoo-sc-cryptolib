@@ -124,6 +124,7 @@ use jni::sys::{JNI_TRUE, JNI_FALSE};
 use cctp_primitives::utils::compute_sc_id;
 use std::convert::TryInto;
 use cctp_primitives::bit_vector::merkle_tree::{merkle_root_from_compressed_bytes_without_checks, merkle_root_from_compressed_bytes};
+use cctp_primitives::proving_system::{ZendooVerifierKey, check_proof_vk_size};
 
 //Field element related functions
 
@@ -1678,6 +1679,57 @@ pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_native
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeCheckProofVkSize(
+    _env: JNIEnv,
+    _class: JClass,
+    _zk: jboolean,
+    _supported_segment_size: jint,
+    _max_proof_size: jint,
+    _max_vk_size: jint,
+    _verification_key_path: JString
+) -> jboolean
+{
+    // Read vk from file
+
+    //Extract vk path
+    let vk_path = _env.get_string(_verification_key_path)
+        .expect("Should be able to read jstring as Rust String");
+
+    // Deserialize vk
+    let vk: ZendooVerifierKey = match read_from_file(Path::new(vk_path.to_str().unwrap()), Some(false), Some(true)) {
+        Ok(vk) => vk,
+        Err(e) => {
+            println!("{:?}", e);
+            return JNI_FALSE
+        },
+    };
+
+    // Read zk value
+    let zk = _zk == JNI_TRUE;
+
+    // Get ps type from vk
+    let ps_type = vk.get_proving_system_type();
+
+    // Get index info from vk
+    let index_info = match vk {
+        ZendooVerifierKey::CoboundaryMarlin(cob_marlin_vk) => cob_marlin_vk.index_info,
+        ZendooVerifierKey::Darlin(darlin_vk) => darlin_vk.index_info
+    };
+
+    // Perform check
+    let result = check_proof_vk_size(
+        _supported_segment_size as usize,
+        index_info,
+        zk,
+        ps_type,
+        _max_proof_size as usize,
+        _max_vk_size as usize
+    );
+
+    if result { JNI_TRUE } else { JNI_FALSE }
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeSetup(
     _env: JNIEnv,
     _class: JClass,
@@ -1685,6 +1737,9 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     _max_pks: jlong,
     _proving_key_path: JString,
     _verification_key_path: JString,
+    _zk: jboolean,
+    _max_proof_size: jint,
+    _max_vk_size: jint,
     _compress_pk: jboolean,
     _compress_vk: jboolean,
 ) -> jboolean
@@ -1703,12 +1758,18 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     let circ = get_instance_for_setup(max_pks);
 
+    // Read zk value
+    let zk = _zk == JNI_TRUE;
+
     // Generate snark keypair
     match generate_circuit_keypair(
         circ,
         proving_system,
         Path::new(proving_key_path.to_str().unwrap()),
         Path::new(verification_key_path.to_str().unwrap()),
+        _max_proof_size as usize,
+        _max_vk_size as usize,
+        zk,
         Some(_compress_pk == JNI_TRUE),
         Some(_compress_vk == JNI_TRUE),
     ) {
@@ -1729,7 +1790,7 @@ fn get_proving_system_type_as_jint(_env: &JNIEnv, ps: ProvingSystem) -> jint {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeGetProverKeyProvingSystemType(
+pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGetProverKeyProvingSystemType(
     _env: JNIEnv,
     _class: JClass,
     _proving_key_path: JString,
@@ -1750,7 +1811,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeGetVerifierKeyProvingSystemType(
+pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGetVerifierKeyProvingSystemType(
     _env: JNIEnv,
     _class: JClass,
     _verifier_key_path: JString,
@@ -1926,7 +1987,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeGetProofProvingSystemType(
+pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGetProofProvingSystemType(
     _env: JNIEnv,
     _class: JClass,
     _proof: jbyteArray,
