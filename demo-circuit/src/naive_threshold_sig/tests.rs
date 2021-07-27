@@ -421,15 +421,15 @@ fn naive_threshold_sig_test_all_cases() {
     let n = 6;
 
     println!("Test success case with v > t");
-    let v = rng.gen_range(1, n);
-    let t = rng.gen_range(0, v);
+    let v = rng.gen_range(1..n);
+    let t = rng.gen_range(0..v);
     let c = generate_inputs(n, v, t, false, false);
     let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(generate_constraints(c, cs));
     println!("Ok !");
 
     println!("Test success case with v == t");
-    let v = rng.gen_range(1, n);
+    let v = rng.gen_range(1..n);
     let t = v;
     let c = generate_inputs(n, v, t, false, false);
     let cs = TestConstraintSystem::<FieldElement>::new();
@@ -437,8 +437,8 @@ fn naive_threshold_sig_test_all_cases() {
     println!("Ok !");
 
     println!("Test negative case with v < t");
-    let t = rng.gen_range(1, n);
-    let v = rng.gen_range(0, t);
+    let t = rng.gen_range(1..n);
+    let v = rng.gen_range(0..t);
     let c = generate_inputs(n, v, t, false, false);
     let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(!generate_constraints(c, cs));
@@ -469,16 +469,16 @@ fn naive_threshold_sig_test_all_cases() {
     println!("Ok !");
 
     println!("Test negative case wrong pks_threshold_hash");
-    let v = rng.gen_range(1, n);
-    let t = rng.gen_range(0, v);
+    let v = rng.gen_range(1..n);
+    let t = rng.gen_range(0..v);
     let c = generate_inputs(n, v, t, true, false);
     let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(!generate_constraints(c, cs));
     println!("Ok !");
 
     println!("Test negative case wrong wcert_sysdata_hash");
-    let v = rng.gen_range(1, n);
-    let t = rng.gen_range(0, v);
+    let v = rng.gen_range(1..n);
+    let t = rng.gen_range(0..v);
     let c = generate_inputs(n, v, t, false, true);
     let cs = TestConstraintSystem::<FieldElement>::new();
     assert!(!generate_constraints(c, cs));
