@@ -549,6 +549,10 @@ mod test {
     fn sample_calls_schnorr_sig_prove_verify(){
         let mut rng = OsRng;
         let msg = FieldElement::rand(&mut rng);
+        {
+            let msg_bytes = serialize_to_buffer(&msg, None).unwrap();
+            println!("msg bytes: {:?}", into_i8(msg_bytes.clone()));
+        }
 
         let (pk, sk) = schnorr_generate_key(); //Keygen
         assert_eq!(schnorr_get_public_key(&sk), pk); //Get pk
@@ -563,6 +567,7 @@ mod test {
         //Serialize/deserialize sk
         let sk_serialized = serialize_to_buffer(&sk, None).unwrap();
         assert_eq!(sk_serialized.len(), SCHNORR_SK_SIZE);
+        println!("sk bytes: {:?}", into_i8(sk_serialized.clone()));
         let sk_deserialized = deserialize_from_buffer(&sk_serialized, None, None).unwrap();
         assert_eq!(sk, sk_deserialized);
 
@@ -571,6 +576,7 @@ mod test {
 
         //Serialize/deserialize sig
         let sig_serialized = serialize_to_buffer(&sig, None).unwrap();
+        println!("sig bytes: {:?}", into_i8(sig_serialized.clone()));
         assert_eq!(sig_serialized.len(), SCHNORR_SIG_SIZE);
         let sig_deserialized = deserialize_from_buffer(&sig_serialized, Some(true), None).unwrap();
         assert_eq!(sig, sig_deserialized);
@@ -586,6 +592,10 @@ mod test {
     fn sample_calls_vrf_prove_verify(){
         let mut rng = OsRng;
         let msg = FieldElement::rand(&mut rng);
+        {
+            let msg_bytes = serialize_to_buffer(&msg, None).unwrap();
+            println!("msg bytes: {:?}", into_i8(msg_bytes.clone()));
+        }
 
         let (pk, sk) = vrf_generate_key(); //Keygen
         assert_eq!(vrf_get_public_key(&sk), pk); //Get pk
@@ -600,6 +610,7 @@ mod test {
         //Serialize/deserialize sk
         let sk_serialized = serialize_to_buffer(&sk, None).unwrap();
         assert_eq!(sk_serialized.len(), VRF_SK_SIZE);
+        println!("sk bytes: {:?}", into_i8(sk_serialized.clone()));
         let sk_deserialized = deserialize_from_buffer(&sk_serialized, None, None).unwrap();
         assert_eq!(sk, sk_deserialized);
 
@@ -609,11 +620,13 @@ mod test {
         //Serialize/deserialize vrf proof
         let proof_serialized = serialize_to_buffer(&vrf_proof, Some(true)).unwrap();
         assert_eq!(proof_serialized.len(), VRF_PROOF_SIZE);
+        println!("proof bytes: {:?}", into_i8(proof_serialized.clone()));
         let proof_deserialized = deserialize_from_buffer(&proof_serialized, Some(true), Some(true)).unwrap();
         assert_eq!(vrf_proof, proof_deserialized);
 
         //Serialize/deserialize vrf out (i.e. a field element)
         let vrf_out_serialized = serialize_to_buffer(&vrf_out, None).unwrap();
+        println!("vrf out bytes: {:?}", into_i8(vrf_out_serialized.clone()));
         let vrf_out_deserialized = deserialize_from_buffer(&vrf_out_serialized, None, None).unwrap();
         assert_eq!(vrf_out, vrf_out_deserialized);
 
