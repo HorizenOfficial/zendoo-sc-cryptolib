@@ -199,6 +199,8 @@ pub fn create_naive_threshold_sig_proof(
         Some(compressed_pk)
     )?;
 
+    let g1_ck = get_g1_committer_key()?;
+
     let proof = match pk {
         ZendooProverKey::Darlin(_) => unimplemented!(),
         ZendooProverKey::CoboundaryMarlin(pk) => {
@@ -206,7 +208,7 @@ pub fn create_naive_threshold_sig_proof(
             let rng = &mut OsRng;
             let proof = CoboundaryMarlin::prove(
                 &pk,
-                get_g1_committer_key().unwrap().as_ref().unwrap(),
+                g1_ck.as_ref().unwrap(),
                 c,
                 zk,
                 if zk { Some(rng) } else { None },
@@ -644,7 +646,7 @@ mod test {
         let leaves_num = 2usize.pow(height as u32);
 
         // Get GingerMHT
-        let mut mht = new_ginger_mht(height, leaves_num);
+        let mut mht = new_ginger_mht(height, leaves_num).unwrap();
 
         // Add leaves
         let mut mht_leaves = Vec::with_capacity(leaves_num);
