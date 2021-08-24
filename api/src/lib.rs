@@ -1190,7 +1190,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
 pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalizeInPlace(
     _env: JNIEnv,
     _tree: JObject,
-)
+) -> jboolean
 {
     let tree = {
 
@@ -1200,7 +1200,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         read_mut_raw_pointer(t.j().unwrap() as *mut GingerMHT)
     };
 
-    finalize_ginger_mht_in_place(tree);
+    match finalize_ginger_mht_in_place(tree) {
+        Ok(_) => JNI_TRUE,
+        Err(_) => JNI_FALSE
+    }
 }
 
 #[no_mangle]

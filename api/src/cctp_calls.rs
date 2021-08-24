@@ -660,7 +660,7 @@ mod test {
         }
 
         // Compute the root
-        finalize_ginger_mht_in_place(&mut mht);
+        finalize_ginger_mht_in_place(&mut mht).unwrap();
         let mht_root = get_ginger_mht_root(&mht).expect("Tree must've been finalized");
 
         for i in 0..leaves_num {
