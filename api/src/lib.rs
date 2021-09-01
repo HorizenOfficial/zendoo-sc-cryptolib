@@ -1133,8 +1133,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
     );
 
     // Create and return new InMemoryOptimizedMerkleTree Java side
-    return_jobject(&_env, mt, "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree")
-        .into_inner()
+    match mt {
+        Ok(mt) => return_jobject(&_env, mt, "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree").into_inner(),
+        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
+    }
 }
 
 #[no_mangle]
@@ -1180,10 +1182,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         read_raw_pointer(t.j().unwrap() as *const GingerMHT)
     };
 
-    let tree_copy = finalize_ginger_mht(tree);
-
-    return_jobject(&_env, tree_copy, "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree")
-        .into_inner()
+    match finalize_ginger_mht(tree) {
+        Ok(tree_copy) => return_jobject(&_env, tree_copy, "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree").into_inner(),
+        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
+    }
 }
 
 #[no_mangle]
