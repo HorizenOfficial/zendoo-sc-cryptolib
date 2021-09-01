@@ -22,11 +22,11 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
     /* Creates a new tree given its `height` and `processing_step`, that defines the
     *  number of leaves to store before triggering the computation of the hashes
     *  of the upper levels. Changing this parameter will affect the performances.
+    *  Return NULL if it was not possible to initialize the tree.
     */
     public static InMemoryOptimizedMerkleTree init(int height, long processingStep){
         return nativeInit(height, processingStep);
     }
-
 
     private native boolean nativeAppend(FieldElement input);
 
@@ -47,6 +47,7 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
     /*
      * Finalize the tree by computing the root and returns the finalized tree. It is possible
      * to continue updating the original tree.
+     * Return NULL if it was not possible to finalize the tree.
      */
     public InMemoryOptimizedMerkleTree finalizeTree() {
         if (inMemoryOptimizedMerkleTreePointer == 0)
@@ -54,16 +55,17 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
         return nativeFinalize();
     }
 
-    private native void nativeFinalizeInPlace();
+    private native boolean nativeFinalizeInPlace();
 
     /*
      * Finalize the tree by computing the root and updates the actual instance. It is not possible
      * to continue updating the tree, unless by restoring the original state (by calling reset()).
+     * Return True if the tree has been correctly finalized, False otherwise.
      */
-    public void finalizeTreeInPlace() {
+    public boolean finalizeTreeInPlace() {
         if (inMemoryOptimizedMerkleTreePointer == 0)
             throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
-        nativeFinalizeInPlace();
+        return nativeFinalizeInPlace();
     }
 
     private native FieldElement nativeRoot();

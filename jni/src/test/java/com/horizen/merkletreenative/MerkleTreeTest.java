@@ -51,6 +51,7 @@ public class MerkleTreeTest {
 
         //Get InMemoryOptimizedMerkleTree
         InMemoryOptimizedMerkleTree mht = InMemoryOptimizedMerkleTree.init(height, numLeaves);
+        assertNotNull("Merkle Tree initialization must succeed", mht);
 
         // Must place the leaves at the same positions of the previous trees
         List<FieldElement> mhtLeaves = new ArrayList<>();
@@ -69,7 +70,7 @@ public class MerkleTreeTest {
             assertTrue("Leaf append must be successfull", mht.append(leaf));
 
         //Finalize the tree
-        mht.finalizeTreeInPlace();
+        assertTrue("Merkle Tree finalization must succeed", mht.finalizeTreeInPlace());
 
         //Compute root and assert equality with the expected one
         FieldElement mhtRoot = mht.root();
@@ -77,6 +78,8 @@ public class MerkleTreeTest {
 
         //It is the same with finalizeTree()
         InMemoryOptimizedMerkleTree mhtCopy = mht.finalizeTree();
+        assertNotNull("Merkle Tree finalization must succeed", mhtCopy);
+
         FieldElement mhtRootCopy = mhtCopy.root();
         assertEquals("InMemoryOptimizedMerkleTree copy root is not as expected", mhtRootCopy, expectedRoot);
 
@@ -92,6 +95,8 @@ public class MerkleTreeTest {
     public void testMerklePaths() {
         List<FieldElement> testLeaves = new ArrayList<>();
         InMemoryOptimizedMerkleTree mht = InMemoryOptimizedMerkleTree.init(6, numLeaves);
+        assertNotNull("Merkle Tree initialization must succeed", mht);
+
         int numLeaves = 64;
 
         // Append leaves to the tree
@@ -106,7 +111,7 @@ public class MerkleTreeTest {
         }
 
         //Finalize the tree and get the root
-        mht.finalizeTreeInPlace();
+        assertTrue("Merkle Tree finalization must succeed", mht.finalizeTreeInPlace());
         FieldElement mhtRoot = mht.root();
 
         for (int i = 0; i < numLeaves; i ++) {
@@ -160,6 +165,8 @@ public class MerkleTreeTest {
     @Test
     public void testAreRightLeavesEmpty() {
         InMemoryOptimizedMerkleTree mht = InMemoryOptimizedMerkleTree.init(6, numLeaves);
+        assertNotNull("Merkle Tree initialization must succeed", mht);
+
         int numLeaves = 64;
 
         // Generate random leaves
@@ -168,6 +175,8 @@ public class MerkleTreeTest {
             assertTrue("Leaf append must be successfull", mht.append(leaf));
 
             InMemoryOptimizedMerkleTree mhtCopy = mht.finalizeTree();
+            assertNotNull("Merkle Tree finalization must succeed", mhtCopy);
+
             MerklePath path = mhtCopy.getMerklePath((long)i);
             assertTrue(path.areRightLeavesEmpty());
 
