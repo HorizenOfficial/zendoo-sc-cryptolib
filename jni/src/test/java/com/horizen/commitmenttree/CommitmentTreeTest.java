@@ -15,6 +15,7 @@ import java.util.Random;
 public class CommitmentTreeTest {
     private byte[] generateFieldElementBytes() {
         try (FieldElement tmp = FieldElement.createRandom()) {
+            assertNotNull("Generated field element serialization must succeed", tmp.serializeFieldElement());
             return tmp.serializeFieldElement();
         }
     }
@@ -238,6 +239,10 @@ public class CommitmentTreeTest {
 
         FieldElement leaf1 = FieldElement.createRandom();
         FieldElement leaf2 = FieldElement.createRandom();
+
+        assertNotNull("leaf1 serialization must succeed", leaf1.serializeFieldElement());
+        assertNotNull("leaf1 serialization must succeed", leaf2.serializeFieldElement());
+
         assertTrue("Certificate leaf expected to be added.", commTree.addCertLeaf(scId, leaf1.serializeFieldElement()));
         assertTrue("Certificate leaf expected to be added.", commTree.addCertLeaf(scId, leaf2.serializeFieldElement()));
 
@@ -451,6 +456,8 @@ public class CommitmentTreeTest {
         assertTrue("Commitment expected to be present for the empty CommitmentTree", commitmentOpt.isPresent());
 
         byte[] commitment = commitmentOpt.get().serializeFieldElement();
+
+        assertNotNull("Serialized commitment must be not null", commitment);
 
         assertArrayEquals("Different empty tree commitment found. Regression failed.",
                 expectedEmptyTreeCommitment, commitment);

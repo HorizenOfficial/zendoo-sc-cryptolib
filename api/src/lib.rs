@@ -89,9 +89,7 @@ fn serialize_from_jobject<T: CanonicalSerialize>(
 
     let obj = read_raw_pointer(pointer.j().unwrap() as *const T);
 
-    let obj_bytes = serialize_from_raw_pointer(obj, compressed.map(|jni_bool| jni_bool == JNI_TRUE));
-
-    match obj_bytes {
+    match serialize_from_raw_pointer(obj, compressed.map(|jni_bool| jni_bool == JNI_TRUE)) {
         Ok(obj_bytes) => _env.byte_array_from_slice(obj_bytes.as_slice())
             .expect("Cannot write object."),
         Err(_) => JObject::null().into_inner()

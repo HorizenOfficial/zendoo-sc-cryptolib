@@ -42,6 +42,7 @@ public class VRFProof implements AutoCloseable
     return deserialize(proofBytes, true, true);
   }
 
+  /* Return NULL if serialization failed */
   public byte[] serializeProof(boolean compressed) {
     if (proofPointer == 0)
       throw new IllegalStateException("Proof was freed.");

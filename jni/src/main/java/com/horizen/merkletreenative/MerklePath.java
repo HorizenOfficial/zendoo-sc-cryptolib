@@ -101,6 +101,7 @@ public class MerklePath implements AutoCloseable {
 
     private native byte[] nativeSerialize();
 
+    /* Return NULL if serialization failed */
     public byte[] serialize() {
         if (merklePathPointer == 0)
             throw new IllegalStateException("Field element was freed.");
