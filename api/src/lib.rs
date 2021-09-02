@@ -12,7 +12,7 @@ use cctp_primitives::{
     }
 };
 use std::{
-    any::type_name, path::Path,
+    path::Path,
 };
 
 mod cctp_calls;
@@ -39,9 +39,8 @@ fn read_nullable_raw_pointer<'a, T>(input: *const T) -> Option<&'a T> {
 fn serialize_from_raw_pointer<T: CanonicalSerialize>(
     to_write: *const T,
     compressed: Option<bool>,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, SerializationError> {
     serialize_to_buffer(read_raw_pointer(to_write), compressed)
-        .expect(format!("unable to write {} to buffer", type_name::<T>()).as_str())
 }
 
 fn return_jobject<'a, T: Sized>(_env: &'a JNIEnv, obj: T, class_path: &str) -> JObject<'a>
@@ -92,8 +91,11 @@ fn serialize_from_jobject<T: CanonicalSerialize>(
 
     let obj_bytes = serialize_from_raw_pointer(obj, compressed.map(|jni_bool| jni_bool == JNI_TRUE));
 
-    _env.byte_array_from_slice(obj_bytes.as_slice())
-        .expect("Cannot write object.")
+    match obj_bytes {
+        Ok(obj_bytes) => _env.byte_array_from_slice(obj_bytes.as_slice())
+            .expect("Cannot write object."),
+        Err(_) => JObject::null().into_inner()
+    }
 }
 
 fn parse_jbyte_array_to_vec(_env: &JNIEnv, java_byte_array: &jbyteArray, length: usize) -> Vec<u8> {
@@ -220,7 +222,11 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativePri
         None,
     );
 
-    println!("{:?}", into_i8(obj_bytes));
+    if obj_bytes.is_ok() {
+        println!("{:?}", into_i8(obj_bytes.unwrap()));
+    } else {
+        println!("{:?}", obj_bytes.unwrap_err());
+    }
 }
 
 #[no_mangle]
@@ -1222,10 +1228,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         read_raw_pointer(t.j().unwrap() as *const GingerMHT)
     };
 
-    let root = get_ginger_mht_root(tree)
-        .expect("Tree must've been finalized");
-
-    return_field_element(&_env, root)
+    match get_ginger_mht_root(tree) {
+        Some(root) => return_field_element(&_env, root),
+        None => std::ptr::null::<jobject>() as jobject
+    }
 }
 
 #[no_mangle]
@@ -1243,11 +1249,11 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         read_raw_pointer(t.j().unwrap() as *const GingerMHT)
     };
 
-    let path = get_ginger_mht_path(tree, _leaf_index as u64)
-        .expect("Tree must've been finalized");
-
-    return_jobject(&_env, path, "com/horizen/merkletreenative/MerklePath")
-        .into_inner()
+    match get_ginger_mht_path(tree, _leaf_index as u64) {
+        Some(path) => return_jobject(&_env, path, "com/horizen/merkletreenative/MerklePath")
+            .into_inner(),
+        None => std::ptr::null::<jobject>() as jobject
+    }
 }
 
 #[no_mangle]
@@ -2176,7 +2182,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
 
     let sc_id = {
         let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+        match FieldElement::deserialize(sc_id_bytes.as_slice()) {
+            Ok(fe) => fe,
+            Err(_) => return JNI_FALSE
+        }
     };
 
     let amount = _amount as u64;
@@ -2250,14 +2259,15 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
         None
     };
 
-
-    let constant_fe;
+    // let constant_fe;
     let constant = if _constant_nullable.is_null() {
         Option::None
     } else {
         let constant_bytes = parse_jbyte_array_to_vec(&_env, &_constant_nullable, FIELD_SIZE);
-        constant_fe = FieldElement::deserialize(constant_bytes.as_slice()).expect("Can't parse the input constant_bytes into FieldElement");
-        Some(&constant_fe)
+        match FieldElement::deserialize(constant_bytes.as_slice()) {
+            Ok(constant_fe) => Option::Some(constant_fe),
+            Err(_) => Option::None
+        }
     };
 
     let cert_verification_key = _env.convert_byte_array(_cert_verification_key)
@@ -2292,7 +2302,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
                                btr_fee,
                                ft_min_amount,
                                custom_creation_data_opt,
-                               constant,
+                               constant.as_ref(),
                                cert_verification_key.as_slice(),
                                csw_verification_key_opt
                                ) {
