@@ -72,6 +72,7 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
 
     /* Returns the root of the Merkle Tree. This function must be called on a finalized tree.
      * If not, the call will result in an exception.
+     * Return NULL if it was not possible to get the root.
      */
     public FieldElement root() {
         if (inMemoryOptimizedMerkleTreePointer == 0)
@@ -82,7 +83,8 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
     private native MerklePath nativeGetMerklePath(long leafIndex);
 
     /*
-    * Compute and return the MerklePath from the leaf at `leafIndex` to the root of the tree
+    * Compute and return the MerklePath from the leaf at `leafIndex` to the root of the tree.
+    * Return NULL if it was not possible to get the MerklePath.
     */
     public MerklePath getMerklePath(long leafIndex) {
         if (inMemoryOptimizedMerkleTreePointer == 0)

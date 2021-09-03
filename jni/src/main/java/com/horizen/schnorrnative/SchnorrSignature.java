@@ -41,7 +41,8 @@ public class SchnorrSignature implements AutoCloseable
   public static SchnorrSignature deserialize(byte[] signatureBytes) {
     return deserialize(signatureBytes, true);
   }
-  
+
+
   public byte[] serializeSignature() {
     return nativeSerializeSignature();
   }

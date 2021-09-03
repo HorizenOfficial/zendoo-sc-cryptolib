@@ -39,6 +39,7 @@ public class FieldElement implements AutoCloseable {
 
     private native byte[] nativeSerializeFieldElement();
 
+
     public byte[] serializeFieldElement() {
         if (fieldElementPointer == 0)
             throw new IllegalStateException("Field element was freed.");
