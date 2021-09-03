@@ -24,9 +24,6 @@ public class FieldElementTest {
                 byte[] serialized1 = fieldElement1.serializeFieldElement();
                 byte[] serialized2 = fieldElement2.serializeFieldElement();
 
-                assertNotNull("serialization of field element 1 must succeed", serialized1);
-                assertNotNull("serialization of field element 2 must succeed", serialized2);
-
                 assertEquals("fieldElement1 size must be - " + FieldElement.FIELD_ELEMENT_LENGTH,
                         FieldElement.FIELD_ELEMENT_LENGTH,
                         serialized1.length);

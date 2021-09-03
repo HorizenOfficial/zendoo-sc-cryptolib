@@ -42,7 +42,7 @@ public class VRFPublicKey implements AutoCloseable
 
   private native byte[] nativeSerializePublicKey(boolean compressed);
 
-  /* Return NULL if serialization failed */
+
   public byte[] serializePublicKey(boolean compressed) {
     if (publicKeyPointer == 0)
       throw new IllegalStateException("Public key was freed.");

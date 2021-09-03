@@ -32,7 +32,7 @@ public class VRFSecretKey implements AutoCloseable
 
     private native byte[] nativeSerializeSecretKey();
 
-    /* Return NULL if serialization failed */
+
     public byte[] serializeSecretKey() {
         if (secretKeyPointer == 0)
             throw new IllegalStateException("Secret key was freed.");
