@@ -12,7 +12,7 @@ use cctp_primitives::{
     }
 };
 use std::{
-    path::Path,
+    any::type_name, path::Path,
 };
 
 mod cctp_calls;
@@ -39,8 +39,10 @@ fn read_nullable_raw_pointer<'a, T>(input: *const T) -> Option<&'a T> {
 fn serialize_from_raw_pointer<T: CanonicalSerialize>(
     to_write: *const T,
     compressed: Option<bool>,
-) -> Result<Vec<u8>, SerializationError> {
+) -> Vec<u8> {
+    // TODO: should be redone to Java exception
     serialize_to_buffer(read_raw_pointer(to_write), compressed)
+        .expect(format!("unable to write {} to buffer", type_name::<T>()).as_str())
 }
 
 fn return_jobject<'a, T: Sized>(_env: &'a JNIEnv, obj: T, class_path: &str) -> JObject<'a>
@@ -89,11 +91,10 @@ fn serialize_from_jobject<T: CanonicalSerialize>(
 
     let obj = read_raw_pointer(pointer.j().unwrap() as *const T);
 
-    match serialize_from_raw_pointer(obj, compressed.map(|jni_bool| jni_bool == JNI_TRUE)) {
-        Ok(obj_bytes) => _env.byte_array_from_slice(obj_bytes.as_slice())
-            .expect("Cannot write object."),
-        Err(_) => JObject::null().into_inner()
-    }
+    let obj_bytes = serialize_from_raw_pointer(obj, compressed.map(|jni_bool| jni_bool == JNI_TRUE));
+
+    _env.byte_array_from_slice(obj_bytes.as_slice())
+        .expect("Cannot write object.")
 }
 
 fn parse_jbyte_array_to_vec(_env: &JNIEnv, java_byte_array: &jbyteArray, length: usize) -> Vec<u8> {
@@ -220,11 +221,7 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativePri
         None,
     );
 
-    if obj_bytes.is_ok() {
-        println!("{:?}", into_i8(obj_bytes.unwrap()));
-    } else {
-        println!("{:?}", obj_bytes.unwrap_err());
-    }
+    println!("{:?}", into_i8(obj_bytes));
 }
 
 #[no_mangle]
@@ -2264,7 +2261,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
         let constant_bytes = parse_jbyte_array_to_vec(&_env, &_constant_nullable, FIELD_SIZE);
         match FieldElement::deserialize(constant_bytes.as_slice()) {
             Ok(constant_fe) => Option::Some(constant_fe),
-            Err(_) => Option::None
+            Err(_) => return JNI_FALSE
         }
     };
 
