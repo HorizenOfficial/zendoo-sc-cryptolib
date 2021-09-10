@@ -15,7 +15,8 @@ public class FieldElement implements AutoCloseable {
         FIELD_ELEMENT_LENGTH = nativeGetFieldElementSize();
     }
 
-    private FieldElement(long fieldElementPointer) {
+    // Declared protected for testing purposes
+    protected FieldElement(long fieldElementPointer) {
         this.fieldElementPointer = fieldElementPointer;
     }
 
@@ -37,7 +38,8 @@ public class FieldElement implements AutoCloseable {
         return nativeCreateRandom(seed);
     }
 
-    private native byte[] nativeSerializeFieldElement();
+    // Declared protected for testing purposes
+    protected native byte[] nativeSerializeFieldElement();
 
 
     public byte[] serializeFieldElement() {
@@ -57,7 +59,8 @@ public class FieldElement implements AutoCloseable {
         return nativeDeserializeFieldElement(fieldElementBytes);
     }
 
-    private native void nativePrintFieldElementBytes();
+    // Declared protected for testing purposes
+    protected native void nativePrintFieldElementBytes();
 
     public void printFieldElementBytes() {
         if (fieldElementPointer == 0)
