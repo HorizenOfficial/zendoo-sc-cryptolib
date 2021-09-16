@@ -25,17 +25,16 @@ use exception::*;
 use cctp_primitives::commitment_tree::CommitmentTree;
 use cctp_primitives::commitment_tree::proofs::{ScExistenceProof, ScAbsenceProof};
 
-
 fn read_raw_pointer<'a, T>(env: &JNIEnv, input: *const T) -> &'a T {
     if input.is_null() {
-        throw(env, "java/lang/NullPointerException", "Received null pointer");
+        throw_and_exit!(env, "java/lang/NullPointerException", "Received null pointer");
     }
     unsafe { &* input }
 }
 
 fn read_mut_raw_pointer<'a, T>(env: &JNIEnv, input: *mut T) -> &'a mut T {
     if input.is_null() {
-        throw(env, "java/lang/NullPointerException", "Received null pointer");
+        throw_and_exit!(env, "java/lang/NullPointerException", "Received null pointer");
     }
     unsafe { &mut *input }
 }
@@ -3311,8 +3310,7 @@ ffi_export!(
             _env.byte_array_from_slice(merkle_root_bytes.as_slice()).expect("Cannot write jobject.")
         }
         Err(_) => {
-            throw(&_env, "java/lang/Exception", "Cannot compute merkle root with size check.");
-            JObject::null().into_inner()
+            throw!(&_env, "java/lang/Exception", "Cannot compute merkle root with size check.", JObject::null().into_inner());
         }
     }
 });
