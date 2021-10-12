@@ -18,17 +18,24 @@ use std::{
 mod cctp_calls;
 use cctp_calls::*;
 
+#[macro_use]
+mod exception;
+use exception::*;
+
 use cctp_primitives::commitment_tree::CommitmentTree;
 use cctp_primitives::commitment_tree::proofs::{ScExistenceProof, ScAbsenceProof};
 
-
-fn read_raw_pointer<'a, T>(input: *const T) -> &'a T {
-    assert!(!input.is_null());
-    unsafe { &*input }
+fn read_raw_pointer<'a, T>(env: &JNIEnv, input: *const T) -> &'a T {
+    if input.is_null() {
+        throw_and_exit!(env, "java/lang/NullPointerException", "Received null pointer");
+    }
+    unsafe { &* input }
 }
 
-fn read_mut_raw_pointer<'a, T>(input: *mut T) -> &'a mut T {
-    assert!(!input.is_null());
+fn read_mut_raw_pointer<'a, T>(env: &JNIEnv, input: *mut T) -> &'a mut T {
+    if input.is_null() {
+        throw_and_exit!(env, "java/lang/NullPointerException", "Received null pointer");
+    }
     unsafe { &mut *input }
 }
 
@@ -37,11 +44,11 @@ fn read_nullable_raw_pointer<'a, T>(input: *const T) -> Option<&'a T> {
 }
 
 fn serialize_from_raw_pointer<T: CanonicalSerialize>(
-    to_write: *const T,
+    _env:       &JNIEnv,
+    to_write:   *const T,
     compressed: Option<bool>,
 ) -> Vec<u8> {
-    // TODO: should be redone to Java exception
-    serialize_to_buffer(read_raw_pointer(to_write), compressed)
+    serialize_to_buffer(read_raw_pointer(&_env, to_write), compressed)
         .expect(format!("unable to write {} to buffer", type_name::<T>()).as_str())
 }
 
@@ -89,9 +96,7 @@ fn serialize_from_jobject<T: CanonicalSerialize>(
     let pointer = _env.get_field(obj, ptr_name, "J")
         .expect("Cannot get object raw pointer.");
 
-    let obj = read_raw_pointer(pointer.j().unwrap() as *const T);
-
-    let obj_bytes = serialize_from_raw_pointer(obj, compressed.map(|jni_bool| jni_bool == JNI_TRUE));
+    let obj_bytes = serialize_from_raw_pointer(_env, pointer.j().unwrap() as *const T, compressed.map(|jni_bool| jni_bool == JNI_TRUE));
 
     _env.byte_array_from_slice(obj_bytes.as_slice())
         .expect("Cannot write object.")
@@ -135,14 +140,20 @@ fn return_field_element(_env: &JNIEnv, fe: FieldElement) -> jobject
         .into_inner()
 }
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeGetFieldElementSize(
+ffi_export!(
+    fn Java_com_horizen_librustsidechains_Library_nativePanickingFunction(
+    _env: JNIEnv,
+    _class: JClass,
+) { panic!("Oh no ! A panic occured !") });
+
+ffi_export!(
+    fn Java_com_horizen_librustsidechains_FieldElement_nativeGetFieldElementSize(
     _env: JNIEnv,
     _field_element_class: JClass,
-) -> jint { FIELD_SIZE as jint }
+) -> jint { FIELD_SIZE as jint });
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeSerializeFieldElement(
+ffi_export!(
+    fn Java_com_horizen_librustsidechains_FieldElement_nativeSerializeFieldElement(
     _env: JNIEnv,
     _field_element: JObject,
 ) -> jbyteArray
@@ -153,10 +164,10 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeSer
         "fieldElementPointer",
         None
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeDeserializeFieldElement(
+ffi_export!(
+    fn Java_com_horizen_librustsidechains_FieldElement_nativeDeserializeFieldElement(
     _env: JNIEnv,
     _class: JClass,
     _field_element_bytes: jbyteArray,
@@ -169,10 +180,10 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeDes
         None,
         "com/horizen/librustsidechains/FieldElement",
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateRandom(
+ffi_export!(
+    fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateRandom(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be
@@ -186,10 +197,10 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCre
     let fe = get_random_field_element(_seed as u64);
 
     return_field_element(&_env, fe)
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateFromLong(
+ffi_export!(
+    fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateFromLong(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be
@@ -203,10 +214,10 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeCre
     let fe = FieldElement::from(_long as u64);
 
     return_field_element(&_env, fe)
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativePrintFieldElementBytes(
+ffi_export!(
+    fn Java_com_horizen_librustsidechains_FieldElement_nativePrintFieldElementBytes(
     _env: JNIEnv,
     _field_element: JObject,
 )
@@ -214,18 +225,16 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativePri
     let pointer = _env.get_field(_field_element, "fieldElementPointer", "J")
         .expect("Cannot get object raw pointer.");
 
-    let obj = read_raw_pointer(pointer.j().unwrap() as *const FieldElement);
-
-    let obj_bytes = serialize_from_raw_pointer(
-        obj,
+    let obj_bytes = serialize_from_raw_pointer(&_env,
+        pointer.j().unwrap() as *const FieldElement,
         None,
     );
 
     println!("{:?}", into_i8(obj_bytes));
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeFreeFieldElement(
+ffi_export!(
+    fn Java_com_horizen_librustsidechains_FieldElement_nativeFreeFieldElement(
     _env: JNIEnv,
     _class: JClass,
     _fe: *mut FieldElement,
@@ -233,10 +242,10 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeFre
 {
     if _fe.is_null()  { return }
     drop(unsafe { Box::from_raw(_fe) });
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeEquals(
+ffi_export!(
+    fn Java_com_horizen_librustsidechains_FieldElement_nativeEquals(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be
@@ -252,7 +261,7 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeEqu
         let f =_env.get_field(_field_element_1, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer_1");
 
-        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
     };
 
     //Read field_2
@@ -261,34 +270,34 @@ pub extern "system" fn Java_com_horizen_librustsidechains_FieldElement_nativeEqu
         let f =_env.get_field(_field_element_2, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer_2");
 
-        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
     };
 
     match field_1 == field_2 {
         true => JNI_TRUE,
         false => JNI_FALSE,
     }
-}
+});
 
 //Public Schnorr key utility functions
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeGetPublicKeySize(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeGetPublicKeySize(
     _env: JNIEnv,
     _schnorr_public_key_class: JClass,
-) -> jint { SCHNORR_PK_SIZE as jint }
+) -> jint { SCHNORR_PK_SIZE as jint });
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSerializePublicKey(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSerializePublicKey(
     _env: JNIEnv,
     _schnorr_public_key: JObject,
     _compressed: jboolean,
 ) -> jbyteArray
 {
     serialize_from_jobject::<SchnorrPk>(&_env, _schnorr_public_key, "publicKeyPointer", Some(_compressed))
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeDeserializePublicKey(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeDeserializePublicKey(
     _env: JNIEnv,
     _schnorr_public_key_class: JClass,
     _public_key_bytes: jbyteArray,
@@ -303,10 +312,10 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeDes
         Some(_compressed),
         "com/horizen/schnorrnative/SchnorrPublicKey"
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeFreePublicKey(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeFreePublicKey(
     _env: JNIEnv,
     _schnorr_public_key: JObject,
 )
@@ -318,17 +327,17 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeFre
 
     if public_key.is_null()  { return }
     drop(unsafe { Box::from_raw(public_key) });
-}
+});
 
-//Secret Schnorr key utility functions
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGetSecretKeySize(
-    _env: JNIEnv,
-    _schnorr_secret_key_class: JClass,
-) -> jint { SCHNORR_SK_SIZE as jint }
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGetSecretKeySize(
+        _env: JNIEnv,
+        _schnorr_secret_key_class: JClass,
+    ) -> jint { SCHNORR_SK_SIZE as jint }
+);
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSerializeSecretKey(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSerializeSecretKey(
     _env: JNIEnv,
     _schnorr_secret_key: JObject,
 ) -> jbyteArray
@@ -339,26 +348,27 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSer
         "secretKeyPointer",
         None
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeDeserializeSecretKey(
-    _env: JNIEnv,
-    _schnorr_secret_key_class: JClass,
-    _secret_key_bytes: jbyteArray,
-) -> jobject
-{
-    deserialize_to_jobject::<SchnorrSk>(
-        &_env,
-        _secret_key_bytes,
-        None,
-        None,
-        "com/horizen/schnorrnative/SchnorrSecretKey",
-    )
-}
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeDeserializeSecretKey(
+        _env: JNIEnv,
+        _schnorr_secret_key_class: JClass,
+        _secret_key_bytes: jbyteArray,
+    ) -> jobject
+    {
+        deserialize_to_jobject::<SchnorrSk>(
+            &_env,
+            _secret_key_bytes,
+            None,
+            None,
+            "com/horizen/schnorrnative/SchnorrSecretKey",
+        )
+    }
+);
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeFreeSecretKey(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeFreeSecretKey(
     _env: JNIEnv,
     _schnorr_secret_key: JObject,
 )
@@ -370,27 +380,27 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeFre
 
     if secret_key.is_null()  { return }
     drop(unsafe { Box::from_raw(secret_key) });
-}
+});
 
 //Public VRF key utility functions
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeGetPublicKeySize(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeGetPublicKeySize(
     _env: JNIEnv,
     _vrf_public_key_class: JClass,
-) -> jint { VRF_PK_SIZE as jint }
+) -> jint { VRF_PK_SIZE as jint });
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePublicKey(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePublicKey(
     _env: JNIEnv,
     _vrf_public_key: JObject,
     _compressed: jboolean,
 ) -> jbyteArray
 {
     serialize_from_jobject::<VRFPk>(&_env, _vrf_public_key, "publicKeyPointer", Some(_compressed))
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeDeserializePublicKey(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeDeserializePublicKey(
     _env: JNIEnv,
     _vrf_public_key_class: JClass,
     _public_key_bytes: jbyteArray,
@@ -405,10 +415,10 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeDeserialize
         Some(_compressed),
         "com/horizen/vrfnative/VRFPublicKey"
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeFreePublicKey(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeFreePublicKey(
     _env: JNIEnv,
     _vrf_public_key: JObject,
 )
@@ -420,17 +430,17 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeFreePublicK
 
     if public_key.is_null()  { return }
     drop(unsafe { Box::from_raw(public_key) });
-}
+});
 
 //Secret VRF key utility functions
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetSecretKeySize(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetSecretKeySize(
     _env: JNIEnv,
     _vrf_secret_key_class: JClass,
-) -> jint { VRF_SK_SIZE as jint }
+) -> jint { VRF_SK_SIZE as jint });
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSecretKey(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSecretKey(
     _env: JNIEnv,
     _vrf_secret_key: JObject,
 ) -> jbyteArray
@@ -441,10 +451,10 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSe
         "secretKeyPointer",
         None
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeDeserializeSecretKey(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFSecretKey_nativeDeserializeSecretKey(
     _env: JNIEnv,
     _vrf_secret_key_class: JClass,
     _secret_key_bytes: jbyteArray,
@@ -457,10 +467,10 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeDeserialize
         None,
         "com/horizen/vrfnative/VRFSecretKey"
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeFreeSecretKey(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFSecretKey_nativeFreeSecretKey(
     _env: JNIEnv,
     _vrf_secret_key: JObject,
 )
@@ -472,17 +482,17 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeFreeSecretK
 
     if secret_key.is_null()  { return }
     drop(unsafe { Box::from_raw(secret_key) });
-}
+});
 
 //Schnorr signature utility functions
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeGetSignatureSize(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeGetSignatureSize(
     _env: JNIEnv,
     _class: JClass,
-) -> jint { SCHNORR_SIG_SIZE as jint }
+) -> jint { SCHNORR_SIG_SIZE as jint });
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSerializeSignature(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSerializeSignature(
     _env: JNIEnv,
     _schnorr_sig: JObject,
 ) -> jbyteArray
@@ -493,10 +503,10 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSer
         "signaturePointer",
         None
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDeserializeSignature(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDeserializeSignature(
     _env: JNIEnv,
     _class: JClass,
     _sig_bytes: jbyteArray,
@@ -510,10 +520,10 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDes
         None,
         "com/horizen/schnorrnative/SchnorrSignature"
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeIsValidSignature(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeIsValidSignature(
     _env: JNIEnv,
     _sig: JObject,
 ) -> jboolean
@@ -521,15 +531,15 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeIsV
     let sig = _env.get_field(_sig, "signaturePointer", "J")
         .expect("Should be able to get field signaturePointer").j().unwrap() as *const SchnorrSig;
 
-    if is_valid(read_raw_pointer(sig)) {
+    if is_valid(read_raw_pointer(&_env, sig)) {
         JNI_TRUE
     } else {
         JNI_FALSE
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativefreeSignature(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrSignature_nativefreeSignature(
     _env: JNIEnv,
     _class: JClass,
     _sig: *mut SchnorrSig,
@@ -537,11 +547,11 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSignature_nativefre
 {
     if _sig.is_null()  { return }
     drop(unsafe { Box::from_raw(_sig) });
-}
+});
 
 //Schnorr signature functions
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeGenerate(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeGenerate(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be
@@ -565,10 +575,10 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeGener
     ).expect("Should be able to create new (SchnorrSecretKey, SchnorrPublicKey) object");
 
     *result
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignMessage(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignMessage(
     _env: JNIEnv,
     _schnorr_key_pair: JObject,
     _message: JObject,
@@ -584,7 +594,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignM
         let s =_env.get_field(sk_object, "secretKeyPointer", "J")
             .expect("Should be able to get field secretKeyPointer");
 
-        read_raw_pointer(s.j().unwrap() as *const SchnorrSk)
+        read_raw_pointer(&_env, s.j().unwrap() as *const SchnorrSk)
     };
 
     //Read pk
@@ -598,7 +608,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignM
         let p = _env.get_field(pk_object, "publicKeyPointer", "J")
             .expect("Should be able to get field publicKeyPointer");
 
-        read_raw_pointer(p.j().unwrap() as *const SchnorrPk)
+        read_raw_pointer(&_env, p.j().unwrap() as *const SchnorrPk)
     };
 
     //Read message
@@ -607,7 +617,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignM
         let m =_env.get_field(_message, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(m.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, m.j().unwrap() as *const FieldElement)
     };
 
     //Sign message and return opaque pointer to sig
@@ -618,10 +628,10 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignM
 
     return_jobject(&_env, signature, "com/horizen/schnorrnative/SchnorrSignature")
         .into_inner()
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVerifyKey(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVerifyKey(
     _env: JNIEnv,
     _public_key: JObject,
 ) -> jboolean
@@ -629,15 +639,15 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVer
     let pk = _env.get_field(_public_key, "publicKeyPointer", "J")
         .expect("Should be able to get field publicKeyPointer").j().unwrap() as *const SchnorrPk;
 
-    if schnorr_verify_public_key(read_raw_pointer(pk)) {
+    if schnorr_verify_public_key(read_raw_pointer(&_env, pk)) {
         JNI_TRUE
     } else {
         JNI_FALSE
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGetPublicKey(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGetPublicKey(
     _env: JNIEnv,
     _secret_key: JObject
 ) -> jobject {
@@ -645,17 +655,16 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGet
     let sk = _env.get_field(_secret_key, "secretKeyPointer", "J")
         .expect("Should be able to get field secretKeyPointer").j().unwrap() as *const SchnorrSk;
 
-    let secret_key = read_raw_pointer(sk);
+    let secret_key = read_raw_pointer(&_env, sk);
 
     let pk = schnorr_get_public_key(secret_key);
 
     return_jobject(&_env, pk, "com/horizen/schnorrnative/SchnorrPublicKey")
         .into_inner()
-}
+});
 
-
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVerifySignature(
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVerifySignature(
     _env: JNIEnv,
     _public_key: JObject,
     _signature: JObject,
@@ -668,7 +677,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVer
         let p = _env.get_field(_public_key, "publicKeyPointer", "J")
             .expect("Should be able to get field publicKeyPointer");
 
-        read_raw_pointer(p.j().unwrap() as *const SchnorrPk)
+        read_raw_pointer(&_env, p.j().unwrap() as *const SchnorrPk)
     };
 
     //Read message
@@ -677,7 +686,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVer
         let m =_env.get_field(_message, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(m.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, m.j().unwrap() as *const FieldElement)
     };
 
     //Read sig
@@ -685,7 +694,7 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVer
         let sig = _env.get_field(_signature, "signaturePointer", "J")
             .expect("Should be able to get field signaturePointer");
 
-        read_raw_pointer(sig.j().unwrap() as *const SchnorrSig)
+        read_raw_pointer(&_env, sig.j().unwrap() as *const SchnorrSig)
     };
 
     //Verify sig
@@ -697,16 +706,16 @@ pub extern "system" fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVer
         },
         Err(_) => JNI_FALSE //CRYPTO_ERROR
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetHashSize(
+ffi_export!(
+    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetHashSize(
     _env: JNIEnv,
     _class: JClass,
-) -> jint { FIELD_SIZE as jint }
+) -> jint { FIELD_SIZE as jint });
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetConstantLengthPoseidonHash(
+ffi_export!(
+    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetConstantLengthPoseidonHash(
     _env: JNIEnv,
     _class: JClass,
     _input_size: jint,
@@ -728,7 +737,7 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetCon
             let f =_env.get_field(field_obj, "fieldElementPointer", "J")
                 .expect("Should be able to get field fieldElementPointer");
 
-            read_raw_pointer(f.j().unwrap() as *const FieldElement)
+            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         };
 
         personalization.push(field);
@@ -743,10 +752,10 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetCon
     //Return PoseidonHash instance
     return_jobject(&_env, h, "com/horizen/poseidonnative/PoseidonHash")
         .into_inner()
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetVariableLengthPoseidonHash(
+ffi_export!(
+    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetVariableLengthPoseidonHash(
     _env: JNIEnv,
     _class: JClass,
     _mod_rate: jboolean,
@@ -768,7 +777,7 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetVar
             let f =_env.get_field(field_obj, "fieldElementPointer", "J")
                 .expect("Should be able to get field fieldElementPointer");
 
-            read_raw_pointer(f.j().unwrap() as *const FieldElement)
+            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         };
 
         personalization.push(field);
@@ -783,10 +792,10 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetVar
     //Return PoseidonHash instance
     return_jobject(&_env, h, "com/horizen/poseidonnative/PoseidonHash")
         .into_inner()
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeUpdate(
+ffi_export!(
+    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeUpdate(
     _env: JNIEnv,
     _h: JObject,
     _input: JObject,
@@ -797,7 +806,7 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeUpdate
         let h = _env.get_field(_h, "poseidonHashPointer", "J")
             .expect("Should be able to get field poseidonHashPointer");
 
-        read_mut_raw_pointer(h.j().unwrap() as *mut FieldHash)
+        read_mut_raw_pointer(&_env, h.j().unwrap() as *mut FieldHash)
     };
 
     //Read input
@@ -806,14 +815,14 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeUpdate
         let i =_env.get_field(_input, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(i.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, i.j().unwrap() as *const FieldElement)
     };
 
     update_poseidon_hash(digest, input);
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFinalize(
+ffi_export!(
+    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFinalize(
     _env: JNIEnv,
     _h: JObject,
 ) -> jobject
@@ -824,7 +833,7 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFinali
         let h = _env.get_field(_h, "poseidonHashPointer", "J")
             .expect("Should be able to get field poseidonHashPointer");
 
-        read_raw_pointer(h.j().unwrap() as *const FieldHash)
+        read_raw_pointer(&_env, h.j().unwrap() as *const FieldHash)
     };
 
     //Get digest
@@ -834,10 +843,10 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFinali
     };
 
     return_field_element(&_env, fe)
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeReset(
+ffi_export!(
+    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeReset(
     _env: JNIEnv,
     _h: JObject,
     _personalization: jobjectArray,
@@ -848,7 +857,7 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeReset(
         let h = _env.get_field(_h, "poseidonHashPointer", "J")
             .expect("Should be able to get field poseidonHashPointer");
 
-        read_mut_raw_pointer(h.j().unwrap() as *mut FieldHash)
+        read_mut_raw_pointer(&_env, h.j().unwrap() as *mut FieldHash)
     };
 
     //Read _personalization as array of FieldElement
@@ -866,7 +875,7 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeReset(
             let f =_env.get_field(field_obj, "fieldElementPointer", "J")
                 .expect("Should be able to get field fieldElementPointer");
 
-            read_raw_pointer(f.j().unwrap() as *const FieldElement)
+            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         };
 
         personalization.push(field);
@@ -875,10 +884,10 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeReset(
     let personalization = if personalization.is_empty() { None } else { Some(personalization) };
 
     reset_poseidon_hash(digest, personalization)
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFreePoseidonHash(
+ffi_export!(
+    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFreePoseidonHash(
     _env: JNIEnv,
     _h: JObject,
 )
@@ -890,14 +899,14 @@ pub extern "system" fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFreePo
 
     if h.is_null()  { return }
     drop(unsafe { Box::from_raw(h) });
-}
+});
 
 //Merkle tree functions
 
 //////////// MERKLE PATH
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify(
     _env: JNIEnv,
     _path: JObject,
     _height: jint,
@@ -910,7 +919,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
         let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
     };
 
     let root = {
@@ -918,7 +927,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
         let fe =_env.get_field(_root, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
     };
 
     let path = {
@@ -926,7 +935,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
         let t =_env.get_field(_path, "merklePathPointer", "J")
             .expect("Should be able to get field merklePathPointer");
 
-        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
     };
 
     if !path.is_valid() {
@@ -937,10 +946,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
         Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
         Err(_) => JNI_FALSE // CRYPTO_ERROR
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerifyWithoutLengthCheck(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeVerifyWithoutLengthCheck(
     _env: JNIEnv,
     _path: JObject,
     _leaf: JObject,
@@ -952,7 +961,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
         let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
     };
 
     let root = {
@@ -960,7 +969,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
         let fe =_env.get_field(_root, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
     };
 
     let path = {
@@ -968,7 +977,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
         let t =_env.get_field(_path, "merklePathPointer", "J")
             .expect("Should be able to get field merklePathPointer");
 
-        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
     };
 
     if !path.is_valid() {
@@ -980,10 +989,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify
     } else {
         JNI_FALSE
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeApply(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeApply(
     _env: JNIEnv,
     _path: JObject,
     _leaf: JObject,
@@ -993,7 +1002,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeApply(
         let t =_env.get_field(_path, "merklePathPointer", "J")
             .expect("Should be able to get field merklePathPointer");
 
-        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
     };
 
     let leaf = {
@@ -1001,16 +1010,16 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeApply(
         let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
     };
 
     let root = get_root_from_path(path, leaf);
 
     return_field_element(&_env, root)
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsLeftmost(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeIsLeftmost(
     _env: JNIEnv,
     _path: JObject,
 ) -> jboolean
@@ -1020,14 +1029,14 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsLeft
         let t =_env.get_field(_path, "merklePathPointer", "J")
             .expect("Should be able to get field merklePathPointer");
 
-        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
     };
 
     is_path_leftmost(path) as jboolean
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsRightmost(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeIsRightmost(
     _env: JNIEnv,
     _path: JObject,
 ) -> jboolean
@@ -1037,14 +1046,14 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeIsRigh
         let t =_env.get_field(_path, "merklePathPointer", "J")
             .expect("Should be able to get field merklePathPointer");
 
-        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
     };
 
     is_path_rightmost(path) as jboolean
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeAreRightLeavesEmpty(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeAreRightLeavesEmpty(
     _env: JNIEnv,
     _path: JObject,
 ) -> jboolean
@@ -1054,14 +1063,14 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeAreRig
         let t =_env.get_field(_path, "merklePathPointer", "J")
             .expect("Should be able to get field merklePathPointer");
 
-        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
     };
 
     are_right_leaves_empty(path) as jboolean
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeLeafIndex(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeLeafIndex(
     _env: JNIEnv,
     _path: JObject,
 ) -> jlong
@@ -1071,14 +1080,14 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeLeafIn
         let t =_env.get_field(_path, "merklePathPointer", "J")
             .expect("Should be able to get field merklePathPointer");
 
-        read_raw_pointer(t.j().unwrap() as *const GingerMHTPath)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
     };
 
     get_leaf_index_from_path(path) as jlong
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeSerialize(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeSerialize(
     _env: JNIEnv,
     _path: JObject,
 ) -> jbyteArray
@@ -1089,10 +1098,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeSerial
         "merklePathPointer",
         None
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeDeserialize(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeDeserialize(
     _env: JNIEnv,
     _class: JClass,
     _path_bytes: jbyteArray,
@@ -1106,10 +1115,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeDeseri
         None,
         "com/horizen/merkletreenative/MerklePath"
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeFreeMerklePath(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeFreeMerklePath(
     _env: JNIEnv,
     _class: JClass,
     _path: *mut GingerMHTPath,
@@ -1117,10 +1126,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_MerklePath_nativeFreeMe
 {
     if _path.is_null()  { return }
     drop(unsafe { Box::from_raw(_path) });
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeInit(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeInit(
     _env: JNIEnv,
     _class: JClass,
     _height: jint,
@@ -1138,10 +1147,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         Ok(mt) => return_jobject(&_env, mt, "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree").into_inner(),
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeAppend(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeAppend(
     _env: JNIEnv,
     _tree: JObject,
     _leaf: JObject,
@@ -1152,7 +1161,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(fe.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
     };
 
     let tree = {
@@ -1160,17 +1169,17 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
             .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut GingerMHT)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
     };
 
     match append_leaf_to_ginger_mht(tree, leaf) {
         Ok(_) => JNI_TRUE,
         Err(_) => JNI_FALSE,
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalize(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalize(
     _env: JNIEnv,
     _tree: JObject,
 ) -> jobject
@@ -1180,17 +1189,17 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
             .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        read_raw_pointer(t.j().unwrap() as *const GingerMHT)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHT)
     };
 
     match finalize_ginger_mht(tree) {
         Ok(tree_copy) => return_jobject(&_env, tree_copy, "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree").into_inner(),
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalizeInPlace(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalizeInPlace(
     _env: JNIEnv,
     _tree: JObject,
 ) -> jboolean
@@ -1200,17 +1209,17 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
             .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut GingerMHT)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
     };
 
     match finalize_ginger_mht_in_place(tree) {
         Ok(_) => JNI_TRUE,
         Err(_) => JNI_FALSE
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeRoot(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeRoot(
     _env: JNIEnv,
     _tree: JObject,
 ) -> jobject
@@ -1220,17 +1229,17 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
             .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        read_raw_pointer(t.j().unwrap() as *const GingerMHT)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHT)
     };
 
     match get_ginger_mht_root(tree) {
         Some(root) => return_field_element(&_env, root),
         None => std::ptr::null::<jobject>() as jobject
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeGetMerklePath(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeGetMerklePath(
     _env: JNIEnv,
     _tree: JObject,
     _leaf_index: jlong,
@@ -1241,7 +1250,7 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
             .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        read_raw_pointer(t.j().unwrap() as *const GingerMHT)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHT)
     };
 
     match get_ginger_mht_path(tree, _leaf_index as u64) {
@@ -1249,10 +1258,10 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
             .into_inner(),
         None => std::ptr::null::<jobject>() as jobject
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeReset(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeReset(
     _env: JNIEnv,
     _tree: JObject,
 )
@@ -1262,14 +1271,14 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
         let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
             .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut GingerMHT)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
     };
 
     reset_ginger_mht(tree);
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFreeInMemoryOptimizedMerkleTree(
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFreeInMemoryOptimizedMerkleTree(
     _env: JNIEnv,
     _class: JClass,
     _tree: *mut GingerMHT,
@@ -1277,28 +1286,28 @@ pub extern "system" fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkle
 {
     if _tree.is_null()  { return }
     drop(unsafe { Box::from_raw(_tree) });
-}
+});
 
 //VRF utility functions
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeGetProofSize(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFProof_nativeGetProofSize(
     _env: JNIEnv,
     _class: JClass,
-) -> jint { VRF_PROOF_SIZE as jint }
+) -> jint { VRF_PROOF_SIZE as jint });
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
     _env: JNIEnv,
     _proof: JObject,
     _compressed: jboolean,
 ) -> jbyteArray
 {
     serialize_from_jobject::<VRFProof>(&_env, _proof, "proofPointer", Some(_compressed))
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProof(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProof(
     _env: JNIEnv,
     _class: JClass,
     _proof_bytes: jbyteArray,
@@ -1313,10 +1322,10 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProo
         Some(_compressed),
         "com/horizen/vrfnative/VRFProof"
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeIsValidVRFProof(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFProof_nativeIsValidVRFProof(
     _env: JNIEnv,
     _vrf_proof: JObject,
 ) -> jboolean
@@ -1324,15 +1333,15 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeIsValidVRFProof
     let proof = _env.get_field(_vrf_proof, "proofPointer", "J")
         .expect("Should be able to get field proofPointer").j().unwrap() as *const VRFProof;
 
-    if is_valid(read_raw_pointer(proof)) {
+    if is_valid(read_raw_pointer(&_env, proof)) {
         JNI_TRUE
     } else {
         JNI_FALSE
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeFreeProof(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFProof_nativeFreeProof(
     _env: JNIEnv,
     _class: JClass,
     _proof: *mut VRFProof,
@@ -1340,12 +1349,12 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFProof_nativeFreeProof(
 {
     if _proof.is_null()  { return }
     drop(unsafe { Box::from_raw(_proof) });
-}
+});
 
 
 //VRF functions
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeGenerate(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFKeyPair_nativeGenerate(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be
@@ -1370,10 +1379,10 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeGenerate(
     ).expect("Should be able to create new (VRFSecretKey, VRFPublicKey) object");
 
     *result
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
     _env: JNIEnv,
     _vrf_key_pair: JObject,
     _message: JObject
@@ -1390,7 +1399,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
         let s =_env.get_field(sk_object, "secretKeyPointer", "J")
             .expect("Should be able to get field secretKeyPointer");
 
-        read_raw_pointer(s.j().unwrap() as *const VRFSk)
+        read_raw_pointer(&_env, s.j().unwrap() as *const VRFSk)
     };
 
     //Read pk
@@ -1404,7 +1413,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
         let p = _env.get_field(pk_object, "publicKeyPointer", "J")
             .expect("Should be able to get field publicKeyPointer");
 
-        read_raw_pointer(p.j().unwrap() as *const VRFPk)
+        read_raw_pointer(&_env, p.j().unwrap() as *const VRFPk)
     };
 
     //Read message
@@ -1413,7 +1422,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
         let m =_env.get_field(_message, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(m.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, m.j().unwrap() as *const FieldElement)
     };
 
     //Compute vrf proof
@@ -1436,10 +1445,10 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
     ).expect("Should be able to create new VRFProveResult:(VRFProof, FieldElement) object");
 
     *result
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetPublicKey(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetPublicKey(
     _env: JNIEnv,
     _vrf_secret_key: JObject
 ) -> jobject {
@@ -1447,14 +1456,14 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetPublicKe
     let sk = _env.get_field(_vrf_secret_key, "secretKeyPointer", "J")
         .expect("Should be able to get field secretKeyPointer").j().unwrap() as *const VRFSk;
 
-    let secret_key = read_raw_pointer(sk);
+    let secret_key = read_raw_pointer(&_env, sk);
 
     let pk = vrf_get_public_key(secret_key);
     return_jobject(&_env, pk, "com/horizen/vrfnative/VRFPublicKey").into_inner()
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeVerifyKey(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeVerifyKey(
     _env: JNIEnv,
     _vrf_public_key: JObject,
 ) -> jboolean
@@ -1462,15 +1471,15 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeVerifyKey(
     let pk = _env.get_field(_vrf_public_key, "publicKeyPointer", "J")
         .expect("Should be able to get field publicKeyPointer").j().unwrap() as *const VRFPk;
 
-    if vrf_verify_public_key(read_raw_pointer(pk)) {
+    if vrf_verify_public_key(read_raw_pointer(&_env, pk)) {
         JNI_TRUE
     } else {
         JNI_FALSE
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeProofToHash(
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeProofToHash(
     _env: JNIEnv,
     _vrf_public_key: JObject,
     _proof: JObject,
@@ -1482,7 +1491,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeProofToHash
         let p = _env.get_field(_vrf_public_key, "publicKeyPointer", "J")
             .expect("Should be able to get field publicKeyPointer");
 
-        read_raw_pointer(p.j().unwrap() as *const VRFPk)
+        read_raw_pointer(&_env, p.j().unwrap() as *const VRFPk)
     };
 
     //Read message
@@ -1491,7 +1500,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeProofToHash
         let m =_env.get_field(_message, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(m.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, m.j().unwrap() as *const FieldElement)
     };
 
     //Read proof
@@ -1499,7 +1508,7 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeProofToHash
         let p = _env.get_field(_proof, "proofPointer", "J")
             .expect("Should be able to get field proofPointer");
 
-        read_raw_pointer(p.j().unwrap() as *const VRFProof)
+        read_raw_pointer(&_env, p.j().unwrap() as *const VRFProof)
     };
 
     //Verify vrf proof and get vrf output
@@ -1510,21 +1519,21 @@ pub extern "system" fn Java_com_horizen_vrfnative_VRFPublicKey_nativeProofToHash
 
     //Return vrf output
     return_field_element(&_env, vrf_out)
-}
+});
 
 //Naive threshold signature proof functions
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_sigproofnative_BackwardTransfer_nativeGetMcPkHashSize(
+ffi_export!(
+    fn Java_com_horizen_sigproofnative_BackwardTransfer_nativeGetMcPkHashSize(
     _env: JNIEnv,
     _class: JClass,
 ) -> jint
 {
     MC_PK_SIZE as jint
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeGetConstant(
+ffi_export!(
+    fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeGetConstant(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be
@@ -1549,7 +1558,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let pk = _env.get_field(pk_object, "publicKeyPointer", "J")
             .expect("Should be able to get field publicKeyPointer");
 
-        pks.push(*read_raw_pointer(pk.j().unwrap() as *const SchnorrPk));
+        pks.push(*read_raw_pointer(&_env, pk.j().unwrap() as *const SchnorrPk));
     }
 
     //Extract threshold
@@ -1560,11 +1569,10 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         Ok(constant) => return_field_element(&_env, constant),
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
     }
-}
+});
 
-
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateMsgToSign(
+ffi_export!(
+    fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateMsgToSign(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be
@@ -1616,14 +1624,14 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let f =_env.get_field(_sc_id, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
     };
 
     let end_cumulative_sc_tx_comm_tree_root = {
         let f =_env.get_field(_end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
     };
 
     //Compute message to sign:
@@ -1641,7 +1649,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
 
     //Return msg
     return_field_element(&_env, msg)
-}
+});
 
 fn get_proving_system_type(_env: &JNIEnv, _proving_system: JObject) -> ProvingSystem {
 
@@ -1661,8 +1669,8 @@ fn get_proving_system_type(_env: &JNIEnv, _proving_system: JObject) -> ProvingSy
     }
 }
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGenerateDLogKeys(
+ffi_export!(
+    fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGenerateDLogKeys(
     _env: JNIEnv,
     _class: JClass,
     _proving_system: JObject,
@@ -1682,10 +1690,10 @@ pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_native
         Ok(_) => JNI_TRUE,
         Err(_) => JNI_FALSE,
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeCheckProofVkSize(
+ffi_export!(
+    fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeCheckProofVkSize(
     _env: JNIEnv,
     _class: JClass,
     _zk: jboolean,
@@ -1733,10 +1741,10 @@ pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_native
     );
 
     if result { JNI_TRUE } else { JNI_FALSE }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeSetup(
+ffi_export!(
+    fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeSetup(
     _env: JNIEnv,
     _class: JClass,
     _proving_system: JObject,
@@ -1785,7 +1793,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
             JNI_FALSE
         },
     }
-}
+});
 
 fn get_proving_system_type_as_jint(_env: &JNIEnv, ps: ProvingSystem) -> jint {
     match ps {
@@ -1795,8 +1803,8 @@ fn get_proving_system_type_as_jint(_env: &JNIEnv, ps: ProvingSystem) -> jint {
     }
 }
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGetProverKeyProvingSystemType(
+ffi_export!(
+    fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGetProverKeyProvingSystemType(
     _env: JNIEnv,
     _class: JClass,
     _proving_key_path: JString,
@@ -1814,10 +1822,10 @@ pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_native
         Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
         Err(_) => -1i32 as jint,
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGetVerifierKeyProvingSystemType(
+ffi_export!(
+    fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGetVerifierKeyProvingSystemType(
     _env: JNIEnv,
     _class: JClass,
     _verifier_key_path: JString,
@@ -1835,11 +1843,10 @@ pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_native
         Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
         Err(_) => -1i32 as jint,
     }
-}
+});
 
-
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateProof(
+ffi_export!(
+    fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateProof(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be
@@ -1929,7 +1936,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
             let pk = _env.get_field(pk_object, "publicKeyPointer", "J")
                 .expect("Should be able to get field publicKeyPointer");
 
-            read_raw_pointer(pk.j().unwrap() as *const SchnorrPk)
+            read_raw_pointer(&_env, pk.j().unwrap() as *const SchnorrPk)
         };
 
         sigs.push(signature);
@@ -1940,14 +1947,14 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let f =_env.get_field(_sc_id, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
     };
 
     let end_cumulative_sc_tx_comm_tree_root = {
         let f =_env.get_field(_end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
     };
 
     //Extract params_path str
@@ -1990,10 +1997,10 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
     ).expect("Should be able to create new CreateProofResult:(byte[], long) object");
 
     *result
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGetProofProvingSystemType(
+ffi_export!(
+    fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGetProofProvingSystemType(
     _env: JNIEnv,
     _class: JClass,
     _proof: jbyteArray,
@@ -2011,10 +2018,10 @@ pub extern "system" fn Java_com_horizen_provingsystemnative_ProvingSystem_native
         Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
         Err(_) => -1i32 as jint,
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeVerifyProof(
+ffi_export!(
+    fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeVerifyProof(
     _env: JNIEnv,
     // this is the class that owns our
     // static method. Not going to be
@@ -2073,14 +2080,14 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let f =_env.get_field(_sc_id, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
     };
 
     let end_cumulative_sc_tx_comm_tree_root = {
         let f =_env.get_field(_end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(f.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
     };
 
     //Extract constant
@@ -2089,7 +2096,7 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         let c =_env.get_field(_constant, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
 
-        read_raw_pointer(c.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, c.j().unwrap() as *const FieldElement)
     };
 
     //Extract proof
@@ -2121,11 +2128,11 @@ pub extern "system" fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_na
         Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
         Err(_) => JNI_FALSE // CRYPTO_ERROR or IO_ERROR
     }
-}
+});
 
 ///////// COMMITMENT TREE
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeInit(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeInit(
     _env: JNIEnv,
     _class: JClass
 ) -> jobject
@@ -2140,10 +2147,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeInit
     _env.new_object(_class, "(J)V", &[JValue::Long(commitment_tree_ptr)])
         .expect("Should be able to create new CommitmentTree object")
         .into_inner()
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeFreeCommitmentTree(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeFreeCommitmentTree(
     _env: JNIEnv,
     _class: JClass,
     _commitment_tree: *mut CommitmentTree
@@ -2151,10 +2158,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeFree
 {
     if _commitment_tree.is_null()  { return }
     drop(unsafe { Box::from_raw(_commitment_tree) });
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddScCr(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddScCr(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray,
@@ -2282,7 +2289,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     if commitment_tree.add_scc(&sc_id,
@@ -2305,10 +2312,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddS
     } else {
         JNI_FALSE
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddFwt(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddFwt(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray,
@@ -2342,7 +2349,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddF
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
 
@@ -2356,10 +2363,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddF
     } else {
         JNI_FALSE
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddBtr(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddBtr(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray,
@@ -2405,7 +2412,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddB
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     if commitment_tree.add_bwtr(&sc_id,
@@ -2418,10 +2425,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddB
     } else {
         JNI_FALSE
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddCert(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddCert(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray,
@@ -2511,7 +2518,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     if commitment_tree.add_cert(&sc_id,
@@ -2526,10 +2533,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
     } else {
         JNI_FALSE
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddCertLeaf(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddCertLeaf(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray,
@@ -2551,7 +2558,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     if commitment_tree.add_cert_leaf(&sc_id, &leaf_fe) {
@@ -2559,10 +2566,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
     } else {
         JNI_FALSE
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCrtLeaves(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCrtLeaves(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray
@@ -2578,7 +2585,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     match commitment_tree.get_cert_leaves(&sc_id) {
@@ -2619,10 +2626,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
             *empty_res.l().unwrap()
         }
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddCsw(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddCsw(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray,
@@ -2651,7 +2658,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     if commitment_tree.add_csw(&sc_id,
@@ -2662,10 +2669,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddC
     } else {
         JNI_FALSE
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScCrCommitment(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScCrCommitment(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray
@@ -2681,7 +2688,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
@@ -2706,10 +2713,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
             *empty_res.l().unwrap()
         }
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetFwtCommitment(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetFwtCommitment(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray
@@ -2725,7 +2732,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetF
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
@@ -2750,10 +2757,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetF
             *empty_res.l().unwrap()
         }
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeBtrCommitment(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeBtrCommitment(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray
@@ -2769,7 +2776,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeBtrC
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
@@ -2794,10 +2801,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeBtrC
             *empty_res.l().unwrap()
         }
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCertCommitment(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCertCommitment(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray
@@ -2813,7 +2820,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
@@ -2838,10 +2845,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
             *empty_res.l().unwrap()
         }
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCswCommitment(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCswCommitment(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray
@@ -2857,7 +2864,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
@@ -2882,10 +2889,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
             *empty_res.l().unwrap()
         }
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScCommitment(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScCommitment(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray
@@ -2901,7 +2908,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
@@ -2926,10 +2933,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
             *empty_res.l().unwrap()
         }
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCommitment(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCommitment(
     _env: JNIEnv,
     _commitment_tree: JObject
 ) -> jobject
@@ -2939,7 +2946,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
@@ -2964,11 +2971,11 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetC
             *empty_res.l().unwrap()
         }
     }
-}
+});
 
 // Sc Existance proof functions
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScExistenceProof(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScExistenceProof(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray
@@ -2984,7 +2991,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
@@ -3009,10 +3016,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
             *empty_res.l().unwrap()
         }
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeSerialize(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeSerialize(
     _env: JNIEnv,
     _proof: JObject,
 ) -> jbyteArray
@@ -3023,10 +3030,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeSe
         "existenceProofPointer",
         None
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeDeserialize(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeDeserialize(
     _env: JNIEnv,
     _class: JClass,
     _proof_bytes: jbyteArray,
@@ -3049,10 +3056,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeDe
         },
         Err(_) => {std::ptr::null::<jobject>() as jobject}
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeFreeScExistenceProof(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeFreeScExistenceProof(
     _env: JNIEnv,
     _class: JClass,
     _sc_existence_proof: *mut ScExistenceProof
@@ -3060,12 +3067,12 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeFr
 {
     if _sc_existence_proof.is_null()  { return }
     drop(unsafe { Box::from_raw(_sc_existence_proof) });
-}
+});
 
 
 // Sc Absence proof functions
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScAbsenceProof(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScAbsenceProof(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray
@@ -3081,7 +3088,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
         let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
             .expect("Should be able to get field commitmentTreePointer");
 
-        read_mut_raw_pointer(t.j().unwrap() as *mut CommitmentTree)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
 
     let cls_optional = _env.find_class("java/util/Optional").unwrap();
@@ -3106,10 +3113,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetS
             *empty_res.l().unwrap()
         }
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeSerialize(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeSerialize(
     _env: JNIEnv,
     _proof: JObject,
 ) -> jbyteArray
@@ -3120,10 +3127,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeSeri
         "absenceProofPointer",
         None
     )
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeDeserialize(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeDeserialize(
     _env: JNIEnv,
     _class: JClass,
     _proof_bytes: jbyteArray,
@@ -3146,10 +3153,10 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeDese
         },
         Err(_) => { std::ptr::null::<jobject>() as jobject }
     }
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeFreeScAbsenceProof(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeFreeScAbsenceProof(
     _env: JNIEnv,
     _class: JClass,
     _sc_absence_proof: *mut ScAbsenceProof
@@ -3157,13 +3164,13 @@ pub extern "system" fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeFree
 {
     if _sc_absence_proof.is_null()  { return }
     drop(unsafe { Box::from_raw(_sc_absence_proof) });
-}
+});
 
 
 // Verify existance/absence functions.
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyScCommitment(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyScCommitment(
     _env: JNIEnv,
     _commitment_tree_class: JObject,
     _sc_commitment: JObject,
@@ -3177,7 +3184,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
         let i =_env.get_field(_sc_commitment, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer from scCommitment");
 
-        read_raw_pointer(i.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, i.j().unwrap() as *const FieldElement)
     };
 
     //Read commitment proof
@@ -3185,7 +3192,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
         let i =_env.get_field(_sc_commitment_proof, "existenceProofPointer", "J")
             .expect("Should be able to get field existenceProofPointer from scCommitmentProof");
 
-        read_raw_pointer(i.j().unwrap() as *const ScExistenceProof)
+        read_raw_pointer(&_env, i.j().unwrap() as *const ScExistenceProof)
     };
 
     //Read commitment
@@ -3193,14 +3200,14 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
         let i =_env.get_field(_commitment, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer from commitment");
 
-        read_raw_pointer(i.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, i.j().unwrap() as *const FieldElement)
     };
 
     CommitmentTree::verify_sc_commitment(sc_commitment_fe, sc_commitment_proof, commitment_fe)
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyScAbsence(
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyScAbsence(
     _env: JNIEnv,
     _commitment_tree: JObject,
     _sc_id: jbyteArray,
@@ -3219,7 +3226,7 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
         let i =_env.get_field(_sc_absence_proof, "absenceProofPointer", "J")
             .expect("Should be able to get field absenceProofPointer from scAbsenceProof");
 
-        read_raw_pointer(i.j().unwrap() as *const ScAbsenceProof)
+        read_raw_pointer(&_env, i.j().unwrap() as *const ScAbsenceProof)
     };
 
     //Read commitment
@@ -3227,15 +3234,14 @@ pub extern "system" fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVeri
         let i =_env.get_field(_commitment, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer from commitment");
 
-        read_raw_pointer(i.j().unwrap() as *const FieldElement)
+        read_raw_pointer(&_env, i.j().unwrap() as *const FieldElement)
     };
 
     CommitmentTree::verify_sc_absence(&sc_id, sc_absence_proof, commitment_fe)
-}
+});
 
-
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCalculateSidechainId(
+ffi_export!(
+    fn Java_com_horizen_librustsidechains_Utils_nativeCalculateSidechainId(
     _env: JNIEnv,
     _utils: JClass,
     _tx_hash: jbyteArray,
@@ -3259,10 +3265,10 @@ pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCalculateS
         None,
     ).expect("Should be able to serialize sc_id");
     _env.byte_array_from_slice(sc_id_bytes.as_slice()).expect("Cannot write jobject.")
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCompressedBitvectorMerkleRoot(
+ffi_export!(
+    fn Java_com_horizen_librustsidechains_Utils_nativeCompressedBitvectorMerkleRoot(
     _env: JNIEnv,
     _utils: JClass,
     _compressed_bit_vector: jbyteArray,
@@ -3282,10 +3288,10 @@ pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCompressed
         None,
     ).expect("Should be able to serialize merkle_root");
     _env.byte_array_from_slice(merkle_root_bytes.as_slice()).expect("Cannot write jobject.")
-}
+});
 
-#[no_mangle]
-pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCompressedBitvectorMerkleRootWithSizeCheck(
+ffi_export!(
+    fn Java_com_horizen_librustsidechains_Utils_nativeCompressedBitvectorMerkleRootWithSizeCheck(
     _env: JNIEnv,
     _utils: JClass,
     _compressed_bit_vector: jbyteArray,
@@ -3309,10 +3315,7 @@ pub extern "system" fn Java_com_horizen_librustsidechains_Utils_nativeCompressed
             _env.byte_array_from_slice(merkle_root_bytes.as_slice()).expect("Cannot write jobject.")
         }
         Err(_) => {
-            _env.throw_new("java/lang/Exception", "Cannot compute merkle root with size check.").expect("Exception expected.");
-            JObject::null().into_inner()
+            throw!(&_env, "java/lang/Exception", "Cannot compute merkle root with size check.", JObject::null().into_inner());
         }
     }
-
-
-}
+});
