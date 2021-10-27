@@ -187,10 +187,10 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
         )?;
 
         // Alloc btr_fee and ft_min_amount
-        let btr_fee_g = UInt64::alloc(cs.ns(|| "alloc btr_fee"), self.btr_fee.clone())?;
+        let btr_fee_g = UInt64::alloc(cs.ns(|| "alloc btr_fee"), self.btr_fee)?;
 
         let ft_min_amount_g =
-            UInt64::alloc(cs.ns(|| "alloc ft_min_amount"), self.ft_min_amount.clone())?;
+            UInt64::alloc(cs.ns(|| "alloc ft_min_amount"), self.ft_min_amount)?;
 
         // Pack them into a single field element
         let fees_bits = {

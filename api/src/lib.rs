@@ -62,12 +62,12 @@ fn serialize_from_raw_pointer<T: CanonicalSerialize>(
     compressed: Option<bool>,
 ) -> Vec<u8> {
     serialize_to_buffer(read_raw_pointer(&_env, to_write), compressed)
-        .expect(format!("unable to write {} to buffer", type_name::<T>()).as_str())
+        .unwrap_or_else(|_| panic!("unable to write {} to buffer", type_name::<T>()))
 }
 
 fn return_jobject<'a, T: Sized>(_env: &'a JNIEnv, obj: T, class_path: &str) -> JObject<'a> {
     //Return field element
-    let obj_ptr: jlong = jlong::from(Box::into_raw(Box::new(obj)) as i64);
+    let obj_ptr: jlong = Box::into_raw(Box::new(obj)) as i64;
 
     let obj_class = _env
         .find_class(class_path)
@@ -807,13 +807,7 @@ ffi_export!(
 
         // Array can be empty
         for i in 0..personalization_len {
-            let field_obj = _env.get_object_array_element(_personalization, i).expect(
-                format!(
-                    "Should be able to read elem {} of the personalization array",
-                    i
-                )
-                .as_str(),
-            );
+            let field_obj = _env.get_object_array_element(_personalization, i).unwrap_or_else(|_| panic!("Should be able to read elem {} of the personalization array", i));
 
             let field = {
                 let f = _env
@@ -856,13 +850,7 @@ ffi_export!(
 
         // Array can be empty
         for i in 0..personalization_len {
-            let field_obj = _env.get_object_array_element(_personalization, i).expect(
-                format!(
-                    "Should be able to read elem {} of the personalization array",
-                    i
-                )
-                .as_str(),
-            );
+            let field_obj = _env.get_object_array_element(_personalization, i).unwrap_or_else(|_| panic!("Should be able to read elem {} of the personalization array", i));
 
             let field = {
                 let f = _env
@@ -965,13 +953,7 @@ ffi_export!(
 
         // Array can be empty
         for i in 0..personalization_len {
-            let field_obj = _env.get_object_array_element(_personalization, i).expect(
-                format!(
-                    "Should be able to read elem {} of the personalization array",
-                    i
-                )
-                .as_str(),
-            );
+            let field_obj = _env.get_object_array_element(_personalization, i).unwrap_or_else(|_| panic!("Should be able to read elem {} of the personalization array", i));
 
             let field = {
                 let f = _env
@@ -1261,7 +1243,7 @@ ffi_export!(
                 "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree",
             )
             .into_inner(),
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(_) => std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
         }
     }
 );
@@ -1315,7 +1297,7 @@ ffi_export!(
                 "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree",
             )
             .into_inner(),
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(_) => std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
         }
     }
 );
@@ -1710,7 +1692,7 @@ ffi_export!(
         for i in 0..pks_list_size {
             let pk_object = _env
                 .get_object_array_element(_schnorr_pks_list, i)
-                .expect(format!("Should be able to get elem {} of schnorr_pks_list", i).as_str());
+                .unwrap_or_else(|_| panic!("Should be able to get elem {} of schnorr_pks_list", i));
 
             let pk = _env
                 .get_field(pk_object, "publicKeyPointer", "J")
@@ -1728,7 +1710,7 @@ ffi_export!(
         //Compute constant
         match compute_pks_threshold_hash(pks.as_slice(), threshold) {
             Ok(constant) => return_field_element(&_env, constant),
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(_) => std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
         }
     }
 );
@@ -1759,7 +1741,7 @@ ffi_export!(
             for i in 0..bt_list_size {
                 let o = _env
                     .get_object_array_element(_bt_list, i)
-                    .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+                    .unwrap_or_else(|_| panic!("Should be able to get elem {} of bt_list array", i));
 
                 let p = _env
                     .call_method(o, "getPublicKeyHash", "()[B", &[])
@@ -1986,9 +1968,9 @@ ffi_export!(
 
 fn get_proving_system_type_as_jint(_env: &JNIEnv, ps: ProvingSystem) -> jint {
     match ps {
-        ProvingSystem::Undefined => 0i32 as jint,
-        ProvingSystem::Darlin => 1i32 as jint,
-        ProvingSystem::CoboundaryMarlin => 2i32 as jint,
+        ProvingSystem::Undefined => 0_i32,
+        ProvingSystem::Darlin => 1_i32,
+        ProvingSystem::CoboundaryMarlin => 2_i32,
     }
 }
 
@@ -2009,7 +1991,7 @@ ffi_export!(
             None,
         ) {
             Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
-            Err(_) => -1i32 as jint,
+            Err(_) => 1_i32,
         }
     }
 );
@@ -2031,7 +2013,7 @@ ffi_export!(
             None,
         ) {
             Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
-            Err(_) => -1i32 as jint,
+            Err(_) => 1_i32,
         }
     }
 );
@@ -2070,7 +2052,7 @@ ffi_export!(
             for i in 0..bt_list_size {
                 let o = _env
                     .get_object_array_element(_bt_list, i)
-                    .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+                    .unwrap_or_else(|_| panic!("Should be able to get elem {} of bt_list array", i));
 
                 let p = _env
                     .call_method(o, "getPublicKeyHash", "()[B", &[])
@@ -2121,21 +2103,18 @@ ffi_export!(
             //Get i-th sig
             let sig_object = _env
                 .get_object_array_element(_schnorr_sigs_list, i)
-                .expect(format!("Should be able to get elem {} of schnorr_sigs_list", i).as_str());
+                .unwrap_or_else(|_| panic!("Should be able to get elem {} of schnorr_sigs_list", i));
 
             let pk_object = _env
                 .get_object_array_element(_schnorr_pks_list, i)
-                .expect(format!("Should be able to get elem {} of schnorr_pks_list", i).as_str());
+                .unwrap_or_else(|_| panic!("Should be able to get elem {} of schnorr_pks_list", i));
 
             let signature = {
                 let sig = _env
                     .get_field(sig_object, "signaturePointer", "J")
                     .expect("Should be able to get field signaturePointer");
 
-                match read_nullable_raw_pointer(sig.j().unwrap() as *const SchnorrSig) {
-                    Some(sig) => Some(*sig),
-                    None => None,
-                }
+                read_nullable_raw_pointer(sig.j().unwrap() as *const SchnorrSig).copied()
             };
 
             let public_key = {
@@ -2212,7 +2191,7 @@ ffi_export!(
                 "([BJ)V",
                 &[
                     JValue::Object(JObject::from(proof_serialized)),
-                    JValue::Long(jlong::from(quality as i64)),
+                    JValue::Long(quality as i64),
                 ],
             )
             .expect("Should be able to create new CreateProofResult:(byte[], long) object");
@@ -2234,7 +2213,7 @@ ffi_export!(
 
         match deserialize_from_buffer::<ProvingSystem>(&proof_bytes[..1], None, None) {
             Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
-            Err(_) => -1i32 as jint,
+            Err(_) => 1_i32,
         }
     }
 );
@@ -2273,7 +2252,7 @@ ffi_export!(
             for i in 0..bt_list_size {
                 let o = _env
                     .get_object_array_element(_bt_list, i)
-                    .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+                    .unwrap_or_else(|_| panic!("Should be able to get elem {} of bt_list array", i));
 
                 let p = _env
                     .call_method(o, "getPublicKeyHash", "()[B", &[])
@@ -2385,7 +2364,7 @@ ffi_export!(
 
         // Create and return new CommitmentTree Java side
         let commitment_tree_ptr: jlong =
-            jlong::from(Box::into_raw(Box::new(commitment_tree)) as i64);
+            Box::into_raw(Box::new(commitment_tree)) as i64;
 
         _env.new_object(_class, "(J)V", &[JValue::Long(commitment_tree_ptr)])
             .expect("Should be able to create new CommitmentTree object")
@@ -2456,13 +2435,7 @@ ffi_export!(
             for i in 0..custom_field_size {
                 let custom_field_config = _env
                     .get_object_array_element(_custom_field_elements_configs, i)
-                    .expect(
-                        format!(
-                            "Should be able to get elem {} of custom_field_elements_configs array",
-                            i
-                        )
-                        .as_str(),
-                    );
+                    .unwrap_or_else(|_| panic!("Should be able to get elem {} of custom_field_elements_configs array", i));
 
                 let bits = _env
                     .call_method(custom_field_config, "getBits", "()B", &[])
@@ -2473,7 +2446,7 @@ ffi_export!(
                 custom_field_elements_configs.push(bits);
             }
         }
-        let custom_field_elements_configs_opt = if custom_field_elements_configs.len() > 0 {
+        let custom_field_elements_configs_opt = if !custom_field_elements_configs.is_empty() {
             Some(custom_field_elements_configs.as_slice())
         } else {
             None
@@ -2486,7 +2459,7 @@ ffi_export!(
         if custom_bitvector_elements_size > 0 {
             for i in 0..custom_bitvector_elements_size {
                 let custom_bitvector_element_config = _env.get_object_array_element(_custom_bitvector_elements_configs, i)
-                .expect(format!("Should be able to get elem {} of custom_bitvector_elements_configs array", i).as_str());
+                .unwrap_or_else(|_| panic!("Should be able to get elem {} of custom_bitvector_elements_configs array", i));
 
                 let bit_vector_size_bits = _env
                     .call_method(
@@ -2517,7 +2490,7 @@ ffi_export!(
             }
         }
 
-        let custom_bitvector_elements_configs_opt = if custom_bitvector_elements_configs.len() > 0 {
+        let custom_bitvector_elements_configs_opt = if !custom_bitvector_elements_configs.is_empty() {
             Some(custom_bitvector_elements_configs.as_slice())
         } else {
             None
@@ -2531,7 +2504,7 @@ ffi_export!(
             .convert_byte_array(_custom_creation_data)
             .expect("Should be able to convert to Rust array");
 
-        let custom_creation_data_opt = if custom_creation_data.len() > 0 {
+        let custom_creation_data_opt = if !custom_creation_data.is_empty() {
             Some(custom_creation_data.as_slice())
         } else {
             None
@@ -2679,13 +2652,7 @@ ffi_export!(
             .expect("Should be able to get _custom_field_elements_configs size");
         if sc_request_data_size > 0 {
             for i in 0..sc_request_data_size {
-                let o = _env.get_object_array_element(_sc_request_data, i).expect(
-                    format!(
-                        "Should be able to get elem {} of custom_field_elements_configs array",
-                        i
-                    )
-                    .as_str(),
-                );
+                let o = _env.get_object_array_element(_sc_request_data, i).unwrap_or_else(|_| panic!("Should be able to get elem {} of custom_field_elements_configs array", i));
 
                 let data = _env
                     .convert_byte_array(o.cast())
@@ -2760,7 +2727,7 @@ ffi_export!(
             for i in 0..bt_list_size {
                 let o = _env
                     .get_object_array_element(_bt_list, i)
-                    .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+                    .unwrap_or_else(|_| panic!("Should be able to get elem {} of bt_list array", i));
 
                 let p = _env
                     .call_method(o, "getPublicKeyHash", "()[B", &[])
@@ -2788,7 +2755,7 @@ ffi_export!(
             }
         }
 
-        let bt_list_opt = if bt_list.len() > 0 {
+        let bt_list_opt = if !bt_list.is_empty() {
             Some(bt_list.as_slice())
         } else {
             None
@@ -2806,10 +2773,7 @@ ffi_export!(
                 for i in 0..custom_fields_size {
                     let o = _env
                         .get_object_array_element(_custom_fields_nullable, i)
-                        .expect(
-                            format!("Should be able to get elem {} of custom_fields array", i)
-                                .as_str(),
-                        );
+                        .unwrap_or_else(|_| panic!("Should be able to get elem {} of custom_fields array", i));
 
                     let cf = _env
                         .convert_byte_array(o.cast())
@@ -2935,7 +2899,7 @@ ffi_export!(
 
                 for (idx, leaf) in leaves.iter().enumerate() {
                     let leaf_field_ptr: jlong =
-                        jlong::from(Box::into_raw(Box::new(leaf.clone())) as i64);
+                        (Box::into_raw(Box::new(*leaf)) as i64);
 
                     let leaf_element = _env
                         .new_object(field_class, "(J)V", &[JValue::Long(leaf_field_ptr)])
@@ -3038,7 +3002,7 @@ ffi_export!(
         match commitment_tree.get_scc(&sc_id) {
             Some(sc_cr_commitment_fe) => {
                 let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                    Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3093,7 +3057,7 @@ ffi_export!(
         match commitment_tree.get_fwt_commitment(&sc_id) {
             Some(sc_cr_commitment_fe) => {
                 let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                    Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3148,7 +3112,7 @@ ffi_export!(
         match commitment_tree.get_bwtr_commitment(&sc_id) {
             Some(sc_cr_commitment_fe) => {
                 let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                    Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3203,7 +3167,7 @@ ffi_export!(
         match commitment_tree.get_cert_commitment(&sc_id) {
             Some(sc_cr_commitment_fe) => {
                 let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                    Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3258,7 +3222,7 @@ ffi_export!(
         match commitment_tree.get_csw_commitment(&sc_id) {
             Some(sc_cr_commitment_fe) => {
                 let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                    Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3313,7 +3277,7 @@ ffi_export!(
         match commitment_tree.get_sc_commitment(&sc_id) {
             Some(sc_cr_commitment_fe) => {
                 let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                    Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3361,7 +3325,7 @@ ffi_export!(
         match commitment_tree.get_commitment() {
             Some(sc_cr_commitment_fe) => {
                 let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                    Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3417,7 +3381,7 @@ ffi_export!(
         match commitment_tree.get_sc_existence_proof(&sc_id) {
             Some(sc_existence_proof) => {
                 let proof_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_existence_proof)) as i64);
+                    Box::into_raw(Box::new(sc_existence_proof)) as i64;
 
                 let existence_proof_class = _env
                     .find_class("com/horizen/commitmenttree/ScExistenceProof")
@@ -3469,7 +3433,7 @@ ffi_export!(
         match ScExistenceProof::deserialize(proof_bytes.as_slice()) {
             Ok(sc_existence_proof) => {
                 let proof_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_existence_proof)) as i64);
+                    Box::into_raw(Box::new(sc_existence_proof)) as i64;
 
                 let existence_proof_class = _env
                     .find_class("com/horizen/commitmenttree/ScExistenceProof")
@@ -3525,7 +3489,7 @@ ffi_export!(
         match commitment_tree.get_sc_absence_proof(&sc_id) {
             Some(sc_absence_proof) => {
                 let proof_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_absence_proof)) as i64);
+                    Box::into_raw(Box::new(sc_absence_proof)) as i64;
 
                 let absence_proof_class = _env
                     .find_class("com/horizen/commitmenttree/ScAbsenceProof")
@@ -3577,7 +3541,7 @@ ffi_export!(
         match ScAbsenceProof::deserialize(proof_bytes.as_slice()) {
             Ok(sc_absence_proof) => {
                 let proof_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_absence_proof)) as i64);
+                    Box::into_raw(Box::new(sc_absence_proof)) as i64;
 
                 let absence_proof_class = _env
                     .find_class("com/horizen/commitmenttree/ScAbsenceProof")

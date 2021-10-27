@@ -60,7 +60,7 @@ pub fn schnorr_sign(
         &mut rng,
         &FieldBasedSchnorrPk(pk.into_projective()),
         sk,
-        msg.clone(),
+        *msg,
     )
 }
 
@@ -71,7 +71,7 @@ pub fn schnorr_verify_signature(
 ) -> Result<bool, Error> {
     SchnorrSigScheme::verify(
         &FieldBasedSchnorrPk(pk.into_projective()),
-        msg.clone(),
+        *msg,
         signature,
     )
 }
@@ -111,7 +111,7 @@ pub fn compute_msg_to_sign(
     let epoch_number = FieldElement::from(epoch_number);
 
     //Compute bt_list merkle_root
-    let bt_list_opt = if bt_list.len() > 0 {
+    let bt_list_opt = if !bt_list.is_empty() {
         Some(bt_list.as_slice())
     } else {
         None
@@ -254,7 +254,7 @@ pub fn verify_naive_threshold_sig_proof(
     check_vk: bool,
     compressed_vk: bool,
 ) -> Result<bool, Error> {
-    let bt_list_opt = if bt_list.len() > 0 {
+    let bt_list_opt = if !bt_list.is_empty() {
         Some(bt_list.as_slice())
     } else {
         None
@@ -333,7 +333,7 @@ pub fn vrf_prove(
         &VRF_GH_PARAMS,
         &FieldBasedEcVrfPk(pk.into_projective()),
         sk,
-        msg.clone(),
+        *msg,
     )?;
 
     //Convert gamma from proof to field elements
@@ -342,7 +342,7 @@ pub fn vrf_prove(
     //Compute VRF output
     let output = {
         let mut h = FieldHash::init_constant_length(3, None);
-        h.update(msg.clone());
+        h.update(*msg);
         gamma_coords.into_iter().for_each(|c| {
             h.update(c);
         });
@@ -360,7 +360,7 @@ pub fn vrf_proof_to_hash(
     VRFScheme::proof_to_hash(
         &VRF_GH_PARAMS,
         &FieldBasedEcVrfPk(pk.into_projective()),
-        msg.clone(),
+        *msg,
         proof,
     )
 }
@@ -574,7 +574,7 @@ mod test {
         let mut vk_path_no_bwt = tmp_dir.clone();
         vk_path_no_bwt.push("sample_vk_no_bwt");
 
-        let mut proof_path_no_bwt = tmp_dir.clone();
+        let mut proof_path_no_bwt = tmp_dir;
         proof_path_no_bwt.push("sample_proof_no_bwt");
 
         create_sample_naive_threshold_sig_circuit(
@@ -599,7 +599,7 @@ mod test {
         let msg = FieldElement::rand(&mut rng);
         {
             let msg_bytes = serialize_to_buffer(&msg, None).unwrap();
-            println!("msg bytes: {:?}", into_i8(msg_bytes.clone()));
+            println!("msg bytes: {:?}", into_i8(msg_bytes));
         }
 
         let (pk, sk) = schnorr_generate_key(); //Keygen
@@ -643,7 +643,7 @@ mod test {
         let msg = FieldElement::rand(&mut rng);
         {
             let msg_bytes = serialize_to_buffer(&msg, None).unwrap();
-            println!("msg bytes: {:?}", into_i8(msg_bytes.clone()));
+            println!("msg bytes: {:?}", into_i8(msg_bytes));
         }
 
         let (pk, sk) = vrf_generate_key(); //Keygen

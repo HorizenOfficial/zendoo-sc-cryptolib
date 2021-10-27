@@ -20,10 +20,10 @@ pub(crate) fn _throw_inner(env: &JNIEnv, exception: &str, description: &str) {
     if !env.exception_check().unwrap() {
         let exception_class = env
             .find_class(exception)
-            .expect(&format!("Unable to find {} class", exception));
+            .unwrap_or_else(|_| panic!("Unable to find {} class", exception));
 
         env.throw_new(exception_class, description)
-            .expect(&format!("Should be able to throw {}", exception));
+            .unwrap_or_else(|_| panic!("Should be able to throw {}", exception));
     }
 }
 
