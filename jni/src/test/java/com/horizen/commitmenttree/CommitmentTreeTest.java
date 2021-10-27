@@ -239,6 +239,7 @@ public class CommitmentTreeTest {
 
         FieldElement leaf1 = FieldElement.createRandom();
         FieldElement leaf2 = FieldElement.createRandom();
+
         assertTrue("Certificate leaf expected to be added.", commTree.addCertLeaf(scId, leaf1.serializeFieldElement()));
         assertTrue("Certificate leaf expected to be added.", commTree.addCertLeaf(scId, leaf2.serializeFieldElement()));
 
