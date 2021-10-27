@@ -1,11 +1,7 @@
-use algebra::{
-    biginteger::BigInteger256 as BigInteger,
-    Field, ProjectiveCurve, field_new
-};
+use algebra::{biginteger::BigInteger256 as BigInteger, field_new, Field, ProjectiveCurve};
 
 use primitives::{
-    crh::pedersen::PedersenWindow,
-    signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk,
+    crh::pedersen::PedersenWindow, signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk,
 };
 
 use crate::type_mapping::*;
@@ -13,8 +9,8 @@ use crate::type_mapping::*;
 pub mod constants;
 
 pub struct NaiveThresholdSigParams {
-    pub null_sig:   SchnorrSig,
-    pub null_pk:    FieldBasedSchnorrPk<G2Projective>,
+    pub null_sig: SchnorrSig,
+    pub null_pk: FieldBasedSchnorrPk<G2Projective>,
 }
 
 impl NaiveThresholdSigParams {
@@ -23,42 +19,39 @@ impl NaiveThresholdSigParams {
         let s = e.clone();
         let null_sig = SchnorrSig::new(e, s);
 
-        let x = field_new!(FieldElement,
-            BigInteger(
-                [
-                    817531083298639342,
-                    16113810631348879462,
-                    1306238005170570794,
-                    917352325188691328,
-                ],
-            )
+        let x = field_new!(
+            FieldElement,
+            BigInteger([
+                817531083298639342,
+                16113810631348879462,
+                1306238005170570794,
+                917352325188691328,
+            ],)
         );
 
-        let y = field_new!(FieldElement,
-            BigInteger(
-                [
-                    7051092939593429249,
-                    9720513155186830666,
-                    6359574609400546156,
-                    2888851165431378812,
-                ],
-            )
+        let y = field_new!(
+            FieldElement,
+            BigInteger([
+                7051092939593429249,
+                9720513155186830666,
+                6359574609400546156,
+                2888851165431378812,
+            ],)
         );
 
-        let z = field_new!(FieldElement,
-            BigInteger(
-                [
-                    2035294266095304701,
-                    17681163514934325971,
-                    18446744073709551615,
-                    4611686018427387903,
-                ],
-            )
+        let z = field_new!(
+            FieldElement,
+            BigInteger([
+                2035294266095304701,
+                17681163514934325971,
+                18446744073709551615,
+                4611686018427387903,
+            ],)
         );
 
         let null_pk = FieldBasedSchnorrPk(G2Projective::new(x, y, z));
 
-        Self{null_sig, null_pk}
+        Self { null_sig, null_pk }
     }
 }
 
@@ -69,69 +62,82 @@ impl PedersenWindow for VRFWindow {
     const NUM_WINDOWS: usize = 2;
 }
 
-pub struct VRFParams{
+pub struct VRFParams {
     pub group_hash_generators: Vec<Vec<G2Projective>>,
 }
 
 impl VRFParams {
     pub fn new() -> Self {
-
         let gen_1 = G2Projective::new(
-        field_new!(FieldElement,
-            BigInteger([
-                12926485790763496744,
-                7301812230106132899,
-                5868404524855748477,
-                606499321461550871,
-            ])),
-        field_new!(FieldElement,
-            BigInteger([
-                12459762756615730720,
-                7373659181971905397,
-                417161890334020390,
-                1065371458433835676,
-            ])),
-        field_new!(FieldElement,
-            BigInteger([
-                2035294266095304701,
-                17681163514934325971,
-                18446744073709551615,
-                4611686018427387903,
-            ])),
+            field_new!(
+                FieldElement,
+                BigInteger([
+                    12926485790763496744,
+                    7301812230106132899,
+                    5868404524855748477,
+                    606499321461550871,
+                ])
+            ),
+            field_new!(
+                FieldElement,
+                BigInteger([
+                    12459762756615730720,
+                    7373659181971905397,
+                    417161890334020390,
+                    1065371458433835676,
+                ])
+            ),
+            field_new!(
+                FieldElement,
+                BigInteger([
+                    2035294266095304701,
+                    17681163514934325971,
+                    18446744073709551615,
+                    4611686018427387903,
+                ])
+            ),
         );
 
         let gen_2 = G2Projective::new(
-        field_new!(FieldElement,
-            BigInteger([
-                15342121784330514541,
-                9118652640516123238,
-                17509069746383483632,
-                1285742610361624126,
-            ])),
-        field_new!(FieldElement,
-            BigInteger([
-                5093526993895361515,
-                7436829771986140347,
-                8066708127376422025,
-                1382517365996680842,
-            ])),
-        field_new!(FieldElement,
-            BigInteger([
-                2035294266095304701,
-                17681163514934325971,
-                18446744073709551615,
-                4611686018427387903,
-            ])),
+            field_new!(
+                FieldElement,
+                BigInteger([
+                    15342121784330514541,
+                    9118652640516123238,
+                    17509069746383483632,
+                    1285742610361624126,
+                ])
+            ),
+            field_new!(
+                FieldElement,
+                BigInteger([
+                    5093526993895361515,
+                    7436829771986140347,
+                    8066708127376422025,
+                    1382517365996680842,
+                ])
+            ),
+            field_new!(
+                FieldElement,
+                BigInteger([
+                    2035294266095304701,
+                    17681163514934325971,
+                    18446744073709551615,
+                    4611686018427387903,
+                ])
+            ),
         );
 
         let group_hash_generators = Self::compute_group_hash_table([gen_1, gen_2].to_vec());
 
-        Self{group_hash_generators}
+        Self {
+            group_hash_generators,
+        }
     }
 
-    pub(crate) fn compute_group_hash_table(generators: Vec<G2Projective>)
-    -> Vec<Vec<G2Projective>>
-    {
+    pub(crate) fn compute_group_hash_table(
+        generators: Vec<G2Projective>,
+    ) -> Vec<Vec<G2Projective>> {
         let mut gen_table = Vec::new();
         for i in 0..VRFWindow::NUM_WINDOWS {
             let mut generators_for_segment = Vec::new();
@@ -149,30 +155,25 @@ impl VRFParams {
 }
 
 #[cfg(test)]
-mod test
-{
-    use algebra::{PrimeField, FpParameters, FromCompressedBits, AffineCurve};
+mod test {
     use super::*;
-    use blake2s_simd::{
-        Hash, Params
-    };
+    use algebra::{AffineCurve, FpParameters, FromCompressedBits, PrimeField};
     use bit_vec::BitVec;
+    use blake2s_simd::{Hash, Params};
 
     fn hash_to_curve<F: PrimeField, G: AffineCurve + FromCompressedBits>(
         tag: &[u8],
-        personalization: &[u8]
+        personalization: &[u8],
     ) -> Option<G> {
-
-        let compute_chunk =
-            |input: &[u8], personalization: &[u8]| -> Hash {
-                Params::new()
-                    .hash_length(32)
-                    .personal(personalization)
-                    .to_state()
-                    .update(constants::GH_FIRST_BLOCK)
-                    .update(input)
-                    .finalize()
-            };
+        let compute_chunk = |input: &[u8], personalization: &[u8]| -> Hash {
+            Params::new()
+                .hash_length(32)
+                .personal(personalization)
+                .to_state()
+                .update(constants::GH_FIRST_BLOCK)
+                .update(input)
+                .finalize()
+        };
 
         // Append counter byte to tag
         let tag_len = tag.len();
@@ -181,13 +182,16 @@ mod test
 
         // Compute number of hashes to be concatenated in order to obtain a field element
         let field_size = F::size_in_bits();
-        let bigint_size = (field_size + F::Params::REPR_SHAVE_BITS as usize)/8;
-        let chunk_num = if bigint_size % 32 == 0 { bigint_size/32 } else { (bigint_size/32) + 1};
+        let bigint_size = (field_size + F::Params::REPR_SHAVE_BITS as usize) / 8;
+        let chunk_num = if bigint_size % 32 == 0 {
+            bigint_size / 32
+        } else {
+            (bigint_size / 32) + 1
+        };
         let max_value = u8::max_value();
         let mut g = None;
 
         while tag[tag_len] <= max_value {
-
             let mut chunks = vec![];
 
             //chunk_0 = H(tag), chunk_1 = H(chunk_0) = H(H(tag)), ..., chunk_i = H(chunk_i-1)
@@ -210,7 +214,7 @@ mod test
             let chunk_bytes = chunk_bits.to_bytes();
             let fe = match F::from_random_bytes(&chunk_bytes[..bigint_size]) {
                 Some(fe) => fe,
-                None => continue
+                None => continue,
             };
 
             //Get point from chunks
@@ -221,13 +225,12 @@ mod test
                 Ok(point) => {
                     g = Some(point);
                     break;
-                },
-                Err(_) => continue
+                }
+                Err(_) => continue,
             };
-        };
+        }
         g
     }
-
 
     #[test]
     fn test_pk_null_gen() {
@@ -258,9 +261,7 @@ mod test
             .into_projective();
 
         //Check GH generators
-        let gh_generators = VRFParams::compute_group_hash_table(
-            [htc_g1_out, htc_g2_out].to_vec()
-        );
+        let gh_generators = VRFParams::compute_group_hash_table([htc_g1_out, htc_g2_out].to_vec());
         println!("{:#?}", htc_g1_out);
         println!("{:#?}", htc_g2_out);
         assert_eq!(gh_generators, VRFParams::new().group_hash_generators);
