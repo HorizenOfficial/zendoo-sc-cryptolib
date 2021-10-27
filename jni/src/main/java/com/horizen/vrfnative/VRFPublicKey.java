@@ -3,15 +3,18 @@ package com.horizen.vrfnative;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
-public class VRFPublicKey
+public class VRFPublicKey implements AutoCloseable
 {
 
-  public static final int PUBLIC_KEY_LENGTH = 193;
+  public static final int PUBLIC_KEY_LENGTH;
 
   private long publicKeyPointer;
 
+  private static native int nativeGetPublicKeySize();
+
   static {
     Library.load();
+    PUBLIC_KEY_LENGTH = nativeGetPublicKeySize();
   }
 
   private VRFPublicKey(long publicKeyPointer) {
@@ -20,24 +23,35 @@ public class VRFPublicKey
     this.publicKeyPointer = publicKeyPointer;
   }
 
-  private static native int nativeGetPublicKeySize();
+  private static native VRFPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes, boolean checkPublicKey, boolean compressed);
 
-  private static native VRFPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes);
-
-  public static VRFPublicKey deserialize(byte[] publicKeyBytes) {
+  public static VRFPublicKey deserialize(byte[] publicKeyBytes, boolean checkPublicKey, boolean compressed) {
     if (publicKeyBytes.length != PUBLIC_KEY_LENGTH)
       throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PUBLIC_KEY_LENGTH, publicKeyBytes.length));
 
-    return nativeDeserializePublicKey(publicKeyBytes);
+    return nativeDeserializePublicKey(publicKeyBytes, checkPublicKey, compressed);
   }
 
-  private native byte[] nativeSerializePublicKey();
+  public static VRFPublicKey deserialize(byte[] publicKeyBytes, boolean checkPublicKey) {
+    return deserialize(publicKeyBytes, checkPublicKey, true);
+  }
+
+  public static VRFPublicKey deserialize(byte[] publicKeyBytes) {
+    return deserialize(publicKeyBytes, true, true);
+  }
+
+  private native byte[] nativeSerializePublicKey(boolean compressed);
+
+
+  public byte[] serializePublicKey(boolean compressed) {
+    if (publicKeyPointer == 0)
+      throw new IllegalStateException("Public key was freed.");
+
+    return nativeSerializePublicKey(compressed);
+  }
 
   public byte[] serializePublicKey() {
-    if (publicKeyPointer == 0)
-      throw new IllegalArgumentException("Public key was freed.");
-
-    return nativeSerializePublicKey();
+    return serializePublicKey(true);
   }
 
   private native void nativeFreePublicKey();
@@ -53,7 +67,7 @@ public class VRFPublicKey
 
   public boolean verifyKey() {
     if (publicKeyPointer == 0)
-      throw new IllegalArgumentException("Public key was freed.");
+      throw new IllegalStateException("Public key was freed.");
 
     return nativeVerifyKey();
   }
@@ -62,9 +76,14 @@ public class VRFPublicKey
 
   public FieldElement proofToHash(VRFProof proof, FieldElement message) {
     if (publicKeyPointer == 0)
-      throw new IllegalArgumentException("Public key was freed.");
+      throw new IllegalStateException("Public key was freed.");
 
     return nativeProofToHash(proof, message);
+  }
+
+  @Override
+  public void close() throws Exception {
+    freePublicKey();
   }
 }
 

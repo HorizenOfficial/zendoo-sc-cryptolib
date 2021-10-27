@@ -6,19 +6,25 @@ edition = "2018"
 include = ["Cargo.toml", "src"]
 
 [dependencies]
-algebra = {version = "0.1.0", git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-primitives = {version = "0.1.0", features = ["signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-r1cs-crypto = {version = "0.1.0", features = ["signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-r1cs-core = {version = "0.1.0", git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-r1cs-std = {version = "0.1.0", git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-proof-systems = {version = "0.1.0", features = ["groth16"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+r1cs-crypto = {features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+r1cs-std = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
 
-derivative = "1"
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "dev" }
+
+derivative = "2.2.0"
 lazy_static = "1"
-radix_trie = "0.1"
-rand = { version = "0.7" }
+radix_trie = "0.2.1"
+rand = { version = "0.8.4" }
+blake2 = { version = "0.8.1", default-features = false }
 
 [dev-dependencies]
-digest = "0.7"
+digest = "0.8"
 blake2s_simd = "0.5"
 bit-vec = "0.6.1"
+
+[features]
+default = [ "asm" ]
+asm = [ "algebra/llvm_asm", "cctp_primitives/asm" ]

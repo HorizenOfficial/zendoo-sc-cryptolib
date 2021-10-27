@@ -1,6 +1,10 @@
 [workspace]
 
-members = ["demo-circuit", "ouroboros", "api"]
+members = [
+    "demo-circuit",
+    #"ouroboros",
+    "api"
+]
 
 [profile.release]
 opt-level = 3
@@ -16,6 +20,22 @@ panic = "unwind"
 opt-level = 3
 lto = "thin"
 incremental = true
-debug-assertions = true
-debug = true
 panic = "unwind"
+
+# Uncomment these lines for local development paths
+#
+#[patch.'https://github.com/HorizenOfficial/ginger-lib.git']
+#algebra = { path = '../ginger-lib/algebra' }
+#primitives = { path = '../ginger-lib/primitives' }
+#r1cs-core = { path = '../ginger-lib/r1cs/core' }
+#r1cs-crypto = { path = '../ginger-lib/r1cs/gadgets/crypto' }
+#r1cs-std = { path = '../ginger-lib/r1cs/gadgets/std' }
+#
+#[patch.'https://github.com/HorizenOfficial/zendoo-cctp-lib.git']
+#cctp_primitives = { path = '../zendoo-cctp-lib/cctp_primitives' }
+#
+#[patch.'https://github.com/HorizenLabs/marlin']
+#marlin = { path = '../marlin' }
+#
+#[patch.'https://github.com/HorizenLabs/poly-commit']
+#poly-commit = { path = '../poly-commit' }

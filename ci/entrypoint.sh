@@ -13,6 +13,7 @@ fi
 
 USER_ID=${LOCAL_USER_ID:-2000}
 GRP_ID=${LOCAL_GRP_ID:-2000}
+CARGO_AUDIT_VERSION=0.14.0
 
 getent group zenbuilder > /dev/null 2>&1 || groupadd -g $GRP_ID zenbuilder
 id -u zenbuilder > /dev/null 2>&1 || useradd --shell /bin/bash -u $USER_ID -g $GRP_ID -o -c "" -m zenbuilder
@@ -48,6 +49,9 @@ gosu zenbuilder cat << EOF > $HOME/.cargo/config
 [target.x86_64-pc-windows-gnu]
 linker = "$(which x86_64-w64-mingw32-gcc)"
 EOF
+
+# Install cargo audit
+gosu zenbuilder cargo install --version ${CARGO_AUDIT_VERSION} cargo-audit
 
 # Print version information
 gosu zenbuilder java -version
