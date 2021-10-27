@@ -119,10 +119,11 @@ public class CommitmentTreeTest {
 
         long ftrAmount = 100;
         byte[] ftrPublicKey = generateFieldElementBytes();
+        byte[] mcReturnAddress = generateRandomBytes(20);
         byte[] ftrTransactionHash = generateFieldElementBytes();
         int fwtOutId = 200;
         assertTrue("Forward transfer output expected to be added.",
-                commTree.addFwt(scId, ftrAmount, ftrPublicKey, ftrTransactionHash, fwtOutId));
+                commTree.addFwt(scId, ftrAmount, ftrPublicKey, mcReturnAddress, ftrTransactionHash, fwtOutId));
 
         Optional<FieldElement> commitmentOpt = commTree.getFwtCommitment(scId);
         assertTrue("Forward transfer expected to be present.", commitmentOpt.isPresent());
@@ -266,10 +267,11 @@ public class CommitmentTreeTest {
 
         long ftrAmount = 100;
         byte[] ftrPublicKeyHash = generateFieldElementBytes();
+        byte[] mcReturnAddress = generateRandomBytes(20);
         byte[] ftrTransactionHash = generateFieldElementBytes();
         int fwtOutId = 200;
         assertTrue("Forward transfer output expected to be added.",
-                commTree.addFwt(scId, ftrAmount, ftrPublicKeyHash, ftrTransactionHash, fwtOutId));
+                commTree.addFwt(scId, ftrAmount, ftrPublicKeyHash, mcReturnAddress, ftrTransactionHash, fwtOutId));
 
         Optional<FieldElement> commitmentOpt = commTree.getCommitment();
         assertTrue("Tree commitment expected to be present.", commitmentOpt.isPresent());
@@ -300,10 +302,11 @@ public class CommitmentTreeTest {
 
         long ftrAmount = 100;
         byte[] ftrPublicKeyHash = generateFieldElementBytes();
+        byte[] mcReturnAddress = generateRandomBytes(20);
         byte[] ftrTransactionHash = generateFieldElementBytes();
         int fwtOutId = 200;
         assertTrue("Forward transfer output expected to be added.",
-                commTree.addFwt(scId, ftrAmount, ftrPublicKeyHash, ftrTransactionHash, fwtOutId));
+                commTree.addFwt(scId, ftrAmount, ftrPublicKeyHash, mcReturnAddress, ftrTransactionHash, fwtOutId));
 
         Optional<FieldElement> commitmentOpt = commTree.getCommitment();
         assertTrue("Tree commitment expected to be present.", commitmentOpt.isPresent());
@@ -349,10 +352,11 @@ public class CommitmentTreeTest {
 
         long ftrAmount = 100;
         byte[] ftrPublicKey = generateFieldElementBytes();
+        byte[] mcReturnAddress = generateRandomBytes(20);
         byte[] ftrTransactionHash = generateFieldElementBytes();
         int fwtOutId = 200;
         assertTrue("Forward transfer output expected to be added.",
-                commTree.addFwt(scId[1], ftrAmount, ftrPublicKey, ftrTransactionHash, fwtOutId));
+                commTree.addFwt(scId[1], ftrAmount, ftrPublicKey, mcReturnAddress, ftrTransactionHash, fwtOutId));
 
         // Try to get Absence proof of existed element
         assertTrue("Existance proof should be present", commTree.getScExistenceProof(scId[1]).isPresent());
@@ -407,10 +411,11 @@ public class CommitmentTreeTest {
 
         long ftrAmount = 100;
         byte[] ftrPublicKey = generateFieldElementBytes();
+        byte[] mcReturnAddress = generateRandomBytes(20);
         byte[] ftrTransactionHash = generateFieldElementBytes();
         int fwtOutId = 200;
         assertTrue("Forward transfer output expected to be added.",
-                commTree.addFwt(scId[0], ftrAmount, ftrPublicKey, ftrTransactionHash, fwtOutId));
+                commTree.addFwt(scId[0], ftrAmount, ftrPublicKey, mcReturnAddress, ftrTransactionHash, fwtOutId));
 
         long bwtAmount = 120;
         byte[] mcDestinationAddress = generateRandomBytes(20);

@@ -62,12 +62,12 @@ public class CommitmentTree implements AutoCloseable {
                 cswVerificationKeyOpt.orElse(null));
     }
     
-    private native boolean nativeAddFwt(byte[] scId, long amount, byte[] pubKey, byte[] txHash, int outIdx);
+    private native boolean nativeAddFwt(byte[] scId, long amount, byte[] pubKey, byte[] mcReturnAddress, byte[] txHash, int outIdx);
     
-    public boolean addFwt(byte[] scId, long amount, byte[] pubKey, byte[] txHash, int outIdx) {
+    public boolean addFwt(byte[] scId, long amount, byte[] pubKey, byte[] mcReturnAddress, byte[] txHash, int outIdx) {
         if (commitmentTreePointer == 0)
             throw new IllegalStateException("CommitmentTree instance was freed.");
-        return nativeAddFwt(scId, amount, pubKey, txHash, outIdx);
+        return nativeAddFwt(scId, amount, pubKey, mcReturnAddress, txHash, outIdx);
     }
 
     private native boolean nativeAddBtr(byte[] scId, long scFee, byte[] mcDestinationAddress,

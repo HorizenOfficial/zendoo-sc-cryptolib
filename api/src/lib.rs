@@ -2321,6 +2321,7 @@ ffi_export!(
     _sc_id: jbyteArray,
     _amount: jlong,
     _pub_key: jbyteArray,
+    _mc_return_address: jbyteArray,
     _tx_hash: jbyteArray,
     _out_idx: jint
 ) -> jboolean
@@ -2334,6 +2335,9 @@ ffi_export!(
 
     let mut pub_key = [0u8; FIELD_SIZE];
     get_byte_array(&_env, &_pub_key, &mut pub_key[..]);
+
+    let mut mc_return_address = [0u8; MC_PK_SIZE];
+    get_byte_array(&_env, &_mc_return_address, &mut mc_return_address[..]);
 
     let mut tx_hash = [0u8; FIELD_SIZE];
     get_byte_array(&_env, &_tx_hash, &mut tx_hash[..]);
@@ -2352,6 +2356,7 @@ ffi_export!(
     if commitment_tree.add_fwt(&sc_id,
                                amount,
                                &pub_key,
+                               &mc_return_address,
                                &tx_hash,
                                out_idx) {
         JNI_TRUE
