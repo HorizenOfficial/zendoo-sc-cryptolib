@@ -31,6 +31,7 @@ public class SchnorrSecretKey implements AutoCloseable
 
     private native byte[] nativeSerializeSecretKey();
 
+
     public byte[] serializeSecretKey() {
         if (secretKeyPointer == 0)
             throw new IllegalStateException("Secret key was freed.");
