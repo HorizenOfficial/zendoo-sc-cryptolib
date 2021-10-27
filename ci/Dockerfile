@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM ubuntu:18.04
 
 MAINTAINER infrastructure@zensystem.io
 
@@ -10,7 +10,7 @@ COPY entrypoint.sh entrypoint_setup_gpg.sh /usr/local/bin/
 RUN set -eux && export GOSU_VERSION=1.12 && export DEBIAN_FRONTEND=noninteractive \
     && apt-get update \
     && apt-get install -y --no-install-recommends build-essential ca-certificates curl dirmngr \
-       gcc-mingw-w64-x86-64 gnupg2 gnupg-curl wget; \
+       gcc-mingw-w64-x86-64 gnupg2 gnupg1-curl wget libssl-dev pkg-config jq ; \
 # save list of currently installed packages for later so we can clean up
     savedAptMark="$(apt-mark showmanual)"; \
     apt-get update; \
@@ -54,4 +54,3 @@ RUN set -eux && export GOSU_VERSION=1.12 && export DEBIAN_FRONTEND=noninteractiv
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-

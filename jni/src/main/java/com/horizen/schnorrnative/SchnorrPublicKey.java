@@ -2,15 +2,18 @@ package com.horizen.schnorrnative;
 
 import com.horizen.librustsidechains.*;
 
-public class SchnorrPublicKey
+public class SchnorrPublicKey implements AutoCloseable
 {
 
-  public static final int PUBLIC_KEY_LENGTH = 193;
+  public static final int PUBLIC_KEY_LENGTH;
 
   private long publicKeyPointer;
 
+  private static native int nativeGetPublicKeySize();
+
   static {
     Library.load();
+    PUBLIC_KEY_LENGTH = nativeGetPublicKeySize();
   }
 
   private SchnorrPublicKey(long publicKeyPointer) {
@@ -19,24 +22,35 @@ public class SchnorrPublicKey
     this.publicKeyPointer = publicKeyPointer;
   }
 
-  private static native int nativeGetPublicKeySize();
+  private static native SchnorrPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes, boolean checkPublicKey, boolean compressed);
 
-  private static native SchnorrPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes);
-
-  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes) {
+  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes, boolean checkPublicKey, boolean compressed) {
     if (publicKeyBytes.length != PUBLIC_KEY_LENGTH)
       throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", PUBLIC_KEY_LENGTH, publicKeyBytes.length));
 
-    return nativeDeserializePublicKey(publicKeyBytes);
+    return nativeDeserializePublicKey(publicKeyBytes, checkPublicKey, compressed);
   }
 
-  private native byte[] nativeSerializePublicKey();
+  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes, boolean checkPublicKey) {
+    return deserialize(publicKeyBytes, checkPublicKey, true);
+  }
+
+  public static SchnorrPublicKey deserialize(byte[] publicKeyBytes) {
+    return deserialize(publicKeyBytes, true, true);
+  }
+
+  private native byte[] nativeSerializePublicKey(boolean compressed);
+
+
+  public byte[] serializePublicKey(boolean compressed) {
+    if (publicKeyPointer == 0)
+      throw new IllegalStateException("Public key was freed.");
+
+    return nativeSerializePublicKey(compressed);
+  }
 
   public byte[] serializePublicKey() {
-    if (publicKeyPointer == 0)
-      throw new IllegalArgumentException("Public key was freed.");
-
-    return nativeSerializePublicKey();
+    return serializePublicKey(true);
   }
 
   private native void nativeFreePublicKey();
@@ -54,16 +68,21 @@ public class SchnorrPublicKey
 
   public boolean verifySignature(SchnorrSignature signature, FieldElement message) {
     if (publicKeyPointer == 0)
-      throw new IllegalArgumentException("Public key was freed.");
+      throw new IllegalStateException("Public key was freed.");
 
     return nativeVerifySignature(signature, message);
   }
 
   public boolean verifyKey() {
     if (publicKeyPointer == 0)
-      throw new IllegalArgumentException("Public key was freed.");
+      throw new IllegalStateException("Public key was freed.");
 
     return nativeVerifyKey();
+  }
+
+  @Override
+  public void close() throws Exception {
+    freePublicKey();
   }
 }
 

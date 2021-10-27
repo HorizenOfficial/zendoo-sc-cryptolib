@@ -2,15 +2,17 @@ package com.horizen.schnorrnative;
 
 import com.horizen.librustsidechains.Library;
 
-public class SchnorrSignature
+public class SchnorrSignature implements AutoCloseable
 {
-
-  public static int SIGNATURE_LENGTH = 192;
+  public static final int SIGNATURE_LENGTH;
 
   private long signaturePointer;
 
+  private static native int nativeGetSignatureSize();
+
   static {
     Library.load();
+    SIGNATURE_LENGTH = nativeGetSignatureSize();
   }
 
   private SchnorrSignature(long signaturePointer) {
@@ -23,28 +25,48 @@ public class SchnorrSignature
     this.signaturePointer = 0;
   }
 
-  private static native byte[] nativeSerializeSignature(long signaturePointer);
+  private native byte[] nativeSerializeSignature();
 
-  private static native SchnorrSignature nativeDeserializeSignature(byte[] signatureBytes);
+  private static native SchnorrSignature nativeDeserializeSignature(byte[] signatureBytes, boolean checkSignature);
 
   private static native void nativefreeSignature(long signaturePointer);
 
-  public static SchnorrSignature deserialize(byte[] signatureBytes) {
+  public static SchnorrSignature deserialize(byte[] signatureBytes, boolean checkSignature) {
     if (signatureBytes.length != SIGNATURE_LENGTH)
       throw new IllegalArgumentException(String.format("Incorrect signature length, %d expected, %d found", SIGNATURE_LENGTH, signatureBytes.length));
 
-    return nativeDeserializeSignature(signatureBytes);
+    return nativeDeserializeSignature(signatureBytes, checkSignature);
   }
 
-  public byte[] serializeSignature() {
-    return nativeSerializeSignature(this.signaturePointer);
+  public static SchnorrSignature deserialize(byte[] signatureBytes) {
+    return deserialize(signatureBytes, true);
   }
+
+
+  public byte[] serializeSignature() {
+    return nativeSerializeSignature();
+  }
+
+  private native boolean nativeIsValidSignature(); // jni call to Rust impl
+
+  public boolean isValidSignature() {
+    if (signaturePointer == 0)
+      throw new IllegalArgumentException("Schnorr signature was freed.");
+
+    return nativeIsValidSignature();
+  }
+
 
   public void freeSignature() {
     if (signaturePointer != 0) {
       nativefreeSignature(this.signaturePointer);
       signaturePointer = 0;
     }
+  }
+
+  @Override
+  public void close() throws Exception {
+    freeSignature();
   }
 }
 
