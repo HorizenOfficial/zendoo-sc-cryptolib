@@ -1,9 +1,9 @@
 
 <h1 align="center">zendoo-sc-cryptolib</h1>
 <p align="center">
-     <img src="https://avatars.githubusercontent.com/u/29291571?s=20&v=4",style="width: 5vw"></a>
+    <a href="AUTHORS"><img src="https://avatars.githubusercontent.com/u/29291571?s=20&v=4",style="width: 5vw"></a>
     <a href="https://app.travis-ci.com/HorizenOfficial/zendoo-sc-cryptolib?branch=master"><img src="https://app.travis-ci.com/HorizenOfficial/zendoo-sc-cryptolib.svg?branch=master"></a>
-   <a href="http://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
    <a href="http://makeapullrequest.com"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square"></a>
 </p>
 
@@ -87,6 +87,6 @@ Contributions are welcomed! Bug fixes and new features can be initiated through 
 
 The code is licensed under the following license:
 
- * MIT license ([LICENSE-MIT](http://opensource.org/licenses/MIT) or http://opensource.org/licenses/MIT)
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
 Unless you explicitly state otherwise, any contribution submitted for inclusion in ginger-lib by you shall be licensed as above, without any additional terms or conditions.  
