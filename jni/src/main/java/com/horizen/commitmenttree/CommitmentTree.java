@@ -1,6 +1,6 @@
 package com.horizen.commitmenttree;
 
-import com.horizen.librustsidechains.FieldElement;
+import com.horizen.common.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 import com.horizen.sigproofnative.BackwardTransfer;
 

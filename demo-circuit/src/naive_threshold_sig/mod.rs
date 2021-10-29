@@ -1,13 +1,9 @@
 #[cfg(test)]
 pub mod tests;
 
-use algebra::{
-    Field, PrimeField, ToBits
-};
+use super::*;
 
-use primitives::signature::schnorr::field_based_schnorr::{
-        FieldBasedSchnorrSignature, FieldBasedSchnorrPk,
-};
+use algebra::bits::ToBits;
 use r1cs_crypto::{
     signature::{
         schnorr::field_based_schnorr::{
@@ -28,23 +24,16 @@ use r1cs_std::{instantiated::tweedle::TweedleDumGadget as CurveGadget, fields::{
 
 use r1cs_core::{ConstraintSystem, ConstraintSynthesizer, SynthesisError};
 
-use crate::{
-    constants::NaiveThresholdSigParams, type_mapping::*,
-};
+type_mappings::generate_phantom_schnorr_bindings!(GroupProjective, Group);
 
 use std::marker::PhantomData;
-use lazy_static::*;
-
-lazy_static! {
-    pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
-}
 
 //Sig types
-pub(crate) type SchnorrSigGadget = FieldBasedSchnorrSigGadget<FieldElement, G2Projective>;
+pub(crate) type SchnorrSigGadget = FieldBasedSchnorrSigGadget<FieldElement, GroupProjective>;
 pub(crate) type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
-    FieldElement, G2Projective, CurveGadget, FieldHash, PoseidonHashGadget
+    FieldElement, GroupProjective, CurveGadget, FieldHash, PoseidonHashGadget
 >;
-pub(crate) type SchnorrPkGadget = FieldBasedSchnorrPkGadget<FieldElement, G2Projective, CurveGadget>;
+pub(crate) type SchnorrPkGadget = FieldBasedSchnorrPkGadget<FieldElement, GroupProjective, CurveGadget>;
 
 //Field types
 pub(crate) type FrGadget = FpGadget<FieldElement>;
@@ -53,9 +42,9 @@ pub(crate) type FrGadget = FpGadget<FieldElement>;
 pub struct NaiveTresholdSignature<F: PrimeField>{
 
     //Witnesses
-    pks:                                  Vec<Option<FieldBasedSchnorrPk<G2Projective>>>, //pk_n = g^sk_n
+    pks:                                  Vec<Option<FieldBasedSchnorrPk<GroupProjective>>>, //pk_n = g^sk_n
     //sig_n = sign(sk_n, H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount))
-    sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>>,
+    sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, GroupProjective>>>,
     threshold:                            Option<FieldElement>,
     b:                                    Vec<Option<bool>>,
     sc_id:                                Option<FieldElement>,
@@ -72,8 +61,8 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 
 impl<F: PrimeField>NaiveTresholdSignature<F> {
     pub fn new(
-        pks:                                  Vec<FieldBasedSchnorrPk<G2Projective>>,
-        sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>>,
+        pks:                                  Vec<FieldBasedSchnorrPk<GroupProjective>>,
+        sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, GroupProjective>>>,
         threshold:                            FieldElement,
         b:                                    FieldElement,
         sc_id:                                FieldElement,
@@ -179,12 +168,12 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
         // Alloc btr_fee and ft_min_amount
         let btr_fee_g = UInt64::alloc(
             cs.ns(|| "alloc btr_fee"),
-            self.btr_fee.clone()
+            self.btr_fee
         )?;
 
         let ft_min_amount_g = UInt64::alloc(
             cs.ns(|| "alloc ft_min_amount"),
-            self.ft_min_amount.clone()
+            self.ft_min_amount
         )?;
 
         // Pack them into a single field element
@@ -353,7 +342,7 @@ mod test {
         utils::commitment_tree::ByteAccumulator
     };
 
-    type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, G2Projective, FieldHash>;
+    type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, GroupProjective, FieldHash>;
 
     fn generate_test_proof(
         max_pks:                  usize,
@@ -410,7 +399,7 @@ mod test {
             //Sample a random boolean and decide if generating a non valid signature or a null one
             let generate_null: bool = rng.gen();
             let (pk, sig) = if generate_null {
-                (NULL_CONST.null_pk, NULL_CONST.null_sig)
+                (FieldBasedSchnorrPk(*PHANTOM_PK), *PHANTOM_SIG)
             } else {
 
                 let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
@@ -422,8 +411,8 @@ mod test {
         }
 
         //Generate b
-        let t_field = FieldElement::from_repr(FieldBigInteger::from(threshold as u64));
-        let valid_field = FieldElement::from_repr(FieldBigInteger::from(valid_sigs as u64));
+        let t_field = FieldElement::from_repr(BigInteger::from(threshold as u64));
+        let valid_field = FieldElement::from_repr(BigInteger::from(valid_sigs as u64));
         let b_field = valid_field - &t_field;
 
         //Compute pks_threshold_hash

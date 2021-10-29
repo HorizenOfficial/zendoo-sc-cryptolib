@@ -1,3 +1,4 @@
+use crate::*;
 use algebra::{
     Field, PrimeField, ToBits, ProjectiveCurve,
 };
@@ -24,27 +25,20 @@ use r1cs_std::{
 };
 
 use r1cs_core::ConstraintSystem;
-use crate::{
-    constants::NaiveThresholdSigParams, type_mapping::*, naive_threshold_sig::*,
-};
+use crate::naive_threshold_sig::*;
 
 use rand::{
     Rng, rngs::OsRng
 };
 
-use lazy_static::*;
 use r1cs_std::bits::uint64::UInt64;
 use cctp_primitives::utils::commitment_tree::ByteAccumulator;
-
-lazy_static! {
-    pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
-}
 
 struct NaiveTresholdSignatureTest {
 
     //Witnesses
-    pks:                                    Vec<FieldBasedSchnorrPk<G2Projective>>,
-    sigs:                                   Vec<FieldBasedSchnorrSignature<FieldElement, G2Projective>>,
+    pks:                                    Vec<FieldBasedSchnorrPk<GroupProjective>>,
+    sigs:                                   Vec<FieldBasedSchnorrSignature<FieldElement, GroupProjective>>,
     threshold:                              FieldElement,
     b:                                      Vec<bool>,
     sc_id:                                  FieldElement,
@@ -116,7 +110,7 @@ fn generate_inputs
         //Sample a random boolean and decide if generating a non valid signature or a null one
         let generate_null: bool = rng.gen();
         let (pk, sig) = if generate_null {
-            (NULL_CONST.null_pk, NULL_CONST.null_sig)
+            (FieldBasedSchnorrPk(*PHANTOM_PK), *PHANTOM_SIG)
         } else {
             let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
             let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, invalid_message).unwrap();
@@ -127,8 +121,8 @@ fn generate_inputs
     }
 
     //Generate b
-    let t_field = FieldElement::from_repr(FieldBigInteger::from(threshold as u64));
-    let valid_field = FieldElement::from_repr(FieldBigInteger::from(valid_sigs as u64));
+    let t_field = FieldElement::from_repr(BigInteger::from(threshold as u64));
+    let valid_field = FieldElement::from_repr(BigInteger::from(valid_sigs as u64));
     let b_field = valid_field - &t_field;
     let b_bool = {
         let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;

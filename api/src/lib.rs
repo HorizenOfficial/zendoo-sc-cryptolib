@@ -1,1525 +1,42 @@
-extern crate jni;
-
-use algebra::{SemanticallyValid, serialize::*};
-use demo_circuit::{type_mapping::*, get_instance_for_setup, generate_circuit_keypair};
-use cctp_primitives::{
-    proving_system::{ProvingSystem, init_dlog_keys},
-    utils::{
-        serialization::*,
-        poseidon_hash::*,
-        mht::*,
-        data_structures::*,
-    }
-};
-use std::{
-    any::type_name, path::Path,
-};
+#![allow(
+    clippy::upper_case_acronyms,
+    clippy::too_many_arguments,
+    clippy::try_err,
+    clippy::map_collect_result_unit,
+    clippy::not_unsafe_ptr_arg_deref
+)]
 
 mod cctp_calls;
 use cctp_calls::*;
 
-#[macro_use]
-mod exception;
-use exception::*;
-
+use algebra::serialize::*;
+use demo_circuit::{get_instance_for_setup, generate_circuit_keypair};
+use cctp_primitives::proving_system::{ProvingSystem, init_dlog_keys};
+use cctp_primitives::utils::{
+    compute_sc_id, data_structures::*,
+};
 use cctp_primitives::commitment_tree::CommitmentTree;
 use cctp_primitives::commitment_tree::proofs::{ScExistenceProof, ScAbsenceProof};
-
-fn read_raw_pointer<'a, T>(env: &JNIEnv, input: *const T) -> &'a T {
-    if input.is_null() {
-        throw_and_exit!(env, "java/lang/NullPointerException", "Received null pointer");
-    }
-    unsafe { &* input }
-}
-
-fn read_mut_raw_pointer<'a, T>(env: &JNIEnv, input: *mut T) -> &'a mut T {
-    if input.is_null() {
-        throw_and_exit!(env, "java/lang/NullPointerException", "Received null pointer");
-    }
-    unsafe { &mut *input }
-}
-
-fn read_nullable_raw_pointer<'a, T>(input: *const T) -> Option<&'a T> {
-    unsafe { input.as_ref() }
-}
-
-fn serialize_from_raw_pointer<T: CanonicalSerialize>(
-    _env:       &JNIEnv,
-    to_write:   *const T,
-    compressed: Option<bool>,
-) -> Vec<u8> {
-    serialize_to_buffer(read_raw_pointer(&_env, to_write), compressed)
-        .expect(format!("unable to write {} to buffer", type_name::<T>()).as_str())
-}
-
-fn return_jobject<'a, T: Sized>(_env: &'a JNIEnv, obj: T, class_path: &str) -> JObject<'a>
-{
-    //Return field element
-    let obj_ptr: jlong = jlong::from(Box::into_raw(Box::new(obj)) as i64);
-
-    let obj_class = _env.find_class(class_path).expect("Should be able to find class");
-
-    _env.new_object(obj_class, "(J)V", &[JValue::Long(obj_ptr)])
-        .expect("Should be able to create new jobject")
-}
-
-fn deserialize_to_jobject<T: CanonicalDeserialize + SemanticallyValid>(
-    _env: &JNIEnv,
-    obj_bytes: jbyteArray,
-    checked: Option<jboolean>, // Can be none for types with trivial checks or without themn
-    compressed: Option<jboolean>, // Can be none for uncompressable types
-    class_path: &str,
-) -> jobject
-{
-    let obj_bytes = _env.convert_byte_array(obj_bytes)
-        .expect("Cannot read bytes.");
-
-    let obj = deserialize_from_buffer::<T>(
-        obj_bytes.as_slice(),
-        checked.map(|jni_bool| jni_bool == JNI_TRUE),
-        compressed.map(|jni_bool| jni_bool == JNI_TRUE)
-    );
-
-    match obj {
-        Ok(obj) => *return_jobject(&_env, obj, class_path),
-        Err(_) => std::ptr::null::<jobject>() as jobject,
-    }
-}
-
-fn serialize_from_jobject<T: CanonicalSerialize>(
-    _env: &JNIEnv,
-    obj: JObject,
-    ptr_name: &str,
-    compressed: Option<jboolean>, // Can be none for uncompressable types
-) -> jbyteArray
-{
-    let pointer = _env.get_field(obj, ptr_name, "J")
-        .expect("Cannot get object raw pointer.");
-
-    let obj_bytes = serialize_from_raw_pointer(_env, pointer.j().unwrap() as *const T, compressed.map(|jni_bool| jni_bool == JNI_TRUE));
-
-    _env.byte_array_from_slice(obj_bytes.as_slice())
-        .expect("Cannot write object.")
-}
-
-fn parse_jbyte_array_to_vec(_env: &JNIEnv, java_byte_array: &jbyteArray, length: usize) -> Vec<u8> {
-    let vec = _env.convert_byte_array(*java_byte_array)
-        .expect("Should be able to convert to Rust array");
-
-    if vec.len() != length {
-        panic!("Retrieved array size {} expected to be {}.", vec.len(), length);
-    }
-
-    vec
-}
-
-fn get_byte_array(_env: &JNIEnv, java_byte_array: &jbyteArray, buffer: &mut [u8]) {
-    let vec = _env.convert_byte_array(*java_byte_array)
-        .expect("Should be able to convert to Rust array");
-
-    for (pos, e) in vec.iter().enumerate() {
-        buffer[pos] = *e;
-    }
-}
-
-
-use jni::JNIEnv;
-use jni::objects::{JClass, JString, JObject, JValue};
-use jni::sys::{jbyteArray, jboolean, jint, jlong, jobject, jobjectArray, jbyte};
-use jni::sys::{JNI_TRUE, JNI_FALSE};
-use cctp_primitives::utils::compute_sc_id;
-use std::convert::TryInto;
 use cctp_primitives::bit_vector::merkle_tree::{merkle_root_from_compressed_bytes_without_checks, merkle_root_from_compressed_bytes};
 use cctp_primitives::proving_system::{ZendooVerifierKey, check_proof_vk_size};
-
-//Field element related functions
-
-fn return_field_element(_env: &JNIEnv, fe: FieldElement) -> jobject
-{
-    return_jobject(_env, fe, "com/horizen/librustsidechains/FieldElement")
-        .into_inner()
-}
-
-ffi_export!(
-    fn Java_com_horizen_librustsidechains_Library_nativePanickingFunction(
-    _env: JNIEnv,
-    _class: JClass,
-) { panic!("Oh no ! A panic occured !") });
-
-ffi_export!(
-    fn Java_com_horizen_librustsidechains_FieldElement_nativeGetFieldElementSize(
-    _env: JNIEnv,
-    _field_element_class: JClass,
-) -> jint { FIELD_SIZE as jint });
-
-ffi_export!(
-    fn Java_com_horizen_librustsidechains_FieldElement_nativeSerializeFieldElement(
-    _env: JNIEnv,
-    _field_element: JObject,
-) -> jbyteArray
-{
-    serialize_from_jobject::<FieldElement>(
-        &_env,
-        _field_element,
-        "fieldElementPointer",
-        None
-    )
-});
-
-ffi_export!(
-    fn Java_com_horizen_librustsidechains_FieldElement_nativeDeserializeFieldElement(
-    _env: JNIEnv,
-    _class: JClass,
-    _field_element_bytes: jbyteArray,
-) -> jobject
-{
-    deserialize_to_jobject::<FieldElement>(
-        &_env,
-        _field_element_bytes,
-        None,
-        None,
-        "com/horizen/librustsidechains/FieldElement",
-    )
-});
-
-ffi_export!(
-    fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateRandom(
-    _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
-    _class: JClass,
-    _seed: jlong,
-) -> jobject
-{
-    //Create random field element
-    let fe = get_random_field_element(_seed as u64);
-
-    return_field_element(&_env, fe)
-});
-
-ffi_export!(
-    fn Java_com_horizen_librustsidechains_FieldElement_nativeCreateFromLong(
-    _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
-    _class: JClass,
-    _long: jlong
-) -> jobject
-{
-    //Create field element from _long
-    let fe = FieldElement::from(_long as u64);
-
-    return_field_element(&_env, fe)
-});
-
-ffi_export!(
-    fn Java_com_horizen_librustsidechains_FieldElement_nativePrintFieldElementBytes(
-    _env: JNIEnv,
-    _field_element: JObject,
-)
-{
-    let pointer = _env.get_field(_field_element, "fieldElementPointer", "J")
-        .expect("Cannot get object raw pointer.");
-
-    let obj_bytes = serialize_from_raw_pointer(&_env,
-        pointer.j().unwrap() as *const FieldElement,
-        None,
-    );
-
-    println!("{:?}", into_i8(obj_bytes));
-});
-
-ffi_export!(
-    fn Java_com_horizen_librustsidechains_FieldElement_nativeFreeFieldElement(
-    _env: JNIEnv,
-    _class: JClass,
-    _fe: *mut FieldElement,
-)
-{
-    if _fe.is_null()  { return }
-    drop(unsafe { Box::from_raw(_fe) });
-});
-
-ffi_export!(
-    fn Java_com_horizen_librustsidechains_FieldElement_nativeEquals(
-    _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
-    _field_element_1: JObject,
-    _field_element_2: JObject,
-) -> jboolean
-{
-    //Read field_1
-    let field_1 = {
-
-        let f =_env.get_field(_field_element_1, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer_1");
-
-        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-    };
-
-    //Read field_2
-    let field_2 = {
-
-        let f =_env.get_field(_field_element_2, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer_2");
-
-        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-    };
-
-    match field_1 == field_2 {
-        true => JNI_TRUE,
-        false => JNI_FALSE,
-    }
-});
-
-//Public Schnorr key utility functions
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeGetPublicKeySize(
-    _env: JNIEnv,
-    _schnorr_public_key_class: JClass,
-) -> jint { SCHNORR_PK_SIZE as jint });
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSerializePublicKey(
-    _env: JNIEnv,
-    _schnorr_public_key: JObject,
-    _compressed: jboolean,
-) -> jbyteArray
-{
-    serialize_from_jobject::<SchnorrPk>(&_env, _schnorr_public_key, "publicKeyPointer", Some(_compressed))
-});
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeDeserializePublicKey(
-    _env: JNIEnv,
-    _schnorr_public_key_class: JClass,
-    _public_key_bytes: jbyteArray,
-    _check_public_key: jboolean,
-    _compressed: jboolean,
-) -> jobject
-{
-    deserialize_to_jobject::<SchnorrPk>(
-        &_env,
-        _public_key_bytes,
-        Some(_check_public_key),
-        Some(_compressed),
-        "com/horizen/schnorrnative/SchnorrPublicKey"
-    )
-});
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeFreePublicKey(
-    _env: JNIEnv,
-    _schnorr_public_key: JObject,
-)
-{
-    let public_key_pointer = _env.get_field(_schnorr_public_key, "publicKeyPointer", "J")
-        .expect("Cannot get public key pointer.");
-
-    let public_key = public_key_pointer.j().unwrap() as *mut SchnorrPk;
-
-    if public_key.is_null()  { return }
-    drop(unsafe { Box::from_raw(public_key) });
-});
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGetSecretKeySize(
-        _env: JNIEnv,
-        _schnorr_secret_key_class: JClass,
-    ) -> jint { SCHNORR_SK_SIZE as jint }
-);
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSerializeSecretKey(
-    _env: JNIEnv,
-    _schnorr_secret_key: JObject,
-) -> jbyteArray
-{
-    serialize_from_jobject::<SchnorrSk>(
-        &_env,
-        _schnorr_secret_key,
-        "secretKeyPointer",
-        None
-    )
-});
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeDeserializeSecretKey(
-        _env: JNIEnv,
-        _schnorr_secret_key_class: JClass,
-        _secret_key_bytes: jbyteArray,
-    ) -> jobject
-    {
-        deserialize_to_jobject::<SchnorrSk>(
-            &_env,
-            _secret_key_bytes,
-            None,
-            None,
-            "com/horizen/schnorrnative/SchnorrSecretKey",
-        )
-    }
-);
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeFreeSecretKey(
-    _env: JNIEnv,
-    _schnorr_secret_key: JObject,
-)
-{
-    let secret_key_pointer = _env.get_field(_schnorr_secret_key, "secretKeyPointer", "J")
-        .expect("Cannot get secret key pointer.");
-
-    let secret_key = secret_key_pointer.j().unwrap() as *mut SchnorrSk;
-
-    if secret_key.is_null()  { return }
-    drop(unsafe { Box::from_raw(secret_key) });
-});
-
-//Public VRF key utility functions
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeGetPublicKeySize(
-    _env: JNIEnv,
-    _vrf_public_key_class: JClass,
-) -> jint { VRF_PK_SIZE as jint });
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePublicKey(
-    _env: JNIEnv,
-    _vrf_public_key: JObject,
-    _compressed: jboolean,
-) -> jbyteArray
-{
-    serialize_from_jobject::<VRFPk>(&_env, _vrf_public_key, "publicKeyPointer", Some(_compressed))
-});
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeDeserializePublicKey(
-    _env: JNIEnv,
-    _vrf_public_key_class: JClass,
-    _public_key_bytes: jbyteArray,
-    _check_public_key: jboolean,
-    _compressed: jboolean,
-) -> jobject
-{
-    deserialize_to_jobject::<VRFPk>(
-        &_env,
-        _public_key_bytes,
-        Some(_check_public_key),
-        Some(_compressed),
-        "com/horizen/vrfnative/VRFPublicKey"
-    )
-});
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeFreePublicKey(
-    _env: JNIEnv,
-    _vrf_public_key: JObject,
-)
-{
-    let public_key_pointer = _env.get_field(_vrf_public_key, "publicKeyPointer", "J")
-        .expect("Cannot get public key pointer.");
-
-    let public_key = public_key_pointer.j().unwrap() as *mut SchnorrPk;
-
-    if public_key.is_null()  { return }
-    drop(unsafe { Box::from_raw(public_key) });
-});
-
-//Secret VRF key utility functions
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetSecretKeySize(
-    _env: JNIEnv,
-    _vrf_secret_key_class: JClass,
-) -> jint { VRF_SK_SIZE as jint });
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSecretKey(
-    _env: JNIEnv,
-    _vrf_secret_key: JObject,
-) -> jbyteArray
-{
-    serialize_from_jobject::<VRFSk>(
-        &_env,
-        _vrf_secret_key,
-        "secretKeyPointer",
-        None
-    )
-});
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFSecretKey_nativeDeserializeSecretKey(
-    _env: JNIEnv,
-    _vrf_secret_key_class: JClass,
-    _secret_key_bytes: jbyteArray,
-) -> jobject
-{
-    deserialize_to_jobject::<VRFSk>(
-        &_env,
-        _secret_key_bytes,
-        None,
-        None,
-        "com/horizen/vrfnative/VRFSecretKey"
-    )
-});
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFSecretKey_nativeFreeSecretKey(
-    _env: JNIEnv,
-    _vrf_secret_key: JObject,
-)
-{
-    let secret_key_pointer = _env.get_field(_vrf_secret_key, "secretKeyPointer", "J")
-        .expect("Cannot get secret key pointer.");
-
-    let secret_key = secret_key_pointer.j().unwrap() as *mut SchnorrSk;
-
-    if secret_key.is_null()  { return }
-    drop(unsafe { Box::from_raw(secret_key) });
-});
-
-//Schnorr signature utility functions
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeGetSignatureSize(
-    _env: JNIEnv,
-    _class: JClass,
-) -> jint { SCHNORR_SIG_SIZE as jint });
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSerializeSignature(
-    _env: JNIEnv,
-    _schnorr_sig: JObject,
-) -> jbyteArray
-{
-    serialize_from_jobject::<SchnorrSig>(
-        &_env,
-        _schnorr_sig,
-        "signaturePointer",
-        None
-    )
-});
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeDeserializeSignature(
-    _env: JNIEnv,
-    _class: JClass,
-    _sig_bytes: jbyteArray,
-    _check_sig: jboolean,
-) -> jobject
-{
-    deserialize_to_jobject::<SchnorrSig>(
-        &_env,
-        _sig_bytes,
-        Some(_check_sig),
-        None,
-        "com/horizen/schnorrnative/SchnorrSignature"
-    )
-});
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeIsValidSignature(
-    _env: JNIEnv,
-    _sig: JObject,
-) -> jboolean
-{
-    let sig = _env.get_field(_sig, "signaturePointer", "J")
-        .expect("Should be able to get field signaturePointer").j().unwrap() as *const SchnorrSig;
-
-    if is_valid(read_raw_pointer(&_env, sig)) {
-        JNI_TRUE
-    } else {
-        JNI_FALSE
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrSignature_nativefreeSignature(
-    _env: JNIEnv,
-    _class: JClass,
-    _sig: *mut SchnorrSig,
-)
-{
-    if _sig.is_null()  { return }
-    drop(unsafe { Box::from_raw(_sig) });
-});
-
-//Schnorr signature functions
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeGenerate(
-    _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
-    _class: JClass,
-) -> jobject
-{
-    let (pk, sk) = schnorr_generate_key();
-
-    let secret_key_object = return_jobject(&_env, sk, "com/horizen/schnorrnative/SchnorrSecretKey");
-    let public_key_object = return_jobject(&_env, pk, "com/horizen/schnorrnative/SchnorrPublicKey");
-
-    let class = _env.find_class("com/horizen/schnorrnative/SchnorrKeyPair")
-        .expect("Should be able to find SchnorrKeyPair class");
-
-    let result = _env.new_object(
-        class,
-        "(Lcom/horizen/schnorrnative/SchnorrSecretKey;Lcom/horizen/schnorrnative/SchnorrPublicKey;)V",
-        &[JValue::Object(secret_key_object), JValue::Object(public_key_object)]
-    ).expect("Should be able to create new (SchnorrSecretKey, SchnorrPublicKey) object");
-
-    *result
-});
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignMessage(
-    _env: JNIEnv,
-    _schnorr_key_pair: JObject,
-    _message: JObject,
-) -> jobject {
-
-    //Read sk
-    let sk_object = _env.get_field(_schnorr_key_pair,
-                                   "secretKey",
-                                   "Lcom/horizen/schnorrnative/SchnorrSecretKey;"
-    ).expect("Should be able to get field secretKey").l().unwrap();
-    let secret_key = {
-
-        let s =_env.get_field(sk_object, "secretKeyPointer", "J")
-            .expect("Should be able to get field secretKeyPointer");
-
-        read_raw_pointer(&_env, s.j().unwrap() as *const SchnorrSk)
-    };
-
-    //Read pk
-    let pk_object = _env.get_field(_schnorr_key_pair,
-                                   "publicKey",
-                                   "Lcom/horizen/schnorrnative/SchnorrPublicKey;"
-    ).expect("Should be able to get field publicKey").l().unwrap();
-
-    let public_key = {
-
-        let p = _env.get_field(pk_object, "publicKeyPointer", "J")
-            .expect("Should be able to get field publicKeyPointer");
-
-        read_raw_pointer(&_env, p.j().unwrap() as *const SchnorrPk)
-    };
-
-    //Read message
-    let message = {
-
-        let m =_env.get_field(_message, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, m.j().unwrap() as *const FieldElement)
-    };
-
-    //Sign message and return opaque pointer to sig
-    let signature = match schnorr_sign(message, secret_key, public_key) {
-        Ok(sig) => sig,
-        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
-    };
-
-    return_jobject(&_env, signature, "com/horizen/schnorrnative/SchnorrSignature")
-        .into_inner()
-});
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVerifyKey(
-    _env: JNIEnv,
-    _public_key: JObject,
-) -> jboolean
-{
-    let pk = _env.get_field(_public_key, "publicKeyPointer", "J")
-        .expect("Should be able to get field publicKeyPointer").j().unwrap() as *const SchnorrPk;
-
-    if schnorr_verify_public_key(read_raw_pointer(&_env, pk)) {
-        JNI_TRUE
-    } else {
-        JNI_FALSE
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGetPublicKey(
-    _env: JNIEnv,
-    _secret_key: JObject
-) -> jobject {
-
-    let sk = _env.get_field(_secret_key, "secretKeyPointer", "J")
-        .expect("Should be able to get field secretKeyPointer").j().unwrap() as *const SchnorrSk;
-
-    let secret_key = read_raw_pointer(&_env, sk);
-
-    let pk = schnorr_get_public_key(secret_key);
-
-    return_jobject(&_env, pk, "com/horizen/schnorrnative/SchnorrPublicKey")
-        .into_inner()
-});
-
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeVerifySignature(
-    _env: JNIEnv,
-    _public_key: JObject,
-    _signature: JObject,
-    _message: JObject,
-) -> jboolean {
-
-    //Read pk
-    let public_key = {
-
-        let p = _env.get_field(_public_key, "publicKeyPointer", "J")
-            .expect("Should be able to get field publicKeyPointer");
-
-        read_raw_pointer(&_env, p.j().unwrap() as *const SchnorrPk)
-    };
-
-    //Read message
-    let message = {
-
-        let m =_env.get_field(_message, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, m.j().unwrap() as *const FieldElement)
-    };
-
-    //Read sig
-    let signature = {
-        let sig = _env.get_field(_signature, "signaturePointer", "J")
-            .expect("Should be able to get field signaturePointer");
-
-        read_raw_pointer(&_env, sig.j().unwrap() as *const SchnorrSig)
-    };
-
-    //Verify sig
-    match schnorr_verify_signature(message, public_key, signature) {
-        Ok(result) => if result {
-            JNI_TRUE
-        } else {
-            JNI_FALSE
-        },
-        Err(_) => JNI_FALSE //CRYPTO_ERROR
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetHashSize(
-    _env: JNIEnv,
-    _class: JClass,
-) -> jint { FIELD_SIZE as jint });
-
-ffi_export!(
-    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetConstantLengthPoseidonHash(
-    _env: JNIEnv,
-    _class: JClass,
-    _input_size: jint,
-    _personalization: jobjectArray,
-) -> jobject
-{
-    //Read _personalization as array of FieldElement
-    let personalization_len = _env.get_array_length(_personalization)
-        .expect("Should be able to read personalization array size");
-    let mut personalization = vec![];
-
-    // Array can be empty
-    for i in 0..personalization_len {
-        let field_obj = _env.get_object_array_element(_personalization, i)
-            .expect(format!("Should be able to read elem {} of the personalization array", i).as_str());
-
-        let field = {
-
-            let f =_env.get_field(field_obj, "fieldElementPointer", "J")
-                .expect("Should be able to get field fieldElementPointer");
-
-            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-        };
-
-        personalization.push(field);
-    }
-
-    //Instantiate PoseidonHash
-    let h = get_poseidon_hash_constant_length(
-        _input_size as usize,
-        if personalization.is_empty() { None } else { Some(personalization) }
-    );
-
-    //Return PoseidonHash instance
-    return_jobject(&_env, h, "com/horizen/poseidonnative/PoseidonHash")
-        .into_inner()
-});
-
-ffi_export!(
-    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetVariableLengthPoseidonHash(
-    _env: JNIEnv,
-    _class: JClass,
-    _mod_rate: jboolean,
-    _personalization: jobjectArray,
-) -> jobject
-{
-    //Read _personalization as array of FieldElement
-    let personalization_len = _env.get_array_length(_personalization)
-        .expect("Should be able to read personalization array size");
-    let mut personalization = vec![];
-
-    // Array can be empty
-    for i in 0..personalization_len {
-        let field_obj = _env.get_object_array_element(_personalization, i)
-            .expect(format!("Should be able to read elem {} of the personalization array", i).as_str());
-
-        let field = {
-
-            let f =_env.get_field(field_obj, "fieldElementPointer", "J")
-                .expect("Should be able to get field fieldElementPointer");
-
-            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-        };
-
-        personalization.push(field);
-    }
-
-    //Instantiate PoseidonHash
-    let h = get_poseidon_hash_variable_length(
-        _mod_rate == JNI_TRUE,
-        if personalization.is_empty() { None } else { Some(personalization) }
-    );
-
-    //Return PoseidonHash instance
-    return_jobject(&_env, h, "com/horizen/poseidonnative/PoseidonHash")
-        .into_inner()
-});
-
-ffi_export!(
-    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeUpdate(
-    _env: JNIEnv,
-    _h: JObject,
-    _input: JObject,
-){
-    //Read PoseidonHash instance
-    let digest = {
-
-        let h = _env.get_field(_h, "poseidonHashPointer", "J")
-            .expect("Should be able to get field poseidonHashPointer");
-
-        read_mut_raw_pointer(&_env, h.j().unwrap() as *mut FieldHash)
-    };
-
-    //Read input
-    let input = {
-
-        let i =_env.get_field(_input, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, i.j().unwrap() as *const FieldElement)
-    };
-
-    update_poseidon_hash(digest, input);
-});
-
-ffi_export!(
-    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFinalize(
-    _env: JNIEnv,
-    _h: JObject,
-) -> jobject
-{
-    //Read PoseidonHash instance
-    let digest = {
-
-        let h = _env.get_field(_h, "poseidonHashPointer", "J")
-            .expect("Should be able to get field poseidonHashPointer");
-
-        read_raw_pointer(&_env, h.j().unwrap() as *const FieldHash)
-    };
-
-    //Get digest
-    let fe = match finalize_poseidon_hash(digest) {
-        Ok(fe) => fe,
-        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
-    };
-
-    return_field_element(&_env, fe)
-});
-
-ffi_export!(
-    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeReset(
-    _env: JNIEnv,
-    _h: JObject,
-    _personalization: jobjectArray,
-){
-    //Read PoseidonHash instance
-    let digest = {
-
-        let h = _env.get_field(_h, "poseidonHashPointer", "J")
-            .expect("Should be able to get field poseidonHashPointer");
-
-        read_mut_raw_pointer(&_env, h.j().unwrap() as *mut FieldHash)
-    };
-
-    //Read _personalization as array of FieldElement
-    let personalization_len = _env.get_array_length(_personalization)
-        .expect("Should be able to read personalization array size");
-    let mut personalization = vec![];
-
-    // Array can be empty
-    for i in 0..personalization_len {
-        let field_obj = _env.get_object_array_element(_personalization, i)
-            .expect(format!("Should be able to read elem {} of the personalization array", i).as_str());
-
-        let field = {
-
-            let f =_env.get_field(field_obj, "fieldElementPointer", "J")
-                .expect("Should be able to get field fieldElementPointer");
-
-            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-        };
-
-        personalization.push(field);
-    }
-
-    let personalization = if personalization.is_empty() { None } else { Some(personalization) };
-
-    reset_poseidon_hash(digest, personalization)
-});
-
-ffi_export!(
-    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeFreePoseidonHash(
-    _env: JNIEnv,
-    _h: JObject,
-)
-{
-    let h_pointer = _env.get_field(_h, "poseidonHashPointer", "J")
-        .expect("Cannot get poseidonHashPointer");
-
-    let h = h_pointer.j().unwrap() as *mut FieldHash;
-
-    if h.is_null()  { return }
-    drop(unsafe { Box::from_raw(h) });
-});
-
-//Merkle tree functions
-
-//////////// MERKLE PATH
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify(
-    _env: JNIEnv,
-    _path: JObject,
-    _height: jint,
-    _leaf: JObject,
-    _root: JObject,
-) -> jboolean
-{
-    let leaf = {
-
-        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
-    };
-
-    let root = {
-
-        let fe =_env.get_field(_root, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
-    };
-
-    let path = {
-
-        let t =_env.get_field(_path, "merklePathPointer", "J")
-            .expect("Should be able to get field merklePathPointer");
-
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
-    };
-
-    if !path.is_valid() {
-        return JNI_FALSE;
-    }
-
-    match verify_ginger_merkle_path(path, _height as usize, leaf, root) {
-        Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
-        Err(_) => JNI_FALSE // CRYPTO_ERROR
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_MerklePath_nativeVerifyWithoutLengthCheck(
-    _env: JNIEnv,
-    _path: JObject,
-    _leaf: JObject,
-    _root: JObject,
-) -> jboolean
-{
-    let leaf = {
-
-        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
-    };
-
-    let root = {
-
-        let fe =_env.get_field(_root, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
-    };
-
-    let path = {
-
-        let t =_env.get_field(_path, "merklePathPointer", "J")
-            .expect("Should be able to get field merklePathPointer");
-
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
-    };
-
-    if !path.is_valid() {
-        return JNI_FALSE;
-    }
-
-    if verify_ginger_merkle_path_without_length_check(path, leaf, root) {
-        JNI_TRUE
-    } else {
-        JNI_FALSE
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_MerklePath_nativeApply(
-    _env: JNIEnv,
-    _path: JObject,
-    _leaf: JObject,
-) -> jobject
-{
-    let path = {
-        let t =_env.get_field(_path, "merklePathPointer", "J")
-            .expect("Should be able to get field merklePathPointer");
-
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
-    };
-
-    let leaf = {
-
-        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
-    };
-
-    let root = get_root_from_path(path, leaf);
-
-    return_field_element(&_env, root)
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_MerklePath_nativeIsLeftmost(
-    _env: JNIEnv,
-    _path: JObject,
-) -> jboolean
-{
-    let path = {
-
-        let t =_env.get_field(_path, "merklePathPointer", "J")
-            .expect("Should be able to get field merklePathPointer");
-
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
-    };
-
-    is_path_leftmost(path) as jboolean
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_MerklePath_nativeIsRightmost(
-    _env: JNIEnv,
-    _path: JObject,
-) -> jboolean
-{
-    let path = {
-
-        let t =_env.get_field(_path, "merklePathPointer", "J")
-            .expect("Should be able to get field merklePathPointer");
-
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
-    };
-
-    is_path_rightmost(path) as jboolean
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_MerklePath_nativeAreRightLeavesEmpty(
-    _env: JNIEnv,
-    _path: JObject,
-) -> jboolean
-{
-    let path = {
-
-        let t =_env.get_field(_path, "merklePathPointer", "J")
-            .expect("Should be able to get field merklePathPointer");
-
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
-    };
-
-    are_right_leaves_empty(path) as jboolean
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_MerklePath_nativeLeafIndex(
-    _env: JNIEnv,
-    _path: JObject,
-) -> jlong
-{
-    let path = {
-
-        let t =_env.get_field(_path, "merklePathPointer", "J")
-            .expect("Should be able to get field merklePathPointer");
-
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
-    };
-
-    get_leaf_index_from_path(path) as jlong
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_MerklePath_nativeSerialize(
-    _env: JNIEnv,
-    _path: JObject,
-) -> jbyteArray
-{
-    serialize_from_jobject::<GingerMHTPath>(
-        &_env,
-        _path,
-        "merklePathPointer",
-        None
-    )
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_MerklePath_nativeDeserialize(
-    _env: JNIEnv,
-    _class: JClass,
-    _path_bytes: jbyteArray,
-    _checked: jboolean,
-) -> jobject
-{
-    deserialize_to_jobject::<GingerMHTPath>(
-        &_env,
-        _path_bytes,
-        Some(_checked),
-        None,
-        "com/horizen/merkletreenative/MerklePath"
-    )
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_MerklePath_nativeFreeMerklePath(
-    _env: JNIEnv,
-    _class: JClass,
-    _path: *mut GingerMHTPath,
-)
-{
-    if _path.is_null()  { return }
-    drop(unsafe { Box::from_raw(_path) });
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeInit(
-    _env: JNIEnv,
-    _class: JClass,
-    _height: jint,
-    _processing_step: jlong,
-) -> jobject
-{
-    // Create new InMemoryOptimizedMerkleTree Rust side
-    let mt = new_ginger_mht(
-        _height as usize,
-        _processing_step as usize
-    );
-
-    // Create and return new InMemoryOptimizedMerkleTree Java side
-    match mt {
-        Ok(mt) => return_jobject(&_env, mt, "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree").into_inner(),
-        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeAppend(
-    _env: JNIEnv,
-    _tree: JObject,
-    _leaf: JObject,
-) -> jboolean
-{
-    let leaf = {
-
-        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
-    };
-
-    let tree = {
-
-        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
-            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
-
-        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
-    };
-
-    match append_leaf_to_ginger_mht(tree, leaf) {
-        Ok(_) => JNI_TRUE,
-        Err(_) => JNI_FALSE,
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalize(
-    _env: JNIEnv,
-    _tree: JObject,
-) -> jobject
-{
-    let tree = {
-
-        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
-            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
-
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHT)
-    };
-
-    match finalize_ginger_mht(tree) {
-        Ok(tree_copy) => return_jobject(&_env, tree_copy, "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree").into_inner(),
-        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalizeInPlace(
-    _env: JNIEnv,
-    _tree: JObject,
-) -> jboolean
-{
-    let tree = {
-
-        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
-            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
-
-        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
-    };
-
-    match finalize_ginger_mht_in_place(tree) {
-        Ok(_) => JNI_TRUE,
-        Err(_) => JNI_FALSE
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeRoot(
-    _env: JNIEnv,
-    _tree: JObject,
-) -> jobject
-{
-    let tree = {
-
-        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
-            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
-
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHT)
-    };
-
-    match get_ginger_mht_root(tree) {
-        Some(root) => return_field_element(&_env, root),
-        None => std::ptr::null::<jobject>() as jobject
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeGetMerklePath(
-    _env: JNIEnv,
-    _tree: JObject,
-    _leaf_index: jlong,
-) -> jobject
-{
-    let tree = {
-
-        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
-            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
-
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHT)
-    };
-
-    match get_ginger_mht_path(tree, _leaf_index as u64) {
-        Some(path) => return_jobject(&_env, path, "com/horizen/merkletreenative/MerklePath")
-            .into_inner(),
-        None => std::ptr::null::<jobject>() as jobject
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeReset(
-    _env: JNIEnv,
-    _tree: JObject,
-)
-{
-    let tree = {
-
-        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
-            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
-
-        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
-    };
-
-    reset_ginger_mht(tree);
-});
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFreeInMemoryOptimizedMerkleTree(
-    _env: JNIEnv,
-    _class: JClass,
-    _tree: *mut GingerMHT,
-)
-{
-    if _tree.is_null()  { return }
-    drop(unsafe { Box::from_raw(_tree) });
-});
-
-//VRF utility functions
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFProof_nativeGetProofSize(
-    _env: JNIEnv,
-    _class: JClass,
-) -> jint { VRF_PROOF_SIZE as jint });
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
-    _env: JNIEnv,
-    _proof: JObject,
-    _compressed: jboolean,
-) -> jbyteArray
-{
-    serialize_from_jobject::<VRFProof>(&_env, _proof, "proofPointer", Some(_compressed))
-});
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFProof_nativeDeserializeProof(
-    _env: JNIEnv,
-    _class: JClass,
-    _proof_bytes: jbyteArray,
-    _check_proof: jboolean,
-    _compressed: jboolean,
-) -> jobject
-{
-    deserialize_to_jobject::<VRFProof>(
-        &_env,
-        _proof_bytes,
-        Some(_check_proof),
-        Some(_compressed),
-        "com/horizen/vrfnative/VRFProof"
-    )
-});
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFProof_nativeIsValidVRFProof(
-    _env: JNIEnv,
-    _vrf_proof: JObject,
-) -> jboolean
-{
-    let proof = _env.get_field(_vrf_proof, "proofPointer", "J")
-        .expect("Should be able to get field proofPointer").j().unwrap() as *const VRFProof;
-
-    if is_valid(read_raw_pointer(&_env, proof)) {
-        JNI_TRUE
-    } else {
-        JNI_FALSE
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFProof_nativeFreeProof(
-    _env: JNIEnv,
-    _class: JClass,
-    _proof: *mut VRFProof,
-)
-{
-    if _proof.is_null()  { return }
-    drop(unsafe { Box::from_raw(_proof) });
-});
-
-
-//VRF functions
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFKeyPair_nativeGenerate(
-    _env: JNIEnv,
-    // this is the class that owns our
-    // static method. Not going to be
-    // used, but still needs to have
-    // an argument slot
-    _class: JClass
-) -> jobject
-{
-
-    let (pk, sk) = vrf_generate_key();
-
-    let secret_key_object = return_jobject(&_env, sk, "com/horizen/vrfnative/VRFSecretKey");
-    let public_key_object = return_jobject(&_env, pk, "com/horizen/vrfnative/VRFPublicKey");
-
-    let class = _env.find_class("com/horizen/vrfnative/VRFKeyPair")
-        .expect("Should be able to find VRFKeyPair class");
-
-    let result = _env.new_object(
-        class,
-        "(Lcom/horizen/vrfnative/VRFSecretKey;Lcom/horizen/vrfnative/VRFPublicKey;)V",
-        &[JValue::Object(secret_key_object), JValue::Object(public_key_object)]
-    ).expect("Should be able to create new (VRFSecretKey, VRFPublicKey) object");
-
-    *result
-});
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
-    _env: JNIEnv,
-    _vrf_key_pair: JObject,
-    _message: JObject
-) -> jobject {
-
-    //Read sk
-    let sk_object = _env.get_field(_vrf_key_pair,
-                                   "secretKey",
-                                   "Lcom/horizen/vrfnative/VRFSecretKey;"
-    ).expect("Should be able to get field vrfKey").l().unwrap();
-
-    let secret_key = {
-
-        let s =_env.get_field(sk_object, "secretKeyPointer", "J")
-            .expect("Should be able to get field secretKeyPointer");
-
-        read_raw_pointer(&_env, s.j().unwrap() as *const VRFSk)
-    };
-
-    //Read pk
-    let pk_object = _env.get_field(_vrf_key_pair,
-                                   "publicKey",
-                                   "Lcom/horizen/vrfnative/VRFPublicKey;"
-    ).expect("Should be able to get field publicKey").l().unwrap();
-
-    let public_key = {
-
-        let p = _env.get_field(pk_object, "publicKeyPointer", "J")
-            .expect("Should be able to get field publicKeyPointer");
-
-        read_raw_pointer(&_env, p.j().unwrap() as *const VRFPk)
-    };
-
-    //Read message
-    let message = {
-
-        let m =_env.get_field(_message, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, m.j().unwrap() as *const FieldElement)
-    };
-
-    //Compute vrf proof
-    let (proof, vrf_out) = match vrf_prove(message, secret_key, public_key) {
-        Ok((proof, vrf_out)) => (
-            return_jobject(&_env, proof, "com/horizen/vrfnative/VRFProof"),
-            return_jobject(&_env, vrf_out, "com/horizen/librustsidechains/FieldElement")
-        ),
-        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
-    };
-
-    //Create and return VRFProveResult instance
-    let class = _env.find_class("com/horizen/vrfnative/VRFProveResult")
-        .expect("Should be able to find VRFProveResult class");
-
-    let result = _env.new_object(
-        class,
-        "(Lcom/horizen/vrfnative/VRFProof;Lcom/horizen/librustsidechains/FieldElement;)V",
-        &[JValue::Object(proof), JValue::Object(vrf_out)]
-    ).expect("Should be able to create new VRFProveResult:(VRFProof, FieldElement) object");
-
-    *result
-});
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetPublicKey(
-    _env: JNIEnv,
-    _vrf_secret_key: JObject
-) -> jobject {
-
-    let sk = _env.get_field(_vrf_secret_key, "secretKeyPointer", "J")
-        .expect("Should be able to get field secretKeyPointer").j().unwrap() as *const VRFSk;
-
-    let secret_key = read_raw_pointer(&_env, sk);
-
-    let pk = vrf_get_public_key(secret_key);
-    return_jobject(&_env, pk, "com/horizen/vrfnative/VRFPublicKey").into_inner()
-});
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeVerifyKey(
-    _env: JNIEnv,
-    _vrf_public_key: JObject,
-) -> jboolean
-{
-    let pk = _env.get_field(_vrf_public_key, "publicKeyPointer", "J")
-        .expect("Should be able to get field publicKeyPointer").j().unwrap() as *const VRFPk;
-
-    if vrf_verify_public_key(read_raw_pointer(&_env, pk)) {
-        JNI_TRUE
-    } else {
-        JNI_FALSE
-    }
-});
-
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeProofToHash(
-    _env: JNIEnv,
-    _vrf_public_key: JObject,
-    _proof: JObject,
-    _message: JObject,
-) -> jobject
-{
-    let public_key = {
-
-        let p = _env.get_field(_vrf_public_key, "publicKeyPointer", "J")
-            .expect("Should be able to get field publicKeyPointer");
-
-        read_raw_pointer(&_env, p.j().unwrap() as *const VRFPk)
-    };
-
-    //Read message
-    let message = {
-
-        let m =_env.get_field(_message, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, m.j().unwrap() as *const FieldElement)
-    };
-
-    //Read proof
-    let proof = {
-        let p = _env.get_field(_proof, "proofPointer", "J")
-            .expect("Should be able to get field proofPointer");
-
-        read_raw_pointer(&_env, p.j().unwrap() as *const VRFProof)
-    };
-
-    //Verify vrf proof and get vrf output
-    let vrf_out = match vrf_proof_to_hash(message, public_key, proof) {
-        Ok(result) => result,
-        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
-    };
-
-    //Return vrf output
-    return_field_element(&_env, vrf_out)
-});
+use type_mappings::{
+    macros::*, instantiated::tweedle::*,
+};
+
+use common_api::{
+    rust_jni::{exception::*, utils::*},
+    *,
+};
+
+use jni::{
+    objects::{JClass, JObject, JString, JValue},
+    sys::{jboolean, jbyte, jbyteArray, jlong, jint, jobject, jobjectArray, JNI_FALSE, JNI_TRUE},
+    JNIEnv,
+};
+
+use std::convert::TryInto;
+
+pub const MC_PK_SIZE: usize = 20;
 
 //Naive threshold signature proof functions
 
@@ -1547,28 +64,25 @@ ffi_export!(
     //Extract Schnorr pks
     let mut pks = vec![];
 
-    let pks_list_size = _env.get_array_length(_schnorr_pks_list)
-        .expect("Should be able to get schnorr_pks_list size");
-
-    for i in 0..pks_list_size {
-
-        let pk_object = _env.get_object_array_element(_schnorr_pks_list, i)
-            .expect(format!("Should be able to get elem {} of schnorr_pks_list", i).as_str());
-
-        let pk = _env.get_field(pk_object, "publicKeyPointer", "J")
-            .expect("Should be able to get field publicKeyPointer");
-
-        pks.push(*read_raw_pointer(&_env, pk.j().unwrap() as *const SchnorrPk));
-    }
+    parse_rust_struct_vec_from_jobject_array!(
+        _env,
+        _schnorr_pks_list,
+        pks,
+        "SchnorrPk",
+        "publicKeyPointer"
+    );
 
     //Extract threshold
     let threshold = _threshold as u64;
 
     //Compute constant
-    match compute_pks_threshold_hash(pks.as_slice(), threshold) {
-        Ok(constant) => return_field_element(&_env, constant),
-        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
-    }
+    map_to_jobject_or_throw_exc(
+        _env,
+        compute_pks_threshold_hash(pks.as_slice(), threshold),
+        "com/horizen/common/librustsidechains/FieldElement",
+        "com/horizen/sigproofnative/NaiveThresholdSigProofException",
+        "Unable to compute pks_threshold_hash"
+    )
 });
 
 ffi_export!(
@@ -1602,11 +116,13 @@ ffi_export!(
             let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
                 .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-            let pk: [u8; 20] = _env.convert_byte_array(p)
-                .expect("Should be able to convert to Rust byte array")
-                .try_into()
-                .expect("Should be able to write into fixed buffer of size 20");
-
+            let pk: [u8; 20] = ok_or_throw_exc!(
+                &_env,
+                parse_fixed_jbyte_array(&_env, p, 20),
+                "com/horizen/sigproofnative/NaiveThresholdSigProofException",
+                format!("Unable to get {} BackwardTransfer", i).as_str(),
+                JNI_NULL
+            ).try_into().unwrap(); // Cannot fail if parse_fixed_jbyte_array passed
 
             let a = _env.call_method(o, "getAmount", "()J", &[])
                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
@@ -1620,35 +136,24 @@ ffi_export!(
         amount: bt_raw.0
     }).collect::<Vec<_>>();
 
-    let sc_id = {
-        let f =_env.get_field(_sc_id, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-    };
-
-    let end_cumulative_sc_tx_comm_tree_root = {
-        let f =_env.get_field(_end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-    };
+    let sc_id = parse_rust_struct_from_jobject::<FieldElement>(&_env, _sc_id, "fieldElementPointer");
+    let end_cumulative_sc_tx_comm_tree_root = parse_rust_struct_from_jobject::<FieldElement>(&_env, _end_cumulative_sc_tx_comm_tree_root, "fieldElementPointer");
 
     //Compute message to sign:
-    let msg = match compute_msg_to_sign(
-        sc_id,
-        _epoch_number as u32,
-        end_cumulative_sc_tx_comm_tree_root,
-        _btr_fee as u64,
-        _ft_min_amount as u64,
-        bt_list
-    ){
-        Ok((_, msg)) => msg,
-        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
-    };
-
-    //Return msg
-    return_field_element(&_env, msg)
+    map_to_jobject_or_throw_exc(
+        _env,
+        compute_msg_to_sign_from_bt_list(
+            sc_id,
+            _epoch_number as u32,
+            end_cumulative_sc_tx_comm_tree_root,
+            _btr_fee as u64,
+            _ft_min_amount as u64,
+            bt_list
+        ),
+        "com/horizen/common/librustsidechains/FieldElement",
+        "com/horizen/sigproofnative/NaiveThresholdSigProofException",
+        "Unable to compute message to sign"
+    )
 });
 
 fn get_proving_system_type(_env: &JNIEnv, _proving_system: JObject) -> ProvingSystem {
@@ -1676,20 +181,22 @@ ffi_export!(
     _proving_system: JObject,
     _max_segment_size: jint,
     _supported_segment_size: jint,
-) -> jboolean
+)
 {
     // Get proving system type
     let proving_system = get_proving_system_type(&_env, _proving_system);
 
     // Generate DLOG keypair
-    match init_dlog_keys(
-        proving_system,
-        _max_segment_size as usize,
-        _supported_segment_size as usize,
-    ) {
-        Ok(_) => JNI_TRUE,
-        Err(_) => JNI_FALSE,
-    }
+    ok_or_throw_exc!(
+        _env,
+        init_dlog_keys(
+            proving_system,
+            _max_segment_size as usize,
+            _supported_segment_size as usize,
+        ),
+        "com/horizen/provingsystemnative/ProvingSystemException",
+        "Unable to initialize DLOG keys"
+    )
 });
 
 ffi_export!(
@@ -1710,13 +217,13 @@ ffi_export!(
         .expect("Should be able to read jstring as Rust String");
 
     // Deserialize vk
-    let vk: ZendooVerifierKey = match read_from_file(Path::new(vk_path.to_str().unwrap()), Some(false), Some(true)) {
-        Ok(vk) => vk,
-        Err(e) => {
-            println!("{:?}", e);
-            return JNI_FALSE
-        },
-    };
+    let vk = ok_or_throw_exc!(
+        &_env,
+        read_from_file::<ZendooVerifierKey>(vk_path.to_str().unwrap(), Some(false), Some(true)),
+        "com/horizen/provingsystemnative/ProvingSystemException",
+        "Unable to read vk from file",
+        JNI_FALSE
+    );
 
     // Read zk value
     let zk = _zk == JNI_TRUE;
@@ -1756,7 +263,7 @@ ffi_export!(
     _max_vk_size: jint,
     _compress_pk: jboolean,
     _compress_vk: jboolean,
-) -> jboolean
+)
 {
     // Get proving system type
     let proving_system = get_proving_system_type(&_env, _proving_system);
@@ -1776,23 +283,22 @@ ffi_export!(
     let zk = _zk == JNI_TRUE;
 
     // Generate snark keypair
-    match generate_circuit_keypair(
-        circ,
-        proving_system,
-        Path::new(proving_key_path.to_str().unwrap()),
-        Path::new(verification_key_path.to_str().unwrap()),
-        _max_proof_size as usize,
-        _max_vk_size as usize,
-        zk,
-        Some(_compress_pk == JNI_TRUE),
-        Some(_compress_vk == JNI_TRUE),
-    ) {
-        Ok(_) => JNI_TRUE,
-        Err(e) => {
-            println!("{:?}", e);
-            JNI_FALSE
-        },
-    }
+    ok_or_throw_exc!(
+        _env,
+        generate_circuit_keypair(
+            circ,
+            proving_system,
+            proving_key_path.to_str().unwrap(),
+            verification_key_path.to_str().unwrap(),
+            _max_proof_size as usize,
+            _max_vk_size as usize,
+            zk,
+            Some(_compress_pk == JNI_TRUE),
+            Some(_compress_vk == JNI_TRUE),
+        ),
+        "com/horizen/sigproofnative/NaiveThresholdSigProofException",
+        "Unable to setup (pk, vk) for NaiveThresholdSigProof"
+    )
 });
 
 fn get_proving_system_type_as_jint(_env: &JNIEnv, ps: ProvingSystem) -> jint {
@@ -1814,14 +320,15 @@ ffi_export!(
     let proving_key_path = _env.get_string(_proving_key_path)
         .expect("Should be able to read jstring as Rust String");
 
-    match read_from_file::<ProvingSystem>(
-        Path::new(proving_key_path.to_str().unwrap()),
-        None,
-        None,
-    ) {
-        Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
-        Err(_) => -1i32 as jint,
-    }
+    let ps = ok_or_throw_exc!(
+        &_env,
+        read_from_file::<ProvingSystem>(proving_key_path.to_str().unwrap(), None, None),
+        "com/horizen/provingsystemnative/ProvingSystemException",
+        "Unable to read ProvingSystem type from file",
+        -1i32 as jint
+    );
+
+    get_proving_system_type_as_jint(&_env, ps)
 });
 
 ffi_export!(
@@ -1835,14 +342,15 @@ ffi_export!(
     let verifier_key_path = _env.get_string(_verifier_key_path)
         .expect("Should be able to read jstring as Rust String");
 
-    match read_from_file::<ProvingSystem>(
-        Path::new(verifier_key_path.to_str().unwrap()),
-        None,
-        None,
-    ) {
-        Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
-        Err(_) => -1i32 as jint,
-    }
+    let ps = ok_or_throw_exc!(
+        &_env,
+        read_from_file::<ProvingSystem>(verifier_key_path.to_str().unwrap(), None, None),
+        "com/horizen/provingsystemnative/ProvingSystemException",
+        "Unable to read ProvingSystem type from file",
+        -1i32 as jint
+    );
+
+    get_proving_system_type_as_jint(&_env, ps)
 });
 
 ffi_export!(
@@ -1884,11 +392,13 @@ ffi_export!(
             let p = _env.call_method(o, "getPublicKeyHash", "()[B", &[])
                 .expect("Should be able to call getPublicKeyHash method").l().unwrap().cast();
 
-            let pk: [u8; 20] = _env.convert_byte_array(p)
-                .expect("Should be able to convert to Rust byte array")
-                .try_into()
-                .expect("Should be able to write into fixed buffer of size 20");
-
+            let pk: [u8; 20] = ok_or_throw_exc!(
+                &_env,
+                parse_fixed_jbyte_array(&_env, p, 20),
+                "com/horizen/sigproofnative/NaiveThresholdSigProofException",
+                format!("Unable to get {} BackwardTransfer", i).as_str(),
+                JNI_NULL
+            ).try_into().unwrap(); // Cannot fail if parse_fixed_jbyte_array passed
 
             let a = _env.call_method(o, "getAmount", "()J", &[])
                 .expect("Should be able to call getAmount method").j().unwrap() as u64;
@@ -1940,7 +450,7 @@ ffi_export!(
         };
 
         sigs.push(signature);
-        pks.push(*public_key);
+        pks.push(public_key);
     }
 
     let sc_id = {
@@ -1972,7 +482,7 @@ ffi_export!(
         _ft_min_amount as u64,
         bt_list,
         _threshold as u64,
-        Path::new(proving_key_path.to_str().unwrap()),
+        proving_key_path.to_str().unwrap(),
         _check_proving_key == JNI_TRUE,
         _zk == JNI_TRUE,
         _compressed_pk == JNI_TRUE,
@@ -2120,7 +630,7 @@ ffi_export!(
         proof_bytes,
         _check_proof == JNI_TRUE,
         _compressed_proof == JNI_TRUE,
-        Path::new(vk_path.to_str().unwrap()),
+        vk_path.to_str().unwrap(),
         _check_vk == JNI_TRUE,
         _compressed_vk == JNI_TRUE,
 
@@ -2181,22 +691,37 @@ ffi_export!(
     _csw_verification_key_nullable: jbyteArray // can be null if there is no key for CSWs
 ) -> jboolean
 {
-
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        match FieldElement::deserialize(sc_id_bytes.as_slice()) {
-            Ok(fe) => fe,
-            Err(_) => return JNI_FALSE
-        }
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_FALSE
+        )
     };
 
     let amount = _amount as u64;
 
-    let mut pub_key = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_pub_key, &mut pub_key[..]);
+    let pub_key: [u8; FIELD_SIZE] = match parse_fixed_jbyte_array(&_env, _pub_key, FIELD_SIZE) {
+        Ok(bytes) => bytes.try_into().unwrap(), // Cannot fail if parse_fixed_jbyte_array returned Ok
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/librustsidechains/DeserializationException",
+            format!("Unable to read pub_key: {:?}", e).as_str(),
+            JNI_FALSE
+        )
+    };
 
-    let mut tx_hash = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_tx_hash, &mut tx_hash[..]);
+    let tx_hash: [u8; FIELD_SIZE] = match parse_fixed_jbyte_array(&_env, _pub_key, FIELD_SIZE) {
+        Ok(bytes) => bytes.try_into().unwrap(), // Cannot fail if parse_fixed_jbyte_array returned Ok
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/librustsidechains/DeserializationException",
+            format!("Unable to read tx_hash: {:?}", e).as_str(),
+            JNI_FALSE
+        )
+    };
 
     let out_idx = _out_idx as u32;
 
@@ -2265,10 +790,14 @@ ffi_export!(
     let constant = if _constant_nullable.is_null() {
         Option::None
     } else {
-        let constant_bytes = parse_jbyte_array_to_vec(&_env, &_constant_nullable, FIELD_SIZE);
-        match FieldElement::deserialize(constant_bytes.as_slice()) {
-            Ok(constant_fe) => Option::Some(constant_fe),
-            Err(_) => return JNI_FALSE
+        match parse_field_element_from_jbyte_array(&_env, _constant_nullable) {
+            Ok(fe) => Some(fe),
+            Err(e) => throw!(
+                &_env,
+                "com/horizen/common/librustsidechains/FieldElementException",
+                format!("Unable to read constant: {:?}", e).as_str(),
+                JNI_FALSE
+            )
         }
     };
 
@@ -2326,22 +855,46 @@ ffi_export!(
     _out_idx: jint
 ) -> jboolean
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
-    };
+    let sc_id = ok_or_throw_exc!(
+        &_env,
+        parse_field_element_from_jbyte_array(&_env, _sc_id),
+        "com/horizen/common/librustsidechains/FieldElementException",
+        "Unable to read sc_id",
+        JNI_FALSE
+    );
 
     let amount = _amount as u64;
 
-    let mut pub_key = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_pub_key, &mut pub_key[..]);
+    let pub_key: [u8; FIELD_SIZE] = match parse_fixed_jbyte_array(&_env, _pub_key, FIELD_SIZE) {
+        Ok(bytes) => bytes.try_into().unwrap(), // Cannot fail if parse_fixed_jbyte_array returned Ok
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/librustsidechains/DeserializationException",
+            format!("Unable to read pub_key: {:?}", e).as_str(),
+            JNI_FALSE
+        )
+    };
 
-    let mut mc_return_address = [0u8; MC_PK_SIZE];
-    get_byte_array(&_env, &_mc_return_address, &mut mc_return_address[..]);
+    let tx_hash: [u8; FIELD_SIZE] = match parse_fixed_jbyte_array(&_env, _pub_key, FIELD_SIZE) {
+        Ok(bytes) => bytes.try_into().unwrap(), // Cannot fail if parse_fixed_jbyte_array returned Ok
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/librustsidechains/DeserializationException",
+            format!("Unable to read tx_hash: {:?}", e).as_str(),
+            JNI_FALSE
+        )
+    };
 
-    let mut tx_hash = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_tx_hash, &mut tx_hash[..]);
-
+    let mc_return_address = match parse_fixed_jbyte_array(&_env, _mc_return_address, MC_PK_SIZE) {
+        Ok(bytes) => bytes.try_into().unwrap(), // Cannot fail if parse_fixed_jbyte_array returned Ok
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/librustsidechains/DeserializationException",
+            format!("Unable to read mc_return_address: {:?}", e).as_str(),
+            JNI_FALSE
+        )
+    };
+    
     let out_idx = _out_idx as u32;
 
     let commitment_tree = {
@@ -2351,7 +904,6 @@ ffi_export!(
 
         read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
     };
-
 
     if commitment_tree.add_fwt(&sc_id,
                                amount,
@@ -2377,15 +929,17 @@ ffi_export!(
     _out_idx: jint
 ) -> jboolean
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_FALSE
+        )
     };
 
     let sc_fee = _sc_fee as u64;
-
-    let mut mc_destination_address = [0u8; 20];
-    get_byte_array(&_env, &_mc_destination_address, &mut mc_destination_address[..]);
 
     let mut sc_request_data = vec![];
     let sc_request_data_size = _env.get_array_length(_sc_request_data)
@@ -2402,8 +956,25 @@ ffi_export!(
         }
     }
 
-    let mut tx_hash = [0u8; FIELD_SIZE];
-    get_byte_array(&_env, &_tx_hash, &mut tx_hash[..]);
+    let tx_hash: [u8; FIELD_SIZE] = match parse_fixed_jbyte_array(&_env, _tx_hash, FIELD_SIZE) {
+        Ok(bytes) => bytes.try_into().unwrap(), // Cannot fail if parse_fixed_jbyte_array returned Ok
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/librustsidechains/DeserializationException",
+            format!("Unable to read tx_hash: {:?}", e).as_str(),
+            JNI_FALSE
+        )
+    };
+
+    let mc_destination_address = match parse_fixed_jbyte_array(&_env, _mc_destination_address, MC_PK_SIZE) {
+        Ok(bytes) => bytes.try_into().unwrap(), // Cannot fail if parse_fixed_jbyte_array returned Ok
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/librustsidechains/DeserializationException",
+            format!("Unable to read mc_destination_address: {:?}", e).as_str(),
+            JNI_FALSE
+        )
+    };
 
     let out_idx = _out_idx as u32;
 
@@ -2441,9 +1012,14 @@ ffi_export!(
     _ft_min_amount: jlong
 ) -> jboolean
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_FALSE
+        )
     };
 
     let epoch_number = _epoch_number as u32;
@@ -2504,9 +1080,14 @@ ffi_export!(
         Some(custom_fields.iter().collect())
     };
 
-    let end_cumulative_sc_tx_commitment_tree_root = {
-        let tree_root_bytes = parse_jbyte_array_to_vec(&_env, &_end_cumulative_sc_tx_commitment_tree_root, FIELD_SIZE);
-        FieldElement::deserialize(tree_root_bytes.as_slice()).expect("Can't parse the input end_cumulative_sc_tx_commitment_tree_root into FieldElement")
+    let end_cumulative_sc_tx_commitment_tree_root = match parse_field_element_from_jbyte_array(&_env, _end_cumulative_sc_tx_commitment_tree_root) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read end_cumulative_sc_tx_commitment_tree_root: {:?}", e).as_str(),
+            JNI_FALSE
+        )
     };
 
     let btr_fee = _btr_fee as u64;
@@ -2543,14 +1124,24 @@ ffi_export!(
     _leaf: jbyteArray
 ) -> jboolean
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_FALSE
+        )
     };
 
-    let leaf_fe = {
-        let leaf_bytes = parse_jbyte_array_to_vec(&_env, &_leaf, FIELD_SIZE);
-        FieldElement::deserialize(leaf_bytes.as_slice()).expect("Can't parse the input leaf_bytes into FieldElement")
+    let leaf_fe = match parse_field_element_from_jbyte_array(&_env, _leaf) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read leaf: {:?}", e).as_str(),
+            JNI_FALSE
+        )
     };
 
     let commitment_tree = {
@@ -2575,9 +1166,14 @@ ffi_export!(
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_NULL
+        )
     };
 
     let commitment_tree = {
@@ -2638,20 +1234,37 @@ ffi_export!(
     _mc_pk_hash: jbyteArray
 ) -> jboolean
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_FALSE
+        )
     };
 
     let amount = _amount as u64;
 
-    let nullifier = {
-        let nullifier_bytes = parse_jbyte_array_to_vec(&_env, &_nullifier, FIELD_SIZE);
-        FieldElement::deserialize(nullifier_bytes.as_slice()).expect("Can't parse the input nullifier_bytes into FieldElement")
+    let nullifier = match parse_field_element_from_jbyte_array(&_env, _nullifier) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read nullifier: {:?}", e).as_str(),
+            JNI_FALSE
+        )
     };
 
-    let mut mc_pk_hash = [0u8; MC_PK_SIZE];
-    get_byte_array(&_env, &_mc_pk_hash, &mut mc_pk_hash[..]);
+    let mc_pk_hash = match parse_fixed_jbyte_array(&_env, _mc_pk_hash, MC_PK_SIZE) {
+        Ok(bytes) => bytes.try_into().unwrap(), // Cannot fail if parse_fixed_jbyte_array returned Ok
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/librustsidechains/DeserializationException",
+            format!("Unable to read mc_pk_hash: {:?}", e).as_str(),
+            JNI_FALSE
+        )
+    };
 
     let commitment_tree = {
 
@@ -2678,9 +1291,14 @@ ffi_export!(
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_NULL
+        )
     };
 
     let commitment_tree = {
@@ -2722,9 +1340,14 @@ ffi_export!(
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_NULL
+        )
     };
 
     let commitment_tree = {
@@ -2766,9 +1389,14 @@ ffi_export!(
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_NULL
+        )
     };
 
     let commitment_tree = {
@@ -2810,9 +1438,14 @@ ffi_export!(
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_NULL
+        )
     };
 
     let commitment_tree = {
@@ -2854,9 +1487,14 @@ ffi_export!(
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_NULL
+        )
     };
 
     let commitment_tree = {
@@ -2898,9 +1536,14 @@ ffi_export!(
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_NULL
+        )
     };
 
     let commitment_tree = {
@@ -2981,9 +1624,14 @@ ffi_export!(
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_NULL
+        )
     };
 
     let commitment_tree = {
@@ -3025,7 +1673,7 @@ ffi_export!(
 ) -> jbyteArray
 {
     serialize_from_jobject::<ScExistenceProof>(
-        &_env,
+        _env,
         _proof,
         "existenceProofPointer",
         None
@@ -3078,9 +1726,14 @@ ffi_export!(
     _sc_id: jbyteArray
 ) -> jobject
 {
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            JNI_NULL
+        )
     };
 
     let commitment_tree = {
@@ -3122,7 +1775,7 @@ ffi_export!(
 ) -> jbyteArray
 {
     serialize_from_jobject::<ScAbsenceProof>(
-        &_env,
+        _env,
         _proof,
         "absenceProofPointer",
         None
@@ -3216,9 +1869,14 @@ ffi_export!(
 ) -> bool
 {
     // Read sidechain id
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    let sc_id = match parse_field_element_from_jbyte_array(&_env, _sc_id) {
+        Ok(fe) => fe,
+        Err(e) => throw!(
+            &_env,
+            "com/horizen/common/librustsidechains/FieldElementException",
+            format!("Unable to read sc_id: {:?}", e).as_str(),
+            false
+        )
     };
 
     //Read commitment proof

@@ -60,6 +60,11 @@
       <version>21.0</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>io.horizenlabs</groupId>
+      <artifactId>sc-common-cryptolib</artifactId>
+      <version>0.1.0</version>
+    </dependency>
   </dependencies>
   <profiles>
     <profile>

@@ -33,27 +33,27 @@ unsafe_code
 )]
 #![forbid(unsafe_code)]
 
+#![allow(
+    clippy::upper_case_acronyms,
+    clippy::too_many_arguments,
+    clippy::try_err,
+    clippy::map_collect_result_unit,
+    clippy::not_unsafe_ptr_arg_deref
+)]
+
 pub mod naive_threshold_sig;
 pub use self::naive_threshold_sig::*;
 
-pub mod constants;
-pub use self::constants::*;
-
-pub mod type_mapping;
-pub use self::type_mapping::*;
-
-
 use r1cs_core::ConstraintSynthesizer;
-use cctp_primitives::{
-    proving_system::{
-        ProvingSystem, ZendooProverKey, ZendooVerifierKey,
-        init::get_g1_committer_key,
-        error::ProvingSystemError,
-        compute_proof_vk_size
-    },
-    utils::serialization::write_to_file,
+use cctp_primitives::proving_system::{
+    ProvingSystem, ZendooProverKey, ZendooVerifierKey,
+    init::get_g1_committer_key,
+    error::ProvingSystemError,
+    compute_proof_vk_size
 };
-use std::path::Path;
+use type_mappings::{
+    macros::*, instantiated::tweedle::*,
+};
 
 /// Utility function: generate and save to specified paths the SNARK proving and
 /// verification key associated to circuit `circ`. Check that their sizes are
@@ -61,8 +61,8 @@ use std::path::Path;
 pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
     circ: C,
     proving_system: ProvingSystem,
-    pk_path: &Path,
-    vk_path: &Path,
+    pk_path: &str,
+    vk_path: &str,
     max_proof_size: usize,
     max_vk_size: usize,
     zk: bool,

@@ -7,13 +7,15 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "sc_testnet_2"}
-primitives = {version = "0.1.0", features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "sc_testnet_2"}
+algebra = { features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development" }
+primitives = { features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development" }
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "sc_testnet_2" }
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "sync_with_ginger/concrete_types_with_macros" }
 
-#ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
+common-api = { features = ["tweedle"], git = "https://github.com/HorizenLabs/sc_cryptolib_common.git", branch = "sync_with_ginger_type_mappings"}
+type-mappings = { features = ["tweedle", "darlin"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "feat/concrete_instantiations" }
+
 
 jni = "0.19.0"
 derivative = "2.2.0"

@@ -123,11 +123,4 @@ public class Library {
         }
     }
 
-    // Used for testing purposes
-    private static native void nativePanickingFunction();
-
-    public static void panickingFunction() {
-        nativePanickingFunction();
-    }
-
 }

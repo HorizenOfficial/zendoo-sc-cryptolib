@@ -1,10 +1,7 @@
 package com.horizen.sigproofnative;
 
-import com.horizen.librustsidechains.FieldElement;
-import com.horizen.schnorrnative.SchnorrKeyPair;
-import com.horizen.schnorrnative.SchnorrPublicKey;
-import com.horizen.schnorrnative.SchnorrSecretKey;
-import com.horizen.schnorrnative.SchnorrSignature;
+import com.horizen.common.librustsidechains.FieldElement;
+import com.horizen.common.schnorrnative.*;
 import com.horizen.sigproofnative.*;
 import com.horizen.provingsystemnative.ProvingSystem;
 import com.horizen.provingsystemnative.ProvingSystemType;

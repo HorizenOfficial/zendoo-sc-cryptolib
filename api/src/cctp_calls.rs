@@ -1,27 +1,8 @@
-use algebra::{
-    ProjectiveCurve, AffineCurve,
-    ToConstraintField, UniformRand,
+use algebra::AffineCurve;
+use primitives::{crh::FieldBasedHash, signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk
 };
-use primitives::{crh::{
-    FieldBasedHash,
-    bowe_hopwood::{
-        BoweHopwoodPedersenParameters
-    },
-}, signature::{
-    FieldBasedSignatureScheme, schnorr::field_based_schnorr::FieldBasedSchnorrPk
-}, vrf::{FieldBasedVrf, ecvrf::FieldBasedEcVrfPk}};
-
-use demo_circuit::{
-    constants::VRFParams,
-    naive_threshold_sig::*,
-    type_mapping::*,
-};
-use rand::{
-    SeedableRng, rngs::OsRng,
-};
-use rand_xorshift::XorShiftRng;
-use lazy_static::*;
-
+use demo_circuit::naive_threshold_sig::*;
+use rand::rngs::OsRng;
 use cctp_primitives::{
     proving_system::{
         init::get_g1_committer_key,
@@ -33,59 +14,23 @@ use cctp_primitives::{
     },
     utils::{
         get_bt_merkle_root,
-        serialization::*,
         commitment_tree::ByteAccumulator,
-        data_structures::BackwardTransfer
+        data_structures::BackwardTransfer,
     },
 };
-
-use std::path::Path;
-
-//*******************************Generic functions**********************************************
-
-// NOTE: This function relies on a non-cryptographically safe RNG, therefore it
-// must be used ONLY for testing purposes
-pub fn get_random_field_element(seed: u64) -> FieldElement {
-    let mut rng = XorShiftRng::seed_from_u64(seed);
-    FieldElement::rand(&mut rng)
-}
-
-//***************************Schnorr types and functions********************************************
-
-pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
-    let mut rng = OsRng;
-    let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
-    (pk.0.into_affine(), sk)
-}
-
-pub fn schnorr_get_public_key(sk: &SchnorrSk) -> SchnorrPk {
-    SchnorrSigScheme::get_public_key(sk).0.into_affine()
-}
-
-pub fn schnorr_verify_public_key(pk: &SchnorrPk) -> bool {
-    SchnorrSigScheme::keyverify(&FieldBasedSchnorrPk(pk.into_projective()))
-}
-
-pub fn schnorr_sign(msg: &FieldElement, sk: &SchnorrSk, pk: &SchnorrPk) -> Result<SchnorrSig, Error> {
-    let mut rng = OsRng;
-    SchnorrSigScheme::sign(&mut rng, &FieldBasedSchnorrPk(pk.into_projective()), sk, msg.clone())
-}
-
-pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &SchnorrSig) -> Result<bool, Error> {
-    SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), msg.clone(), signature)
-}
+use super::*;
 
 //*****************************Naive threshold sig circuit related functions************************
 
 // Computes H(H(pks), threshold): used to generate the constant value needed to be declared
 // in MC during SC creation.
-pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<FieldElement, Error>
+pub fn compute_pks_threshold_hash(pks: &[&SchnorrPk], threshold: u64) -> Result<FieldElement, Error>
 {
     let threshold_field = FieldElement::from(threshold);
 
     // pks must always be all present
     let mut h = FieldHash::init_constant_length(pks.len(), None);
-    pks.iter().for_each(|pk| { h.update(pk.x); });
+    pks.iter().for_each(|&pk| { h.update(pk.x); });
     let pks_hash = h.finalize()?;
 
     FieldHash::init_constant_length(2, None)
@@ -94,25 +39,30 @@ pub fn compute_pks_threshold_hash(pks: &[SchnorrPk], threshold: u64) -> Result<F
         .finalize()
 }
 
-//Compute and return (MR(bt_list), H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount))
-pub fn compute_msg_to_sign(
-    sc_id:                               &FieldElement,
-    epoch_number:                        u32,
-    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
-    btr_fee:                             u64,
-    ft_min_amount:                       u64,
-    bt_list:                             Vec<BackwardTransfer>,
-) -> Result<(FieldElement, FieldElement), Error> {
-
-    let epoch_number = FieldElement::from(epoch_number);
-
+/// Compute BackwardTransfer MerkleTree root
+pub fn compute_bt_root(bt_list: Vec<BackwardTransfer>) -> Result<FieldElement, Error>
+{
     //Compute bt_list merkle_root
     let bt_list_opt = if bt_list.len() > 0 {
         Some(bt_list.as_slice())
     } else {
         None
     };
-    let mr_bt = get_bt_merkle_root(bt_list_opt)?;
+
+    get_bt_merkle_root(bt_list_opt)
+}
+
+//Compute and return msg_to_sign: H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)
+pub fn compute_msg_to_sign(
+    sc_id:                               &FieldElement,
+    epoch_number:                        u32,
+    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
+    btr_fee:                             u64,
+    ft_min_amount:                       u64,
+    mr_bt:                               FieldElement,
+) -> Result<FieldElement, Error> {
+
+    let epoch_number = FieldElement::from(epoch_number);
 
     let fees_field_element = {
         let fes = ByteAccumulator::init()
@@ -132,11 +82,24 @@ pub fn compute_msg_to_sign(
         .update(fees_field_element)
         .finalize()?;
 
-    Ok((mr_bt, msg))
+    Ok(msg)
+}
+
+pub fn compute_msg_to_sign_from_bt_list(
+    sc_id:                               &FieldElement,
+    epoch_number:                        u32,
+    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
+    btr_fee:                             u64,
+    ft_min_amount:                       u64,
+    bt_list:                             Vec<BackwardTransfer>,
+) -> Result<FieldElement, Error> {
+
+    let mr_bt = compute_bt_root(bt_list)?;
+    compute_msg_to_sign(sc_id, epoch_number, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount, mr_bt)
 }
 
 pub fn create_naive_threshold_sig_proof(
-    pks:                                 &[SchnorrPk],
+    pks:                                 &[&SchnorrPk],
     mut sigs:                            Vec<Option<SchnorrSig>>,
     sc_id:                               &FieldElement,
     epoch_number:                        u32,
@@ -145,7 +108,7 @@ pub fn create_naive_threshold_sig_proof(
     ft_min_amount:                       u64,
     bt_list:                             Vec<BackwardTransfer>,
     threshold:                           u64,
-    proving_key_path:                    &Path,
+    proving_key_path:                    &str,
     enforce_membership:                  bool,
     zk:                                  bool,
     compressed_pk:                       bool,
@@ -157,25 +120,26 @@ pub fn create_naive_threshold_sig_proof(
     assert_eq!(sigs.len(), max_pks);
 
     // Compute msg to sign
-    let (mr_bt, msg) = compute_msg_to_sign(
+    let mr_bt = compute_bt_root(bt_list)?;
+    let msg = compute_msg_to_sign(
         sc_id,
         epoch_number,
         end_cumulative_sc_tx_comm_tree_root,
         btr_fee,
         ft_min_amount,
-        bt_list,
+        mr_bt,
     )?;
 
     // Iterate over sigs, check and count number of valid signatures,
-    // and replace with NULL_CONST.null_sig the None ones
+    // and replace with PHANTOM_SIG the None ones
     let mut valid_signatures = 0;
     for i in 0..max_pks {
         if sigs[i].is_some(){
-            let is_verified = schnorr_verify_signature(&msg, &pks[i], &sigs[i].unwrap())?;
+            let is_verified = schnorr_verify_signature(&msg, pks[i], &sigs[i].unwrap())?;
             if is_verified { valid_signatures += 1; }
         }
         else {
-            sigs[i] = Some(NULL_CONST.null_sig)
+            sigs[i] = Some(*PHANTOM_SIG)
         }
     }
 
@@ -219,7 +183,6 @@ pub fn create_naive_threshold_sig_proof(
     Ok((proof, valid_signatures))
 }
 
-
 pub fn verify_naive_threshold_sig_proof(
     constant:                                   &FieldElement,
     sc_id:                                      &FieldElement,
@@ -232,7 +195,7 @@ pub fn verify_naive_threshold_sig_proof(
     proof:                                      Vec<u8>,
     check_proof:                                bool,
     compressed_proof:                           bool,
-    vk_path:                                    &Path,
+    vk_path:                                    &str,
     check_vk:                                   bool,
     compressed_vk:                              bool,
 ) -> Result<bool, Error>
@@ -285,66 +248,7 @@ pub fn verify_naive_threshold_sig_proof(
     Ok(is_verified)
 }
 
-//VRF types and functions
-
-lazy_static! {
-    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<G2Projective> = {
-        let params = VRFParams::new();
-        BoweHopwoodPedersenParameters::<G2Projective>{generators: params.group_hash_generators}
-    };
-}
-
-pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
-    let mut rng = OsRng;
-    let (pk, sk) = VRFScheme::keygen(&mut rng);
-    (pk.0.into_affine(), sk)
-}
-
-pub fn vrf_get_public_key(sk: &VRFSk) -> VRFPk {
-    VRFScheme::get_public_key(sk).0.into_affine()
-}
-
-pub fn vrf_verify_public_key(pk: &VRFPk) -> bool {
-    VRFScheme::keyverify(&FieldBasedEcVrfPk(pk.into_projective()))
-}
-
-pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof, FieldElement), Error> {
-    let mut rng = OsRng;
-
-    //Compute proof
-    let proof = VRFScheme::prove(
-        &mut rng,
-        &VRF_GH_PARAMS,
-        &FieldBasedEcVrfPk(pk.into_projective()),
-        sk,
-        msg.clone()
-    )?;
-
-    //Convert gamma from proof to field elements
-    let gamma_coords = proof.gamma.to_field_elements().unwrap();
-
-    //Compute VRF output
-    let output = {
-        let mut h = FieldHash::init_constant_length(3, None);
-        h.update(msg.clone());
-        gamma_coords.into_iter().for_each(|c| { h.update(c); });
-        h.finalize()
-    }?;
-
-    Ok((proof, output))
-}
-
-pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Result<FieldElement, Error> {
-    VRFScheme::proof_to_hash(
-        &VRF_GH_PARAMS,
-        &FieldBasedEcVrfPk(pk.into_projective()),
-        msg.clone(),
-        proof
-    )
-}
-
 // Test functions
-
 pub(crate) fn into_i8(v: Vec<u8>) -> Vec<i8> {
     // first, make sure v's destructor doesn't free the data
     // it thinks it owns when it goes out of scope
@@ -363,18 +267,15 @@ pub(crate) fn into_i8(v: Vec<u8>) -> Vec<i8> {
 mod test {
     use super::*;
     use rand::Rng;
-    use algebra::Field;
-    use cctp_primitives::utils::{
-        poseidon_hash::*, mht::*
-    };
+    use algebra::UniformRand;
     use cctp_primitives::proving_system::init_dlog_keys;
     use demo_circuit::generate_circuit_keypair;
 
     fn create_sample_naive_threshold_sig_circuit(
         bt_num:     usize,
-        pk_path:    &Path,
-        vk_path:    &Path,
-        proof_path: &Path,
+        pk_path:    &str,
+        vk_path:    &str,
+        proof_path: &str,
     ) {
         //assume to have 3 pks, threshold = 2
         let mut rng = OsRng;
@@ -392,7 +293,7 @@ mod test {
         let ft_min_amount: u64 = rng.gen();
 
         //Compute msg to sign
-        let (_, msg) = compute_msg_to_sign(
+        let msg = compute_msg_to_sign_from_bt_list(
             &sc_id,
             epoch_number,
             &end_cumulative_sc_tx_comm_tree_root,
@@ -441,12 +342,13 @@ mod test {
         println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[0], None).unwrap()));
         println!("sig: {:?}", into_i8(serialize_to_buffer(&sigs[2], None).unwrap()));
 
-        let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
+        let pks_ref = pks.iter().map(|pk| pk).collect::<Vec<_>>();
+        let constant = compute_pks_threshold_hash(pks_ref.as_slice(), threshold).unwrap();
         println!("Constant u8: {:?}", serialize_to_buffer(&constant, None).unwrap());
 
         //Create and serialize proof
         let (proof, quality) = create_naive_threshold_sig_proof(
-            pks.as_slice(),
+            pks_ref.as_slice(),
             sigs,
             &sc_id,
             epoch_number,
@@ -523,7 +425,7 @@ mod test {
         let mut proof_path = tmp_dir.clone();
         proof_path.push("sample_proof");
 
-        create_sample_naive_threshold_sig_circuit(10, &pk_path, &vk_path, &proof_path);
+        create_sample_naive_threshold_sig_circuit(10, pk_path.to_str().unwrap(), vk_path.to_str().unwrap(), proof_path.to_str().unwrap());
 
         println!("****************Without BWT*******************");
 
@@ -536,7 +438,7 @@ mod test {
         let mut proof_path_no_bwt = tmp_dir.clone();
         proof_path_no_bwt.push("sample_proof_no_bwt");
 
-        create_sample_naive_threshold_sig_circuit(0, &pk_path_no_bwt, &vk_path_no_bwt, &proof_path_no_bwt);
+        create_sample_naive_threshold_sig_circuit(0, pk_path_no_bwt.to_str().unwrap(), vk_path_no_bwt.to_str().unwrap(), proof_path_no_bwt.to_str().unwrap());
 
         println!("*************** Clean up **********************");
         std::fs::remove_file(pk_path).unwrap();
@@ -545,177 +447,5 @@ mod test {
         std::fs::remove_file(pk_path_no_bwt).unwrap();
         std::fs::remove_file(vk_path_no_bwt).unwrap();
         std::fs::remove_file(proof_path_no_bwt).unwrap();
-    }
-
-    #[test]
-    fn sample_calls_schnorr_sig_prove_verify(){
-        let mut rng = OsRng;
-        let msg = FieldElement::rand(&mut rng);
-        {
-            let msg_bytes = serialize_to_buffer(&msg, None).unwrap();
-            println!("msg bytes: {:?}", into_i8(msg_bytes.clone()));
-        }
-
-        let (pk, sk) = schnorr_generate_key(); //Keygen
-        assert_eq!(schnorr_get_public_key(&sk), pk); //Get pk
-        assert!(schnorr_verify_public_key(&pk)); //Verify pk
-
-        //Serialize/deserialize pk
-        let pk_serialized = serialize_to_buffer(&pk, Some(true)).unwrap();
-        assert_eq!(pk_serialized.len(), SCHNORR_PK_SIZE);
-        let pk_deserialized: SchnorrPk = deserialize_from_buffer(&pk_serialized, Some(true), Some(true)).unwrap();
-        assert_eq!(pk, pk_deserialized);
-
-        //Serialize/deserialize sk
-        let sk_serialized = serialize_to_buffer(&sk, None).unwrap();
-        assert_eq!(sk_serialized.len(), SCHNORR_SK_SIZE);
-        println!("sk bytes: {:?}", into_i8(sk_serialized.clone()));
-        let sk_deserialized = deserialize_from_buffer(&sk_serialized, None, None).unwrap();
-        assert_eq!(sk, sk_deserialized);
-
-        let sig = schnorr_sign(&msg, &sk, &pk).unwrap(); //Sign msg
-        assert!(is_valid(&sig));
-
-        //Serialize/deserialize sig
-        let sig_serialized = serialize_to_buffer(&sig, None).unwrap();
-        println!("sig bytes: {:?}", into_i8(sig_serialized.clone()));
-        assert_eq!(sig_serialized.len(), SCHNORR_SIG_SIZE);
-        let sig_deserialized = deserialize_from_buffer(&sig_serialized, Some(true), None).unwrap();
-        assert_eq!(sig, sig_deserialized);
-
-        assert!(schnorr_verify_signature(&msg, &pk, &sig).unwrap()); //Verify sig
-
-        //Negative case
-        let wrong_msg = FieldElement::rand(&mut rng);
-        assert!(!schnorr_verify_signature(&wrong_msg, &pk, &sig).unwrap());
-    }
-
-    #[test]
-    fn sample_calls_vrf_prove_verify(){
-        let mut rng = OsRng;
-        let msg = FieldElement::rand(&mut rng);
-        {
-            let msg_bytes = serialize_to_buffer(&msg, None).unwrap();
-            println!("msg bytes: {:?}", into_i8(msg_bytes.clone()));
-        }
-
-        let (pk, sk) = vrf_generate_key(); //Keygen
-        assert_eq!(vrf_get_public_key(&sk), pk); //Get pk
-        assert!(vrf_verify_public_key(&pk)); //Verify pk
-
-        //Serialize/deserialize pk
-        let pk_serialized = serialize_to_buffer(&pk, Some(true)).unwrap();
-        assert_eq!(pk_serialized.len(), VRF_PK_SIZE);
-        let pk_deserialized: VRFPk = deserialize_from_buffer(&pk_serialized, Some(true), Some(true)).unwrap();
-        assert_eq!(pk, pk_deserialized);
-
-        //Serialize/deserialize sk
-        let sk_serialized = serialize_to_buffer(&sk, None).unwrap();
-        assert_eq!(sk_serialized.len(), VRF_SK_SIZE);
-        println!("sk bytes: {:?}", into_i8(sk_serialized.clone()));
-        let sk_deserialized = deserialize_from_buffer(&sk_serialized, None, None).unwrap();
-        assert_eq!(sk, sk_deserialized);
-
-        let (vrf_proof, vrf_out) = vrf_prove(&msg, &sk, &pk).unwrap(); //Create vrf proof for msg
-        assert!(is_valid(&vrf_proof));
-
-        //Serialize/deserialize vrf proof
-        let proof_serialized = serialize_to_buffer(&vrf_proof, Some(true)).unwrap();
-        assert_eq!(proof_serialized.len(), VRF_PROOF_SIZE);
-        println!("proof bytes: {:?}", into_i8(proof_serialized.clone()));
-        let proof_deserialized = deserialize_from_buffer(&proof_serialized, Some(true), Some(true)).unwrap();
-        assert_eq!(vrf_proof, proof_deserialized);
-
-        //Serialize/deserialize vrf out (i.e. a field element)
-        let vrf_out_serialized = serialize_to_buffer(&vrf_out, None).unwrap();
-        println!("vrf out bytes: {:?}", into_i8(vrf_out_serialized.clone()));
-        let vrf_out_deserialized = deserialize_from_buffer(&vrf_out_serialized, None, None).unwrap();
-        assert_eq!(vrf_out, vrf_out_deserialized);
-
-        let vrf_out_dup = vrf_proof_to_hash(&msg, &pk, &vrf_proof).unwrap(); //Verify vrf proof and get vrf out for msg
-        assert_eq!(vrf_out, vrf_out_dup);
-
-        //Negative case
-        let wrong_msg = FieldElement::rand(&mut rng);
-        assert!(vrf_proof_to_hash(&wrong_msg, &pk, &vrf_proof).is_err());
-    }
-
-    #[test]
-    fn sample_calls_merkle_path() {
-        let height = 6;
-        let leaves_num = 2usize.pow(height as u32);
-
-        // Get GingerMHT
-        let mut mht = new_ginger_mht(height, leaves_num).unwrap();
-
-        // Add leaves
-        let mut mht_leaves = Vec::with_capacity(leaves_num);
-        for i in 0..leaves_num/2 {
-            let leaf = get_random_field_element(i as u64);
-            mht_leaves.push(leaf);
-            append_leaf_to_ginger_mht(&mut mht, &leaf).unwrap();
-        }
-        for _ in leaves_num/2..leaves_num {
-            mht_leaves.push(FieldElement::zero());
-        }
-
-        // Compute the root
-        finalize_ginger_mht_in_place(&mut mht).unwrap();
-        let mht_root = get_ginger_mht_root(&mht).expect("Tree must've been finalized");
-
-        for i in 0..leaves_num {
-
-            //Create and verify merkle paths for each leaf
-            let path = get_ginger_mht_path(&mht, i as u64).unwrap();
-            assert!(verify_ginger_merkle_path_without_length_check(&path,&mht_leaves[i], &mht_root));
-
-            // Check leaf index is the correct one
-            assert_eq!(i as u64, get_leaf_index_from_path(&path));
-
-            if i == 0 { // leftmost check
-                assert!(is_path_leftmost(&path));
-            }
-            else if i == (leaves_num / 2) - 1 { // non-empty rightmost check
-                assert!(are_right_leaves_empty(&path));
-            }
-            else if i == leaves_num - 1 { //rightmost check
-                assert!(is_path_rightmost(&path));
-            }
-            else { // Other cases check
-                assert!(!is_path_leftmost(&path));
-                assert!(!is_path_rightmost(&path));
-
-                if i < (leaves_num / 2) - 1 {
-                    assert!(!are_right_leaves_empty(&path));
-                }
-            }
-
-            // Serialization/deserialization test
-            let path_serialized = serialize_to_buffer(&path, None).unwrap();
-            let path_deserialized: GingerMHTPath = deserialize_from_buffer(&path_serialized, Some(true), None).unwrap();
-            assert_eq!(path, path_deserialized);
-        }
-    }
-
-    #[test]
-    fn sample_calls_poseidon_hash(){
-        let mut rng = OsRng;
-        let hash_input = vec![FieldElement::rand(&mut rng); 2];
-        let mut h = get_poseidon_hash_variable_length(false, None);
-
-        //Compute poseidon hash
-        update_poseidon_hash(&mut h, &hash_input[0]);
-        update_poseidon_hash(&mut h, &hash_input[1]);
-        let h_output = finalize_poseidon_hash(&h).unwrap();
-
-        //Call to finalize keeps the state
-        reset_poseidon_hash(&mut h, None);
-        update_poseidon_hash(&mut h, &hash_input[0]);
-        finalize_poseidon_hash(&h).unwrap(); //Call to finalize() keeps the state
-        update_poseidon_hash(&mut h, &hash_input[1]);
-        assert_eq!(h_output, finalize_poseidon_hash(&h).unwrap());
-
-        //finalize() is idempotent
-        assert_eq!(h_output, finalize_poseidon_hash(&h).unwrap());
     }
 }

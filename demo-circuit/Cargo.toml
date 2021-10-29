@@ -6,13 +6,14 @@ edition = "2018"
 include = ["Cargo.toml", "src"]
 
 [dependencies]
-algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "sc_testnet_2"}
-primitives = {version = "0.1.0", features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "sc_testnet_2"}
-r1cs-crypto = {version = "0.1.0", features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "sc_testnet_2"}
-r1cs-core = {version = "0.1.0", git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "sc_testnet_2"}
-r1cs-std = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "sc_testnet_2"}
+algebra = { git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development" }
+primitives = { features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+r1cs-crypto = { features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+r1cs-core = { git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+r1cs-std = { features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+type-mappings = { features = ["tweedle", "darlin"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "feat/concrete_instantiations" }
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "sc_testnet_2" }
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "sync_with_ginger/concrete_types_with_macros" }
 
 derivative = "2.2.0"
 lazy_static = "1"

@@ -1,19 +1,17 @@
 package com.horizen.commitmenttree;
 
-import org.junit.Ignore;
 import org.junit.Test;
 import static org.junit.Assert.*;
-import com.horizen.commitmenttree.CommitmentTree;
 import com.horizen.sigproofnative.BackwardTransfer;
-import com.horizen.librustsidechains.FieldElement;
+import com.horizen.common.librustsidechains.FieldElement;
+import com.horizen.common.librustsidechains.FieldElementException;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 
 public class CommitmentTreeTest {
-    private byte[] generateFieldElementBytes() {
+    private byte[] generateFieldElementBytes() throws FieldElementException {
         try (FieldElement tmp = FieldElement.createRandom()) {
             return tmp.serializeFieldElement();
         }
@@ -32,7 +30,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void addScCreation() {
+    public void addScCreation() throws FieldElementException {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -111,7 +109,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void addForwardTransfer() {
+    public void addForwardTransfer() throws FieldElementException {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -131,7 +129,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void addBackwardTransfer() {
+    public void addBackwardTransfer() throws FieldElementException {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -151,7 +149,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void addBackwardTransferWithEmptyRequestData() {
+    public void addBackwardTransferWithEmptyRequestData() throws FieldElementException {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -170,7 +168,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void addCeasedSidechainWithdrawal() {
+    public void addCeasedSidechainWithdrawal() throws FieldElementException {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -188,7 +186,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void addCertificate() {
+    public void addCertificate() throws FieldElementException {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -231,7 +229,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void addCertificateLeaf() {
+    public void addCertificateLeaf() throws FieldElementException {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -259,7 +257,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void existenceProofTest() {
+    public void existenceProofTest() throws FieldElementException {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -294,7 +292,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void existenceProofSerializationTest() {
+    public void existenceProofSerializationTest() throws FieldElementException {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -330,7 +328,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void absenceProofTest() {
+    public void absenceProofTest() throws FieldElementException {
         CommitmentTree commTree = CommitmentTree.init();
         byte[][] scId = new byte[5][];
 
@@ -399,7 +397,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void absenceProofSerializationTest() {
+    public void absenceProofSerializationTest() throws FieldElementException {
         CommitmentTree commTree = CommitmentTree.init();
         byte[][] scId = new byte[3][];
 
