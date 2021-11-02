@@ -6,9 +6,7 @@
     clippy::not_unsafe_ptr_arg_deref
 )]
 
-use type_mappings::{
-    macros::*, instantiated::tweedle::*,
-};
+use type_mappings::{instantiated::tweedle::*, macros::*};
 
 mod cctp_calls;
 mod rust_jni;
