@@ -12,3 +12,6 @@ pub const NULL_PK_PERSONALIZATION: &'static [u8; 8]
 /// BLAKE2s Personalization for Group hash generators used for VRF.
 pub const VRF_GROUP_HASH_GENERATORS_PERSONALIZATION: &'static [u8; 8]
 = b"ZenVrfPH";
+
+// TODO: define the correct max value
+pub const CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER: usize = 100;

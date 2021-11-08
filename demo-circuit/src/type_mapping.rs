@@ -1,11 +1,11 @@
 pub use cctp_primitives::type_mapping::*;
-use primitives::{
-    crh::bowe_hopwood::BoweHopwoodPedersenCRH,
-    signature::{
+use primitives::{FieldBasedBinaryMHTPath, crh::bowe_hopwood::BoweHopwoodPedersenCRH, signature::{
     schnorr::field_based_schnorr::{
         FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature,
     },
 }, vrf::ecvrf::*};
+use r1cs_crypto::{TweedleFrPoseidonHashGadget, field_based_mht::FieldBasedBinaryMerkleTreePathGadget};
+use r1cs_std::fields::fp::FpGadget;
 use crate::constants::VRFWindow;
 
 pub const SCHNORR_PK_SIZE: usize = GROUP_COMPRESSED_SIZE;
@@ -29,3 +29,8 @@ pub type VRFScheme = FieldBasedEcVrf<FieldElement, G2Projective, FieldHash, Grou
 pub type VRFProof = FieldBasedEcVrfProof<FieldElement, G2Projective>;
 pub type VRFPk = G2;
 pub type VRFSk = ScalarFieldElement;
+pub type FieldElementGadget = FpGadget<FieldElement>;
+pub type FieldHashGadget = TweedleFrPoseidonHashGadget;
+pub type GingerMHTBinaryPath = FieldBasedBinaryMHTPath<GingerMHTParams>;
+pub type GingerMHTBinaryGadget =
+    FieldBasedBinaryMerkleTreePathGadget<GingerMHTParams, FieldHashGadget, FieldElement>;
