@@ -320,7 +320,7 @@ pub struct CswProverDataGadget {
     // witnesses [START]
     last_wcert_g: WithdrawalCertificateDataGadget,
     input_g: CswUtxoInputDataGadget,
-    mst_path_to_output_g: FieldElementGadget,
+    mst_path_to_output_g: GingerMHTBinaryGadget,
     ft_input_g: CswFtInputDataGadget,
     ft_input_secret_key_g: Vec<UInt8>,
     mcb_sc_txs_com_start_g: FieldElementGadget,
@@ -341,7 +341,7 @@ impl CswProverDataGadget {
     pub fn get_receiver_g(&self) -> &Vec::<UInt8> { &self.receiver_g }
     pub fn get_last_wcert_g(&self) -> &WithdrawalCertificateDataGadget { &self.last_wcert_g }
     pub fn get_input_g(&self) -> &CswUtxoInputDataGadget { &self.input_g }
-    pub fn get_mst_path_to_output_g(&self) -> &FieldElementGadget { &self.mst_path_to_output_g }
+    pub fn get_mst_path_to_output_g(&self) -> &GingerMHTBinaryGadget { &self.mst_path_to_output_g }
     pub fn get_ft_input_g(&self) -> &CswFtInputDataGadget { &self.ft_input_g }
     pub fn get_ft_input_secret_key_g(&self) -> &Vec<UInt8> { &self.ft_input_secret_key_g }
     pub fn get_mcb_sc_txs_com_start_g(&self) -> &FieldElementGadget { &self.mcb_sc_txs_com_start_g }
@@ -399,9 +399,9 @@ impl FromGadget<CswProverData, FieldElement> for CswProverDataGadget where {
             || Ok(data.input.clone())
         )?;
 
-        let mst_path_to_output_g = FieldElementGadget::alloc(
+        let mst_path_to_output_g = GingerMHTBinaryGadget::alloc(
             cs.ns(|| "alloc mst path to output"),
-            || Ok(data.mst_path_to_output)
+            || Ok(data.mst_path_to_output.clone())
         )?;
 
         let ft_input_g = CswFtInputDataGadget::alloc(
@@ -439,9 +439,10 @@ impl FromGadget<CswProverData, FieldElement> for CswProverDataGadget where {
             || Ok(data.wcert_tree_root)
         )?;
 
+        assert!(data.sc_txs_com_hashes.len() == CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER);
         let mut sc_txs_com_hashes_g = Vec::with_capacity(CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER);
 
-        for index in 0..CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER {
+        for index in 0..data.sc_txs_com_hashes.len() {
             let sc_txs_com_hash_g = FieldElementGadget::alloc(
                 cs.ns(|| format!("alloc sc txs com hash {}", index)),
                 || Ok(data.sc_txs_com_hashes[index])

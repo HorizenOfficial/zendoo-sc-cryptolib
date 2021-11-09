@@ -39,7 +39,7 @@ pub struct CswFtInputData {
     pub receiver_pub_key: [u8; 32],
     pub payback_addr_data_hash: FieldElement,
     pub tx_hash: FieldElement,
-    pub out_idx: FieldElement,
+    pub out_idx: FieldElement
 }
 
 #[derive(Clone)]
@@ -62,7 +62,7 @@ pub struct CswProverData {
 
     // either `input` or `ft_input` must be non NULL
     pub input: CswUtxoInputData,                        // unspent output we are trying to withdraw
-    pub mst_path_to_output: FieldElement,               // path to output in the MST of the known state
+    pub mst_path_to_output: GingerMHTBinaryPath,        // path to output in the MST of the known state
     pub ft_input: CswFtInputData,                       // FT output in the MC block
     pub ft_input_secret_key: [u8; 32],                  // secret key that authorizes ft_input spending
     pub mcb_sc_txs_com_start: FieldElement,             // Cumulative ScTxsCommittment taken from the last MC block of the last confirmed (not reverted) epoch
@@ -70,7 +70,7 @@ pub struct CswProverData {
     pub ft_tree_path: GingerMHTBinaryPath,              // path to the ft_input_hash in the FT Merkle tree included in ScTxsComm tree
     pub scb_btr_tree_root: FieldElement,                // root hash of the BTR tree included in ScTxsComm tree
     pub wcert_tree_root: FieldElement,                  // root hash of the Wcert tree included in ScTxsComm tree
-    pub sc_txs_com_hashes: Vec<FieldElement>,           // contains all ScTxsComm cumulative hashes on the way from `mcb_sc_txs_com_start` to `mcb_sc_txs_com_end` 
+    pub sc_txs_com_hashes: Vec<FieldElement>            // contains all ScTxsComm cumulative hashes on the way from `mcb_sc_txs_com_start` to `mcb_sc_txs_com_end` 
                                                         // RANGE_SIZE is a number of blocks between `mcb_sc_txs_com_start` and `mcb_sc_txs_com_end`. 
                                                         // It seems it can be a constant as the number of blocks between the last confirmed block and SC ceasing block should be fixed for a particular sidechain
     // witnesses [END]
