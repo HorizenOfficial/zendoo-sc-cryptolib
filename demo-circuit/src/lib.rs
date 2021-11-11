@@ -46,6 +46,7 @@ pub mod pgd_csw;
 pub use self::pgd_csw::*;
 
 
+use algebra::SerializationError;
 use r1cs_core::ConstraintSynthesizer;
 use cctp_primitives::{
     proving_system::{
@@ -57,6 +58,23 @@ use cctp_primitives::{
     utils::serialization::write_to_file,
 };
 use std::path::Path;
+
+//Will return error if buffer.len > FIELD_SIZE. If buffer.len < FIELD_SIZE, padding 0s will be added
+pub fn read_field_element_from_buffer_with_padding(
+    buffer: &[u8],
+) -> Result<FieldElement, SerializationError> {
+    let buff_len = buffer.len();
+
+    //Pad to reach field element size
+    let mut new_buffer = Vec::new();
+    new_buffer.extend_from_slice(buffer);
+
+    for _ in buff_len..FIELD_SIZE {
+        new_buffer.push(0u8)
+    } //Add padding zeros to reach field size
+
+    algebra::serialize::CanonicalDeserialize::deserialize(new_buffer.as_slice())
+}
 
 /// Utility function: generate and save to specified paths the SNARK proving and
 /// verification key associated to circuit `circ`. Check that their sizes are

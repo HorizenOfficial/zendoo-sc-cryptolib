@@ -1,7 +1,7 @@
 use std::borrow::Borrow;
 
 use cctp_primitives::type_mapping::FieldElement;
-use r1cs_core::{ConstraintSystem, SynthesisError};
+use r1cs_core::{ConstraintSystemAbstract, SynthesisError};
 use r1cs_std::{FromGadget, prelude::{AllocGadget, UInt8}};
 
 use crate::{CswFtInputData, CswProverData, CswUtxoInputData, FieldElementGadget, GingerMHTBinaryGadget, WithdrawalCertificateData, constants::constants::CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER};
@@ -29,7 +29,7 @@ impl WithdrawalCertificateDataGadget {
 }
 
 impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertificateDataGadget {
-    fn alloc<F, T, CS: ConstraintSystem<FieldElement>>(mut cs: CS, f: F) -> Result<Self, SynthesisError>
+    fn alloc<F, T, CS: ConstraintSystemAbstract<FieldElement>>(mut cs: CS, f: F) -> Result<Self, SynthesisError>
         where
         F: FnOnce() -> Result<T, SynthesisError>,
         T: Borrow<WithdrawalCertificateData> {
@@ -120,7 +120,7 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
             Ok(new_instance)
     }
 
-    fn alloc_input<F, T, CS: ConstraintSystem<FieldElement>>(_cs: CS, _f: F) -> Result<Self, SynthesisError>
+    fn alloc_input<F, T, CS: ConstraintSystemAbstract<FieldElement>>(_cs: CS, _f: F) -> Result<Self, SynthesisError>
         where
         F: FnOnce() -> Result<T, SynthesisError>,
         T: Borrow<WithdrawalCertificateData> {
@@ -145,7 +145,7 @@ impl CswUtxoInputDataGadget {
 }
 
 impl AllocGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
-    fn alloc<F, T, CS: ConstraintSystem<FieldElement>>(mut cs: CS, f: F) -> Result<Self, SynthesisError>
+    fn alloc<F, T, CS: ConstraintSystemAbstract<FieldElement>>(mut cs: CS, f: F) -> Result<Self, SynthesisError>
         where
         F: FnOnce() -> Result<T, SynthesisError>,
         T: Borrow<CswUtxoInputData> {
@@ -209,7 +209,7 @@ impl AllocGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
             Ok(new_instance)
     }
 
-    fn alloc_input<F, T, CS: ConstraintSystem<FieldElement>>(_cs: CS, _f: F) -> Result<Self, SynthesisError>
+    fn alloc_input<F, T, CS: ConstraintSystemAbstract<FieldElement>>(_cs: CS, _f: F) -> Result<Self, SynthesisError>
         where
         F: FnOnce() -> Result<T, SynthesisError>,
         T: Borrow<CswUtxoInputData> {
@@ -234,7 +234,7 @@ impl CswFtInputDataGadget {
 }
 
 impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
-    fn alloc<F, T, CS: ConstraintSystem<FieldElement>>(mut cs: CS, f: F) -> Result<Self, SynthesisError>
+    fn alloc<F, T, CS: ConstraintSystemAbstract<FieldElement>>(mut cs: CS, f: F) -> Result<Self, SynthesisError>
         where
         F: FnOnce() -> Result<T, SynthesisError>,
         T: Borrow<CswFtInputData> {
@@ -298,7 +298,7 @@ impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
             Ok(new_instance)
     }
 
-    fn alloc_input<F, T, CS: ConstraintSystem<FieldElement>>(_cs: CS, _f: F) -> Result<Self, SynthesisError>
+    fn alloc_input<F, T, CS: ConstraintSystemAbstract<FieldElement>>(_cs: CS, _f: F) -> Result<Self, SynthesisError>
         where
         F: FnOnce() -> Result<T, SynthesisError>,
         T: Borrow<CswFtInputData> {
@@ -314,7 +314,7 @@ pub struct CswProverDataGadget {
     sc_last_wcert_hash_g: FieldElementGadget,
     amount_g: FieldElementGadget,
     nullifier_g: FieldElementGadget,
-    receiver_g: Vec<UInt8>,
+    receiver_g: FieldElementGadget,
     // public inputs [END]
 
     // witnesses [START]
@@ -338,7 +338,7 @@ impl CswProverDataGadget {
     pub fn get_sc_last_wcert_hash_g(&self) -> &FieldElementGadget { &self.sc_last_wcert_hash_g }
     pub fn get_amount_g(&self) -> &FieldElementGadget { &self.amount_g }
     pub fn get_nullifier_g(&self) -> &FieldElementGadget { &self.nullifier_g }
-    pub fn get_receiver_g(&self) -> &Vec::<UInt8> { &self.receiver_g }
+    pub fn get_receiver_g(&self) -> &FieldElementGadget { &self.receiver_g }
     pub fn get_last_wcert_g(&self) -> &WithdrawalCertificateDataGadget { &self.last_wcert_g }
     pub fn get_input_g(&self) -> &CswUtxoInputDataGadget { &self.input_g }
     pub fn get_mst_path_to_output_g(&self) -> &GingerMHTBinaryGadget { &self.mst_path_to_output_g }
@@ -354,7 +354,7 @@ impl CswProverDataGadget {
 
 impl FromGadget<CswProverData, FieldElement> for CswProverDataGadget where {
 
-    fn from<CS: ConstraintSystem<FieldElement>>(
+    fn from<CS: ConstraintSystemAbstract<FieldElement>>(
         data: CswProverData,
         mut cs: CS,
     ) -> Result<Self, SynthesisError> {
@@ -384,7 +384,7 @@ impl FromGadget<CswProverData, FieldElement> for CswProverDataGadget where {
             || Ok(data.nullifier)
         )?;
 
-        let receiver_g = Vec::<UInt8>::alloc_input(
+        let receiver_g = FieldElementGadget::alloc_input(
             cs.ns(|| "alloc receiver"),
             || Ok(data.receiver)
         )?;

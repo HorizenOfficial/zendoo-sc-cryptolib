@@ -1,4 +1,4 @@
-use cctp_primitives::type_mapping::{FieldElement, MC_PK_SIZE};
+use cctp_primitives::type_mapping::FieldElement;
 
 use crate::GingerMHTBinaryPath;
 
@@ -52,7 +52,7 @@ pub struct CswProverData {
     pub sc_last_wcert_hash: FieldElement,   // hash of the last confirmed WCert (excluding reverted) for this sidechain (calculated directly by MC). Note that it should be a hash of WithdrawalCertificateData
     pub amount: FieldElement,               // taken from CSW and passed directly by the MC
     pub nullifier: FieldElement,            // taken from CSW and passed directly by the MC
-    pub receiver: [u8; MC_PK_SIZE],         // the receiver is fixed by the proof, otherwise someone will be able to front-run the tx and steel the proof. Note that we actually don't need to do anything with the receiver in the circuit, it's enough just to have it as a public input
+    pub receiver: FieldElement,             // the receiver is fixed by the proof, otherwise someone will be able to front-run the tx and steel the proof. Note that we actually don't need to do anything with the receiver in the circuit, it's enough just to have it as a public input
     // sys_data [END]
 
     // public inputs [END]

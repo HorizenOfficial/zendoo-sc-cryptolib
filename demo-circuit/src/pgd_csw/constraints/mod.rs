@@ -1,5 +1,5 @@
 use cctp_primitives::type_mapping::FieldElement;
-use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
+use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 use r1cs_crypto::FieldBasedHashGadget;
 use r1cs_std::{FromGadget, prelude::EqGadget};
 
@@ -21,7 +21,7 @@ impl CeasedSidechainWithdrawalCircuit {
 }
 
 impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
-    fn generate_constraints<CS: ConstraintSystem<FieldElement>>(
+    fn generate_constraints<CS: ConstraintSystemAbstract<FieldElement>>(
         self,
         cs: &mut CS
     ) -> Result<(), SynthesisError> {
@@ -58,9 +58,12 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 
 #[cfg(test)]
 mod test {
-    use cctp_primitives::{proving_system::init::{get_g1_committer_key, load_g1_committer_key}, type_mapping::{CoboundaryMarlin, FieldElement, MC_PK_SIZE}};
+    use std::ops::AddAssign;
 
-    use crate::{CswFtInputData, CswProverData, CswUtxoInputData, GingerMHTBinaryPath, WithdrawalCertificateData, constants::constants::CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER};
+    use cctp_primitives::{proving_system::init::{get_g1_committer_key, load_g1_committer_key}, type_mapping::{CoboundaryMarlin, FieldElement, MC_PK_SIZE}, utils::poseidon_hash::{finalize_poseidon_hash, get_poseidon_hash_constant_length, update_poseidon_hash}};
+    use r1cs_core::debug_circuit;
+
+    use crate::{CswFtInputData, CswProverData, CswUtxoInputData, GingerMHTBinaryPath, WithdrawalCertificateData, constants::constants::CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER, read_field_element_from_buffer_with_padding};
 
     use super::CeasedSidechainWithdrawalCircuit;
 
@@ -76,6 +79,19 @@ mod test {
             scb_new_mst_root: FieldElement::from(8u8)
         };
 
+        let mut poseidon_hash = get_poseidon_hash_constant_length(8, None);
+
+        update_poseidon_hash(&mut poseidon_hash, &cert_data.ledger_id);
+        update_poseidon_hash(&mut poseidon_hash, &cert_data.epoch_id);
+        update_poseidon_hash(&mut poseidon_hash, &cert_data.bt_list_hash);
+        update_poseidon_hash(&mut poseidon_hash, &cert_data.quality);
+        update_poseidon_hash(&mut poseidon_hash, &cert_data.mcb_sc_txs_com);
+        update_poseidon_hash(&mut poseidon_hash, &cert_data.ft_min_fee);
+        update_poseidon_hash(&mut poseidon_hash, &cert_data.btr_min_fee);
+        update_poseidon_hash(&mut poseidon_hash, &cert_data.scb_new_mst_root);
+
+        let computed_last_wcert_hash = finalize_poseidon_hash(&mut poseidon_hash).unwrap();
+
         let utxo_input_data = CswUtxoInputData {
             spending_pub_key: [9 ; 32],
             amount: FieldElement::from(10u8),
@@ -87,10 +103,10 @@ mod test {
         let csw_prover_data = CswProverData {
             genesis_constant: FieldElement::from(14u8),
             mcb_sc_txs_com_end: FieldElement::from(15u8),
-            sc_last_wcert_hash: FieldElement::from(16u8),
+            sc_last_wcert_hash: computed_last_wcert_hash,
             amount: FieldElement::from(17u8),
             nullifier: FieldElement::from(18u8),
-            receiver: [19 ; MC_PK_SIZE],
+            receiver: read_field_element_from_buffer_with_padding(&[19 ; MC_PK_SIZE]).unwrap(),
             last_wcert: cert_data,
             input: utxo_input_data,
             mst_path_to_output: GingerMHTBinaryPath::default(),
@@ -110,7 +126,11 @@ mod test {
     #[test]
     fn test_csw_circuit() {
         let csw_prover_data = generate_test_csw_prover_data();
-        let circuit = CeasedSidechainWithdrawalCircuit::new(csw_prover_data);
+        let circuit = CeasedSidechainWithdrawalCircuit::new(csw_prover_data.clone());
+
+        let failing_constraint = debug_circuit(circuit.clone()).unwrap();
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint.is_none());
 
         load_g1_committer_key(1 << 17,1 << 15).unwrap();
         let ck_g1 = get_g1_committer_key().unwrap();
@@ -120,7 +140,21 @@ mod test {
             &params.0.clone(), ck_g1.as_ref().unwrap(), circuit, false, None
         ).unwrap();
 
-        let public_inputs = Vec::new();
+        let mut public_inputs = vec![
+            csw_prover_data.genesis_constant,
+            csw_prover_data.mcb_sc_txs_com_end,
+            csw_prover_data.sc_last_wcert_hash,
+            csw_prover_data.amount,
+            csw_prover_data.nullifier,
+            csw_prover_data.receiver,
+            csw_prover_data.last_wcert.scb_new_mst_root
+        ];
+
+        // Check that the proof gets correctly verified
         assert!(CoboundaryMarlin::verify(&params.1.clone(), ck_g1.as_ref().unwrap(), public_inputs.as_slice(), &proof).unwrap());
+
+        // Change one public input and check that the proof fails
+        public_inputs[0].add_assign(&FieldElement::from(1u8));
+        assert!(!CoboundaryMarlin::verify(&params.1.clone(), ck_g1.as_ref().unwrap(), public_inputs.as_slice(), &proof).unwrap());
     }
 }
