@@ -1,10 +1,10 @@
-
 <h1 align="center">zendoo-sc-cryptolib</h1>
 <p align="center">
-    <a href="AUTHORS"><img src="https://avatars.githubusercontent.com/u/29291571?s=20&v=4",style="width: 5vw"></a>
-    <a href="https://app.travis-ci.com/HorizenOfficial/zendoo-sc-cryptolib?branch=master"><img src="https://app.travis-ci.com/HorizenOfficial/zendoo-sc-cryptolib.svg?branch=master"></a>
-   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-   <a href="http://makeapullrequest.com"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square"></a>
+    <a href= "https://github.com/HorizenOfficial/zendoo-sc-cryptolib/releases"><img src="https://img.shields.io/github/release/HorizenOfficial/zendoo-sc-cryptolib.svg"></a>
+    <a href="AUTHORS"><img src="https://img.shields.io/github/contributors/HorizenOfficial/zendoo-sc-cryptolib.svg?"></a>
+    <a href="https://travis-ci.com/github/HorizenOfficial/zendoo-sc-cryptolib"><img src="https://app.travis-ci.com/HorizenOfficial/zendoo-sc-cryptolib.svg?branch=master"></a>
+    <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+    <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square"></a>
 </p>
 
 `zendoo-sc-cryptolib` is a Rust crate that exposes to Java, through JNI, the [ginger-lib](https://github.com/HorizenOfficial/ginger-lib) components needed by the [Zendoo](https://eprint.iacr.org/2020/123.pdf "Zendoo") sidechain SDK.
@@ -45,48 +45,8 @@ git clone https://github.com/HorizenOfficial/zendoo-sc-cryptolib.git
 cd zendoo-sc-cryptolib
 cargo build --release
 ```
-
 This library comes with unit tests for each of the provided crates. Run the tests with:
 ```bash
 cargo test
 ``` 
-
-## Java Jar build guide
-
-To be able to build the Java Jar package you can use the `build_jar.sh` script in `ci` folder.
-Requirements:
-1. Build on Linux (Ubuntu 18.04+, for example) with a cross compilation of a native Rust code for windows target as well.
-2. Install `rust` and `cargo` following the [official guide](https://www.rust-lang.org/tools/install). Restart the OS if needed.
-3. Add windows target support for `cargo`:
-    ```
-    rustup target add x86_64-pc-windows-gnu
-    rustup toolchain install stable-x86_64-pc-windows-gnu
-    ```
-4. Install maven, openjdk, clang, llvm, mingw:
-    ```
-    sudo apt-get install clang llvm maven gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
-    ```
-5. Configure `mingw` to be able to cross compile the windows target of cryptolib dependencies:
-    ```
-    update-alternatives --install /usr/bin/x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix 100
-    update-alternatives --install /usr/bin/x86_64-w64-mingw32-g++ x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix 100
-    ``` 
-6. Run `./ci/build_jar.sh`
-
-
-## Contributing
-
-Contributions are welcomed! Bug fixes and new features can be initiated through GitHub pull requests. In order to speed up the code review process, please adhere to the following guidelines:
-
-* Follow Horizen repositories' *code of conduct*
-* Follow Horizen repositories' *styling guide* 
-* Please gpg sign your commits 
-* Please make sure you push your pull requests to the development branch
-
-## License
-
-The code is licensed under the following license:
-
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-Unless you explicitly state otherwise, any contribution submitted for inclusion in ginger-lib by you shall be licensed as above, without any additional terms or conditions.  
+More detailed build guide, as well as instructions to build the .jar, can be found in in our [build guide](BUILD.md).
