@@ -1,16 +1,22 @@
 package com.horizen.librustsidechains;
 
-public class FieldElement {
+import java.util.Random;
 
-    public static int FIELD_ELEMENT_LENGTH = 96;
+public class FieldElement implements AutoCloseable {
+
+    public static final int FIELD_ELEMENT_LENGTH;
 
     private long fieldElementPointer;
 
+    private static native int nativeGetFieldElementSize();
+
     static {
         Library.load();
+        FIELD_ELEMENT_LENGTH = nativeGetFieldElementSize();
     }
 
-    private FieldElement(long fieldElementPointer) {
+    // Declared protected for testing purposes
+    protected FieldElement(long fieldElementPointer) {
         this.fieldElementPointer = fieldElementPointer;
     }
 
@@ -20,19 +26,25 @@ public class FieldElement {
         return nativeCreateFromLong(value);
     }
 
-    private static native FieldElement nativeCreateRandom();
+    private static native FieldElement nativeCreateRandom(long seed);
 
-    public static FieldElement createRandom() { return nativeCreateRandom(); }
+    /*  NOTE: This function relies on a non-cryptographically safe RNG, therefore it
+     *  must be used ONLY for testing purposes
+     */
+    public static FieldElement createRandom(long seed) { return nativeCreateRandom(seed); }
 
-    private static native int nativeGetFieldElementSize();
+    public static FieldElement createRandom() {
+        long seed = new Random().nextLong();
+        return nativeCreateRandom(seed);
+    }
 
-    public static int getFieldElementSize() {return  nativeGetFieldElementSize();}
+    // Declared protected for testing purposes
+    protected native byte[] nativeSerializeFieldElement();
 
-    private native byte[] nativeSerializeFieldElement();
 
     public byte[] serializeFieldElement() {
         if (fieldElementPointer == 0)
-            throw new IllegalArgumentException("Field element was freed.");
+            throw new IllegalStateException("Field element was freed.");
 
         return nativeSerializeFieldElement();
     }
@@ -45,6 +57,15 @@ public class FieldElement {
                     FIELD_ELEMENT_LENGTH, fieldElementBytes.length));
 
         return nativeDeserializeFieldElement(fieldElementBytes);
+    }
+
+    // Declared protected for testing purposes
+    protected native void nativePrintFieldElementBytes();
+
+    public void printFieldElementBytes() {
+        if (fieldElementPointer == 0)
+            throw new IllegalStateException("Field element was freed.");
+        nativePrintFieldElementBytes();
     }
 
     private static native void nativeFreeFieldElement(long fieldElementPointer);
@@ -70,5 +91,10 @@ public class FieldElement {
         }
 
         return nativeEquals((FieldElement) o);
+    }
+
+    @Override
+    public void close() {
+        freeFieldElement();
     }
 }

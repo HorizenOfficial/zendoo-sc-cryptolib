@@ -2,14 +2,17 @@ package com.horizen.vrfnative;
 
 import com.horizen.librustsidechains.Library;
 
-public class VRFSecretKey
+public class VRFSecretKey implements AutoCloseable
 {
-    public static final int SECRET_KEY_LENGTH = 96;
+    public static final int SECRET_KEY_LENGTH;
 
     private long secretKeyPointer;
 
+    private static native int nativeGetSecretKeySize();
+
     static {
         Library.load();
+        SECRET_KEY_LENGTH = nativeGetSecretKeySize();
     }
 
     private VRFSecretKey(long secretKeyPointer) {
@@ -17,8 +20,6 @@ public class VRFSecretKey
             throw new IllegalArgumentException("Secret key pointer must be not null.");
         this.secretKeyPointer = secretKeyPointer;
     }
-
-    private static native int nativeGetSecretKeySize();
 
     private static native VRFSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
 
@@ -31,9 +32,10 @@ public class VRFSecretKey
 
     private native byte[] nativeSerializeSecretKey();
 
+
     public byte[] serializeSecretKey() {
         if (secretKeyPointer == 0)
-            throw new IllegalArgumentException("Secret key was freed.");
+            throw new IllegalStateException("Secret key was freed.");
 
         return nativeSerializeSecretKey();
     }
@@ -51,8 +53,13 @@ public class VRFSecretKey
 
     public VRFPublicKey getPublicKey() {
         if (secretKeyPointer == 0)
-            throw new IllegalArgumentException("Secret key was freed.");
+            throw new IllegalStateException("Secret key was freed.");
 
         return nativeGetPublicKey();
+    }
+
+    @Override
+    public void close() throws Exception {
+        freeSecretKey();
     }
 }

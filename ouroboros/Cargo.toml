@@ -1,11 +1,14 @@
 [package]
 name = "ouroboros"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["DanieleDiBenedetto <daniele@horizenlabs.io>"]
 edition = "2018"
 
 [dependencies]
-algebra = { git = "https://github.com/HorizenOfficial/ginger-lib.git",  tag = "0.2.0"}
-primitives = { features = ["vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git",  tag = "0.2.0"}
+algebra = { git = "https://github.com/HorizenOfficial/ginger-lib.git",  tag = "0.3.0"}
+primitives = { features = ["vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git",  tag = "0.3.0"}
 rand = { version = "0.7" }
 
+[features]
+default = [ "asm" ]
+asm = [ "algebra/llvm_asm" ]

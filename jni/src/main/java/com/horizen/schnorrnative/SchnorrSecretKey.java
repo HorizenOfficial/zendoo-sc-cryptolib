@@ -2,16 +2,16 @@ package com.horizen.schnorrnative;
 
 import com.horizen.librustsidechains.Library;
 
-import java.util.Arrays;
-
-public class SchnorrSecretKey
+public class SchnorrSecretKey implements AutoCloseable
 {
-    public static final int SECRET_KEY_LENGTH = 96;
+    public static final int SECRET_KEY_LENGTH;
 
     private long secretKeyPointer;
 
+    private static native int nativeGetSecretKeySize();
     static {
         Library.load();
+        SECRET_KEY_LENGTH = nativeGetSecretKeySize();
     }
 
     private SchnorrSecretKey(long secretKeyPointer) {
@@ -19,8 +19,6 @@ public class SchnorrSecretKey
             throw new IllegalArgumentException("Secret key pointer must be not null.");
         this.secretKeyPointer = secretKeyPointer;
     }
-
-    private static native int nativeGetSecretKeySize();
 
     private static native SchnorrSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
 
@@ -33,9 +31,10 @@ public class SchnorrSecretKey
 
     private native byte[] nativeSerializeSecretKey();
 
+
     public byte[] serializeSecretKey() {
         if (secretKeyPointer == 0)
-            throw new IllegalArgumentException("Secret key was freed.");
+            throw new IllegalStateException("Secret key was freed.");
 
         return nativeSerializeSecretKey();
     }
@@ -53,8 +52,13 @@ public class SchnorrSecretKey
 
     public SchnorrPublicKey getPublicKey() {
         if (secretKeyPointer == 0)
-            throw new IllegalArgumentException("Secret key was freed.");
+            throw new IllegalStateException("Secret key was freed.");
 
         return nativeGetPublicKey();
+    }
+
+    @Override
+    public void close() throws Exception {
+        freeSecretKey();
     }
 }
