@@ -13,13 +13,13 @@ edition = "2018"
 include = ["Cargo.toml", "src"]
 
 [dependencies]
-algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "release_0_3_0"}
-primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "release_0_3_0"}
-r1cs-crypto = {features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "release_0_3_0"}
-r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "release_0_3_0"}
-r1cs-std = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "release_0_3_0"}
+algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.0"}
+primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.0"}
+r1cs-crypto = {features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.0"}
+r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.0"}
+r1cs-std = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.0"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "release_0_1_0" }
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", tag = "0.1.0" }
 
 derivative = "2.2.0"
 lazy_static = "1"
