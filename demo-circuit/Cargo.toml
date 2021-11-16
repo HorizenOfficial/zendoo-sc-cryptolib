@@ -1,6 +1,6 @@
 [package]
 name = "demo-circuit"
-version = "0.4.0"
+version = "0.4.1"
 authors = [
     "DanieleDiBenedetto <daniele@horizenlabs.io>",
     "Oleksandr Iozhytsia <oleksandr@zensystem.io>",
@@ -13,24 +13,24 @@ edition = "2018"
 include = ["Cargo.toml", "src"]
 
 [dependencies]
-algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.0"}
-primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.0"}
-r1cs-crypto = {features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.0"}
-r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.0"}
-r1cs-std = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.0"}
+algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.1"}
+primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.1"}
+r1cs-crypto = {features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.1"}
+r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.1"}
+r1cs-std = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.1"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", tag = "0.1.0" }
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", tag = "0.1.1" }
 
-derivative = "2.2.0"
-lazy_static = "1"
-radix_trie = "0.2.1"
-rand = { version = "0.8.4" }
-blake2 = { version = "0.8.1", default-features = false }
+derivative = "=2.2.0"
+lazy_static = "=1.4.0"
+radix_trie = "=0.2.1"
+rand = { version = "=0.8.4" }
+blake2 = { version = "=0.8.1", default-features = false }
 
 [dev-dependencies]
-digest = "0.8"
-blake2s_simd = "0.5"
-bit-vec = "0.6.1"
+digest = "=0.8.1"
+blake2s_simd = "=0.5.11"
+bit-vec = "=0.6.3"
 
 [features]
 default = [ "asm" ]
