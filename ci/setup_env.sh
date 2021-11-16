@@ -14,13 +14,11 @@ touch "${HOME}/key.asc"
 if [ ! -z "${TRAVIS_TAG}" ]; then
   export GNUPGHOME="$(mktemp -d 2>/dev/null || mktemp -d -t 'GNUPGHOME')"
   echo "Tagged build, fetching maintainer keys."
-    gpg -v --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys $MAINTAINER_KEYS ||
-    gpg -v --batch --keyserver hkp://ipv4.pool.sks-keyservers.net --recv-keys $MAINTAINER_KEYS ||
-    gpg -v --batch --keyserver hkp://pgp.mit.edu:80 --recv-keys $MAINTAINER_KEYS ||
-    gpg -v --batch --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys $MAINTAINER_KEYS || 
-    gpg -v --batch --keyserver hkp://ha.pool.sks-keyservers.net --recv-keys $MAINTAINER_KEYS ||
-    gpg -v --batch --keyserver keyserver.pgp.com --recv-keys $MAINTAINER_KEYS ||
-    gpg -v --batch --keyserver pgp.key-server.io --recv-keys $MAINTAINER_KEYS
+  gpg -v --batch --keyserver hkps://keys.openpgp.org --recv-keys $MAINTAINER_KEYS ||
+  gpg -v --batch --keyserver hkp://keyserver.ubuntu.com --recv-keys $MAINTAINER_KEYS ||
+  gpg -v --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys $MAINTAINER_KEYS ||
+  gpg -v --batch --keyserver hkp://ipv4.pool.sks-keyservers.net --recv-keys $MAINTAINER_KEYS ||
+  gpg -v --batch --keyserver hkp://pgp.mit.edu:80 --recv-keys $MAINTAINER_KEYS
   if git verify-tag -v "${TRAVIS_TAG}"; then
     echo "Valid signed tag"
     if [[ "${CONTAINER_RUST_VER}" != *"nightly"* ]]; then
