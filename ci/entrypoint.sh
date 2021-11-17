@@ -60,5 +60,10 @@ gosu zenbuilder rustc --version
 # Fix ownership recursively
 chown -RH zenbuilder:zenbuilder /build
 
+# Set JAVA_HOME
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+echo $JAVA_HOME
+export PATH=$PATH:$JAVA_HOME/bin
+
 exec gosu zenbuilder /usr/local/bin//entrypoint_setup_gpg.sh "$@"
 
