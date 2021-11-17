@@ -6,8 +6,8 @@ rustup install 1.51.0
 ```
 After that, use `cargo`, the standard Rust build tool, to build the library:
 ```bash
-git clone https://github.com/HorizenOfficial/ginger-lib.git
-cd ginger-lib
+git clone https://github.com/HorizenOfficial/zendoo-sc-cryptolib.git
+cd zendoo-sc-cryptolib
 cargo build --release
 ```
 This library comes with unit tests for each of the provided crates. Run the tests with:

@@ -64,6 +64,7 @@ chown -RH zenbuilder:zenbuilder /build
 export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 echo $JAVA_HOME
 export PATH=$PATH:$JAVA_HOME/bin
+java -version
 
 exec gosu zenbuilder /usr/local/bin//entrypoint_setup_gpg.sh "$@"
 
