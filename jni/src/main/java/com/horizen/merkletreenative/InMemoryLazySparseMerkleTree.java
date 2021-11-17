@@ -1,3 +1,5 @@
+package com.horizen.merkletreenative;
+
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
@@ -63,12 +65,12 @@ public class InMemoryLazySparseMerkleTree implements AutoCloseable {
     }
 
 
-    private static native void nativeFreeInMemoryLazySparseMerkleTree(long merkleTreePointer);
+    private native void nativeFreeInMemoryLazySparseMerkleTree();
 
     // Free Rust memory from InMemoryLazySparseMerkleTree
     public void freeInMemoryLazySparseMerkleTree() {
         if (merkleTreePointer != 0) {
-            nativeFreeInMemoryLazySparseMerkleTree(this.merkleTreePointer);
+            nativeFreeInMemoryLazySparseMerkleTree();
             merkleTreePointer = 0;
         }
     }
