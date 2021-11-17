@@ -3,9 +3,7 @@ package com.horizen.sigproofnative;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.schnorrnative.SchnorrKeyPair;
 import com.horizen.schnorrnative.SchnorrPublicKey;
-import com.horizen.schnorrnative.SchnorrSecretKey;
 import com.horizen.schnorrnative.SchnorrSignature;
-import com.horizen.sigproofnative.*;
 import com.horizen.provingsystemnative.ProvingSystem;
 import com.horizen.provingsystemnative.ProvingSystemType;
 import org.junit.BeforeClass;
@@ -14,11 +12,9 @@ import org.junit.AfterClass;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.FileReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.Optional;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;

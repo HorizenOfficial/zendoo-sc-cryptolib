@@ -1,5 +1,7 @@
 package com.horizen.merkletreenative;
 
+import java.util.List;
+
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
@@ -34,10 +36,10 @@ public class InMemoryLazySparseMerkleTree implements AutoCloseable {
     private native FieldElement nativeAddLeaves(PositionLeaf[] leaves);
 
     // Add leaves to tree, compute and return the root
-    public FieldElement addLeaves(PositionLeaf[] leaves){
+    public FieldElement addLeaves(List<PositionLeaf> leaves){
         if (merkleTreePointer == 0)
             throw new IllegalStateException("InMemoryLazySparseMerkleTree instance was freed.");
-        return nativeAddLeaves(leaves);
+        return nativeAddLeaves(leaves.toArray(new PositionLeaf[0]));
     }
 
     private native void nativeRemoveLeaves(long[] positions);

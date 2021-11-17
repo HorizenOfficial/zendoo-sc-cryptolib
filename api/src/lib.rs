@@ -1118,6 +1118,37 @@ ffi_export!(
 });
 
 ffi_export!(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeEquals(
+    _env: JNIEnv,
+    _path_1: JObject,
+    _path_2: JObject,
+) -> jboolean
+{
+    //Read path_1
+    let path_1 = {
+
+        let t =_env.get_field(_path_1, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    //Read path_1
+    let path_2 = {
+
+        let t =_env.get_field(_path_2, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    match path_1 == path_2 {
+        true => JNI_TRUE,
+        false => JNI_FALSE,
+    }
+});
+
+ffi_export!(
     fn Java_com_horizen_merkletreenative_MerklePath_nativeFreeMerklePath(
     _env: JNIEnv,
     _class: JClass,
@@ -3324,7 +3355,7 @@ ffi_export!(
 ////////////LAZY SPARSE MERKLE TREE
 
 use algebra::fields::tweedle::Fr;
-use primitives::{ActionLeaf, BatchFieldBasedMerkleTreeParameters, FieldBasedMerkleTreeParameters, FieldBasedMerkleTreePrecomputedZeroConstants, LazyBigMerkleTree, OperationLeaf, crh::{TweedleFrPoseidonHash, TweedleFrBatchPoseidonHash}, merkle_tree::TWEEDLE_DEE_MHT_POSEIDON_PARAMETERS};
+use primitives::{ActionLeaf, BatchFieldBasedMerkleTreeParameters, FieldBasedMHTPath, FieldBasedMerkleTreeParameters, FieldBasedMerkleTreePrecomputedZeroConstants, LazyBigMerkleTree, OperationLeaf, crh::{TweedleFrPoseidonHash, TweedleFrBatchPoseidonHash}, merkle_tree::TWEEDLE_DEE_MHT_POSEIDON_PARAMETERS};
 
 #[derive(Clone, Debug)]
 struct TweedleFrFieldBasedMerkleTreeParams;
@@ -3406,7 +3437,7 @@ ffi_export!(
                 "Lcom/horizen/librustsidechains/FieldElement;"
             ).expect("Should be able to get field FieldElement").l().unwrap();
 
-            let f =_env.get_field(field_object, "data", "J")
+            let f =_env.get_field(field_object, "fieldElementPointer", "J")
                 .expect("Should be able to get field fieldElementPointer");
 
             read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
@@ -3508,13 +3539,16 @@ ffi_export!(
     };
 
     match tree.get_merkle_path(_leaf_position as u32) {
-        Ok(path) => *return_jobject(&_env, path, "com/horizen/merkletreenative/MerklePath" ),
+        Ok(path) => {
+            let converted_path: FieldBasedMHTPath<TweedleFrFieldBasedMerkleTreeParams> = path.try_into().unwrap();
+            *return_jobject(&_env, converted_path, "com/horizen/merkletreenative/MerklePath")
+        },
         Err(e) => throw!(&_env, "java/lang/Exception", format!("Cannot compute path: {}", e.to_string()).as_str(), JObject::null().into_inner())
     }
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryLazySparseMerkleTree_nativeFreeLazyMerkleTree(
+    fn Java_com_horizen_merkletreenative_InMemoryLazySparseMerkleTree_nativeFreeInMemoryLazySparseMerkleTree(
     _env: JNIEnv,
     _tree: JObject,
 )

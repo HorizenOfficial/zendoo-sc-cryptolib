@@ -1,8 +1,6 @@
 package com.horizen.vrfnative;
 
 import com.horizen.librustsidechains.FieldElement;
-import com.horizen.schnorrnative.SchnorrKeyPair;
-import com.horizen.schnorrnative.SchnorrSignature;
 import org.junit.Test;
 
 import static org.junit.Assert.assertNull;

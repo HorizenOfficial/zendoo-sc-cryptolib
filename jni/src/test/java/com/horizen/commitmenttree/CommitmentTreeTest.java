@@ -1,13 +1,10 @@
 package com.horizen.commitmenttree;
 
-import org.junit.Ignore;
 import org.junit.Test;
 import static org.junit.Assert.*;
-import com.horizen.commitmenttree.CommitmentTree;
 import com.horizen.sigproofnative.BackwardTransfer;
 import com.horizen.librustsidechains.FieldElement;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;

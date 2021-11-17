@@ -1,7 +1,6 @@
 package com.horizen.provingsystemnative;
 
 import com.horizen.librustsidechains.Library;
-import java.util.Optional;
 
 public class ProvingSystem {
 

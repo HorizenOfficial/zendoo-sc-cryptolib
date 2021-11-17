@@ -119,6 +119,22 @@ public class MerklePath implements AutoCloseable {
         return nativeDeserialize(merklePathBytes, true);
     }
 
+    private native boolean nativeEquals(MerklePath otherPath);
+
+    @Override
+    public boolean equals(Object o) {
+
+        if (o == this) {
+            return true;
+        }
+
+        if (!(o instanceof MerklePath)) {
+            return false;
+        }
+
+        return nativeEquals((MerklePath) o);
+    }
+
     private native void nativeFreeMerklePath(long merklePathPointer);
 
     public void freeMerklePath(){

@@ -7,7 +7,7 @@ include = ["Cargo.toml", "src"]
 
 [dependencies]
 algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "in_memory_lazy_smt"}
 r1cs-crypto = {features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
 r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
 r1cs-std = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
