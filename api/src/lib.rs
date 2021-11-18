@@ -3355,7 +3355,7 @@ ffi_export!(
 ////////////LAZY SPARSE MERKLE TREE
 
 use algebra::fields::tweedle::Fr;
-use primitives::{ActionLeaf, BatchFieldBasedMerkleTreeParameters, FieldBasedMHTPath, FieldBasedMerkleTreeParameters, FieldBasedMerkleTreePrecomputedZeroConstants, LazyBigMerkleTree, OperationLeaf, crh::{TweedleFrPoseidonHash, TweedleFrBatchPoseidonHash}, merkle_tree::TWEEDLE_DEE_MHT_POSEIDON_PARAMETERS};
+use primitives::{BatchFieldBasedMerkleTreeParameters, FieldBasedMHTPath, FieldBasedMerkleTree, FieldBasedMerkleTreeParameters, FieldBasedMerkleTreePrecomputedZeroConstants, FieldBasedOptimizedSparseMHT, FieldBasedSparseMerkleTree, crh::{TweedleFrPoseidonHash, TweedleFrBatchPoseidonHash}, merkle_tree::TWEEDLE_DEE_MHT_POSEIDON_PARAMETERS};
 
 #[derive(Clone, Debug)]
 struct TweedleFrFieldBasedMerkleTreeParams;
@@ -3370,28 +3370,28 @@ impl BatchFieldBasedMerkleTreeParameters for TweedleFrFieldBasedMerkleTreeParams
     type BH = TweedleFrBatchPoseidonHash;
 }
 
-type GingerLazyMHT = LazyBigMerkleTree<TweedleFrFieldBasedMerkleTreeParams>;
+type GingerSparseMHT = FieldBasedOptimizedSparseMHT<TweedleFrFieldBasedMerkleTreeParams>;
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryLazySparseMerkleTree_nativeInit(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeInit(
     _env: JNIEnv,
     _class: JClass,
     _height: jint,
 ) -> jobject
 {
-    // Create new InMemoryLazySparseMerkleTree Rust side
-    let mt = GingerLazyMHT::new(_height as u8);
+    // Create new InMemorySparseMerkleTree Rust side
+    let mt = GingerSparseMHT::init(_height as u8);
 
-    // Create and return new InMemoryLazySparseMerkleTree Java side
+    // Create and return new InMemorySparseMerkleTree Java side
     let mt_ptr: jlong = jlong::from(Box::into_raw(Box::new(mt)) as i64);
 
     _env.new_object(_class, "(J)V", &[JValue::Long(mt_ptr)])
-        .expect("Should be able to create new InMemoryLazySparseMerkleTree object")
+        .expect("Should be able to create new InMemorySparseMerkleTree object")
         .into_inner()
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryLazySparseMerkleTree_nativeIsPositionEmpty(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeIsPositionEmpty(
     _env: JNIEnv,
     _tree: JObject,
     _position: jlong,
@@ -3402,7 +3402,7 @@ ffi_export!(
         let t =_env.get_field(_tree, "merkleTreePointer", "J")
             .expect("Should be able to get field merkleTreePointer");
 
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerLazyMHT)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerSparseMHT)
     };
 
     // Call corresponding function and return result if Ok(), otherwise throw Exception
@@ -3413,16 +3413,16 @@ ffi_export!(
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryLazySparseMerkleTree_nativeAddLeaves(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeAddLeaves(
     _env: JNIEnv,
     _tree: JObject,
     _leaves: jobjectArray,
-) -> jobject
+)
 {
     //Read _leaves as array of OperationLeaf
     let leaves_len = _env.get_array_length(_leaves)
         .expect("Should be able to read leaves array size");
-    let mut leaves = vec![];
+    let mut leaves = Vec::with_capacity(leaves_len as usize);
 
     for i in 0..leaves_len {
         // Read PositionLeaf object
@@ -3450,7 +3450,7 @@ ffi_export!(
             "J"
         ).expect("Should be able to get field position").j().unwrap() as u32;
 
-        leaves.push(OperationLeaf::new(position, ActionLeaf::Insert, Some(*field)));
+        leaves.push((position, *field));
     }
 
     // Read tree
@@ -3458,22 +3458,22 @@ ffi_export!(
         let t =_env.get_field(_tree, "merkleTreePointer", "J")
             .expect("Should be able to get field merkleTreePointer");
 
-        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerLazyMHT)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerSparseMHT)
     };
 
-    // Update the tree with leaves and return the root
-    match tree.process_leaves(leaves.as_slice()) {
-        Ok(root) => return_field_element(&_env, root),
-        Err(e) => throw!(&_env, "java/lang/Exception", format!("Cannot insert leaves: {}", e.to_string()).as_str(), JObject::null().into_inner())
-    }    
+    // Update the tree with leaves
+    match tree.insert_leaves(leaves) {
+        Ok(_) => {},
+        Err(e) => throw!(&_env, "java/lang/Exception", format!("Cannot insert leaves: {}", e.to_string()).as_str())
+    };    
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryLazySparseMerkleTree_nativeRemoveLeaves(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeRemoveLeaves(
     _env: JNIEnv,
     _tree: JObject,
     _positions: jlongArray,
-) -> jobject
+)
 {
     //Read _positions as an array of jlongs
     let positions_len = _env.get_array_length(_positions)
@@ -3488,25 +3488,47 @@ ffi_export!(
         let t =_env.get_field(_tree, "merkleTreePointer", "J")
             .expect("Should be able to get field merkleTreePointer");
 
-        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerLazyMHT)
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerSparseMHT)
     };
 
     // Update the tree with leaves and return the root
     let leaves = positions
         .into_iter()
-        .map(|position| OperationLeaf::new(position as u32, ActionLeaf::Remove, None))
+        .map(|position| position as u32)
         .collect::<Vec<_>>();
 
-    // Update the tree with leaves and get the root
-    match tree.process_leaves(leaves.as_slice())
+    // Update the tree with leaves
+    match tree.remove_leaves(leaves)
     {
-        Ok(root) => return_field_element(&_env, root),
-        Err(e) => throw!(&_env, "java/lang/Exception", format!("Cannot remove leaves: {}", e.to_string()).as_str(), JObject::null().into_inner())
+        Ok(_) => return,
+        Err(e) => throw!(&_env, "java/lang/Exception", format!("Cannot remove leaves: {}", e.to_string()).as_str())
     }
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryLazySparseMerkleTree_nativeRoot(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeFinalizeInPlace(
+    _env: JNIEnv,
+    _tree: JObject,
+)
+{
+    // Read tree
+    let tree = {
+        let t =_env.get_field(_tree, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerSparseMHT)
+    };
+
+    // Update the root of the tree
+    match tree.finalize_in_place()
+    {
+        Ok(_) => return,
+        Err(e) => throw!(&_env, "java/lang/Exception", format!("Cannot finalize tree: {}", e.to_string()).as_str())
+    };
+});
+
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeRoot(
     _env: JNIEnv,
     _tree: JObject,
 ) -> jobject
@@ -3516,15 +3538,17 @@ ffi_export!(
         let t =_env.get_field(_tree, "merkleTreePointer", "J")
             .expect("Should be able to get field merkleTreePointer");
 
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerLazyMHT)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerSparseMHT)
     };
 
-    // Get and return root as FieldElement object
-    return_field_element(&_env, tree.get_root())
+    match tree.root() {
+        Some(root) => return_field_element(&_env, root),
+        None => throw!(&_env, "java/lang/Exception", "Unable to return root. Have you finalized the tree ?", JObject::null().into_inner())
+    }
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryLazySparseMerkleTree_nativeGetMerklePath(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeGetMerklePath(
     _env: JNIEnv,
     _tree: JObject,
     _leaf_position: jlong,
@@ -3535,20 +3559,20 @@ ffi_export!(
         let t =_env.get_field(_tree, "merkleTreePointer", "J")
             .expect("Should be able to get field merkleTreePointer");
 
-        read_raw_pointer(&_env, t.j().unwrap() as *const GingerLazyMHT)
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerSparseMHT)
     };
 
     match tree.get_merkle_path(_leaf_position as u32) {
-        Ok(path) => {
+        Some(path) => {
             let converted_path: FieldBasedMHTPath<TweedleFrFieldBasedMerkleTreeParams> = path.try_into().unwrap();
             *return_jobject(&_env, converted_path, "com/horizen/merkletreenative/MerklePath")
         },
-        Err(e) => throw!(&_env, "java/lang/Exception", format!("Cannot compute path: {}", e.to_string()).as_str(), JObject::null().into_inner())
+        None => throw!(&_env, "java/lang/Exception", "Cannot compute path. Have you finalized the tree ?", JObject::null().into_inner())
     }
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryLazySparseMerkleTree_nativeFreeInMemoryLazySparseMerkleTree(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeFreeInMemorySparseMerkleTree(
     _env: JNIEnv,
     _tree: JObject,
 )
@@ -3558,7 +3582,7 @@ ffi_export!(
         let t =_env.get_field(_tree, "merkleTreePointer", "J")
             .expect("Should be able to get field merkleTreePointer");
 
-        t.j().unwrap() as *mut GingerLazyMHT
+        t.j().unwrap() as *mut GingerSparseMHT
     };
 
     if tree_ptr.is_null()  { return }

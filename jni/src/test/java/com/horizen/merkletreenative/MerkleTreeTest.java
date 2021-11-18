@@ -43,12 +43,12 @@ public class MerkleTreeTest {
     }
 
     @Test
-    public void testMerkleTrees() {
+    public void testMerkleTrees() throws Exception {
 
-        //Get InMemoryLazySparseMerkleTree
-        InMemoryLazySparseMerkleTree smtLazy = InMemoryLazySparseMerkleTree.init(height);
+        //Get InMemorySparseMerkleTree
+        InMemorySparseMerkleTree smtLazy = InMemorySparseMerkleTree.init(height);
 
-        //Add leaves to InMemoryLazySparseMerkleTree
+        //Add leaves to InMemorySparseMerkleTree
         List<PositionLeaf> positionLeaves = new ArrayList<>();
         for(int i = 0; i < numLeaves; i++) {
             assertTrue("Position must be empty", smtLazy.isPositionEmpty(positions[i]));
@@ -56,16 +56,17 @@ public class MerkleTreeTest {
         }
         smtLazy.addLeaves(positionLeaves);
 
-        //Remove leaves from InMemoryLazySparseMerkleTree
+        //Remove leaves from InMemorySparseMerkleTree
         long[] leavesToRemove = { 458L, 532L };
         smtLazy.removeLeaves(leavesToRemove);
 
         //Compute root and assert equality with the expected one
+        smtLazy.finalizeInPlace();
         FieldElement smtLazyRoot = smtLazy.root();
-        assertEquals("InMemoryLazySparseMerkleTree root is not as expected", smtLazyRoot, expectedRoot);
+        assertEquals("InMemorySparseMerkleTree root is not as expected", smtLazyRoot, expectedRoot);
 
         //Free memory
-        smtLazy.freeInMemoryLazySparseMerkleTree();
+        smtLazy.freeInMemorySparseMerkleTree();
         smtLazyRoot.freeFieldElement();
 
         //Get InMemoryOptimizedMerkleTree
@@ -113,11 +114,11 @@ public class MerkleTreeTest {
     }
 
     @Test
-    public void testMerklePaths() {
+    public void testMerklePaths() throws Exception {
         List<FieldElement> testLeaves = new ArrayList<>();
         List<PositionLeaf> testPositionLeaves = new ArrayList<>();
         InMemoryOptimizedMerkleTree mht = InMemoryOptimizedMerkleTree.init(6, numLeaves);
-        InMemoryLazySparseMerkleTree smt = InMemoryLazySparseMerkleTree.init(6);
+        InMemorySparseMerkleTree smt = InMemorySparseMerkleTree.init(6);
         assertNotNull("Merkle Tree initialization must succeed", mht);
         assertNotNull("Sparse Merkle Tree initialization must succeed", smt);
 
@@ -136,7 +137,9 @@ public class MerkleTreeTest {
         }
 
         // Append leaves to SMT too
-        FieldElement smtRoot = smt.addLeaves(testPositionLeaves);
+        smt.addLeaves(testPositionLeaves);
+        smt.finalizeInPlace();
+        FieldElement smtRoot = smt.root();
 
         //Finalize the tree and get the root
         assertTrue("Merkle Tree finalization must succeed", mht.finalizeTreeInPlace());
