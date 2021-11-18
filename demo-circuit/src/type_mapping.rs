@@ -1,12 +1,17 @@
-pub use cctp_primitives::type_mapping::*;
-use primitives::{FieldBasedBinaryMHTPath, crh::bowe_hopwood::BoweHopwoodPedersenCRH, signature::{
-    schnorr::field_based_schnorr::{
-        FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature,
-    },
-}, vrf::ecvrf::*};
-use r1cs_crypto::{TweedleFrPoseidonHashGadget, field_based_mht::FieldBasedBinaryMerkleTreePathGadget};
-use r1cs_std::fields::fp::FpGadget;
 use crate::constants::VRFWindow;
+pub use cctp_primitives::type_mapping::*;
+use primitives::{
+    crh::bowe_hopwood::BoweHopwoodPedersenCRH,
+    signature::schnorr::field_based_schnorr::{
+        FieldBasedSchnorrSignature, FieldBasedSchnorrSignatureScheme,
+    },
+    vrf::ecvrf::*,
+    FieldBasedBinaryMHTPath,
+};
+use r1cs_crypto::{
+    field_based_mht::FieldBasedBinaryMerkleTreePathGadget, TweedleFrPoseidonHashGadget,
+};
+use r1cs_std::fields::fp::FpGadget;
 
 pub const SCHNORR_PK_SIZE: usize = GROUP_COMPRESSED_SIZE;
 pub const SCHNORR_SK_SIZE: usize = SCALAR_FIELD_SIZE;

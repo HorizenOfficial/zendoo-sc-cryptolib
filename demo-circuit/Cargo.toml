@@ -24,6 +24,7 @@ blake2 = { version = "0.8.1", default-features = false }
 digest = "0.8"
 blake2s_simd = "0.5"
 bit-vec = "0.6.1"
+sha2 = "0.9.5"
 
 [features]
 default = [ "asm" ]

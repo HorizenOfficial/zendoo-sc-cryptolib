@@ -1,35 +1,35 @@
 #![deny(
-unused_import_braces,
-unused_qualifications,
-trivial_casts,
-trivial_numeric_casts
+    unused_import_braces,
+    unused_qualifications,
+    trivial_casts,
+    trivial_numeric_casts
 )]
 #![deny(
-unused_qualifications,
-variant_size_differences,
-stable_features,
-unreachable_pub
+    unused_qualifications,
+    variant_size_differences,
+    stable_features,
+    unreachable_pub
 )]
 #![deny(
-non_shorthand_field_patterns,
-unused_attributes,
-unused_imports,
-unused_extern_crates
+    non_shorthand_field_patterns,
+    unused_attributes,
+    unused_imports,
+    unused_extern_crates
 )]
 #![deny(
-renamed_and_removed_lints,
-stable_features,
-unused_allocation,
-unused_comparisons,
-bare_trait_objects
+    renamed_and_removed_lints,
+    stable_features,
+    unused_allocation,
+    unused_comparisons,
+    bare_trait_objects
 )]
 #![deny(
-const_err,
-unused_must_use,
-unused_mut,
-unused_unsafe,
-private_in_public,
-unsafe_code
+    const_err,
+    unused_must_use,
+    unused_mut,
+    unused_unsafe,
+    private_in_public,
+    unsafe_code
 )]
 #![forbid(unsafe_code)]
 
@@ -45,18 +45,15 @@ pub use self::type_mapping::*;
 pub mod pgd_csw;
 pub use self::pgd_csw::*;
 
-
 use algebra::SerializationError;
-use r1cs_core::ConstraintSynthesizer;
 use cctp_primitives::{
     proving_system::{
+        compute_proof_vk_size, error::ProvingSystemError, init::get_g1_committer_key,
         ProvingSystem, ZendooProverKey, ZendooVerifierKey,
-        init::get_g1_committer_key,
-        error::ProvingSystemError,
-        compute_proof_vk_size
     },
     utils::serialization::write_to_file,
 };
+use r1cs_core::ConstraintSynthesizer;
 use std::path::Path;
 
 //Will return error if buffer.len > FIELD_SIZE. If buffer.len < FIELD_SIZE, padding 0s will be added
@@ -89,8 +86,7 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
     zk: bool,
     compress_pk: Option<bool>,
     compress_vk: Option<bool>,
-) -> Result<(), Error>
-{
+) -> Result<(), Error> {
     let g1_ck = get_g1_committer_key()?;
     match proving_system {
         ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
@@ -102,22 +98,24 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
                 zk,
                 proving_system,
             );
-            if proof_size > max_proof_size || vk_size > max_vk_size
-            {
-                return Err(ProvingSystemError::SetupFailed(
-                    format!(
-                        "Circuit is too complex: \
+            if proof_size > max_proof_size || vk_size > max_vk_size {
+                return Err(ProvingSystemError::SetupFailed(format!(
+                    "Circuit is too complex: \
                         Max supported proof size: {}, Actual proof size: {} \
                         Max supported vk size: {}, Actual vk size: {}",
-                        max_proof_size, proof_size, max_vk_size, vk_size
-                    )
-                ))?;
+                    max_proof_size, proof_size, max_vk_size, vk_size
+                )))?;
             }
-            let (pk, vk) = CoboundaryMarlin::circuit_specific_setup(g1_ck.as_ref().unwrap(), index)?;
+            let (pk, vk) =
+                CoboundaryMarlin::circuit_specific_setup(g1_ck.as_ref().unwrap(), index)?;
             write_to_file(&ZendooProverKey::CoboundaryMarlin(pk), pk_path, compress_pk)?;
-            write_to_file(&ZendooVerifierKey::CoboundaryMarlin(vk), vk_path, compress_vk)?;
-        },
-        ProvingSystem::Darlin => unimplemented!()
+            write_to_file(
+                &ZendooVerifierKey::CoboundaryMarlin(vk),
+                vk_path,
+                compress_vk,
+            )?;
+        }
+        ProvingSystem::Darlin => unimplemented!(),
     }
 
     Ok(())
