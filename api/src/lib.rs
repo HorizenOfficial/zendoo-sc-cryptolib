@@ -11,6 +11,7 @@ use cctp_primitives::{
         data_structures::*,
     }
 };
+use primitives::{FieldBasedMerkleTree, FieldBasedSparseMerkleTree};
 use std::{
     any::type_name, path::Path,
 };
@@ -3354,24 +3355,6 @@ ffi_export!(
 
 ////////////LAZY SPARSE MERKLE TREE
 
-use algebra::fields::tweedle::Fr;
-use primitives::{BatchFieldBasedMerkleTreeParameters, FieldBasedMHTPath, FieldBasedMerkleTree, FieldBasedMerkleTreeParameters, FieldBasedMerkleTreePrecomputedZeroConstants, FieldBasedOptimizedSparseMHT, FieldBasedSparseMerkleTree, crh::{TweedleFrPoseidonHash, TweedleFrBatchPoseidonHash}, merkle_tree::TWEEDLE_DEE_MHT_POSEIDON_PARAMETERS};
-
-#[derive(Clone, Debug)]
-struct TweedleFrFieldBasedMerkleTreeParams;
-impl FieldBasedMerkleTreeParameters for TweedleFrFieldBasedMerkleTreeParams {
-    type Data = Fr;
-    type H = TweedleFrPoseidonHash;
-    const MERKLE_ARITY: usize = 2;
-    const ZERO_NODE_CST: Option<FieldBasedMerkleTreePrecomputedZeroConstants<'static, Self::H>> =
-        Some(TWEEDLE_DEE_MHT_POSEIDON_PARAMETERS);
-}
-impl BatchFieldBasedMerkleTreeParameters for TweedleFrFieldBasedMerkleTreeParams {
-    type BH = TweedleFrBatchPoseidonHash;
-}
-
-type GingerSparseMHT = FieldBasedOptimizedSparseMHT<TweedleFrFieldBasedMerkleTreeParams>;
-
 ffi_export!(
     fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeInit(
     _env: JNIEnv,
@@ -3564,7 +3547,7 @@ ffi_export!(
 
     match tree.get_merkle_path(_leaf_position as u32) {
         Some(path) => {
-            let converted_path: FieldBasedMHTPath<TweedleFrFieldBasedMerkleTreeParams> = path.try_into().unwrap();
+            let converted_path: GingerMHTPath = path.try_into().unwrap();
             *return_jobject(&_env, converted_path, "com/horizen/merkletreenative/MerklePath")
         },
         None => throw!(&_env, "java/lang/Exception", "Cannot compute path. Have you finalized the tree ?", JObject::null().into_inner())
