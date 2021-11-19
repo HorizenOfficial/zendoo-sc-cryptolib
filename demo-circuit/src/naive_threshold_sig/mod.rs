@@ -1,9 +1,11 @@
-use algebra::{
-    Field, PrimeField, ToBits
-};
+use algebra::{Field, PrimeField, ProjectiveCurve, ToBits};
 
-use primitives::signature::schnorr::field_based_schnorr::{
+use cctp_primitives::utils::commitment_tree::ByteAccumulator;
+use primitives::{
+    crh::FieldBasedHash,
+    signature::schnorr::field_based_schnorr::{
         FieldBasedSchnorrSignature, FieldBasedSchnorrPk,
+    }
 };
 use r1cs_crypto::{
     signature::{
@@ -83,10 +85,47 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
         mr_bt:                                FieldElement,
         ft_min_amount:                        u64,
         btr_fee:                              u64,
-        pks_threshold_hash:                   FieldElement,
-        cert_data_hash:                       FieldElement,
         max_pks:                              usize,
+        valid_signatures:                     u64
     ) -> Self {
+
+        //Convert needed variables into field elements
+        let fees_field_elements = {
+            let fes = ByteAccumulator::init()
+                .update(btr_fee).unwrap()
+                .update(ft_min_amount).unwrap()
+                .get_field_elements().unwrap();
+            assert_eq!(fes.len(), 1);
+            fes[0]
+        };
+        let valid_signatures_fe = FieldElement::from(valid_signatures);
+
+        //Compute pks_threshold_hash
+        let mut h = FieldHash::init_constant_length(pks.len(), None);
+        pks.iter().for_each(|pk| { h.update(pk.0.into_affine().x); });
+        let pks_hash = h.finalize().unwrap();
+        let pks_threshold_hash = FieldHash::init_constant_length(2, None)
+            .update(pks_hash)
+            .update(threshold)
+            .finalize()
+            .unwrap();
+
+        //Compute cert_data_hash
+        let cert_data_hash = {
+            let wcert_sysdata_hash = FieldHash::init_constant_length(6, None)
+                .update(sc_id)
+                .update(epoch_number)
+                .update(mr_bt)
+                .update(valid_signatures_fe)
+                .update(end_cumulative_sc_tx_comm_tree_root)
+                .update(fees_field_elements)
+                .finalize()
+                .unwrap();
+            FieldHash::init_constant_length(1, None)
+                .update(wcert_sysdata_hash)
+                .finalize()
+                .unwrap()
+        };
 
         //Convert b to the needed bool vector
         let b_bool = {
@@ -339,7 +378,6 @@ pub fn get_instance_for_setup(max_pks: usize) -> NaiveTresholdSignature<FieldEle
 #[cfg(test)]
 mod test {
     use super::*;
-    use algebra::ProjectiveCurve;
     use primitives::{
         crh::FieldBasedHash,
         signature::{
@@ -426,44 +464,16 @@ mod test {
         let valid_field = FieldElement::from_repr(FieldBigInteger::from(valid_sigs as u64));
         let b_field = valid_field - &t_field;
 
-        //Compute pks_threshold_hash
-        let mut h = FieldHash::init_constant_length(pks.len(), None);
-        pks.iter().for_each(|pk| { h.update(pk.0.into_affine().x); });
-        let pks_hash = h.finalize().unwrap();
-        let pks_threshold_hash = if !wrong_pks_threshold_hash {
-            FieldHash::init_constant_length(2, None)
-                .update(pks_hash)
-                .update(t_field)
-                .finalize()
-                .unwrap()
-        } else {
-            rng.gen()
-        };
-
-        //Compute cert_data_hash
-        let cert_data_hash = if !wrong_cert_data_hash {
-            let wcert_sysdata_hash = FieldHash::init_constant_length(6, None)
-                .update(sc_id)
-                .update(epoch_number)
-                .update(mr_bt)
-                .update(valid_field)
-                .update(end_cumulative_sc_tx_comm_tree_root)
-                .update(fees_field_elements)
-                .finalize()
-                .unwrap();
-            FieldHash::init_constant_length(1, None)
-                .update(wcert_sysdata_hash)
-                .finalize()
-                .unwrap()
-        } else {
-            rng.gen()
-        };
-
         //Return concrete circuit instance
-        NaiveTresholdSignature::<FieldElement>::new(
+        let mut c = NaiveTresholdSignature::<FieldElement>::new(
             pks, sigs, t_field, b_field, sc_id, epoch_number, end_cumulative_sc_tx_comm_tree_root,
-            mr_bt, ft_min_amount, btr_fee, pks_threshold_hash, cert_data_hash, max_pks
-        )
+            mr_bt, ft_min_amount, btr_fee, max_pks, valid_sigs as u64
+        );
+
+        if wrong_pks_threshold_hash { c.pks_threshold_hash = Some(rng.gen()); }
+        if wrong_cert_data_hash { c.cert_data_hash = Some(rng.gen()); }
+
+        c
     }
     fn generate_test_proof(
         max_pks:                  usize,

@@ -187,47 +187,10 @@ pub fn create_naive_threshold_sig_proof(
 
     //Convert needed variables into field elements
     let threshold = FieldElement::from(threshold);
-    let epoch_number = FieldElement::from(epoch_number);
-    let fees_field_elements = {
-        let fes = ByteAccumulator::init()
-            .update(btr_fee).unwrap()
-            .update(ft_min_amount).unwrap()
-            .get_field_elements().unwrap();
-        assert_eq!(fes.len(), 1);
-        fes[0]
-    };
-    let valid_signatures_fe = FieldElement::from(valid_signatures);
-
-    //Compute pks_threshold_hash
-    let mut h = FieldHash::init_constant_length(pks.len(), None);
-    pks.iter().for_each(|pk| { h.update(pk.0.into_affine().x); });
-    let pks_hash = h.finalize().unwrap();
-    let pks_threshold_hash = FieldHash::init_constant_length(2, None)
-        .update(pks_hash)
-        .update(threshold)
-        .finalize()
-        .unwrap();
-
-    //Compute cert_data_hash
-    let cert_data_hash = {
-        let wcert_sysdata_hash = FieldHash::init_constant_length(6, None)
-            .update(*sc_id)
-            .update(epoch_number)
-            .update(mr_bt)
-            .update(valid_signatures_fe)
-            .update(*end_cumulative_sc_tx_comm_tree_root)
-            .update(fees_field_elements)
-            .finalize()
-            .unwrap();
-        FieldHash::init_constant_length(1, None)
-            .update(wcert_sysdata_hash)
-            .finalize()
-            .unwrap()
-    };
 
     let c = NaiveTresholdSignature::<FieldElement>::new(
-        pks, sigs, threshold, b, *sc_id, epoch_number, *end_cumulative_sc_tx_comm_tree_root,
-        mr_bt, ft_min_amount, btr_fee, pks_threshold_hash, cert_data_hash, max_pks,
+        pks, sigs, threshold, b, *sc_id, FieldElement::from(epoch_number), *end_cumulative_sc_tx_comm_tree_root,
+        mr_bt, ft_min_amount, btr_fee, max_pks, valid_signatures
     );
 
     let pk: ZendooProverKey = read_from_file(
