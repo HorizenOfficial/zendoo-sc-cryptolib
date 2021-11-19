@@ -1,9 +1,21 @@
+use algebra::Field;
 use cctp_primitives::type_mapping::FieldElement;
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 use r1cs_crypto::{FieldBasedHashGadget, FieldBasedMerkleTreePathGadget};
-use r1cs_std::{prelude::EqGadget, to_field_gadget_vec::ToConstraintFieldGadget, FromGadget};
+use r1cs_std::{
+    alloc::AllocGadget,
+    alloc::ConstantGadget,
+    boolean::{AllocatedBit, Boolean},
+    fields::FieldGadget,
+    prelude::EqGadget,
+    to_field_gadget_vec::ToConstraintFieldGadget,
+    FromGadget,
+};
 
-use crate::{constants::constants::BoxType, CswProverData, FieldElementGadget, FieldHashGadget};
+use crate::{
+    constants::constants::{BoxType, CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER},
+    CswProverData, FieldElementGadget, FieldHashGadget,
+};
 
 use self::data_structures::CswProverDataGadget;
 
@@ -11,12 +23,16 @@ pub mod data_structures;
 
 #[derive(Clone)]
 pub struct CeasedSidechainWithdrawalCircuit {
+    sidechain_id: FieldElement,
     csw_data: CswProverData,
 }
 
 impl CeasedSidechainWithdrawalCircuit {
-    pub fn new(csw_data: CswProverData) -> Self {
-        CeasedSidechainWithdrawalCircuit { csw_data }
+    pub fn new(sidechain_id: FieldElement, csw_data: CswProverData) -> Self {
+        CeasedSidechainWithdrawalCircuit {
+            sidechain_id,
+            csw_data,
+        }
     }
 }
 
@@ -25,6 +41,13 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
+        let true_boolean_g = Boolean::from(
+            AllocatedBit::alloc(cs.ns(|| "Alloc constant True gadget"), || Ok(true)).unwrap(),
+        );
+
+        let sidechain_id_g =
+            FieldElementGadget::from_value(cs.ns(|| "sidechain_id_g"), &self.sidechain_id);
+
         let csw_data_g = <CswProverDataGadget as FromGadget<CswProverData, FieldElement>>::from(
             self.csw_data,
             cs.ns(|| "alloc csw data"),
@@ -47,6 +70,29 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             ],
         )?;
 
+        let should_enforce_utxo_withdrawal_g = csw_data_g
+            .input_g
+            .is_phantom(cs.ns(|| "should_enforce_utxo_withdrawal"))?
+            .not();
+
+        let should_enforce_ft_withdrawal_g = csw_data_g
+            .ft_input_g
+            .is_phantom(cs.ns(|| "should_enforce_ft_withdrawal"))?
+            .not();
+
+        // enforce that the CSW if for either UTXO or FT
+        // and that exactly one of the two is not NULL
+        let utxo_xor_ft_withdrawal_g = Boolean::xor(
+            cs.ns(|| "(input != NULL) XOR (ft_input != NULL)"),
+            &should_enforce_utxo_withdrawal_g,
+            &should_enforce_ft_withdrawal_g,
+        )?;
+
+        utxo_xor_ft_withdrawal_g.enforce_equal(
+            cs.ns(|| "enforce that the CSW if for either UTXO or FT"),
+            &true_boolean_g,
+        )?;
+
         // require(sc_last_wcert_hash == last_wcert_hash)
         last_wcert_hash_g.enforce_equal(
             cs.ns(|| "enforce sc_last_wcert_hash == last_wcert_hash"),
@@ -54,11 +100,6 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         )?;
 
         // UTXO widthdrawal [START]
-        // if (input != NULL)
-        let should_enforce_utxo_withdrawal_g = csw_data_g
-            .input_g
-            .is_phantom(cs.ns(|| "should_enforce_utxo_withdrawal"))?
-            .not();
 
         // val outputHash = H(input.output | BoxType.Coin)
         let box_type_coin_g = FieldElementGadget::from(
@@ -81,12 +122,10 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 
         // 1 Check output presence in the known state
         // mst_root = reconstruct_merkle_root_hash(outputHash, mst_path_to_output)
-        let mst_root_g = csw_data_g
-            .mst_path_to_output_g
-            .enforce_root_from_leaf(
-                cs.ns(|| "reconstruct_merkle_root_hash(outputHash, mst_path_to_output)"),
-                &output_hash_g,
-            )?;
+        let mst_root_g = csw_data_g.mst_path_to_output_g.enforce_root_from_leaf(
+            cs.ns(|| "reconstruct_merkle_root_hash(outputHash, mst_path_to_output)"),
+            &output_hash_g,
+        )?;
 
         // require(last_wcert.proof_data.scb_new_mst_root == mst_root)
         mst_root_g.conditional_enforce_equal(
@@ -118,6 +157,115 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         // TODO: check secret key ownership
 
         // UTXO widthdrawal [END]
+
+        // FT withdrawal [START]
+
+        // val ft_input_hash = H(ft_input)
+        let ft_input_hash_input_elements = csw_data_g
+            .ft_input_g
+            .to_field_gadget_elements(cs.ns(|| "alloc ft_input_hash input elements"))?;
+
+        let ft_input_hash_g = FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "H(ft_input)"),
+            &ft_input_hash_input_elements,
+        )?;
+
+        // val scb_ft_tree_root = reconstruct_merkle_root_hash(ft_input_hash, ft_tree_path)
+        let scb_ft_tree_root_g = csw_data_g.ft_tree_path_g.enforce_root_from_leaf(
+            cs.ns(|| "reconstruct_merkle_root_hash(ft_input_hash, ft_tree_path)"),
+            &ft_input_hash_g,
+        )?;
+
+        // val txs_hash = H(scb_ft_tree_root | scb_btr_tree_root | wcert_tree_root)     // Q: what about sc_creation_tx that may be included in txs_hash? Should we add NULL instead?
+        let txs_hash_g = FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "H(scb_ft_tree_root | scb_btr_tree_root | wcert_tree_root)"),
+            &[
+                scb_ft_tree_root_g,
+                csw_data_g.scb_btr_tree_root_g.clone(),
+                csw_data_g.wcert_tree_root_g.clone(),
+            ],
+        )?;
+
+        // val sc_hash = H(txs_hash | THIS_SIDECHAIN_ID)
+        let sc_hash_g = FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "H(txs_hash | THIS_SIDECHAIN_ID)"),
+            &[txs_hash_g, sidechain_id_g],
+        )?;
+
+        // val sc_txs_com_tree_root = reconstruct_merkle_root_hash(sc_hash, merkle_path_to_scHash)
+        let sc_txs_com_tree_root_g = csw_data_g.merkle_path_to_sc_hash_g.enforce_root_from_leaf(
+            cs.ns(|| "reconstruct_merkle_root_hash(sc_hash, merkle_path_to_scHash)"),
+            &sc_hash_g,
+        )?;
+
+        // var sc_txs_com_cumulative = mcb_sc_txs_com_start
+        let mut sc_txs_com_cumulative_g = csw_data_g.mcb_sc_txs_com_start_g;
+
+        // var cnt = 0
+        let counter_g = FieldElementGadget::from_value(
+            cs.ns(|| "alloc initial counter"),
+            &FieldElement::from(0u8),
+        );
+
+        // TODO: define CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER as creation parameter
+        for i in 0..CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER {
+            // if (sc_txs_com_tree_root == sc_txs_com_hashes[i]) { cnt++ }
+            let should_increase_counter = sc_txs_com_tree_root_g.is_eq(
+                cs.ns(|| format!("sc_txs_com_tree_root == sc_txs_com_hashes[{}]", i)),
+                &csw_data_g.sc_txs_com_hashes_g[i],
+            )?;
+
+            // cnt++
+            counter_g.conditionally_add_constant(
+                cs.ns(|| format!("cnt++ [{}]", i)),
+                &should_increase_counter,
+                FieldElement::one(),
+            )?;
+
+            // sc_txs_com_cumulative = H(sc_txs_com_cumulative, sc_txs_com_hashes[i])
+            sc_txs_com_cumulative_g = FieldHashGadget::enforce_hash_constant_length(
+                cs.ns(|| format!("H(sc_txs_com_cumulative, sc_txs_com_hashes[{}])", i)),
+                &[
+                    sc_txs_com_cumulative_g,
+                    csw_data_g.sc_txs_com_hashes_g[i].clone(),
+                ],
+            )?;
+        }
+
+        // require(cnt == 1)   // We must have exactly one match
+        let constant_one_g =
+            FieldElementGadget::from_value(cs.ns(|| "alloc constant 1"), &FieldElement::from(1u8));
+        counter_g.conditional_enforce_equal(
+            cs.ns(|| "require(cnt == 1)"),
+            &constant_one_g,
+            &should_enforce_ft_withdrawal_g,
+        )?;
+
+        // require(mcb_sc_txs_com_end = sc_txs_com_cumulative)
+        csw_data_g.mcb_sc_txs_com_end_g.conditional_enforce_equal(
+            cs.ns(|| "mcb_sc_txs_com_end = sc_txs_com_cumulative"),
+            &sc_txs_com_cumulative_g,
+            &should_enforce_ft_withdrawal_g,
+        )?;
+
+        // require(ft_input.amount == sys_data.amount)
+        csw_data_g.ft_input_g.amount_g.conditional_enforce_equal(
+            cs.ns(|| "ft_input.amount == sys_data.amount"),
+            &csw_data_g.amount_g,
+            &should_enforce_ft_withdrawal_g,
+        )?;
+
+        // require(true == verify_signature(ft_input_hash, ft_input_sig, ft_input.receiver_metadata.receiver_pub_key))
+        // TODO: as soon as the related gadget is available, implement this as proof of ownership of a secret key
+
+        // require(nullifier == ft_input_hash)
+        csw_data_g.nullifier_g.conditional_enforce_equal(
+            cs.ns(|| "nullifier == ft_input_hash"),
+            &ft_input_hash_g,
+            &should_enforce_ft_withdrawal_g,
+        )?;
+
+        // FT withdrawal [END]
 
         Ok(())
     }
@@ -238,8 +386,9 @@ mod test {
 
     #[test]
     fn test_csw_circuit() {
+        let sidechain_id = FieldElement::from(77u8);
         let csw_prover_data = generate_test_csw_prover_data();
-        let circuit = CeasedSidechainWithdrawalCircuit::new(csw_prover_data.clone());
+        let circuit = CeasedSidechainWithdrawalCircuit::new(sidechain_id, csw_prover_data.clone());
 
         let failing_constraint = debug_circuit(circuit.clone()).unwrap();
         println!("Failing constraint: {:?}", failing_constraint);

@@ -440,12 +440,28 @@ impl EqGadget<FieldElement> for CswUtxoInputDataGadget {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub struct CswFtInputDataGadget {
     pub amount_g: FieldElementGadget,
     pub receiver_pub_key_g: Vec<UInt8>,
     pub payback_addr_data_hash_g: FieldElementGadget,
     pub tx_hash_g: FieldElementGadget,
     pub out_idx_g: FieldElementGadget,
+}
+
+impl CswFtInputDataGadget {
+    pub fn is_phantom<CS: ConstraintSystemAbstract<FieldElement>>(
+        &self,
+        mut cs: CS,
+    ) -> Result<Boolean, SynthesisError> {
+        // TODO: properly create and store the phantom gadget
+        let phantom_ft_input_g = CswFtInputDataGadget::from_value(
+            cs.ns(|| "alloc constant FT input phantom gadget"),
+            &CswFtInputData::default(),
+        );
+
+        self.is_eq(cs.ns(|| "is FT output phantom"), &phantom_ft_input_g)
+    }
 }
 
 impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
@@ -514,6 +530,118 @@ impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
     }
 }
 
+impl ConstantGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
+    fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        value: &CswFtInputData,
+    ) -> Self {
+        let amount_g = FieldElementGadget::from_value(cs.ns(|| "alloc amount"), &value.amount);
+        let receiver_pub_key_g = value
+            .receiver_pub_key
+            .iter()
+            .map(|&byte| UInt8::constant(byte))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        let payback_addr_data_hash_g = FieldElementGadget::from_value(
+            cs.ns(|| "alloc payback addr data hash"),
+            &value.payback_addr_data_hash,
+        );
+        let tx_hash_g = FieldElementGadget::from_value(cs.ns(|| "alloc tx hash"), &value.tx_hash);
+        let out_idx_g = FieldElementGadget::from_value(cs.ns(|| "alloc out idx"), &value.out_idx);
+
+        Self {
+            amount_g,
+            receiver_pub_key_g,
+            payback_addr_data_hash_g,
+            tx_hash_g,
+            out_idx_g,
+        }
+    }
+
+    fn get_constant(&self) -> CswFtInputData {
+        CswFtInputData {
+            amount: self.amount_g.get_constant(),
+            receiver_pub_key: self
+                .receiver_pub_key_g
+                .iter()
+                .map(|byte| byte.get_value().unwrap())
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
+            payback_addr_data_hash: self.payback_addr_data_hash_g.get_constant(),
+            tx_hash: self.tx_hash_g.get_constant(),
+            out_idx: self.out_idx_g.get_constant(),
+        }
+    }
+}
+
+impl EqGadget<FieldElement> for CswFtInputDataGadget {
+    fn is_eq<CS: ConstraintSystemAbstract<FieldElement>>(
+        &self,
+        mut cs: CS,
+        other: &Self,
+    ) -> Result<Boolean, SynthesisError> {
+        let b1 = self
+            .amount_g
+            .is_eq(cs.ns(|| "is eq amount_g"), &other.amount_g)?;
+        let b2 = self.receiver_pub_key_g.is_eq(
+            cs.ns(|| "is eq receiver_pub_key_g"),
+            &other.receiver_pub_key_g,
+        )?;
+        let b3 = self.payback_addr_data_hash_g.is_eq(
+            cs.ns(|| "is eq payback_addr_data_hash_g"),
+            &other.payback_addr_data_hash_g,
+        )?;
+        let b4 = self
+            .tx_hash_g
+            .is_eq(cs.ns(|| "is eq tx_hash_g"), &other.tx_hash_g)?;
+        let b5 = self
+            .out_idx_g
+            .is_eq(cs.ns(|| "is eq out_idx_g"), &other.out_idx_g)?;
+
+        Boolean::kary_and(
+            cs.ns(|| "is_eq CswUtxoInputDataGadget"),
+            &[b1, b2, b3, b4, b5],
+        )
+    }
+}
+
+impl ToConstraintFieldGadget<FieldElement> for CswFtInputDataGadget {
+    type FieldGadget = FieldElementGadget;
+
+    fn to_field_gadget_elements<CS: ConstraintSystemAbstract<FieldElement>>(
+        &self,
+        mut cs: CS,
+    ) -> Result<Vec<FieldElementGadget>, SynthesisError> {
+        let mut elements = vec![self.amount_g.clone()];
+
+        let bits = self
+            .receiver_pub_key_g
+            .to_bits(cs.ns(|| "receiver_pub_key_g to bits"))
+            .unwrap();
+
+        elements.extend(
+            bits.chunks(FIELD_CAPACITY)
+                .enumerate()
+                .map(|(index, chunk)| {
+                    FieldElementGadget::from_bits(
+                        cs.ns(|| format!("from bits le {}", index)),
+                        chunk,
+                    )
+                    .unwrap()
+                })
+                .collect::<Vec<_>>(),
+        );
+
+        elements.push(self.payback_addr_data_hash_g.clone());
+        elements.push(self.tx_hash_g.clone());
+        elements.push(self.out_idx_g.clone());
+
+        Ok(elements)
+    }
+}
+
 pub struct CswProverDataGadget {
     // public inputs [START]
     pub genesis_constant_g: FieldElementGadget,
@@ -535,8 +663,7 @@ pub struct CswProverDataGadget {
     pub ft_tree_path_g: GingerMHTBinaryGadget,
     pub scb_btr_tree_root_g: FieldElementGadget,
     pub wcert_tree_root_g: FieldElementGadget,
-    pub sc_txs_com_hashes_g: Vec<FieldElementGadget>
-    // witnesses [END]
+    pub sc_txs_com_hashes_g: Vec<FieldElementGadget>, // witnesses [END]
 }
 
 impl FromGadget<CswProverData, FieldElement> for CswProverDataGadget {
