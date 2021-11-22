@@ -8,9 +8,7 @@ use primitives::{
     vrf::ecvrf::*,
     FieldBasedBinaryMHTPath,
 };
-use r1cs_crypto::{
-    field_based_mht::FieldBasedBinaryMerkleTreePathGadget, TweedleFrPoseidonHashGadget,
-};
+use r1cs_crypto::{TweedleFrDensityOptimizedPoseidonHashGadget, field_based_mht::FieldBasedBinaryMerkleTreePathGadget};
 use r1cs_std::fields::fp::FpGadget;
 
 pub const SCHNORR_PK_SIZE: usize = GROUP_COMPRESSED_SIZE;
@@ -35,7 +33,7 @@ pub type VRFProof = FieldBasedEcVrfProof<FieldElement, G2Projective>;
 pub type VRFPk = G2;
 pub type VRFSk = ScalarFieldElement;
 pub type FieldElementGadget = FpGadget<FieldElement>;
-pub type FieldHashGadget = TweedleFrPoseidonHashGadget;
+pub type FieldHashGadget = TweedleFrDensityOptimizedPoseidonHashGadget;
 pub type GingerMHTBinaryPath = FieldBasedBinaryMHTPath<GingerMHTParams>;
 pub type GingerMHTBinaryGadget =
     FieldBasedBinaryMerkleTreePathGadget<GingerMHTParams, FieldHashGadget, FieldElement>;
