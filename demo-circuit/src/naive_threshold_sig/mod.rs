@@ -3,9 +3,7 @@ use algebra::{Field, PrimeField, ProjectiveCurve, ToBits};
 use cctp_primitives::utils::commitment_tree::ByteAccumulator;
 use primitives::{
     crh::FieldBasedHash,
-    signature::schnorr::field_based_schnorr::{
-        FieldBasedSchnorrSignature, FieldBasedSchnorrPk,
-    }
+    signature::schnorr::field_based_schnorr::{FieldBasedSchnorrPk, FieldBasedSchnorrSignature},
 };
 use r1cs_crypto::{
     crh::{FieldBasedHashGadget, TweedleFrPoseidonHashGadget as PoseidonHashGadget},
@@ -18,11 +16,13 @@ use r1cs_crypto::{
     },
 };
 
-use r1cs_std::{instantiated::tweedle::TweedleDumGadget as CurveGadget, fields::{
-    fp::FpGadget, FieldGadget,
-}, alloc::AllocGadget, bits::{
-    boolean::Boolean, uint64::UInt64, FromBitsGadget,
-}, eq::EqGadget};
+use r1cs_std::{
+    alloc::AllocGadget,
+    bits::{boolean::Boolean, uint64::UInt64, FromBitsGadget},
+    eq::EqGadget,
+    fields::{fp::FpGadget, FieldGadget},
+    instantiated::tweedle::TweedleDumGadget as CurveGadget,
+};
 
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 
@@ -66,8 +66,8 @@ pub struct NaiveTresholdSignature<F: PrimeField> {
     btr_fee: Option<u64>,
 
     // Public inputs
-    pks_threshold_hash:                   Option<FieldElement>,
-    cert_data_hash:                       Option<FieldElement>,
+    pks_threshold_hash: Option<FieldElement>,
+    cert_data_hash: Option<FieldElement>,
 
     //Other
     max_pks: usize,
@@ -76,26 +76,28 @@ pub struct NaiveTresholdSignature<F: PrimeField> {
 
 impl<F: PrimeField> NaiveTresholdSignature<F> {
     pub fn new(
-        pks:                                  Vec<FieldBasedSchnorrPk<G2Projective>>,
-        sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>>,
-        threshold:                            FieldElement,
-        b:                                    FieldElement,
-        sc_id:                                FieldElement,
-        epoch_number:                         FieldElement,
-        end_cumulative_sc_tx_comm_tree_root:  FieldElement,
-        mr_bt:                                FieldElement,
-        ft_min_amount:                        u64,
-        btr_fee:                              u64,
-        max_pks:                              usize,
-        valid_signatures:                     u64
+        pks: Vec<FieldBasedSchnorrPk<G2Projective>>,
+        sigs: Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>>,
+        threshold: FieldElement,
+        b: FieldElement,
+        sc_id: FieldElement,
+        epoch_number: FieldElement,
+        end_cumulative_sc_tx_comm_tree_root: FieldElement,
+        mr_bt: FieldElement,
+        ft_min_amount: u64,
+        btr_fee: u64,
+        max_pks: usize,
+        valid_signatures: u64,
     ) -> Self {
-
         //Convert needed variables into field elements
         let fees_field_elements = {
             let fes = ByteAccumulator::init()
-                .update(btr_fee).unwrap()
-                .update(ft_min_amount).unwrap()
-                .get_field_elements().unwrap();
+                .update(btr_fee)
+                .unwrap()
+                .update(ft_min_amount)
+                .unwrap()
+                .get_field_elements()
+                .unwrap();
             assert_eq!(fes.len(), 1);
             fes[0]
         };
@@ -103,7 +105,9 @@ impl<F: PrimeField> NaiveTresholdSignature<F> {
 
         //Compute pks_threshold_hash
         let mut h = FieldHash::init_constant_length(pks.len(), None);
-        pks.iter().for_each(|pk| { h.update(pk.0.into_affine().x); });
+        pks.iter().for_each(|pk| {
+            h.update(pk.0.into_affine().x);
+        });
         let pks_hash = h.finalize().unwrap();
         let pks_threshold_hash = FieldHash::init_constant_length(2, None)
             .update(pks_hash)
@@ -153,7 +157,7 @@ impl<F: PrimeField> NaiveTresholdSignature<F> {
             max_pks,
             pks_threshold_hash: Some(pks_threshold_hash),
             cert_data_hash: Some(cert_data_hash),
-            _field: PhantomData
+            _field: PhantomData,
         }
     }
 }
@@ -304,10 +308,11 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
         }?;
 
         //Check pks_threshold_hash (constant)
-        let expected_pks_threshold_hash_g = FrGadget::alloc_input(
-            cs.ns(|| "alloc constant as input"),
-            || self.pks_threshold_hash.ok_or(SynthesisError::AssignmentMissing)
-        )?;
+        let expected_pks_threshold_hash_g =
+            FrGadget::alloc_input(cs.ns(|| "alloc constant as input"), || {
+                self.pks_threshold_hash
+                    .ok_or(SynthesisError::AssignmentMissing)
+            })?;
 
         pks_threshold_hash_g.enforce_equal(
             cs.ns(|| "pks_threshold_hash: expected == actual"),
@@ -315,10 +320,10 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
         )?;
 
         // Check cert_data_hash
-        let expected_cert_data_hash_g = FrGadget::alloc_input(
-            cs.ns(|| "alloc input cert_data_hash_g"),
-            || self.cert_data_hash.ok_or(SynthesisError::AssignmentMissing)
-        )?;
+        let expected_cert_data_hash_g =
+            FrGadget::alloc_input(cs.ns(|| "alloc input cert_data_hash_g"), || {
+                self.cert_data_hash.ok_or(SynthesisError::AssignmentMissing)
+            })?;
 
         cert_data_hash_g.enforce_equal(
             cs.ns(|| "cert_data_hash: expected == actual"),
@@ -356,26 +361,30 @@ pub fn get_instance_for_setup(max_pks: usize) -> NaiveTresholdSignature<FieldEle
 
     // Create parameters for our circuit
     NaiveTresholdSignature::<FieldElement> {
-        pks:                                    vec![None; max_pks],
-        sigs:                                   vec![None; max_pks],
-        threshold:                              None,
-        b:                                      vec![None; log_max_pks + 1],
-        sc_id:                                  None,
-        epoch_number:                           None,
-        end_cumulative_sc_tx_comm_tree_root:    None,
-        mr_bt:                                  None,
-        ft_min_amount:                          None,
-        btr_fee:                                None,
-        pks_threshold_hash:                     None,
-        cert_data_hash:                         None,
+        pks: vec![None; max_pks],
+        sigs: vec![None; max_pks],
+        threshold: None,
+        b: vec![None; log_max_pks + 1],
+        sc_id: None,
+        epoch_number: None,
+        end_cumulative_sc_tx_comm_tree_root: None,
+        mr_bt: None,
+        ft_min_amount: None,
+        btr_fee: None,
+        pks_threshold_hash: None,
+        cert_data_hash: None,
         max_pks,
-        _field:                                 PhantomData,
+        _field: PhantomData,
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use cctp_primitives::{
+        proving_system::init::{get_g1_committer_key, load_g1_committer_key},
+        utils::commitment_tree::ByteAccumulator,
+    };
     use primitives::{
         crh::FieldBasedHash,
         signature::{
@@ -384,24 +393,17 @@ mod test {
         },
     };
     use r1cs_core::debug_circuit;
-    use rand::{Rng, rngs::OsRng};
-    use cctp_primitives::{
-        proving_system::init::{
-            load_g1_committer_key, get_g1_committer_key
-        },
-        utils::commitment_tree::ByteAccumulator
-    };
+    use rand::{rngs::OsRng, Rng};
 
     type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, G2Projective, FieldHash>;
 
     fn get_test_circuit_instance(
-        max_pks:                  usize,
-        valid_sigs:               usize,
-        threshold:                usize,
+        max_pks: usize,
+        valid_sigs: usize,
+        threshold: usize,
         wrong_pks_threshold_hash: bool,
-        wrong_cert_data_hash:     bool,
-    ) ->  NaiveTresholdSignature<FieldElement> 
-    {
+        wrong_cert_data_hash: bool,
+    ) -> NaiveTresholdSignature<FieldElement> {
         //Istantiate rng
         let mut rng = OsRng::default();
         let mut h = FieldHash::init_constant_length(5, None);
@@ -415,9 +417,12 @@ mod test {
         let ft_min_amount: u64 = rng.gen();
         let fees_field_elements = {
             let fes = ByteAccumulator::init()
-                .update(btr_fee).unwrap()
-                .update(ft_min_amount).unwrap()
-                .get_field_elements().unwrap();
+                .update(btr_fee)
+                .unwrap()
+                .update(ft_min_amount)
+                .unwrap()
+                .get_field_elements()
+                .unwrap();
             assert_eq!(fes.len(), 1);
             fes[0]
         };
@@ -464,25 +469,38 @@ mod test {
 
         //Return concrete circuit instance
         let mut c = NaiveTresholdSignature::<FieldElement>::new(
-            pks, sigs, t_field, b_field, sc_id, epoch_number, end_cumulative_sc_tx_comm_tree_root,
-            mr_bt, ft_min_amount, btr_fee, max_pks, valid_sigs as u64
+            pks,
+            sigs,
+            t_field,
+            b_field,
+            sc_id,
+            epoch_number,
+            end_cumulative_sc_tx_comm_tree_root,
+            mr_bt,
+            ft_min_amount,
+            btr_fee,
+            max_pks,
+            valid_sigs as u64,
         );
 
-        if wrong_pks_threshold_hash { c.pks_threshold_hash = Some(rng.gen()); }
-        if wrong_cert_data_hash { c.cert_data_hash = Some(rng.gen()); }
+        if wrong_pks_threshold_hash {
+            c.pks_threshold_hash = Some(rng.gen());
+        }
+        if wrong_cert_data_hash {
+            c.cert_data_hash = Some(rng.gen());
+        }
 
         c
     }
     fn generate_test_proof(
-        max_pks:                  usize,
-        valid_sigs:               usize,
-        threshold:                usize,
+        max_pks: usize,
+        valid_sigs: usize,
+        threshold: usize,
         wrong_pks_threshold_hash: bool,
-        wrong_cert_data_hash:     bool,
-        index_pk:                 CoboundaryMarlinProverKey,
-        zk:                       bool,
+        wrong_cert_data_hash: bool,
+        index_pk: CoboundaryMarlinProverKey,
+        zk: bool,
     ) -> Result<(CoboundaryMarlinProof, Vec<FieldElement>), Error> {
-
         // Get concrete and correct circuit instance. We want to test error cases in verification only.
         let c = get_test_circuit_instance(max_pks, valid_sigs, threshold, false, false);
 
@@ -490,12 +508,24 @@ mod test {
         let rng = &mut OsRng;
         let ck_g1 = get_g1_committer_key().unwrap();
         match CoboundaryMarlin::prove(
-            &index_pk, ck_g1.as_ref().unwrap(), c.clone(), zk, if zk { Some(rng) } else { None }
+            &index_pk,
+            ck_g1.as_ref().unwrap(),
+            c.clone(),
+            zk,
+            if zk { Some(rng) } else { None },
         ) {
             Ok(proof) => {
                 let public_inputs = vec![
-                    if !wrong_pks_threshold_hash { c.pks_threshold_hash.unwrap() } else { rng.gen() },
-                    if !wrong_cert_data_hash { c.cert_data_hash.unwrap() } else { rng.gen() },
+                    if !wrong_pks_threshold_hash {
+                        c.pks_threshold_hash.unwrap()
+                    } else {
+                        rng.gen()
+                    },
+                    if !wrong_cert_data_hash {
+                        c.cert_data_hash.unwrap()
+                    } else {
+                        rng.gen()
+                    },
                 ];
                 Ok((MarlinProof(proof), public_inputs))
             }

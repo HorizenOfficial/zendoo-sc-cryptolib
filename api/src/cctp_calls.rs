@@ -196,8 +196,18 @@ pub fn create_naive_threshold_sig_proof(
     let threshold = FieldElement::from(threshold);
 
     let c = NaiveTresholdSignature::<FieldElement>::new(
-        pks, sigs, threshold, b, *sc_id, FieldElement::from(epoch_number), *end_cumulative_sc_tx_comm_tree_root,
-        mr_bt, ft_min_amount, btr_fee, max_pks, valid_signatures
+        pks,
+        sigs,
+        threshold,
+        b,
+        *sc_id,
+        FieldElement::from(epoch_number),
+        *end_cumulative_sc_tx_comm_tree_root,
+        mr_bt,
+        ft_min_amount,
+        btr_fee,
+        max_pks,
+        valid_signatures,
     );
 
     let pk: ZendooProverKey = read_from_file(
