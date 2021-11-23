@@ -107,6 +107,7 @@ pub fn compute_msg_to_sign(
     btr_fee: u64,
     ft_min_amount: u64,
     bt_list: Vec<BackwardTransfer>,
+    custom_fields: Option<Vec<FieldElement>>,
 ) -> Result<(FieldElement, FieldElement), Error> {
     let epoch_number = FieldElement::from(epoch_number);
 
@@ -127,14 +128,34 @@ pub fn compute_msg_to_sign(
         fes[0]
     };
 
+    // Compute custom_fields_hash if they are present
+    let custom_fields_hash = if custom_fields.is_some() {
+        let custom_fields = custom_fields.unwrap();
+        let mut h = FieldHash::init_constant_length(custom_fields.len(), None);
+        custom_fields.into_iter().for_each(|custom_field| { h.update(custom_field); });
+        Some(h.finalize().unwrap())
+    } else {
+        None
+    };
+
     //Compute message to be verified
-    let msg = FieldHash::init_constant_length(5, None)
+    let mut h = FieldHash::init_constant_length(
+        5 + if custom_fields_hash.is_some() { 1 } else { 0 },
+        None
+    );
+
+    h
         .update(*sc_id)
         .update(epoch_number)
         .update(mr_bt)
         .update(*end_cumulative_sc_tx_comm_tree_root)
-        .update(fees_field_element)
-        .finalize()?;
+        .update(fees_field_element);
+
+    if custom_fields_hash.is_some() {
+        h.update(custom_fields_hash.unwrap());
+    }
+
+    let msg = h.finalize()?;
 
     Ok((mr_bt, msg))
 }
@@ -149,6 +170,7 @@ pub fn create_naive_threshold_sig_proof(
     ft_min_amount: u64,
     bt_list: Vec<BackwardTransfer>,
     threshold: u64,
+    custom_fields: Option<Vec<FieldElement>>,
     proving_key_path: &Path,
     enforce_membership: bool,
     zk: bool,
@@ -167,6 +189,7 @@ pub fn create_naive_threshold_sig_proof(
         btr_fee,
         ft_min_amount,
         bt_list,
+        custom_fields.clone()
     )?;
 
     // Iterate over sigs, check and count number of valid signatures,
@@ -208,6 +231,7 @@ pub fn create_naive_threshold_sig_proof(
         btr_fee,
         max_pks,
         valid_signatures,
+        custom_fields,
     );
 
     let pk: ZendooProverKey = read_from_file(
@@ -248,6 +272,7 @@ pub fn verify_naive_threshold_sig_proof(
     ft_min_amount: u64,
     bt_list: Vec<BackwardTransfer>,
     valid_sigs: u64,
+    custom_fields: Vec<FieldElement>,
     proof: Vec<u8>,
     check_proof: bool,
     compressed_proof: bool,
@@ -267,7 +292,7 @@ pub fn verify_naive_threshold_sig_proof(
         epoch_number,
         quality: valid_sigs,
         bt_list: bt_list_opt,
-        custom_fields: None,
+        custom_fields: if custom_fields.len() == 0 { None } else { Some(custom_fields.iter().collect()) },
         end_cumulative_sc_tx_commitment_tree_root,
         btr_fee,
         ft_min_amount,
@@ -393,6 +418,7 @@ mod test {
 
     fn create_sample_naive_threshold_sig_circuit(
         bt_num: usize,
+        custom_fields_len: usize,
         pk_path: &Path,
         vk_path: &Path,
         proof_path: &Path,
@@ -411,6 +437,15 @@ mod test {
         let epoch_number: u32 = rng.gen();
         let btr_fee: u64 = rng.gen();
         let ft_min_amount: u64 = rng.gen();
+        let custom_fields = if custom_fields_len > 0 {
+            let random_fields = (0..custom_fields_len).map(|_| rng.gen()).collect::<Vec<_>>();
+            Some(random_fields)
+        } else {
+            None
+        };
+
+        println!("Custom fields len: {}", custom_fields_len);
+        println!("Custom fields: {:?}", custom_fields);
 
         //Compute msg to sign
         let (_, msg) = compute_msg_to_sign(
@@ -420,12 +455,13 @@ mod test {
             btr_fee,
             ft_min_amount,
             bt_list.clone(),
+            custom_fields.clone()
         )
         .unwrap();
         println!("compute_msg_to_sign finished");
 
         //Generate params and write them to file
-        let circ = get_instance_for_setup(3);
+        let circ = get_instance_for_setup(3, custom_fields_len);
         generate_circuit_keypair(
             circ,
             ProvingSystem::CoboundaryMarlin,
@@ -499,6 +535,7 @@ mod test {
             ft_min_amount,
             bt_list.clone(),
             threshold,
+            custom_fields.clone(),
             pk_path,
             false,
             false,
@@ -518,6 +555,7 @@ mod test {
             ft_min_amount,
             bt_list.clone(),
             quality,
+            if custom_fields.is_some() { custom_fields.clone().unwrap() } else { vec![] },
             proof.clone(),
             true,
             true,
@@ -537,6 +575,7 @@ mod test {
             ft_min_amount,
             bt_list,
             quality - 1,
+            if custom_fields.is_some() { custom_fields.unwrap() } else { vec![] },
             proof,
             true,
             true,
@@ -551,47 +590,51 @@ mod test {
     fn sample_calls_naive_threshold_sig_circuit() {
         let tmp_dir = std::env::temp_dir();
         let ps_type = ProvingSystem::CoboundaryMarlin;
+        let custom_fields = 10;
 
         init_dlog_keys(ps_type, 1 << 17, 1 << 14).unwrap();
 
-        println!("****************With BWT**********************");
+        for i in vec![0, custom_fields as usize] {
+            println!("****************With BWT**********************");
 
-        let mut pk_path = tmp_dir.clone();
-        pk_path.push("sample_pk");
-
-        let mut vk_path = tmp_dir.clone();
-        vk_path.push("sample_vk");
-
-        let mut proof_path = tmp_dir.clone();
-        proof_path.push("sample_proof");
-
-        create_sample_naive_threshold_sig_circuit(10, &pk_path, &vk_path, &proof_path);
-
-        println!("****************Without BWT*******************");
-
-        let mut pk_path_no_bwt = tmp_dir.clone();
-        pk_path_no_bwt.push("sample_pk_no_bwt");
-
-        let mut vk_path_no_bwt = tmp_dir.clone();
-        vk_path_no_bwt.push("sample_vk_no_bwt");
-
-        let mut proof_path_no_bwt = tmp_dir.clone();
-        proof_path_no_bwt.push("sample_proof_no_bwt");
-
-        create_sample_naive_threshold_sig_circuit(
-            0,
-            &pk_path_no_bwt,
-            &vk_path_no_bwt,
-            &proof_path_no_bwt,
-        );
-
-        println!("*************** Clean up **********************");
-        std::fs::remove_file(pk_path).unwrap();
-        std::fs::remove_file(vk_path).unwrap();
-        std::fs::remove_file(proof_path).unwrap();
-        std::fs::remove_file(pk_path_no_bwt).unwrap();
-        std::fs::remove_file(vk_path_no_bwt).unwrap();
-        std::fs::remove_file(proof_path_no_bwt).unwrap();
+            let mut pk_path = tmp_dir.clone();
+            pk_path.push("sample_pk");
+    
+            let mut vk_path = tmp_dir.clone();
+            vk_path.push("sample_vk");
+    
+            let mut proof_path = tmp_dir.clone();
+            proof_path.push("sample_proof");
+    
+            create_sample_naive_threshold_sig_circuit(10, i, &pk_path, &vk_path, &proof_path);
+    
+            println!("****************Without BWT*******************");
+    
+            let mut pk_path_no_bwt = tmp_dir.clone();
+            pk_path_no_bwt.push("sample_pk_no_bwt");
+    
+            let mut vk_path_no_bwt = tmp_dir.clone();
+            vk_path_no_bwt.push("sample_vk_no_bwt");
+    
+            let mut proof_path_no_bwt = tmp_dir.clone();
+            proof_path_no_bwt.push("sample_proof_no_bwt");
+    
+            create_sample_naive_threshold_sig_circuit(
+                0,
+                i,
+                &pk_path_no_bwt,
+                &vk_path_no_bwt,
+                &proof_path_no_bwt,
+            );
+    
+            println!("*************** Clean up **********************");
+            std::fs::remove_file(pk_path).unwrap();
+            std::fs::remove_file(vk_path).unwrap();
+            std::fs::remove_file(proof_path).unwrap();
+            std::fs::remove_file(pk_path_no_bwt).unwrap();
+            std::fs::remove_file(vk_path_no_bwt).unwrap();
+            std::fs::remove_file(proof_path_no_bwt).unwrap();
+        }
     }
 
     #[test]

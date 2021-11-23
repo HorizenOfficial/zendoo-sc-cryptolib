@@ -1767,6 +1767,7 @@ ffi_export!(
         _end_cumulative_sc_tx_comm_tree_root: JObject,
         _btr_fee: jlong,
         _ft_min_amount: jlong,
+        _custom_fields_list: jobjectArray,
     ) -> jobject {
         //Extract backward transfers
         let mut bt_list = vec![];
@@ -1832,6 +1833,38 @@ ffi_export!(
             read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         };
 
+        // Read custom fields if they are present
+        let mut custom_fields_list = None;
+
+        let custom_fields_list_size = _env
+            .get_array_length(_custom_fields_list)
+            .expect("Should be able to get custom_fields_list size");
+
+        if custom_fields_list_size > 0 {
+            let mut custom_fields = Vec::with_capacity(custom_fields_list_size as usize);
+
+            for i in 0..custom_fields_list_size {
+                let field_obj = _env.get_object_array_element(_custom_fields_list, i).expect(
+                    format!(
+                        "Should be able to read elem {} of the personalization array",
+                        i
+                    )
+                    .as_str(),
+                );
+    
+                let field = {
+                    let f = _env
+                        .get_field(field_obj, "fieldElementPointer", "J")
+                        .expect("Should be able to get field fieldElementPointer");
+    
+                    read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+                };
+
+                custom_fields.push(*field);
+            }
+            custom_fields_list = Some(custom_fields);
+        }
+
         //Compute message to sign:
         let msg = match compute_msg_to_sign(
             sc_id,
@@ -1840,6 +1873,7 @@ ffi_export!(
             _btr_fee as u64,
             _ft_min_amount as u64,
             bt_list,
+            custom_fields_list,
         ) {
             Ok((_, msg)) => msg,
             Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
@@ -1956,6 +1990,7 @@ ffi_export!(
         _class: JClass,
         _proving_system: JObject,
         _max_pks: jlong,
+        _num_custom_fields: jint,
         _proving_key_path: JString,
         _verification_key_path: JString,
         _zk: jboolean,
@@ -1978,7 +2013,7 @@ ffi_export!(
 
         let max_pks = _max_pks as usize;
 
-        let circ = get_instance_for_setup(max_pks);
+        let circ = get_instance_for_setup(max_pks, _num_custom_fields as usize);
 
         // Read zk value
         let zk = _zk == JNI_TRUE;
@@ -2073,6 +2108,7 @@ ffi_export!(
         _schnorr_sigs_list: jobjectArray,
         _schnorr_pks_list: jobjectArray,
         _threshold: jlong,
+        _custom_fields_list: jobjectArray,
         _proving_key_path: JString,
         _check_proving_key: jboolean,
         _zk: jboolean,
@@ -2195,6 +2231,38 @@ ffi_export!(
             .get_string(_proving_key_path)
             .expect("Should be able to read jstring as Rust String");
 
+        // Read custom fields if they are present
+        let mut custom_fields_list = None;
+
+        let custom_fields_list_size = _env
+            .get_array_length(_custom_fields_list)
+            .expect("Should be able to get custom_fields_list size");
+
+        if custom_fields_list_size > 0 {
+            let mut custom_fields = Vec::with_capacity(custom_fields_list_size as usize);
+
+            for i in 0..custom_fields_list_size {
+                let field_obj = _env.get_object_array_element(_custom_fields_list, i).expect(
+                    format!(
+                        "Should be able to read elem {} of the personalization array",
+                        i
+                    )
+                    .as_str(),
+                );
+    
+                let field = {
+                    let f = _env
+                        .get_field(field_obj, "fieldElementPointer", "J")
+                        .expect("Should be able to get field fieldElementPointer");
+    
+                    read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+                };
+
+                custom_fields.push(*field);
+            }
+            custom_fields_list = Some(custom_fields);
+        }
+
         //create proof
         let (proof, quality) = match create_naive_threshold_sig_proof(
             pks.as_slice(),
@@ -2206,6 +2274,7 @@ ffi_export!(
             _ft_min_amount as u64,
             bt_list,
             _threshold as u64,
+            custom_fields_list,
             Path::new(proving_key_path.to_str().unwrap()),
             _check_proving_key == JNI_TRUE,
             _zk == JNI_TRUE,
@@ -2275,6 +2344,7 @@ ffi_export!(
         _ft_min_amount: jlong,
         _constant: JObject,
         _quality: jlong,
+        _custom_fields_list: jobjectArray,
         _sc_proof_bytes: jbyteArray,
         _check_proof: jboolean,
         _compressed_proof: jboolean,
@@ -2355,6 +2425,35 @@ ffi_export!(
             read_raw_pointer(&_env, c.j().unwrap() as *const FieldElement)
         };
 
+        // Read custom fields if they are present
+        let mut custom_fields_list = vec![];
+
+        let custom_fields_list_size = _env
+            .get_array_length(_custom_fields_list)
+            .expect("Should be able to get custom_fields_list size");
+
+        if custom_fields_list_size > 0 {
+            for i in 0..custom_fields_list_size {
+                let field_obj = _env.get_object_array_element(_custom_fields_list, i).expect(
+                    format!(
+                        "Should be able to read elem {} of the personalization array",
+                        i
+                    )
+                    .as_str(),
+                );
+    
+                let field = {
+                    let f = _env
+                        .get_field(field_obj, "fieldElementPointer", "J")
+                        .expect("Should be able to get field fieldElementPointer");
+    
+                    read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+                };
+
+                custom_fields_list.push(*field);
+            }
+        }
+
         //Extract proof
         let proof_bytes = _env
             .convert_byte_array(_sc_proof_bytes)
@@ -2375,6 +2474,7 @@ ffi_export!(
             _ft_min_amount as u64,
             bt_list,
             _quality as u64,
+            custom_fields_list,
             proof_bytes,
             _check_proof == JNI_TRUE,
             _compressed_proof == JNI_TRUE,
