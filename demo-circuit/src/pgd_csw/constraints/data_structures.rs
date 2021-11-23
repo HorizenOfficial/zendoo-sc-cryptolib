@@ -90,9 +90,7 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
             FieldElementGadget::alloc(cs.ns(|| "alloc btr min fee"), || btr_min_fee)?;
 
         let scb_new_mst_root_g =
-            FieldElementGadget::alloc_input(cs.ns(|| "alloc scb new mst root"), || {
-                scb_new_mst_root
-            })?;
+            FieldElementGadget::alloc(cs.ns(|| "alloc scb new mst root"), || scb_new_mst_root)?;
 
         let new_instance = Self {
             ledger_id_g,

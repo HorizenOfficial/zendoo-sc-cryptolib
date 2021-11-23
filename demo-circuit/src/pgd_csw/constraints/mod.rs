@@ -1,15 +1,20 @@
-use algebra::Field;
+use algebra::{fields::ed25519::fq::Fq as ed25519Fq, AffineCurve, Field};
 use cctp_primitives::type_mapping::FieldElement;
+use primitives::bytes_to_bits;
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 use r1cs_crypto::{FieldBasedHashGadget, FieldBasedMerkleTreePathGadget};
 use r1cs_std::{
     alloc::AllocGadget,
     alloc::ConstantGadget,
     boolean::{AllocatedBit, Boolean},
-    fields::FieldGadget,
+    fields::{nonnative::nonnative_field_gadget::NonNativeFieldGadget, FieldGadget},
+    groups::{
+        nonnative::short_weierstrass::short_weierstrass_jacobian::GroupAffineNonNativeGadget,
+        GroupGadget,
+    },
     prelude::EqGadget,
     to_field_gadget_vec::ToConstraintFieldGadget,
-    FromGadget,
+    FromBitsGadget, FromGadget,
 };
 
 use crate::{
@@ -20,6 +25,13 @@ use crate::{
 use self::data_structures::CswProverDataGadget;
 
 pub mod data_structures;
+
+// Simulated types
+type SimulatedFieldElement = ed25519Fq;
+type SimulatedGroup = algebra::curves::ed25519::SWEd25519Affine;
+type SimulatedCurveParameters = algebra::curves::ed25519::Ed25519Parameters;
+type ECPointSimulationGadget =
+    GroupAffineNonNativeGadget<SimulatedCurveParameters, FieldElement, SimulatedFieldElement>;
 
 #[derive(Clone)]
 pub struct CeasedSidechainWithdrawalCircuit {
@@ -156,6 +168,67 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 
         // TODO: check secret key ownership
 
+        let public_key_bits = bytes_to_bits(
+            &csw_data_g
+                .input_g
+                .output_g
+                .spending_pub_key_g
+                .iter()
+                .map(|byte_gadget| byte_gadget.get_value().unwrap())
+                .collect::<Vec<_>>(),
+        );
+
+        let public_key_bits_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc public key bits"), || {
+            Ok(public_key_bits.as_slice())
+        })?;
+
+        // Get the Boolean corresponding to the sign of the x coordinate
+        let pk_x_sign_bit_g = public_key_bits_g[public_key_bits_g.len() - 1];
+
+        // Read a NonNativeFieldGadget(ed25519Fq) from the other Booleans
+        let pk_y_coordinate_bits = &mut public_key_bits_g.clone()[..public_key_bits_g.len() - 1];
+        pk_y_coordinate_bits.reverse();
+
+        let pk_y_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement> =
+            NonNativeFieldGadget::from_bits(
+                cs.ns(|| "alloc pk y coordinate"),
+                pk_y_coordinate_bits,
+            )?;
+
+        let secret_key_bits = bytes_to_bits(
+            &csw_data_g
+                .input_g
+                .secret_key_g
+                .iter()
+                .map(|byte_gadget| byte_gadget.get_value().unwrap())
+                .collect::<Vec<_>>(),
+        );
+
+        let secret_key_bits_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc secret key bits"), || {
+            Ok(secret_key_bits.as_slice())
+        })?;
+
+        // Compute public key from secret key
+        let current_public_key_g = ECPointSimulationGadget::mul_bits_fixed_base(
+            &SimulatedGroup::prime_subgroup_generator().into_projective(),
+            cs.ns(|| "G^sk"),
+            secret_key_bits_g.as_slice(),
+        )?;
+
+        let x_sign = current_public_key_g.x.is_odd(cs.ns(|| ""))?;
+
+        // Enforce x_sign is the same
+        x_sign.enforce_equal(
+            cs.ns(|| "Enforce x_sign == pk_x_sign_bit_g"),
+            &pk_x_sign_bit_g,
+        )?;
+
+        // Enforce y_coordinate is the same
+        current_public_key_g.y.enforce_equal(
+            cs.ns(|| "Enforce y coordinate is equal"),
+            &pk_y_coordinate_g,
+        )?;
+
         // UTXO widthdrawal [END]
 
         // FT withdrawal [START]
@@ -255,9 +328,6 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             &should_enforce_ft_withdrawal_g,
         )?;
 
-        // require(true == verify_signature(ft_input_hash, ft_input_sig, ft_input.receiver_metadata.receiver_pub_key))
-        // TODO: as soon as the related gadget is available, implement this as proof of ownership of a secret key
-
         // require(nullifier == ft_input_hash)
         csw_data_g.nullifier_g.conditional_enforce_equal(
             cs.ns(|| "nullifier == ft_input_hash"),
@@ -273,9 +343,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 
 #[cfg(test)]
 mod test {
-    use std::{convert::TryInto, ops::AddAssign};
-
-    use algebra::ToConstraintField;
+    use algebra::{fields::ed25519::fr::Fr as ed25519Fr, ToBits, ToConstraintField, UniformRand};
     use cctp_primitives::{
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
         type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
@@ -283,6 +351,8 @@ mod test {
     };
     use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree};
     use r1cs_core::debug_circuit;
+    use rand::rngs::OsRng;
+    use std::{convert::TryInto, ops::AddAssign};
 
     use crate::{
         constants::constants::{BoxType, CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER},
@@ -293,7 +363,13 @@ mod test {
 
     use super::CeasedSidechainWithdrawalCircuit;
 
+    type SimulatedScalarFieldElement = ed25519Fr;
+
     fn generate_test_csw_prover_data() -> CswProverData {
+        let rng = &mut OsRng::default();
+        let mut secret = SimulatedScalarFieldElement::rand(rng).write_bits();
+        secret.reverse();
+
         let utxo_input_data = CswUtxoInputData {
             output: CswUtxoOutputData {
                 spending_pub_key: [9; SC_PUBLIC_KEY_LENGTH],
