@@ -14,6 +14,7 @@ import org.junit.Test;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 
 import static org.junit.Assert.assertNotNull;
@@ -51,9 +52,9 @@ public class NaiveThresholdSigProofTest {
     @BeforeClass
     public static void initKeys() {
         assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
-        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath, zk, maxProofSize, maxVkSize));
-        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath, zk, 1, maxVkSize));
-        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, snarkPkPath, snarkVkPath, zk, maxProofSize, 1));
+        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPath, snarkVkPath, zk, maxProofSize, maxVkSize));
+        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPath, snarkVkPath, zk, 1, maxVkSize));
+        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPath, snarkVkPath, zk, maxProofSize, 1));
         assertEquals(
                 psType,
                 ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
@@ -102,7 +103,8 @@ public class NaiveThresholdSigProofTest {
                     epochNumber,
                     endCumulativeScTxCommTreeRoot,
                     btrFee,
-                    ftMinAmount
+                    ftMinAmount,
+                    Optional.empty()
                 );
                 signatureList.add(keyPairList.get(i).signMessage(msgToSign));
             } else {
@@ -122,7 +124,7 @@ public class NaiveThresholdSigProofTest {
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
             btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
-            snarkPkPath, false, zk
+            Optional.empty(), snarkPkPath, false, zk
         );
 
         assertNotNull("Proof creation must be successful", proofResult);
@@ -137,7 +139,7 @@ public class NaiveThresholdSigProofTest {
 
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(
             btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
-            btrFee, ftMinAmount, constant, quality, proof, true, snarkVkPath, true
+            btrFee, ftMinAmount, constant, quality, Optional.empty(), proof, true, snarkVkPath, true
         );
 
         assertTrue("Proof must be verified", isProofVerified);
@@ -145,7 +147,7 @@ public class NaiveThresholdSigProofTest {
         quality = threshold - 1;
         isProofVerified = NaiveThresholdSigProof.verifyProof(
             btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
-            btrFee, ftMinAmount, constant, quality, proof, true, snarkVkPath, true
+            btrFee, ftMinAmount, constant, quality, Optional.empty(), proof, true, snarkVkPath, true
         );
 
         assertFalse("Proof must not be verified", isProofVerified);

@@ -7,6 +7,7 @@ import com.horizen.schnorrnative.SchnorrSignature;
 import com.horizen.provingsystemnative.ProvingSystemType;
 
 import java.util.List;
+import java.util.Optional;
 
 public class NaiveThresholdSigProof {
 
@@ -33,7 +34,8 @@ public class NaiveThresholdSigProof {
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
-            long ftMinAmount
+            long ftMinAmount,
+            FieldElement[] customFields
     );
 
     public static FieldElement createMsgToSign(
@@ -42,15 +44,19 @@ public class NaiveThresholdSigProof {
             int epochNumber,
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
-            long ftMinAmount
+            long ftMinAmount,
+            Optional<List<FieldElement>> customFields
     )
     {
-        return nativeCreateMsgToSign(bt, scId, epochNumber, endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount);
+        // Passing an empty array, Rust side, instead of an Option, will slightly simplify the process of unpacking.
+        FieldElement[] customFieldsArray = (customFields.isPresent()) ? customFields.get().toArray(new FieldElement[0]): new FieldElement[] {};
+        return nativeCreateMsgToSign(bt, scId, epochNumber, endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount, customFieldsArray);
     }
 
     private static native boolean nativeSetup(
         ProvingSystemType psType,
         long maxPks,
+        int numCustomFields,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -63,6 +69,7 @@ public class NaiveThresholdSigProof {
     public static boolean setup(
         ProvingSystemType psType,
         long maxPks,
+        int numCustomFields,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -73,7 +80,7 @@ public class NaiveThresholdSigProof {
     )
     {
         return nativeSetup(
-            psType, maxPks, provingKeyPath, verificationKeyPath,
+            psType, maxPks, numCustomFields, provingKeyPath, verificationKeyPath,
             zk, maxProofSize, maxVkSize, compressPk, compressVk
         );
     }
@@ -81,6 +88,7 @@ public class NaiveThresholdSigProof {
     public static boolean setup(
         ProvingSystemType psType,
         long maxPks,
+        int numCustomFields,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -89,7 +97,7 @@ public class NaiveThresholdSigProof {
     )
     {
         return nativeSetup(
-            psType, maxPks, provingKeyPath, verificationKeyPath,
+            psType, maxPks, numCustomFields, provingKeyPath, verificationKeyPath,
             zk, maxProofSize, maxVkSize, true, true
         );
     }
@@ -97,6 +105,7 @@ public class NaiveThresholdSigProof {
     public static boolean setup(
         ProvingSystemType psType,
         long maxPks,
+        int numCustomFields,
         String provingKeyPath,
         String verificationKeyPath,
         int maxProofSize,
@@ -104,7 +113,7 @@ public class NaiveThresholdSigProof {
     )
     {
         return nativeSetup(
-            psType, maxPks, provingKeyPath, verificationKeyPath,
+            psType, maxPks, numCustomFields, provingKeyPath, verificationKeyPath,
             false, maxProofSize, maxVkSize, true, true
         );
     }
@@ -119,6 +128,7 @@ public class NaiveThresholdSigProof {
             SchnorrSignature[] schnorrSignatures,
             SchnorrPublicKey[] schnorrPublicKeys,
             long threshold,
+            FieldElement[] customFields,
             String provingKeyPath,
             boolean checkProvingKey,
             boolean zk,
@@ -136,6 +146,7 @@ public class NaiveThresholdSigProof {
             List<SchnorrSignature> schnorrSignatureList,
             List<SchnorrPublicKey> schnorrPublicKeyList,
             long threshold,
+            Optional<List<FieldElement>> customFields,
             String provingKeyPath,
             boolean checkProvingKey,
             boolean zk,
@@ -143,12 +154,15 @@ public class NaiveThresholdSigProof {
             boolean compress_proof
     )
     {
+        // Passing an empty array, Rust side, instead of an Option, will slightly simplify the process of unpacking.
+        FieldElement[] customFieldsArray = (customFields.isPresent()) ? customFields.get().toArray(new FieldElement[0]): new FieldElement[] {};
+
         return nativeCreateProof(
             btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
             endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
             schnorrSignatureList.toArray(new SchnorrSignature[0]),
             schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
-            threshold, provingKeyPath, checkProvingKey, zk,
+            threshold, customFieldsArray, provingKeyPath, checkProvingKey, zk,
             compressed_pk, compress_proof
         );
     }
@@ -163,17 +177,21 @@ public class NaiveThresholdSigProof {
             List<SchnorrSignature> schnorrSignatureList,
             List<SchnorrPublicKey> schnorrPublicKeyList,
             long threshold,
+            Optional<List<FieldElement>> customFields,
             String provingKeyPath,
             boolean checkProvingKey,
             boolean zk
     )
     {
+        // Passing an empty array, Rust side, instead of an Option, will slightly simplify the process of unpacking.
+        FieldElement[] customFieldsArray = (customFields.isPresent()) ? customFields.get().toArray(new FieldElement[0]): new FieldElement[] {};
+
         return nativeCreateProof(
                 btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
                 endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
                 schnorrSignatureList.toArray(new SchnorrSignature[0]),
                 schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
-                threshold, provingKeyPath, checkProvingKey, zk,
+                threshold, customFieldsArray, provingKeyPath, checkProvingKey, zk,
                 true, true
         );
     }
@@ -188,16 +206,20 @@ public class NaiveThresholdSigProof {
             List<SchnorrSignature> schnorrSignatureList,
             List<SchnorrPublicKey> schnorrPublicKeyList,
             long threshold,
+            Optional<List<FieldElement>> customFields,
             String provingKeyPath,
             boolean zk
     )
     {
+        // Passing an empty array, Rust side, instead of an Option, will slightly simplify the process of unpacking.
+        FieldElement[] customFieldsArray = (customFields.isPresent()) ? customFields.get().toArray(new FieldElement[0]): new FieldElement[] {};
+
         return nativeCreateProof(
                 btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
                 endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
                 schnorrSignatureList.toArray(new SchnorrSignature[0]),
                 schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
-                threshold, provingKeyPath, false, zk,
+                threshold, customFieldsArray, provingKeyPath, false, zk,
                 true, true
         );
     }
@@ -212,6 +234,7 @@ public class NaiveThresholdSigProof {
             long ftMinAmount,
             FieldElement constant,
             long quality,
+            FieldElement[] customFields,
             byte[] proof,
             boolean checkProof,
             boolean compressedProof,
@@ -229,16 +252,20 @@ public class NaiveThresholdSigProof {
             long ftMinAmount,
             FieldElement constant,
             long quality,
+            Optional<List<FieldElement>> customFields,
             byte[] proof,
             boolean checkProof,
             String verificationKeyPath,
             boolean checkVerificationKey
     )
     {
+        // Passing an empty array, Rust side, instead of an Option, will slightly simplify the process of unpacking.
+        FieldElement[] customFieldsArray = (customFields.isPresent()) ? customFields.get().toArray(new FieldElement[0]): new FieldElement[] {};
+
         return nativeVerifyProof(
             btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
             endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
-            constant, quality, proof, checkProof, true,
+            constant, quality, customFieldsArray, proof, checkProof, true,
             verificationKeyPath, checkVerificationKey, true
         );
     }
@@ -252,14 +279,18 @@ public class NaiveThresholdSigProof {
             long ftMinAmount,
             FieldElement constant,
             long quality,
+            Optional<List<FieldElement>> customFields,
             byte[] proof,
             String verificationKeyPath
     )
     {
+        // Passing an empty array, Rust side, instead of an Option, will slightly simplify the process of unpacking.
+        FieldElement[] customFieldsArray = (customFields.isPresent()) ? customFields.get().toArray(new FieldElement[0]): new FieldElement[] {};
+
         return nativeVerifyProof(
                 btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
                 endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
-                constant, quality, proof, true, true,
+                constant, quality, customFieldsArray, proof, true, true,
                 verificationKeyPath, false, true
         );
     }
