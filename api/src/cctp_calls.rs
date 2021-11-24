@@ -99,7 +99,7 @@ pub fn compute_pks_threshold_hash(
         .finalize()
 }
 
-//Compute and return (MR(bt_list), H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount))
+//Compute and return (MR(bt_list), H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount, [H(custom_fields)]))
 pub fn compute_msg_to_sign(
     sc_id: &FieldElement,
     epoch_number: u32,
