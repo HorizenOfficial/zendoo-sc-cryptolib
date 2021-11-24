@@ -1,4 +1,7 @@
-use algebra::{fields::ed25519::fq::Fq as ed25519Fq, AffineCurve, Field};
+use algebra::{
+    fields::ed25519::{fq::Fq as ed25519Fq, fr::Fr as ed25519Fr},
+    AffineCurve, Field, FpParameters, PrimeField,
+};
 use cctp_primitives::type_mapping::FieldElement;
 use primitives::bytes_to_bits;
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
@@ -27,6 +30,7 @@ use self::data_structures::CswProverDataGadget;
 pub mod data_structures;
 
 // Simulated types
+type SimulatedScalarFieldElement = ed25519Fr;
 type SimulatedFieldElement = ed25519Fq;
 type SimulatedGroup = algebra::curves::ed25519::SWEd25519Affine;
 type SimulatedCurveParameters = algebra::curves::ed25519::Ed25519Parameters;
@@ -166,8 +170,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
                 &should_enforce_utxo_withdrawal_g,
             )?;
 
-        // TODO: check secret key ownership
-
+        // Check secret key ownership
         let public_key_bits = bytes_to_bits(
             &csw_data_g
                 .input_g
@@ -186,16 +189,16 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         let pk_x_sign_bit_g = public_key_bits_g[public_key_bits_g.len() - 1];
 
         // Read a NonNativeFieldGadget(ed25519Fq) from the other Booleans
-        let pk_y_coordinate_bits = &mut public_key_bits_g.clone()[..public_key_bits_g.len() - 1];
+        let mut pk_y_coordinate_bits = (&public_key_bits_g[..public_key_bits_g.len() - 1]).to_vec();
         pk_y_coordinate_bits.reverse();
 
         let pk_y_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement> =
             NonNativeFieldGadget::from_bits(
                 cs.ns(|| "alloc pk y coordinate"),
-                pk_y_coordinate_bits,
+                &pk_y_coordinate_bits,
             )?;
 
-        let secret_key_bits = bytes_to_bits(
+        let mut secret_key_bits = bytes_to_bits(
             &csw_data_g
                 .input_g
                 .secret_key_g
@@ -203,6 +206,18 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
                 .map(|byte_gadget| byte_gadget.get_value().unwrap())
                 .collect::<Vec<_>>(),
         );
+
+        let bits_to_keep =
+            <SimulatedScalarFieldElement as PrimeField>::Params::MODULUS_BITS as usize;
+        assert!(secret_key_bits.len() >= bits_to_keep);
+
+        // Check that the last 3 bits of the key are not set
+        secret_key_bits[bits_to_keep..].iter().for_each(|bit| {
+            debug_assert_eq!(bit, &false);
+        });
+
+        // Discard the last 3 bits of the secret key
+        secret_key_bits.truncate(bits_to_keep);
 
         let secret_key_bits_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc secret key bits"), || {
             Ok(secret_key_bits.as_slice())
@@ -215,7 +230,9 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             secret_key_bits_g.as_slice(),
         )?;
 
-        let x_sign = current_public_key_g.x.is_odd(cs.ns(|| ""))?;
+        let x_sign = current_public_key_g
+            .x
+            .is_odd(cs.ns(|| "public key x coordinate is odd"))?;
 
         // Enforce x_sign is the same
         x_sign.enforce_equal(
@@ -343,11 +360,16 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 
 #[cfg(test)]
 mod test {
-    use algebra::{fields::ed25519::fr::Fr as ed25519Fr, ToBits, ToConstraintField, UniformRand};
+    use algebra::{
+        fields::ed25519::fr::Fr as ed25519Fr, Group, ProjectiveCurve, ToConstraintField,
+        UniformRand,
+    };
     use cctp_primitives::{
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
         type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
-        utils::poseidon_hash::get_poseidon_hash_constant_length,
+        utils::{
+            poseidon_hash::get_poseidon_hash_constant_length, serialization::serialize_to_buffer,
+        },
     };
     use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree};
     use r1cs_core::debug_circuit;
@@ -358,26 +380,50 @@ mod test {
         constants::constants::{BoxType, CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER},
         read_field_element_from_buffer_with_padding, CswFtInputData, CswProverData,
         CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
-        MST_MERKLE_TREE_HEIGHT, SC_PUBLIC_KEY_LENGTH, SC_SECRET_KEY_LENGTH,
+        MST_MERKLE_TREE_HEIGHT, SC_SECRET_KEY_LENGTH,
     };
 
-    use super::CeasedSidechainWithdrawalCircuit;
+    use super::*;
 
     type SimulatedScalarFieldElement = ed25519Fr;
 
     fn generate_test_csw_prover_data() -> CswProverData {
         let rng = &mut OsRng::default();
-        let mut secret = SimulatedScalarFieldElement::rand(rng).write_bits();
-        secret.reverse();
+
+        // Generate the secret key
+        let secret = SimulatedScalarFieldElement::rand(rng);
+        //let secret = SimulatedScalarFieldElement::from_str("1234567890").unwrap();
+
+        // Compute GENERATOR^SECRET_KEY
+        let public_key = SimulatedGroup::prime_subgroup_generator()
+            .into_projective()
+            .mul(&secret)
+            .into_affine();
+
+        // Store the sign (last bit) of the X coordinate
+        // The value is left-shifted to be used later in an OR operation
+        let x_sign = if public_key.x.is_odd() { 1 << 7 } else { 0u8 };
+
+        // Extract the public key bytes as Y coordinate
+        let y_coordinate = public_key.y;
+        let mut pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
+
+        // Use the last (null) bit of the public key to store the sign of the X coordinate
+        // Before this operation, the last bit of the public key is always 0 due to the field modulus
+        let len = pk_bytes.len();
+        pk_bytes[len - 1] |= x_sign;
 
         let utxo_input_data = CswUtxoInputData {
             output: CswUtxoOutputData {
-                spending_pub_key: [9; SC_PUBLIC_KEY_LENGTH],
+                spending_pub_key: pk_bytes.try_into().unwrap(),
                 amount: FieldElement::from(10u8),
                 nonce: FieldElement::from(11u8),
                 custom_hash: FieldElement::from(12u8),
             },
-            secret_key: [13; SC_SECRET_KEY_LENGTH],
+            secret_key: serialize_to_buffer(&secret, None)
+                .unwrap()
+                .try_into()
+                .unwrap(),
         };
 
         let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
@@ -490,7 +536,6 @@ mod test {
             FieldElement::from(csw_prover_data.amount),
             csw_prover_data.nullifier,
             csw_prover_data.receiver,
-            csw_prover_data.last_wcert.scb_new_mst_root,
         ];
 
         // Check that the proof gets correctly verified
