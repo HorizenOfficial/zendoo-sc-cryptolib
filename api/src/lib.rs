@@ -1,13 +1,9 @@
 extern crate jni;
 
 use algebra::{serialize::*, SemanticallyValid};
-use cctp_primitives::{
-    bit_vector::merkle_tree::{
+use cctp_primitives::{bit_vector::merkle_tree::{
         merkle_root_from_compressed_bytes, merkle_root_from_compressed_bytes_without_checks,
-    },
-    proving_system::{check_proof_vk_size, init_dlog_keys, ProvingSystem, ZendooVerifierKey},
-    utils::{data_structures::*, mht::*, poseidon_hash::*, serialization::*},
-};
+    }, proving_system::{ProvingSystem, ZendooVerifierKey, compute_proof_vk_size, init_dlog_keys}, utils::{data_structures::*, mht::*, poseidon_hash::*, serialization::*}};
 use demo_circuit::{generate_circuit_keypair, get_instance_for_setup, type_mapping::*};
 
 use primitives::{FieldBasedMerkleTree, FieldBasedSparseMerkleTree};
@@ -1930,8 +1926,7 @@ ffi_export!(
         _class: JClass,
         _zk: jboolean,
         _supported_segment_size: jint,
-        _max_proof_size: jint,
-        _max_vk_size: jint,
+        _max_proof_plus_vk_size: jint,
         _verification_key_path: JString,
     ) -> jboolean {
         // Read vk from file
@@ -1967,16 +1962,14 @@ ffi_export!(
         };
 
         // Perform check
-        let result = check_proof_vk_size(
+        let (proof_size, vk_size) = compute_proof_vk_size(
             _supported_segment_size as usize,
             index_info,
             zk,
             ps_type,
-            _max_proof_size as usize,
-            _max_vk_size as usize,
         );
 
-        if result {
+        if proof_size + vk_size <= _max_proof_plus_vk_size as usize {
             JNI_TRUE
         } else {
             JNI_FALSE
@@ -1994,8 +1987,7 @@ ffi_export!(
         _proving_key_path: JString,
         _verification_key_path: JString,
         _zk: jboolean,
-        _max_proof_size: jint,
-        _max_vk_size: jint,
+        _max_proof_plus_vk_size: jint,
         _compress_pk: jboolean,
         _compress_vk: jboolean,
     ) -> jboolean {
@@ -2024,8 +2016,7 @@ ffi_export!(
             proving_system,
             Path::new(proving_key_path.to_str().unwrap()),
             Path::new(verification_key_path.to_str().unwrap()),
-            _max_proof_size as usize,
-            _max_vk_size as usize,
+            _max_proof_plus_vk_size as usize,
             zk,
             Some(_compress_pk == JNI_TRUE),
             Some(_compress_vk == JNI_TRUE),

@@ -81,8 +81,7 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
     proving_system: ProvingSystem,
     pk_path: &Path,
     vk_path: &Path,
-    max_proof_size: usize,
-    max_vk_size: usize,
+    max_proof_plus_vk_size: usize,
     zk: bool,
     compress_pk: Option<bool>,
     compress_vk: Option<bool>,
@@ -98,12 +97,10 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
                 zk,
                 proving_system,
             );
-            if proof_size > max_proof_size || vk_size > max_vk_size {
+            if proof_size + vk_size > max_proof_plus_vk_size {
                 return Err(ProvingSystemError::SetupFailed(format!(
-                    "Circuit is too complex: \
-                        Max supported proof size: {}, Actual proof size: {} \
-                        Max supported vk size: {}, Actual vk size: {}",
-                    max_proof_size, proof_size, max_vk_size, vk_size
+                    "Circuit is too complex: Max supported proof + vk size: {}, Actual proof + vk size: {}",
+                    max_proof_plus_vk_size, proof_size + vk_size
                 )))?;
             }
             let (pk, vk) =

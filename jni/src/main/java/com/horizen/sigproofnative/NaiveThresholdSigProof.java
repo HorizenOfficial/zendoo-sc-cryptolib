@@ -79,8 +79,7 @@ public class NaiveThresholdSigProof {
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
-        int maxProofSize,
-        int maxVkSize,
+        int maxProofPlusVkSize,
         boolean compressPk,
         boolean compressVk
     );
@@ -93,8 +92,7 @@ public class NaiveThresholdSigProof {
      * @param provingKeyPath - file path to which saving the proving key
      * @param verificationKeyPath - file path to which saving the verification key
      * @param zk - used to estimate the proof and vk size, tells if the proof will be created using zk or not
-     * @param maxProofSize - maximum allowed proof size
-     * @param maxVkSize - maximum allowed vk size
+     * @param maxProofPlusVkSize - maximum allowed size for proof + vk
      * @param compressPk - if the proving key must be saved to provingKeyPath in compressed form
      * @param compressVk - if the verification key must be saved to verificationKeyPath in compressed form
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise
@@ -106,15 +104,14 @@ public class NaiveThresholdSigProof {
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
-        int maxProofSize,
-        int maxVkSize,
+        int maxProofPlusVkSize,
         boolean compressPk,
         boolean compressVk
     )
     {
         return nativeSetup(
             psType, maxPks, numCustomFields, provingKeyPath, verificationKeyPath,
-            zk, maxProofSize, maxVkSize, compressPk, compressVk
+            zk, maxProofPlusVkSize, compressPk, compressVk
         );
     }
 
@@ -126,8 +123,7 @@ public class NaiveThresholdSigProof {
      * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
      * @param zk - used to estimate the proof and vk size, tells if the proof will be created using zk or not
-     * @param maxProofSize - maximum allowed proof size
-     * @param maxVkSize - maximum allowed vk size
+     * @param maxProofPlusVkSize - maximum allowed size for proof + vk
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise
      */
     public static boolean setup(
@@ -137,13 +133,12 @@ public class NaiveThresholdSigProof {
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
-        int maxProofSize,
-        int maxVkSize
+        int maxProofPlusVkSize
     )
     {
         return nativeSetup(
             psType, maxPks, numCustomFields, provingKeyPath, verificationKeyPath,
-            zk, maxProofSize, maxVkSize, true, true
+            zk, maxProofPlusVkSize, true, true
         );
     }
 
@@ -154,8 +149,7 @@ public class NaiveThresholdSigProof {
      * @param numCustomFields - exact number of custom fields the circuit must support 
      * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
-     * @param maxProofSize - maximum allowed proof size, estimated assuming to not use zk property.
-     * @param maxVkSize - maximum allowed vk size,  estimated assuming to not use zk property.
+     * @param maxProofPlusVkSize - maximum allowed size for proof + vk, estimated assuming not to use zk property
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise.
      */
     public static boolean setup(
@@ -164,13 +158,12 @@ public class NaiveThresholdSigProof {
         int numCustomFields,
         String provingKeyPath,
         String verificationKeyPath,
-        int maxProofSize,
-        int maxVkSize
+        int maxProofPlusVkSize
     )
     {
         return nativeSetup(
             psType, maxPks, numCustomFields, provingKeyPath, verificationKeyPath,
-            false, maxProofSize, maxVkSize, true, true
+            false, maxProofPlusVkSize, true, true
         );
     }
 

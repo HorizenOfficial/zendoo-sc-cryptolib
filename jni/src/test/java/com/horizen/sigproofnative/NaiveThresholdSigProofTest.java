@@ -34,8 +34,7 @@ public class NaiveThresholdSigProofTest {
     static long btrFee = 100L;
     static long ftMinAmount = 200L;
 
-    static int maxProofSize = 7000;
-    static int maxVkSize = 4000;
+    static int maxProofPlusVkSize = 9 * 1024;
 
     FieldElement scId;
     FieldElement endCumulativeScTxCommTreeRoot;
@@ -56,10 +55,9 @@ public class NaiveThresholdSigProofTest {
     @BeforeClass
     public static void initKeys() {
         assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
-        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, maxProofSize, maxVkSize));
-        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, customFieldsNum, snarkPkPathCustomFields, snarkVkPathCustomFields, zk, maxProofSize, maxVkSize));
-        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, 1, maxVkSize));
-        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, maxProofSize, 1));
+        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, maxProofPlusVkSize));
+        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, customFieldsNum, snarkPkPathCustomFields, snarkVkPathCustomFields, zk, maxProofPlusVkSize));
+        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, 1));
         assertEquals(
                 psType,
                 ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPathNoCustomFields)
