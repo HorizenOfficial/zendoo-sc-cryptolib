@@ -25,6 +25,7 @@ import static org.junit.Assert.assertEquals;
 public class NaiveThresholdSigProofTest {
 
     static int keyCount = 7;
+    static int customFieldsNum = 1;
     static long threshold = 5;
     static int backwardTransferCout = 10;
     static boolean zk = false;
@@ -42,9 +43,12 @@ public class NaiveThresholdSigProofTest {
     List<SchnorrPublicKey> publicKeyList = new ArrayList<>();
     List<SchnorrSignature> signatureList = new ArrayList<>();
     List<BackwardTransfer> btList = new ArrayList<>();
+    Optional<List<FieldElement>> customFieldsOpt = Optional.empty();
     
-    static String snarkPkPath = "./test_snark_pk";
-    static String snarkVkPath = "./test_snark_vk";
+    static String snarkPkPathNoCustomFields = "./test_snark_pk";
+    static String snarkVkPathNoCustomFields = "./test_snark_vk";
+    static String snarkPkPathCustomFields = "./test_snark_pk_with_custom_fields";
+    static String snarkVkPathCustomFields = "./test_snark_vk_with_custom_fields";
     static int maxSegmentSize = 1 << 17;
     static int supportedSegmentSize = 1 << 15;
     static ProvingSystemType psType = ProvingSystemType.COBOUNDARY_MARLIN;
@@ -52,21 +56,31 @@ public class NaiveThresholdSigProofTest {
     @BeforeClass
     public static void initKeys() {
         assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
-        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPath, snarkVkPath, zk, maxProofSize, maxVkSize));
-        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPath, snarkVkPath, zk, 1, maxVkSize));
-        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPath, snarkVkPath, zk, maxProofSize, 1));
+        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, maxProofSize, maxVkSize));
+        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, customFieldsNum, snarkPkPathCustomFields, snarkVkPathCustomFields, zk, maxProofSize, maxVkSize));
+        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, 1, maxVkSize));
+        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, maxProofSize, 1));
         assertEquals(
                 psType,
-                ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
+                ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPathNoCustomFields)
         );
         assertEquals(
-                ProvingSystem.getProverKeyProvingSystemType(snarkPkPath),
-                ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
+                ProvingSystem.getProverKeyProvingSystemType(snarkPkPathNoCustomFields),
+                ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPathNoCustomFields)
         );
     }
 
     @Test
-    public void testCreateRandomProof() throws Exception {
+    public void testCreateVerifyRandomProofWithoutCustomFields() throws Exception {
+        testCreateVerifyRandomProof(0, snarkPkPathNoCustomFields, snarkVkPathNoCustomFields);
+    }
+
+    @Test
+    public void testCreateVerifyRandomProofWithCustomFields() throws Exception {
+        testCreateVerifyRandomProof(customFieldsNum, snarkPkPathCustomFields, snarkVkPathCustomFields);
+    }
+
+    private void testCreateVerifyRandomProof(int numCustomFields, String snarkPkPath, String snarkVkPath) throws Exception {
         Random r = new Random();
 
         scId = FieldElement.createRandom();
@@ -83,6 +97,7 @@ public class NaiveThresholdSigProofTest {
             btList.add(new BackwardTransfer(publicKeyHash, amount));
         }
 
+        // Compute keys and signatures
         List<SchnorrKeyPair> keyPairList = new ArrayList<>();
 
         for (int i = 0; i<keyCount; i++) {
@@ -95,6 +110,15 @@ public class NaiveThresholdSigProofTest {
             publicKeyList.add(keyPair.getPublicKey());
         }
 
+        // Generate random custom fields if requested
+        if (numCustomFields > 0) {
+            List<FieldElement> customFields = new ArrayList<>();
+            for (int i = 0; i < numCustomFields; i++) {
+                customFields.add(FieldElement.createRandom());
+            }
+            customFieldsOpt = Optional.of(customFields);
+        }
+
         for (int i = 0; i<keyCount; i++) {
             if (i < threshold) {
                 FieldElement msgToSign = NaiveThresholdSigProof.createMsgToSign(
@@ -104,7 +128,7 @@ public class NaiveThresholdSigProofTest {
                     endCumulativeScTxCommTreeRoot,
                     btrFee,
                     ftMinAmount,
-                    Optional.empty()
+                    customFieldsOpt
                 );
                 signatureList.add(keyPairList.get(i).signMessage(msgToSign));
             } else {
@@ -116,15 +140,13 @@ public class NaiveThresholdSigProofTest {
         for (SchnorrKeyPair kp: keyPairList)
             kp.getSecretKey().freeSecretKey();
 
-        createAndVerifyProof();
-    }
+        // Create and verify proof
 
-    private void createAndVerifyProof() {
-
+        // Positive test
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
             btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
-            Optional.empty(), snarkPkPath, false, zk
+            customFieldsOpt, snarkPkPath, false, zk
         );
 
         assertNotNull("Proof creation must be successful", proofResult);
@@ -139,15 +161,16 @@ public class NaiveThresholdSigProofTest {
 
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(
             btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
-            btrFee, ftMinAmount, constant, quality, Optional.empty(), proof, true, snarkVkPath, true
+            btrFee, ftMinAmount, constant, quality, customFieldsOpt, proof, true, snarkVkPath, true
         );
 
         assertTrue("Proof must be verified", isProofVerified);
 
+        // Negative test
         quality = threshold - 1;
         isProofVerified = NaiveThresholdSigProof.verifyProof(
             btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
-            btrFee, ftMinAmount, constant, quality, Optional.empty(), proof, true, snarkVkPath, true
+            btrFee, ftMinAmount, constant, quality, customFieldsOpt, proof, true, snarkVkPath, true
         );
 
         assertFalse("Proof must not be verified", isProofVerified);
@@ -163,14 +186,22 @@ public class NaiveThresholdSigProofTest {
             sig.freeSignature();
         signatureList.clear();
 
+        if(customFieldsOpt.isPresent()) {
+            for (FieldElement fe: customFieldsOpt.get())
+                fe.freeFieldElement();
+            customFieldsOpt = Optional.empty();
+        }
+
         scId.freeFieldElement();
         endCumulativeScTxCommTreeRoot.freeFieldElement();
     }
 
     @AfterClass
     public static void deleteKeys(){
-        // Delete proving key and verification key
-        new File(snarkPkPath).delete();
-        new File(snarkVkPath).delete();
+        // Delete proving keys and verification keys
+        new File(snarkPkPathNoCustomFields).delete();
+        new File(snarkVkPathNoCustomFields).delete();
+        new File(snarkPkPathCustomFields).delete();
+        new File(snarkVkPathCustomFields).delete();
     }
 }

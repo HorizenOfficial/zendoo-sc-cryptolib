@@ -2264,7 +2264,7 @@ ffi_export!(
         }
 
         //create proof
-        let (proof, quality) = match create_naive_threshold_sig_proof(
+        match create_naive_threshold_sig_proof(
             pks.as_slice(),
             sigs,
             sc_id,
@@ -2281,32 +2281,35 @@ ffi_export!(
             _compressed_pk == JNI_TRUE,
             _compress_proof == JNI_TRUE,
         ) {
-            Ok(proof) => proof,
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR or IO_ERROR
-        };
+            Ok((proof, quality)) => {
+                //Return proof serialized
+                let proof_serialized = _env
+                    .byte_array_from_slice(proof.as_slice())
+                    .expect("Should be able to convert Rust slice into jbytearray");
 
-        //Return proof serialized
-        let proof_serialized = _env
-            .byte_array_from_slice(proof.as_slice())
-            .expect("Should be able to convert Rust slice into jbytearray");
+                //Create new CreateProofResult object
+                let proof_result_class = _env
+                    .find_class("com/horizen/sigproofnative/CreateProofResult")
+                    .expect("Should be able to find CreateProofResult class");
 
-        //Create new CreateProofResult object
-        let proof_result_class = _env
-            .find_class("com/horizen/sigproofnative/CreateProofResult")
-            .expect("Should be able to find CreateProofResult class");
+                let result = _env
+                    .new_object(
+                        proof_result_class,
+                        "([BJ)V",
+                        &[
+                            JValue::Object(JObject::from(proof_serialized)),
+                            JValue::Long(jlong::from(quality as i64)),
+                        ],
+                    )
+                    .expect("Should be able to create new CreateProofResult:(byte[], long) object");
 
-        let result = _env
-            .new_object(
-                proof_result_class,
-                "([BJ)V",
-                &[
-                    JValue::Object(JObject::from(proof_serialized)),
-                    JValue::Long(jlong::from(quality as i64)),
-                ],
-            )
-            .expect("Should be able to create new CreateProofResult:(byte[], long) object");
-
-        *result
+                *result
+            },
+            Err(e) => {
+                eprintln!("Error creating proof {:?}", e);
+                JObject::null().into_inner()
+            }
+        }
     }
 );
 
