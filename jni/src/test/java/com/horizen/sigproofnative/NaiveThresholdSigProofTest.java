@@ -14,7 +14,6 @@ import org.junit.Test;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Random;
 
 import static org.junit.Assert.assertNotNull;
@@ -42,7 +41,7 @@ public class NaiveThresholdSigProofTest {
     List<SchnorrPublicKey> publicKeyList = new ArrayList<>();
     List<SchnorrSignature> signatureList = new ArrayList<>();
     List<BackwardTransfer> btList = new ArrayList<>();
-    Optional<List<FieldElement>> customFieldsOpt = Optional.empty();
+    List<FieldElement> customFields = new ArrayList<>();
     
     static String snarkPkPathNoCustomFields = "./test_snark_pk";
     static String snarkVkPathNoCustomFields = "./test_snark_vk";
@@ -110,11 +109,9 @@ public class NaiveThresholdSigProofTest {
 
         // Generate random custom fields if requested
         if (numCustomFields > 0) {
-            List<FieldElement> customFields = new ArrayList<>();
             for (int i = 0; i < numCustomFields; i++) {
                 customFields.add(FieldElement.createRandom());
             }
-            customFieldsOpt = Optional.of(customFields);
         }
 
         for (int i = 0; i<keyCount; i++) {
@@ -126,7 +123,7 @@ public class NaiveThresholdSigProofTest {
                     endCumulativeScTxCommTreeRoot,
                     btrFee,
                     ftMinAmount,
-                    customFieldsOpt
+                    customFields
                 );
                 signatureList.add(keyPairList.get(i).signMessage(msgToSign));
             } else {
@@ -144,7 +141,7 @@ public class NaiveThresholdSigProofTest {
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
             btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
-            customFieldsOpt, snarkPkPath, false, zk
+            customFields, snarkPkPath, false, zk
         );
 
         assertNotNull("Proof creation must be successful", proofResult);
@@ -159,7 +156,7 @@ public class NaiveThresholdSigProofTest {
 
         boolean isProofVerified = NaiveThresholdSigProof.verifyProof(
             btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
-            btrFee, ftMinAmount, constant, quality, customFieldsOpt, proof, true, snarkVkPath, true
+            btrFee, ftMinAmount, constant, quality, customFields, proof, true, snarkVkPath, true
         );
 
         assertTrue("Proof must be verified", isProofVerified);
@@ -168,7 +165,7 @@ public class NaiveThresholdSigProofTest {
         quality = threshold - 1;
         isProofVerified = NaiveThresholdSigProof.verifyProof(
             btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
-            btrFee, ftMinAmount, constant, quality, customFieldsOpt, proof, true, snarkVkPath, true
+            btrFee, ftMinAmount, constant, quality, customFields, proof, true, snarkVkPath, true
         );
 
         assertFalse("Proof must not be verified", isProofVerified);
@@ -184,11 +181,9 @@ public class NaiveThresholdSigProofTest {
             sig.freeSignature();
         signatureList.clear();
 
-        if(customFieldsOpt.isPresent()) {
-            for (FieldElement fe: customFieldsOpt.get())
-                fe.freeFieldElement();
-            customFieldsOpt = Optional.empty();
-        }
+        for (FieldElement fe: customFields)
+            fe.freeFieldElement();
+        customFields.clear();
 
         scId.freeFieldElement();
         endCumulativeScTxCommTreeRoot.freeFieldElement();

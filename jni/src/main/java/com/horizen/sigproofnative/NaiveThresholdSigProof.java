@@ -53,7 +53,7 @@ public class NaiveThresholdSigProof {
      * @param endCumulativeScTxCommTreeRoot - the value of the cumulative sidechain transaction commitment tree at epoch end
      * @param btrFee - fee for BackwardTransfer
      * @param ftMinAmount - minimum amount for Forward Transfer
-     * @param customFields - additional optional parameters
+     * @param customFields - additional parameters. Can be empty.
      * @return The message to be signed, computed as PoseidonHash(scId, epochNumber, MR(bt), endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount, [H(customFields)])
      *         or null pointer if some error occured.
      */
@@ -64,12 +64,10 @@ public class NaiveThresholdSigProof {
             FieldElement endCumulativeScTxCommTreeRoot,
             long btrFee,
             long ftMinAmount,
-            Optional<List<FieldElement>> customFields
+            List<FieldElement> customFields
     )
     {
-        // Passing an empty array, Rust side, instead of an Option, will slightly simplify the process of unpacking.
-        FieldElement[] customFieldsArray = (customFields.isPresent()) ? customFields.get().toArray(new FieldElement[0]): new FieldElement[] {};
-        return nativeCreateMsgToSign(bt, scId, epochNumber, endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount, customFieldsArray);
+        return nativeCreateMsgToSign(bt, scId, epochNumber, endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount, customFields.toArray(new FieldElement[0]));
     }
 
     private static native boolean nativeSetup(
@@ -196,7 +194,7 @@ public class NaiveThresholdSigProof {
      * @param schnorrSignatureList - list of Schnorr signatures to be verified using the corresponding public keys passed in SchnorrPublicKeyList
      * @param schnorrPublicKeyList - list of Schnorr public keys corresponding to schnorrSignaturesList
      * @param threshold - Minimum number of signatures that must be verified for the certificate to be accepted
-     * @param customFields - additional optional parameters
+     * @param customFields - additional parameters. Can be empty.
      * @param provingKeyPath - file path from which reading the proving key
      * @param checkProvingKey - enable semantic checks on the proving key (WARNING: very expensive)
      * @param zk - if proof must be created using zk property or not
@@ -215,7 +213,7 @@ public class NaiveThresholdSigProof {
             List<SchnorrSignature> schnorrSignatureList,
             List<SchnorrPublicKey> schnorrPublicKeyList,
             long threshold,
-            Optional<List<FieldElement>> customFields,
+            List<FieldElement> customFields,
             String provingKeyPath,
             boolean checkProvingKey,
             boolean zk,
@@ -223,16 +221,13 @@ public class NaiveThresholdSigProof {
             boolean compress_proof
     )
     {
-        // Passing an empty array, Rust side, instead of an Option, will slightly simplify the process of unpacking.
-        FieldElement[] customFieldsArray = (customFields.isPresent()) ? customFields.get().toArray(new FieldElement[0]): new FieldElement[] {};
-
         return nativeCreateProof(
             btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
             endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
             schnorrSignatureList.toArray(new SchnorrSignature[0]),
             schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
-            threshold, customFieldsArray, provingKeyPath, checkProvingKey, zk,
-            compressed_pk, compress_proof
+            threshold, customFields.toArray(new FieldElement[0]),
+            provingKeyPath, checkProvingKey, zk, compressed_pk, compress_proof
         );
     }
 
@@ -247,7 +242,7 @@ public class NaiveThresholdSigProof {
      * @param schnorrSignatureList - list of Schnorr signatures to be verified using the corresponding public keys passed in SchnorrPublicKeyList
      * @param schnorrPublicKeyList - list of Schnorr public keys corresponding to schnorrSignaturesList
      * @param threshold - Minimum number of signatures that must be verified for the certificate to be accepted
-     * @param customFields - additional optional parameters
+     * @param customFields - additional parameters. Can be empty.
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
      * @param checkProvingKey - enable semantic checks on the proving key (WARNING: very expensive)
      * @param zk - if proof must be created using zk property or not
@@ -265,22 +260,19 @@ public class NaiveThresholdSigProof {
             List<SchnorrSignature> schnorrSignatureList,
             List<SchnorrPublicKey> schnorrPublicKeyList,
             long threshold,
-            Optional<List<FieldElement>> customFields,
+            List<FieldElement> customFields,
             String provingKeyPath,
             boolean checkProvingKey,
             boolean zk
     )
     {
-        // Passing an empty array, Rust side, instead of an Option, will slightly simplify the process of unpacking.
-        FieldElement[] customFieldsArray = (customFields.isPresent()) ? customFields.get().toArray(new FieldElement[0]): new FieldElement[] {};
-
         return nativeCreateProof(
                 btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
                 endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
                 schnorrSignatureList.toArray(new SchnorrSignature[0]),
                 schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
-                threshold, customFieldsArray, provingKeyPath, checkProvingKey, zk,
-                true, true
+                threshold, customFields.toArray(new FieldElement[0]),
+                provingKeyPath, checkProvingKey, zk, true, true
         );
     }
 
@@ -295,7 +287,7 @@ public class NaiveThresholdSigProof {
      * @param schnorrSignatureList - list of Schnorr signatures to be verified using the corresponding public keys passed in SchnorrPublicKeyList
      * @param schnorrPublicKeyList - list of Schnorr public keys corresponding to schnorrSignaturesList
      * @param threshold - Minimum number of signatures that must be verified for the certificate to be accepted
-     * @param customFields - additional optional parameters
+     * @param customFields - additional optional parameters. Can be empty
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
      * @param zk - if proof must be created using zk property or not
      * @return a CreateProofResult instance, i.e. the computed proof bytes (in compressed form),
@@ -312,21 +304,18 @@ public class NaiveThresholdSigProof {
             List<SchnorrSignature> schnorrSignatureList,
             List<SchnorrPublicKey> schnorrPublicKeyList,
             long threshold,
-            Optional<List<FieldElement>> customFields,
+            List<FieldElement> customFields,
             String provingKeyPath,
             boolean zk
     )
     {
-        // Passing an empty array, Rust side, instead of an Option, will slightly simplify the process of unpacking.
-        FieldElement[] customFieldsArray = (customFields.isPresent()) ? customFields.get().toArray(new FieldElement[0]): new FieldElement[] {};
-
         return nativeCreateProof(
                 btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
                 endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
                 schnorrSignatureList.toArray(new SchnorrSignature[0]),
                 schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
-                threshold, customFieldsArray, provingKeyPath, false, zk,
-                true, true
+                threshold, customFields.toArray(new FieldElement[0]),
+                provingKeyPath, false, zk, true, true
         );
     }
 
@@ -359,7 +348,7 @@ public class NaiveThresholdSigProof {
      * @param ftMinAmount - minimum amount for Forward Transfer
      * @param constant - constant parameter, as defined by getConstant() method
      * @param quality - quality parameter, as returned by the createProof() function (in this case the number of valid signatures)
-     * @param customFields - additional optional parameters
+     * @param customFields - additional parameters. Can be empty.
      * @param proof - the bytes of the proof to be verified, expected to be in compressed form
      * @param checkProof - enable semantic checks on the proof
      * @param verificationKeyPath - file path from which loading the verification key, expected to be in compressed form
@@ -375,21 +364,18 @@ public class NaiveThresholdSigProof {
             long ftMinAmount,
             FieldElement constant,
             long quality,
-            Optional<List<FieldElement>> customFields,
+            List<FieldElement> customFields,
             byte[] proof,
             boolean checkProof,
             String verificationKeyPath,
             boolean checkVerificationKey
     )
     {
-        // Passing an empty array, Rust side, instead of an Option, will slightly simplify the process of unpacking.
-        FieldElement[] customFieldsArray = (customFields.isPresent()) ? customFields.get().toArray(new FieldElement[0]): new FieldElement[] {};
-
         return nativeVerifyProof(
             btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
             endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
-            constant, quality, customFieldsArray, proof, checkProof, true,
-            verificationKeyPath, checkVerificationKey, true
+            constant, quality, customFields.toArray(new FieldElement[0]),
+            proof, checkProof, true, verificationKeyPath, checkVerificationKey, true
         );
     }
 
@@ -403,7 +389,7 @@ public class NaiveThresholdSigProof {
      * @param ftMinAmount - minimum amount for Forward Transfer
      * @param constant - constant parameter, as defined by getConstant() method
      * @param quality - quality parameter, as returned by the createProof() function (in this case the number of valid signatures)
-     * @param customFields - additional optional parameters
+     * @param customFields - additional parameters. Can be empty.
      * @param proof - the bytes of the proof to be verified, expected to be in compressed form
      * @param verificationKeyPath - file path from which loading the verification key, expected to be in compressed form
      * @return true, if proof verification was successfull, false if proof verification failed or if some errors occured during verification
@@ -417,18 +403,15 @@ public class NaiveThresholdSigProof {
             long ftMinAmount,
             FieldElement constant,
             long quality,
-            Optional<List<FieldElement>> customFields,
+            List<FieldElement> customFields,
             byte[] proof,
             String verificationKeyPath
     )
     {
-        // Passing an empty array, Rust side, instead of an Option, will slightly simplify the process of unpacking.
-        FieldElement[] customFieldsArray = (customFields.isPresent()) ? customFields.get().toArray(new FieldElement[0]): new FieldElement[] {};
-
         return nativeVerifyProof(
                 btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
                 endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
-                constant, quality, customFieldsArray, proof, true, true,
+                constant, quality, customFields.toArray(new FieldElement[0]), proof, true, true,
                 verificationKeyPath, false, true
         );
     }
