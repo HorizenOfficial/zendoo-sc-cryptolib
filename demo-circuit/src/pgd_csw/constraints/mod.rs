@@ -1,9 +1,5 @@
-use algebra::{
-    fields::ed25519::{fq::Fq as ed25519Fq, fr::Fr as ed25519Fr},
-    AffineCurve, Field, FpParameters, PrimeField,
-};
+use algebra::{AffineCurve, Field};
 use cctp_primitives::type_mapping::FieldElement;
-use primitives::bytes_to_bits;
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 use r1cs_crypto::{FieldBasedHashGadget, FieldBasedMerkleTreePathGadget};
 use r1cs_std::{
@@ -11,10 +7,7 @@ use r1cs_std::{
     alloc::ConstantGadget,
     boolean::{AllocatedBit, Boolean},
     fields::{nonnative::nonnative_field_gadget::NonNativeFieldGadget, FieldGadget},
-    groups::{
-        nonnative::short_weierstrass::short_weierstrass_jacobian::GroupAffineNonNativeGadget,
-        GroupGadget,
-    },
+    groups::GroupGadget,
     prelude::EqGadget,
     to_field_gadget_vec::ToConstraintFieldGadget,
     FromBitsGadget, FromGadget,
@@ -22,20 +15,13 @@ use r1cs_std::{
 
 use crate::{
     constants::constants::{BoxType, CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER},
+    type_mapping::*,
     CswProverData, FieldElementGadget, FieldHashGadget,
 };
 
 use self::data_structures::CswProverDataGadget;
 
 pub mod data_structures;
-
-// Simulated types
-type SimulatedScalarFieldElement = ed25519Fr;
-type SimulatedFieldElement = ed25519Fq;
-type SimulatedGroup = algebra::curves::ed25519::SWEd25519Affine;
-type SimulatedCurveParameters = algebra::curves::ed25519::Ed25519Parameters;
-type ECPointSimulationGadget =
-    GroupAffineNonNativeGadget<SimulatedCurveParameters, FieldElement, SimulatedFieldElement>;
 
 #[derive(Clone)]
 pub struct CeasedSidechainWithdrawalCircuit {
@@ -171,63 +157,26 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             )?;
 
         // Check secret key ownership
-        let public_key_bits = bytes_to_bits(
-            &csw_data_g
-                .input_g
-                .output_g
-                .spending_pub_key_g
-                .iter()
-                .map(|byte_gadget| byte_gadget.get_value().unwrap())
-                .collect::<Vec<_>>(),
-        );
-
-        let public_key_bits_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc public key bits"), || {
-            Ok(public_key_bits.as_slice())
-        })?;
+        let public_key_bits_g = csw_data_g.input_g.output_g.spending_pub_key_g;
 
         // Get the Boolean corresponding to the sign of the x coordinate
-        let pk_x_sign_bit_g = public_key_bits_g[public_key_bits_g.len() - 1];
+        let pk_x_sign_bit_g = public_key_bits_g[0];
 
         // Read a NonNativeFieldGadget(ed25519Fq) from the other Booleans
-        let mut pk_y_coordinate_bits = (&public_key_bits_g[..public_key_bits_g.len() - 1]).to_vec();
-        pk_y_coordinate_bits.reverse();
-
         let pk_y_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement> =
             NonNativeFieldGadget::from_bits(
                 cs.ns(|| "alloc pk y coordinate"),
-                &pk_y_coordinate_bits,
+                &public_key_bits_g[1..],
             )?;
 
-        let mut secret_key_bits = bytes_to_bits(
-            &csw_data_g
-                .input_g
-                .secret_key_g
-                .iter()
-                .map(|byte_gadget| byte_gadget.get_value().unwrap())
-                .collect::<Vec<_>>(),
-        );
-
-        let bits_to_keep =
-            <SimulatedScalarFieldElement as PrimeField>::Params::MODULUS_BITS as usize;
-        assert!(secret_key_bits.len() >= bits_to_keep);
-
-        // Check that the last 3 bits of the key are not set
-        secret_key_bits[bits_to_keep..].iter().for_each(|bit| {
-            debug_assert_eq!(bit, &false);
-        });
-
-        // Discard the last 3 bits of the secret key
-        secret_key_bits.truncate(bits_to_keep);
-
-        let secret_key_bits_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc secret key bits"), || {
-            Ok(secret_key_bits.as_slice())
-        })?;
+        let mut secret_key_bits_g = csw_data_g.input_g.secret_key_g;
+        secret_key_bits_g.reverse();
 
         // Compute public key from secret key
         let current_public_key_g = ECPointSimulationGadget::mul_bits_fixed_base(
             &SimulatedGroup::prime_subgroup_generator().into_projective(),
             cs.ns(|| "G^sk"),
-            secret_key_bits_g.as_slice(),
+            &secret_key_bits_g,
         )?;
 
         let x_sign = current_public_key_g
@@ -361,17 +310,15 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 #[cfg(test)]
 mod test {
     use algebra::{
-        fields::ed25519::fr::Fr as ed25519Fr, Group, ProjectiveCurve, ToConstraintField,
+        fields::ed25519::fr::Fr as ed25519Fr, Group, ProjectiveCurve, ToBits, ToConstraintField,
         UniformRand,
     };
     use cctp_primitives::{
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
         type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
-        utils::{
-            poseidon_hash::get_poseidon_hash_constant_length, serialization::serialize_to_buffer,
-        },
+        utils::poseidon_hash::get_poseidon_hash_constant_length,
     };
-    use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree};
+    use primitives::{FieldBasedHash, FieldBasedMerkleTree};
     use r1cs_core::debug_circuit;
     use rand::rngs::OsRng;
     use std::{convert::TryInto, ops::AddAssign};
@@ -380,7 +327,7 @@ mod test {
         constants::constants::{BoxType, CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER},
         read_field_element_from_buffer_with_padding, CswFtInputData, CswProverData,
         CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
-        MST_MERKLE_TREE_HEIGHT, SC_SECRET_KEY_LENGTH,
+        MST_MERKLE_TREE_HEIGHT, PHANTOM_SECRET_KEY_BITS,
     };
 
     use super::*;
@@ -401,34 +348,39 @@ mod test {
             .into_affine();
 
         // Store the sign (last bit) of the X coordinate
-        // The value is left-shifted to be used later in an OR operation
-        let x_sign = if public_key.x.is_odd() { 1 << 7 } else { 0u8 };
+        let x_sign = if public_key.x.is_odd() { true } else { false };
 
         // Extract the public key bytes as Y coordinate
         let y_coordinate = public_key.y;
-        let mut pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
 
         // Use the last (null) bit of the public key to store the sign of the X coordinate
-        // Before this operation, the last bit of the public key is always 0 due to the field modulus
-        let len = pk_bytes.len();
-        pk_bytes[len - 1] |= x_sign;
+        // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus
+        let mut pk_bits = vec![x_sign];
+        pk_bits.append(&mut y_coordinate.write_bits());
 
         let utxo_input_data = CswUtxoInputData {
             output: CswUtxoOutputData {
-                spending_pub_key: pk_bytes.try_into().unwrap(),
+                spending_pub_key: pk_bits.clone().try_into().unwrap(),
                 amount: FieldElement::from(10u8),
                 nonce: FieldElement::from(11u8),
                 custom_hash: FieldElement::from(12u8),
             },
-            secret_key: serialize_to_buffer(&secret, None)
-                .unwrap()
-                .try_into()
-                .unwrap(),
+            secret_key: secret.write_bits().try_into().unwrap(),
+        };
+
+        let _ft_input_data = CswFtInputData {
+            amount: FieldElement::from(100u8),
+            receiver_pub_key: pk_bits.try_into().unwrap(),
+            payback_addr_data_hash: FieldElement::from(101u8),
+            tx_hash: FieldElement::from(102u8),
+            out_idx: FieldElement::from(103u8),
         };
 
         let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
 
-        let mut mst_leaf_inputs = bytes_to_bits(&utxo_input_data.output.spending_pub_key)
+        let mut mst_leaf_inputs = utxo_input_data
+            .output
+            .spending_pub_key
             .to_field_elements()
             .unwrap();
 
@@ -491,7 +443,7 @@ mod test {
             input: utxo_input_data,
             mst_path_to_output: mst_path,
             ft_input: CswFtInputData::default(),
-            ft_input_secret_key: [20; SC_SECRET_KEY_LENGTH],
+            ft_input_secret_key: PHANTOM_SECRET_KEY_BITS,
             mcb_sc_txs_com_start: FieldElement::from(21u8),
             merkle_path_to_sc_hash: GingerMHTBinaryPath::default(),
             ft_tree_path: GingerMHTBinaryPath::default(),

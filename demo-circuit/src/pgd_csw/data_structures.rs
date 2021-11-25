@@ -1,6 +1,9 @@
 use cctp_primitives::type_mapping::FieldElement;
 
-use crate::{GingerMHTBinaryPath, SC_PUBLIC_KEY_LENGTH, SC_SECRET_KEY_LENGTH};
+use crate::{
+    type_mapping::*, GingerMHTBinaryPath, PHANTOM_FIELD_ELEMENT, PHANTOM_PUBLIC_KEY_BITS,
+    PHANTOM_SECRET_KEY_BITS,
+};
 
 #[derive(Clone)]
 pub struct WithdrawalCertificateData {
@@ -18,30 +21,62 @@ pub struct WithdrawalCertificateData {
     pub scb_new_mst_root: FieldElement, // proof_data [END]
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct CswUtxoOutputData {
-    pub spending_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
+    pub spending_pub_key: [bool; SIMULATED_FIELD_BYTE_SIZE * 8],
     pub amount: FieldElement,
     pub nonce: FieldElement,
     pub custom_hash: FieldElement,
 }
 
+impl Default for CswUtxoOutputData {
+    fn default() -> Self {
+        Self {
+            spending_pub_key: PHANTOM_PUBLIC_KEY_BITS,
+            amount: PHANTOM_FIELD_ELEMENT,
+            nonce: PHANTOM_FIELD_ELEMENT,
+            custom_hash: PHANTOM_FIELD_ELEMENT,
+        }
+    }
+}
+
 // TODO: is it ok to consider "phantom" the default instance of this struct?
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct CswUtxoInputData {
     pub output: CswUtxoOutputData,
-    pub secret_key: [u8; SC_SECRET_KEY_LENGTH],
+    pub secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+}
+
+impl Default for CswUtxoInputData {
+    fn default() -> Self {
+        Self {
+            output: CswUtxoOutputData::default(),
+            secret_key: PHANTOM_SECRET_KEY_BITS,
+        }
+    }
 }
 
 // TODO: is it ok to consider "phantom" the default instance of this struct?
 // Eventually consider using PHANTOM_FIELD_ELEMENT.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct CswFtInputData {
     pub amount: FieldElement,
-    pub receiver_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
+    pub receiver_pub_key: [bool; SIMULATED_FIELD_BYTE_SIZE * 8],
     pub payback_addr_data_hash: FieldElement,
     pub tx_hash: FieldElement,
     pub out_idx: FieldElement,
+}
+
+impl Default for CswFtInputData {
+    fn default() -> Self {
+        Self {
+            amount: PHANTOM_FIELD_ELEMENT,
+            receiver_pub_key: PHANTOM_PUBLIC_KEY_BITS,
+            payback_addr_data_hash: PHANTOM_FIELD_ELEMENT,
+            tx_hash: PHANTOM_FIELD_ELEMENT,
+            out_idx: PHANTOM_FIELD_ELEMENT,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -66,7 +101,7 @@ pub struct CswProverData {
     pub input: CswUtxoInputData, // unspent output we are trying to withdraw
     pub mst_path_to_output: GingerMHTBinaryPath, // path to output in the MST of the known state
     pub ft_input: CswFtInputData, // FT output in the MC block
-    pub ft_input_secret_key: [u8; SC_SECRET_KEY_LENGTH], // secret key that authorizes ft_input spending
+    pub ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // secret key that authorizes ft_input spending
     pub mcb_sc_txs_com_start: FieldElement, // Cumulative ScTxsCommittment taken from the last MC block of the last confirmed (not reverted) epoch
     pub merkle_path_to_sc_hash: GingerMHTBinaryPath, // Merkle path to a particular sidechain in the ScTxsComm tree
     pub ft_tree_path: GingerMHTBinaryPath, // path to the ft_input_hash in the FT Merkle tree included in ScTxsComm tree

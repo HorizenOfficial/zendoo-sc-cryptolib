@@ -5,7 +5,7 @@ use r1cs_core::{ConstraintSystemAbstract, SynthesisError};
 use r1cs_std::{
     boolean::Boolean,
     fields::FieldGadget,
-    prelude::{AllocGadget, ConstantGadget, EqGadget, UInt8},
+    prelude::{AllocGadget, ConstantGadget, EqGadget},
     to_field_gadget_vec::ToConstraintFieldGadget,
     FromBitsGadget, FromGadget, ToBitsGadget,
 };
@@ -13,7 +13,8 @@ use r1cs_std::{
 use crate::{
     constants::constants::CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER, CswFtInputData, CswProverData,
     CswUtxoInputData, CswUtxoOutputData, FieldElementGadget, GingerMHTBinaryGadget,
-    WithdrawalCertificateData, SC_PUBLIC_KEY_LENGTH, SC_SECRET_KEY_LENGTH,
+    WithdrawalCertificateData, PHANTOM_SECRET_KEY_BITS, SIMULATED_FIELD_BYTE_SIZE,
+    SIMULATED_SCALAR_FIELD_MODULUS_BITS,
 };
 
 #[derive(Clone)]
@@ -120,7 +121,7 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
 
 #[derive(PartialEq, Eq)]
 pub struct CswUtxoOutputDataGadget {
-    pub spending_pub_key_g: [UInt8; SC_PUBLIC_KEY_LENGTH],
+    pub spending_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
     pub amount_g: FieldElementGadget,
     pub nonce_g: FieldElementGadget,
     pub custom_hash_g: FieldElementGadget,
@@ -169,12 +170,12 @@ impl AllocGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
         };
 
         let spending_pub_key_g =
-            Vec::<UInt8>::alloc(cs.ns(|| "alloc spending pub key"), || spending_pub_key)?
+            Vec::<Boolean>::alloc(cs.ns(|| "alloc spending pub key"), || spending_pub_key)?
                 .try_into()
                 .map_err(|_| {
                     SynthesisError::Other(format!(
-                        "invalid size for spending_pub_key, expected {}",
-                        SC_PUBLIC_KEY_LENGTH
+                        "invalid size for spending_pub_key, expected {} bits",
+                        SIMULATED_FIELD_BYTE_SIZE * 8
                     ))
                 })?;
 
@@ -216,7 +217,7 @@ impl ConstantGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget
         let spending_pub_key_g = value
             .spending_pub_key
             .iter()
-            .map(|&byte| UInt8::constant(byte))
+            .map(|&bit| Boolean::Constant(bit))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -241,7 +242,7 @@ impl ConstantGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget
             spending_pub_key: self
                 .spending_pub_key_g
                 .iter()
-                .map(|byte| byte.get_value().unwrap())
+                .map(|bit| bit.get_value().unwrap())
                 .collect::<Vec<_>>()
                 .try_into()
                 .unwrap(),
@@ -308,7 +309,7 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
 #[derive(PartialEq, Eq)]
 pub struct CswUtxoInputDataGadget {
     pub output_g: CswUtxoOutputDataGadget,
-    pub secret_key_g: [UInt8; SC_SECRET_KEY_LENGTH],
+    pub secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
 }
 
 impl CswUtxoInputDataGadget {
@@ -316,14 +317,13 @@ impl CswUtxoInputDataGadget {
         &self,
         mut cs: CS,
     ) -> Result<Boolean, SynthesisError> {
-        // TODO: properly create and store the phantom secret_key gadget.
-        // Eventually consider using PHANTOM_UINT8_ARRAY.
-        let phantom_secret_key_g: [UInt8; SC_SECRET_KEY_LENGTH] = [0u8; SC_SECRET_KEY_LENGTH]
-            .iter()
-            .map(|&byte| UInt8::constant(byte))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
+        let phantom_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS] =
+            PHANTOM_SECRET_KEY_BITS
+                .iter()
+                .map(|&bit| Boolean::constant(bit))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
 
         let b1 = self.output_g.is_phantom(cs.ns(|| "is output_g phantom"))?;
         let b2 = self
@@ -359,12 +359,12 @@ impl AllocGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
 
         let output_g = CswUtxoOutputDataGadget::alloc(cs.ns(|| "alloc output"), || output)?;
 
-        let secret_key_g = Vec::<UInt8>::alloc(cs.ns(|| "alloc secret key"), || secret_key)?
+        let secret_key_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc secret key"), || secret_key)?
             .try_into()
             .map_err(|_| {
                 SynthesisError::Other(format!(
-                    "invalid size for secret_key, expected {}",
-                    SC_SECRET_KEY_LENGTH
+                    "invalid size for secret_key, expected {} bits",
+                    SIMULATED_SCALAR_FIELD_MODULUS_BITS
                 ))
             })?;
 
@@ -396,7 +396,7 @@ impl ConstantGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
         let secret_key_g = value
             .secret_key
             .iter()
-            .map(|&byte| UInt8::constant(byte))
+            .map(|&bit| Boolean::constant(bit))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -441,7 +441,7 @@ impl EqGadget<FieldElement> for CswUtxoInputDataGadget {
 #[derive(PartialEq, Eq)]
 pub struct CswFtInputDataGadget {
     pub amount_g: FieldElementGadget,
-    pub receiver_pub_key_g: Vec<UInt8>,
+    pub receiver_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
     pub payback_addr_data_hash_g: FieldElementGadget,
     pub tx_hash_g: FieldElementGadget,
     pub out_idx_g: FieldElementGadget,
@@ -452,7 +452,6 @@ impl CswFtInputDataGadget {
         &self,
         mut cs: CS,
     ) -> Result<Boolean, SynthesisError> {
-        // TODO: properly create and store the phantom gadget
         let phantom_ft_input_g = CswFtInputDataGadget::from_value(
             cs.ns(|| "alloc constant FT input phantom gadget"),
             &CswFtInputData::default(),
@@ -494,7 +493,14 @@ impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
         let amount_g = FieldElementGadget::alloc(cs.ns(|| "alloc amount"), || amount)?;
 
         let receiver_pub_key_g =
-            Vec::<UInt8>::alloc(cs.ns(|| "alloc receiver pub key"), || receiver_pub_key)?;
+            Vec::<Boolean>::alloc(cs.ns(|| "alloc receiver pub key"), || receiver_pub_key)?
+                .try_into()
+                .map_err(|_| {
+                    SynthesisError::Other(format!(
+                        "invalid size for public key, expected {} bits",
+                        SIMULATED_FIELD_BYTE_SIZE * 8
+                    ))
+                })?;
 
         let payback_addr_data_hash_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc payback addr data hash"), || {
@@ -537,7 +543,7 @@ impl ConstantGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
         let receiver_pub_key_g = value
             .receiver_pub_key
             .iter()
-            .map(|&byte| UInt8::constant(byte))
+            .map(|&bit| Boolean::constant(bit))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -655,7 +661,7 @@ pub struct CswProverDataGadget {
     pub input_g: CswUtxoInputDataGadget,
     pub mst_path_to_output_g: GingerMHTBinaryGadget,
     pub ft_input_g: CswFtInputDataGadget,
-    pub ft_input_secret_key_g: Vec<UInt8>,
+    pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
     pub mcb_sc_txs_com_start_g: FieldElementGadget,
     pub merkle_path_to_sc_hash_g: GingerMHTBinaryGadget,
     pub ft_tree_path_g: GingerMHTBinaryGadget,
@@ -710,8 +716,15 @@ impl FromGadget<CswProverData, FieldElement> for CswProverDataGadget {
             CswFtInputDataGadget::alloc(cs.ns(|| "alloc ft input"), || Ok(data.ft_input.clone()))?;
 
         let ft_input_secret_key_g =
-            Vec::<UInt8>::alloc(cs.ns(|| "alloc ft input secret key"), || {
+            Vec::<Boolean>::alloc(cs.ns(|| "alloc ft input secret key"), || {
                 Ok(data.ft_input_secret_key)
+            })?
+            .try_into()
+            .map_err(|_| {
+                SynthesisError::Other(format!(
+                    "invalid size for secret_key, expected {} bits",
+                    SIMULATED_SCALAR_FIELD_MODULUS_BITS
+                ))
             })?;
 
         let mcb_sc_txs_com_start_g =
