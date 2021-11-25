@@ -2601,6 +2601,126 @@ ffi_export!(
 });
 
 ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetFwtLeaves(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    match commitment_tree.get_fwt_leaves(&sc_id) {
+        Some(leaves) => {
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let initial_element = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(0)]).expect("Should be able to create new long for FieldElement");
+
+            let leaf_fe_array = _env.new_object_array(leaves.len() as i32, field_class, initial_element)
+                .expect("Should be able to create array of FieldElements");
+
+            for (idx, leaf) in leaves.iter().enumerate() {
+                let leaf_field_ptr: jlong = jlong::from(Box::into_raw(Box::new(leaf.clone())) as i64);
+
+                let leaf_element = _env.new_object(field_class, "(J)V", &[
+                    JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+                _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
+                    .expect("Should be able to add FieldElement leaf to an array");
+            }
+
+
+            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+            let empty_res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::from(JObject::from(leaf_fe_array))])
+                .expect("Should be able to create new value for Optional");
+
+            *empty_res.l().unwrap()
+        }
+        _ => {
+            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
+
+            *empty_res.l().unwrap()
+        }
+    }
+});
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetBtrLeaves(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    match commitment_tree.get_bwtr_leaves(&sc_id) {
+        Some(leaves) => {
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let initial_element = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(0)]).expect("Should be able to create new long for FieldElement");
+
+            let leaf_fe_array = _env.new_object_array(leaves.len() as i32, field_class, initial_element)
+                .expect("Should be able to create array of FieldElements");
+
+            for (idx, leaf) in leaves.iter().enumerate() {
+                let leaf_field_ptr: jlong = jlong::from(Box::into_raw(Box::new(leaf.clone())) as i64);
+
+                let leaf_element = _env.new_object(field_class, "(J)V", &[
+                    JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+                _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
+                    .expect("Should be able to add FieldElement leaf to an array");
+            }
+
+
+            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+            let empty_res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::from(JObject::from(leaf_fe_array))])
+                .expect("Should be able to create new value for Optional");
+
+            *empty_res.l().unwrap()
+        }
+        _ => {
+            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
+
+            *empty_res.l().unwrap()
+        }
+    }
+});
+
+ffi_export!(
     fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCrtLeaves(
     _env: JNIEnv,
     _commitment_tree: JObject,
@@ -3005,7 +3125,188 @@ ffi_export!(
     }
 });
 
-// Sc Existance proof functions
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScCommitmentMerklePath(
+        _env: JNIEnv,
+        _commitment_tree: JObject,
+        _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
+
+    let commitment_tree = {
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+    match commitment_tree.get_sc_commitment_merkle_path(&sc_id) {
+        Some(merkle_path) => {
+            let merkle_path_ptr: jlong = jlong::from(Box::into_raw(Box::new(merkle_path)) as i64);
+
+            let merkle_path_class = _env.find_class("com/horizen/merkletreenative/MerklePath")
+                .expect("Should be able to find MerklePath class");
+
+            let jep = _env.new_object(merkle_path_class, "(J)V", &[
+                JValue::Long(merkle_path_ptr)]).expect("Should be able to create new long for MerklePath");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
+                                              &[JValue::Object(jep)]).unwrap();
+            *res.l().unwrap()
+        },
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
+            *empty_res.l().unwrap()
+        }
+    }
+});
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetFwtMerklePath(
+        _env: JNIEnv,
+        _commitment_tree: JObject,
+        _sc_id: jbyteArray,
+        _leaf_index: jint
+) -> jobject
+{
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
+
+    let leaf_index = _leaf_index as usize;
+
+    let commitment_tree = {
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+    match commitment_tree.get_fwt_merkle_path(&sc_id, leaf_index) {
+        Some(merkle_path) => {
+            let merkle_path_ptr: jlong = jlong::from(Box::into_raw(Box::new(merkle_path)) as i64);
+
+            let merkle_path_class = _env.find_class("com/horizen/merkletreenative/MerklePath")
+                .expect("Should be able to find MerklePath class");
+
+            let jep = _env.new_object(merkle_path_class, "(J)V", &[
+                JValue::Long(merkle_path_ptr)]).expect("Should be able to create new long for MerklePath");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
+                                              &[JValue::Object(jep)]).unwrap();
+            *res.l().unwrap()
+        },
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
+            *empty_res.l().unwrap()
+        }
+    }
+});
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetBtrMerklePath(
+        _env: JNIEnv,
+        _commitment_tree: JObject,
+        _sc_id: jbyteArray,
+        _leaf_index: jint
+) -> jobject
+{
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
+
+    let leaf_index = _leaf_index as usize;
+
+    let commitment_tree = {
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+    match commitment_tree.get_bwtr_merkle_path(&sc_id, leaf_index) {
+        Some(merkle_path) => {
+            let merkle_path_ptr: jlong = jlong::from(Box::into_raw(Box::new(merkle_path)) as i64);
+
+            let merkle_path_class = _env.find_class("com/horizen/merkletreenative/MerklePath")
+                .expect("Should be able to find MerklePath class");
+
+            let jep = _env.new_object(merkle_path_class, "(J)V", &[
+                JValue::Long(merkle_path_ptr)]).expect("Should be able to create new long for MerklePath");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
+                                              &[JValue::Object(jep)]).unwrap();
+            *res.l().unwrap()
+        },
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
+            *empty_res.l().unwrap()
+        }
+    }
+});
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCertMerklePath(
+        _env: JNIEnv,
+        _commitment_tree: JObject,
+        _sc_id: jbyteArray,
+        _leaf_index: jint
+) -> jobject
+{
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
+
+    let leaf_index = _leaf_index as usize;
+
+    let commitment_tree = {
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+    match commitment_tree.get_cert_merkle_path(&sc_id, leaf_index) {
+        Some(merkle_path) => {
+            let merkle_path_ptr: jlong = jlong::from(Box::into_raw(Box::new(merkle_path)) as i64);
+
+            let merkle_path_class = _env.find_class("com/horizen/merkletreenative/MerklePath")
+                .expect("Should be able to find MerklePath class");
+
+            let jep = _env.new_object(merkle_path_class, "(J)V", &[
+                JValue::Long(merkle_path_ptr)]).expect("Should be able to create new long for MerklePath");
+
+            let res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;",
+                                              &[JValue::Object(jep)]).unwrap();
+            *res.l().unwrap()
+        },
+        _ => {
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
+            *empty_res.l().unwrap()
+        }
+    }
+});
+
+// Sc Existence proof functions
 ffi_export!(
     fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScExistenceProof(
     _env: JNIEnv,
@@ -3199,7 +3500,7 @@ ffi_export!(
 });
 
 
-// Verify existance/absence functions.
+// Verify existence/absence functions.
 
 ffi_export!(
     fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyScCommitment(

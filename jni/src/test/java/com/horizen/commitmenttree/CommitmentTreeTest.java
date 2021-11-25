@@ -1,5 +1,6 @@
 package com.horizen.commitmenttree;
 
+import com.horizen.merkletreenative.MerklePath;
 import org.junit.Test;
 import static org.junit.Assert.*;
 import com.horizen.sigproofnative.BackwardTransfer;
@@ -124,6 +125,18 @@ public class CommitmentTreeTest {
 
         Optional<FieldElement> commitmentOpt = commTree.getFwtCommitment(scId);
         assertTrue("Forward transfer expected to be present.", commitmentOpt.isPresent());
+
+        Optional<MerklePath> fwtMerklePathOpt = commTree.getFwtMerklePath(scId, 0);
+        assertTrue("Forward transfer merkle path expected to be present.", fwtMerklePathOpt.isPresent());
+
+        Optional<List<FieldElement>> fwtLeavesOpt = commTree.getFwtLeaves(scId);
+        assertTrue("Commitment Tree should contain fwt leaves for given sc id.", fwtLeavesOpt.isPresent());
+
+        List<FieldElement> fwtLeaves = fwtLeavesOpt.get();
+        assertEquals("Commitment Tree contains different number of leaves for given sc id.", 1, fwtLeaves.size());
+
+        assertTrue("Invalid merkle path for FT.", fwtMerklePathOpt.get().verify(fwtLeaves.get(0), commitmentOpt.get()));
+
         commTree.freeCommitmentTree();
     }
 
@@ -144,6 +157,18 @@ public class CommitmentTreeTest {
 
         Optional<FieldElement> commitmentOpt = commTree.getBtrCommitment(scId);
         assertTrue("Backward transfer expected to be present.", commitmentOpt.isPresent());
+
+        Optional<MerklePath> btrMerklePathOpt = commTree.getBtrMerklePath(scId, 0);
+        assertTrue("Backward transfer merkle path expected to be present.", btrMerklePathOpt.isPresent());
+
+        Optional<List<FieldElement>> btrLeavesOpt = commTree.getBtrLeaves(scId);
+        assertTrue("Commitment Tree should contain btr leaves for given sc id.", btrLeavesOpt.isPresent());
+
+        List<FieldElement> btrLeaves = btrLeavesOpt.get();
+        assertEquals("Commitment Tree contains different number of leaves for given sc id.", 1, btrLeaves.size());
+
+        assertTrue("Invalid merkle path for BTR.", btrMerklePathOpt.get().verify(btrLeaves.get(0), commitmentOpt.get()));
+
         commTree.freeCommitmentTree();
     }
 
@@ -223,6 +248,22 @@ public class CommitmentTreeTest {
                         Optional.empty(), endCumulativeScTxCommitmentTreeRoot, btrFee, ftMinAmount)
         );
 
+        // Calculate Cert commitment after all certificates were applied.
+        commitmentOpt = commTree.getCertCommitment(scId);
+        assertTrue("Certificate expected to be present.", commitmentOpt.isPresent());
+
+        Optional<List<FieldElement>> certLeavesOpt = commTree.getCrtLeaves(scId);
+        assertTrue("Commitment Tree should contain cert leaves for given sc id.", certLeavesOpt.isPresent());
+
+        List<FieldElement> certLeaves = certLeavesOpt.get();
+        assertEquals("Commitment Tree contains different number of leaves for given sc id.", 2, certLeaves.size());
+
+        for(int i = 0; i < certLeaves.size(); i++) {
+            Optional<MerklePath> certMerklePathOpt = commTree.getCertMerklePath(scId, i);
+            assertTrue("Certificate merkle path expected to be present.", certMerklePathOpt.isPresent());
+
+            assertTrue("Invalid merkle path for Certificate " + i, certMerklePathOpt.get().verify(certLeaves.get(i), commitmentOpt.get()));
+        }
 
         commTree.freeCommitmentTree();
     }
@@ -253,6 +294,34 @@ public class CommitmentTreeTest {
         commTree.freeCommitmentTree();
         leafListOpt.get().get(0).freeFieldElement();
         leafListOpt.get().get(1).freeFieldElement();
+    }
+
+    @Test
+    public void scCommitmentTest() {
+        CommitmentTree commTree = CommitmentTree.init();
+        byte[] scId = generateFieldElementBytes();
+
+        assertFalse("No SC commitment expected to be found for given sc id.", commTree.getScCommitment(scId).isPresent());
+        assertFalse("No SC commitment merkle path expected to be found for given sc id.", commTree.getScCommitmentMerklePath(scId).isPresent());
+
+        // Init subtree for given sc id by adding the cert leaf.
+        FieldElement certLeaf = FieldElement.createRandom();
+        assertTrue("Certificate leaf expected to be added.", commTree.addCertLeaf(scId, certLeaf.serializeFieldElement()));
+        certLeaf.freeFieldElement();
+
+        // Check commitments and merkle path
+        Optional<FieldElement> scCommitmentOpt = commTree.getScCommitment(scId);
+        assertTrue("SC commitment expected to be found for given sc id.", scCommitmentOpt.isPresent());
+
+        Optional<MerklePath> scCommitmentMerklePathOpt = commTree.getScCommitmentMerklePath(scId);
+        assertTrue("SC commitment merkle path expected to be found for given sc id.", scCommitmentMerklePathOpt.isPresent());
+
+        Optional<FieldElement> commitmentOpt = commTree.getCommitment();
+        assertTrue("Tree Commitment expected to be found.", commitmentOpt.isPresent());
+
+        assertTrue("Invalid merkle path for SC Commitment.", scCommitmentMerklePathOpt.get().verify(scCommitmentOpt.get(), commitmentOpt.get()));
+
+        commTree.freeCommitmentTree();
     }
 
     @Test
