@@ -154,6 +154,9 @@ impl VRFParams {
     }
 }
 
+pub const MC_RETURN_ADDRESS_BYTES: usize = 20;
+pub const FIELD_MODULUS: usize = FIELD_CAPACITY + 1;
+
 pub const MST_MERKLE_TREE_HEIGHT: usize = 22;
 
 pub const PHANTOM_FIELD_ELEMENT: FieldElement = field_new!(

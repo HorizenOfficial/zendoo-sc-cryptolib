@@ -1,7 +1,7 @@
 use cctp_primitives::type_mapping::FieldElement;
 
 use crate::{
-    type_mapping::*, GingerMHTBinaryPath, PHANTOM_FIELD_ELEMENT, PHANTOM_PUBLIC_KEY_BITS,
+    type_mapping::*, GingerMHTBinaryPath, MC_RETURN_ADDRESS_BYTES, PHANTOM_PUBLIC_KEY_BITS,
     PHANTOM_SECRET_KEY_BITS,
 };
 
@@ -24,18 +24,18 @@ pub struct WithdrawalCertificateData {
 #[derive(Clone)]
 pub struct CswUtxoOutputData {
     pub spending_pub_key: [bool; SIMULATED_FIELD_BYTE_SIZE * 8],
-    pub amount: FieldElement,
-    pub nonce: FieldElement,
-    pub custom_hash: FieldElement,
+    pub amount: u64,
+    pub nonce: u64,
+    pub custom_hash: [bool; FIELD_SIZE * 8],
 }
 
 impl Default for CswUtxoOutputData {
     fn default() -> Self {
         Self {
             spending_pub_key: PHANTOM_PUBLIC_KEY_BITS,
-            amount: PHANTOM_FIELD_ELEMENT,
-            nonce: PHANTOM_FIELD_ELEMENT,
-            custom_hash: PHANTOM_FIELD_ELEMENT,
+            amount: 0,
+            nonce: 0,
+            custom_hash: [false; FIELD_SIZE * 8],
         }
     }
 }
@@ -57,24 +57,23 @@ impl Default for CswUtxoInputData {
 }
 
 // TODO: is it ok to consider "phantom" the default instance of this struct?
-// Eventually consider using PHANTOM_FIELD_ELEMENT.
 #[derive(Clone)]
 pub struct CswFtInputData {
-    pub amount: FieldElement,
+    pub amount: u64,
     pub receiver_pub_key: [bool; SIMULATED_FIELD_BYTE_SIZE * 8],
-    pub payback_addr_data_hash: FieldElement,
-    pub tx_hash: FieldElement,
-    pub out_idx: FieldElement,
+    pub payback_addr_data_hash: [bool; MC_RETURN_ADDRESS_BYTES * 8],
+    pub tx_hash: [bool; FIELD_SIZE * 8],
+    pub out_idx: u32,
 }
 
 impl Default for CswFtInputData {
     fn default() -> Self {
         Self {
-            amount: PHANTOM_FIELD_ELEMENT,
+            amount: 0,
             receiver_pub_key: PHANTOM_PUBLIC_KEY_BITS,
-            payback_addr_data_hash: PHANTOM_FIELD_ELEMENT,
-            tx_hash: PHANTOM_FIELD_ELEMENT,
-            out_idx: PHANTOM_FIELD_ELEMENT,
+            payback_addr_data_hash: [false; MC_RETURN_ADDRESS_BYTES * 8],
+            tx_hash: [false; FIELD_SIZE * 8],
+            out_idx: 0,
         }
     }
 }

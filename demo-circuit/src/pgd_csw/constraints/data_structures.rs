@@ -1,20 +1,21 @@
 use std::{borrow::Borrow, convert::TryInto};
 
-use cctp_primitives::type_mapping::{FieldElement, FIELD_CAPACITY};
+use cctp_primitives::type_mapping::{FieldElement, FIELD_CAPACITY, FIELD_SIZE};
 use r1cs_core::{ConstraintSystemAbstract, SynthesisError};
 use r1cs_std::{
     boolean::Boolean,
-    fields::FieldGadget,
     prelude::{AllocGadget, ConstantGadget, EqGadget},
     to_field_gadget_vec::ToConstraintFieldGadget,
+    uint32::UInt32,
+    uint64::UInt64,
     FromBitsGadget, FromGadget, ToBitsGadget,
 };
 
 use crate::{
     constants::constants::CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER, CswFtInputData, CswProverData,
     CswUtxoInputData, CswUtxoOutputData, FieldElementGadget, GingerMHTBinaryGadget,
-    WithdrawalCertificateData, PHANTOM_SECRET_KEY_BITS, SIMULATED_FIELD_BYTE_SIZE,
-    SIMULATED_SCALAR_FIELD_MODULUS_BITS,
+    WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES, PHANTOM_SECRET_KEY_BITS,
+    SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS,
 };
 
 #[derive(Clone)]
@@ -122,9 +123,9 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
 #[derive(PartialEq, Eq)]
 pub struct CswUtxoOutputDataGadget {
     pub spending_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
-    pub amount_g: FieldElementGadget,
-    pub nonce_g: FieldElementGadget,
-    pub custom_hash_g: FieldElementGadget,
+    pub amount_g: UInt64,
+    pub nonce_g: UInt64,
+    pub custom_hash_g: [Boolean; FIELD_SIZE * 8],
 }
 
 impl CswUtxoOutputDataGadget {
@@ -180,12 +181,18 @@ impl AllocGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
                 })?;
 
         // TODO: to save some constraints, it would be possible to allocate amount and nonce as Vec<Boolean>
-        let amount_g = FieldElementGadget::alloc(cs.ns(|| "alloc amount"), || amount)?;
+        let amount_g = UInt64::alloc(cs.ns(|| "alloc amount"), amount.ok())?;
 
-        let nonce_g = FieldElementGadget::alloc(cs.ns(|| "alloc nonce"), || nonce)?;
+        let nonce_g = UInt64::alloc(cs.ns(|| "alloc nonce"), nonce.ok())?;
 
-        let custom_hash_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc custom hash"), || custom_hash)?;
+        let custom_hash_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc custom hash"), || custom_hash)?
+            .try_into()
+            .map_err(|_| {
+                SynthesisError::Other(format!(
+                    "invalid size for custom_hash, expected {} bits",
+                    FIELD_SIZE * 8
+                ))
+            })?;
 
         let new_instance = Self {
             spending_pub_key_g,
@@ -211,7 +218,7 @@ impl AllocGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
 
 impl ConstantGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
     fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
-        mut cs: CS,
+        _cs: CS,
         value: &CswUtxoOutputData,
     ) -> Self {
         let spending_pub_key_g = value
@@ -222,12 +229,17 @@ impl ConstantGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget
             .try_into()
             .unwrap();
 
-        let amount_g = FieldElementGadget::from_value(cs.ns(|| "alloc amount_g"), &value.amount);
+        let amount_g = UInt64::constant(value.amount);
 
-        let nonce_g = FieldElementGadget::from_value(cs.ns(|| "alloc nonce_g"), &value.nonce);
+        let nonce_g = UInt64::constant(value.nonce);
 
-        let custom_hash_g =
-            FieldElementGadget::from_value(cs.ns(|| "alloc custom hash"), &value.custom_hash);
+        let custom_hash_g = value
+            .custom_hash
+            .iter()
+            .map(|&bit| Boolean::Constant(bit))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
 
         Self {
             spending_pub_key_g,
@@ -248,7 +260,13 @@ impl ConstantGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget
                 .unwrap(),
             amount: self.amount_g.get_value().unwrap(),
             nonce: self.nonce_g.get_value().unwrap(),
-            custom_hash: self.custom_hash_g.get_value().unwrap(),
+            custom_hash: self
+                .custom_hash_g
+                .iter()
+                .map(|bit| bit.get_value().unwrap())
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
         }
     }
 }
@@ -284,23 +302,28 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
         &self,
         mut cs: CS,
     ) -> Result<Vec<FieldElementGadget>, SynthesisError> {
-        let bits = self
+        let mut bits = self
             .spending_pub_key_g
             .to_bits(cs.ns(|| "spending_pub_key_g to bits"))
             .unwrap();
 
-        let mut elements = bits
+        let mut amount_big_endian_g = self.amount_g.to_bits_le();
+        amount_big_endian_g.reverse();
+        bits.extend_from_slice(&amount_big_endian_g);
+
+        let mut nonce_big_endian_g = self.nonce_g.to_bits_le();
+        nonce_big_endian_g.reverse();
+        bits.extend_from_slice(&nonce_big_endian_g);
+
+        bits.extend_from_slice(&self.custom_hash_g);
+
+        let elements = bits
             .chunks(FIELD_CAPACITY)
             .enumerate()
             .map(|(index, chunk)| {
-                FieldElementGadget::from_bits(cs.ns(|| format!("from bits le {}", index)), chunk)
-                    .unwrap()
+                FieldElementGadget::from_bits(cs.ns(|| format!("from bits {}", index)), chunk)
             })
-            .collect::<Vec<_>>();
-
-        elements.push(self.amount_g.clone());
-        elements.push(self.nonce_g.clone());
-        elements.push(self.custom_hash_g.clone());
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(elements)
     }
@@ -440,11 +463,11 @@ impl EqGadget<FieldElement> for CswUtxoInputDataGadget {
 
 #[derive(PartialEq, Eq)]
 pub struct CswFtInputDataGadget {
-    pub amount_g: FieldElementGadget,
+    pub amount_g: UInt64,
     pub receiver_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
-    pub payback_addr_data_hash_g: FieldElementGadget,
-    pub tx_hash_g: FieldElementGadget,
-    pub out_idx_g: FieldElementGadget,
+    pub payback_addr_data_hash_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
+    pub tx_hash_g: [Boolean; FIELD_SIZE * 8],
+    pub out_idx_g: UInt32,
 }
 
 impl CswFtInputDataGadget {
@@ -490,7 +513,7 @@ impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
             ),
         };
 
-        let amount_g = FieldElementGadget::alloc(cs.ns(|| "alloc amount"), || amount)?;
+        let amount_g = UInt64::alloc(cs.ns(|| "alloc amount"), amount.ok())?;
 
         let receiver_pub_key_g =
             Vec::<Boolean>::alloc(cs.ns(|| "alloc receiver pub key"), || receiver_pub_key)?
@@ -503,13 +526,27 @@ impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
                 })?;
 
         let payback_addr_data_hash_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc payback addr data hash"), || {
+            Vec::<Boolean>::alloc(cs.ns(|| "alloc payback addr data hash"), || {
                 payback_addr_data_hash
+            })?
+            .try_into()
+            .map_err(|_| {
+                SynthesisError::Other(format!(
+                    "invalid size for payback_addr_data_hash, expected {} bits",
+                    MC_RETURN_ADDRESS_BYTES * 8
+                ))
             })?;
 
-        let tx_hash_g = FieldElementGadget::alloc(cs.ns(|| "alloc tx hash"), || tx_hash)?;
+        let tx_hash_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc tx hash"), || tx_hash)?
+            .try_into()
+            .map_err(|_| {
+                SynthesisError::Other(format!(
+                    "invalid size for tx hash, expected {} bits",
+                    FIELD_SIZE * 8
+                ))
+            })?;
 
-        let out_idx_g = FieldElementGadget::alloc(cs.ns(|| "alloc out idx"), || out_idx)?;
+        let out_idx_g = UInt32::alloc(cs.ns(|| "alloc out idx"), out_idx.ok())?;
 
         let new_instance = Self {
             amount_g,
@@ -536,10 +573,10 @@ impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
 
 impl ConstantGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
     fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
-        mut cs: CS,
+        _cs: CS,
         value: &CswFtInputData,
     ) -> Self {
-        let amount_g = FieldElementGadget::from_value(cs.ns(|| "alloc amount"), &value.amount);
+        let amount_g = UInt64::constant(value.amount);
         let receiver_pub_key_g = value
             .receiver_pub_key
             .iter()
@@ -547,12 +584,24 @@ impl ConstantGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
-        let payback_addr_data_hash_g = FieldElementGadget::from_value(
-            cs.ns(|| "alloc payback addr data hash"),
-            &value.payback_addr_data_hash,
-        );
-        let tx_hash_g = FieldElementGadget::from_value(cs.ns(|| "alloc tx hash"), &value.tx_hash);
-        let out_idx_g = FieldElementGadget::from_value(cs.ns(|| "alloc out idx"), &value.out_idx);
+
+        let payback_addr_data_hash_g = value
+            .payback_addr_data_hash
+            .iter()
+            .map(|&bit| Boolean::constant(bit))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        let tx_hash_g = value
+            .tx_hash
+            .iter()
+            .map(|&bit| Boolean::constant(bit))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        let out_idx_g = UInt32::constant(value.out_idx);
 
         Self {
             amount_g,
@@ -565,17 +614,29 @@ impl ConstantGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
 
     fn get_constant(&self) -> CswFtInputData {
         CswFtInputData {
-            amount: self.amount_g.get_constant(),
+            amount: self.amount_g.get_value().unwrap(),
             receiver_pub_key: self
                 .receiver_pub_key_g
                 .iter()
-                .map(|byte| byte.get_value().unwrap())
+                .map(|bit| bit.get_value().unwrap())
                 .collect::<Vec<_>>()
                 .try_into()
                 .unwrap(),
-            payback_addr_data_hash: self.payback_addr_data_hash_g.get_constant(),
-            tx_hash: self.tx_hash_g.get_constant(),
-            out_idx: self.out_idx_g.get_constant(),
+            payback_addr_data_hash: self
+                .payback_addr_data_hash_g
+                .iter()
+                .map(|bit| bit.get_value().unwrap())
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
+            tx_hash: self
+                .tx_hash_g
+                .iter()
+                .map(|bit| bit.get_value().unwrap())
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
+            out_idx: self.out_idx_g.value.unwrap(),
         }
     }
 }
@@ -618,29 +679,26 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtInputDataGadget {
         &self,
         mut cs: CS,
     ) -> Result<Vec<FieldElementGadget>, SynthesisError> {
-        let mut elements = vec![self.amount_g.clone()];
+        let mut bits = self.amount_g.to_bits_le();
+        bits.reverse();
 
-        let bits = self
-            .receiver_pub_key_g
-            .to_bits(cs.ns(|| "receiver_pub_key_g to bits"))
-            .unwrap();
+        bits.extend_from_slice(&self.receiver_pub_key_g);
+        bits.extend_from_slice(&self.payback_addr_data_hash_g);
+        bits.extend_from_slice(&self.tx_hash_g);
 
-        elements.extend(
-            bits.chunks(FIELD_CAPACITY)
-                .enumerate()
-                .map(|(index, chunk)| {
-                    FieldElementGadget::from_bits(
-                        cs.ns(|| format!("from bits le {}", index)),
-                        chunk,
-                    )
+        let mut out_idx_big_endian_g = self.out_idx_g.to_bits_le();
+        out_idx_big_endian_g.reverse();
+
+        bits.extend_from_slice(&out_idx_big_endian_g);
+
+        let elements = bits
+            .chunks(FIELD_CAPACITY)
+            .enumerate()
+            .map(|(index, chunk)| {
+                FieldElementGadget::from_bits(cs.ns(|| format!("FT from bits {}", index)), chunk)
                     .unwrap()
-                })
-                .collect::<Vec<_>>(),
-        );
-
-        elements.push(self.payback_addr_data_hash_g.clone());
-        elements.push(self.tx_hash_g.clone());
-        elements.push(self.out_idx_g.clone());
+            })
+            .collect::<Vec<_>>();
 
         Ok(elements)
     }

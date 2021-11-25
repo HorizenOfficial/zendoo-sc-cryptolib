@@ -9,6 +9,7 @@ use r1cs_std::{
     fields::{nonnative::nonnative_field_gadget::NonNativeFieldGadget, FieldGadget},
     groups::GroupGadget,
     prelude::EqGadget,
+    select::CondSelectGadget,
     to_field_gadget_vec::ToConstraintFieldGadget,
     FromBitsGadget, FromGadget,
 };
@@ -114,8 +115,12 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             .output_g
             .to_field_gadget_elements(cs.ns(|| "alloc output hash elements"))?;
 
+        debug_assert_eq!(output_hash_elements_g.len(), 3);
         output_hash_elements_g.push(box_type_coin_g);
-        assert_eq!(output_hash_elements_g.len(), 6);
+
+        output_hash_elements_g.iter().for_each(|x| {
+            println!("Circuit output hash element: {:?}", x);
+        });
 
         let output_hash_g = FieldHashGadget::enforce_hash_constant_length(
             cs.ns(|| "H(input.output)"),
@@ -143,18 +148,6 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             &csw_data_g.nullifier_g,
             &should_enforce_utxo_withdrawal_g,
         )?;
-
-        // 3 Check amount and signature
-        // require(input.output.amount == sys_data.amount)
-        csw_data_g
-            .input_g
-            .output_g
-            .amount_g
-            .conditional_enforce_equal(
-                cs.ns(|| "input.output.amount == sys_data.amount"),
-                &csw_data_g.amount_g,
-                &should_enforce_utxo_withdrawal_g,
-            )?;
 
         // Check secret key ownership
         let public_key_bits_g = csw_data_g.input_g.output_g.spending_pub_key_g;
@@ -184,15 +177,17 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             .is_odd(cs.ns(|| "public key x coordinate is odd"))?;
 
         // Enforce x_sign is the same
-        x_sign.enforce_equal(
+        x_sign.conditional_enforce_equal(
             cs.ns(|| "Enforce x_sign == pk_x_sign_bit_g"),
             &pk_x_sign_bit_g,
+            &should_enforce_utxo_withdrawal_g,
         )?;
 
         // Enforce y_coordinate is the same
-        current_public_key_g.y.enforce_equal(
+        current_public_key_g.y.conditional_enforce_equal(
             cs.ns(|| "Enforce y coordinate is equal"),
             &pk_y_coordinate_g,
+            &should_enforce_utxo_withdrawal_g,
         )?;
 
         // UTXO widthdrawal [END]
@@ -271,6 +266,8 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             )?;
         }
 
+        println!("Circuit counter value: {:?}", counter_g.get_value());
+
         // require(cnt == 1)   // We must have exactly one match
         let constant_one_g =
             FieldElementGadget::from_value(cs.ns(|| "alloc constant 1"), &FieldElement::from(1u8));
@@ -287,13 +284,6 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             &should_enforce_ft_withdrawal_g,
         )?;
 
-        // require(ft_input.amount == sys_data.amount)
-        csw_data_g.ft_input_g.amount_g.conditional_enforce_equal(
-            cs.ns(|| "ft_input.amount == sys_data.amount"),
-            &csw_data_g.amount_g,
-            &should_enforce_ft_withdrawal_g,
-        )?;
-
         // require(nullifier == ft_input_hash)
         csw_data_g.nullifier_g.conditional_enforce_equal(
             cs.ns(|| "nullifier == ft_input_hash"),
@@ -303,6 +293,35 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 
         // FT withdrawal [END]
 
+        // The following and last section contains checks that has to be performed for both UTXO and FT withdrawal,
+        // to avoid duplication of code we rely on a conditional select.
+
+        // 3 Check amount
+        // require(input.output.amount == sys_data.amount)
+        // or
+        // require(ft_input.amount == sys_data.amount)
+        let utxo_input_amount_g = FieldElementGadget::from_bits(
+            cs.ns(|| "read utxo input amount"),
+            &csw_data_g.input_g.output_g.amount_g.to_bits_le(),
+        )?;
+
+        let ft_input_amount_g = FieldElementGadget::from_bits(
+            cs.ns(|| "read ft input amount"),
+            &csw_data_g.ft_input_g.amount_g.to_bits_le(),
+        )?;
+
+        let selected_input_amount_g = FieldElementGadget::conditionally_select(
+            cs.ns(|| "select input amount"),
+            &should_enforce_utxo_withdrawal_g,
+            &utxo_input_amount_g,
+            &ft_input_amount_g,
+        )?;
+
+        selected_input_amount_g.enforce_equal(
+            cs.ns(|| "input.amount == sys_data.amount"),
+            &csw_data_g.amount_g,
+        )?;
+
         Ok(())
     }
 }
@@ -310,15 +329,16 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 #[cfg(test)]
 mod test {
     use algebra::{
-        fields::ed25519::fr::Fr as ed25519Fr, Group, ProjectiveCurve, ToBits, ToConstraintField,
-        UniformRand,
+        fields::ed25519::fr::Fr as ed25519Fr, Group, ProjectiveCurve, ToBits, UniformRand,
     };
     use cctp_primitives::{
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
         type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
-        utils::poseidon_hash::get_poseidon_hash_constant_length,
+        utils::{
+            commitment_tree::ByteAccumulator, poseidon_hash::get_poseidon_hash_constant_length,
+        },
     };
-    use primitives::{FieldBasedHash, FieldBasedMerkleTree};
+    use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree};
     use r1cs_core::debug_circuit;
     use rand::rngs::OsRng;
     use std::{convert::TryInto, ops::AddAssign};
@@ -327,14 +347,19 @@ mod test {
         constants::constants::{BoxType, CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER},
         read_field_element_from_buffer_with_padding, CswFtInputData, CswProverData,
         CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
-        MST_MERKLE_TREE_HEIGHT, PHANTOM_SECRET_KEY_BITS,
+        MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT, PHANTOM_SECRET_KEY_BITS,
     };
 
     use super::*;
 
     type SimulatedScalarFieldElement = ed25519Fr;
 
-    fn generate_test_csw_prover_data() -> CswProverData {
+    enum CswType {
+        UTXO,
+        FT,
+    }
+
+    fn generate_test_csw_prover_data(csw_type: CswType) -> CswProverData {
         let rng = &mut OsRng::default();
 
         // Generate the secret key
@@ -361,48 +386,52 @@ mod test {
         let utxo_input_data = CswUtxoInputData {
             output: CswUtxoOutputData {
                 spending_pub_key: pk_bits.clone().try_into().unwrap(),
-                amount: FieldElement::from(10u8),
-                nonce: FieldElement::from(11u8),
-                custom_hash: FieldElement::from(12u8),
+                amount: 10,
+                nonce: 11,
+                custom_hash: bytes_to_bits(&[12; FIELD_SIZE]).try_into().unwrap(),
             },
             secret_key: secret.write_bits().try_into().unwrap(),
         };
 
-        let _ft_input_data = CswFtInputData {
-            amount: FieldElement::from(100u8),
+        let ft_input_data = CswFtInputData {
+            amount: 100,
             receiver_pub_key: pk_bits.try_into().unwrap(),
-            payback_addr_data_hash: FieldElement::from(101u8),
-            tx_hash: FieldElement::from(102u8),
-            out_idx: FieldElement::from(103u8),
+            payback_addr_data_hash: bytes_to_bits(&[101; MC_RETURN_ADDRESS_BYTES])
+                .try_into()
+                .unwrap(),
+            tx_hash: bytes_to_bits(&[102; FIELD_SIZE]).try_into().unwrap(),
+            out_idx: 103,
         };
 
         let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
 
-        let mut mst_leaf_inputs = utxo_input_data
-            .output
-            .spending_pub_key
-            .to_field_elements()
+        let mut mst_leaf_accumulator = ByteAccumulator::init();
+        mst_leaf_accumulator
+            .update(&utxo_input_data.output.spending_pub_key[..])
             .unwrap();
+            println!("ACCUMULATOR SIZE: {}", mst_leaf_accumulator.get_field_elements().unwrap().len());
+            mst_leaf_accumulator.update(utxo_input_data.output.amount)
+            .unwrap();
+            println!("ACCUMULATOR SIZE: {}", mst_leaf_accumulator.get_field_elements().unwrap().len());
+            mst_leaf_accumulator.update(utxo_input_data.output.nonce)
+            .unwrap();
+            println!("ACCUMULATOR SIZE: {}", mst_leaf_accumulator.get_field_elements().unwrap().len());
+            mst_leaf_accumulator.update(&utxo_input_data.output.custom_hash[..])
+            .unwrap();
+            println!("ACCUMULATOR SIZE: {}", mst_leaf_accumulator.get_field_elements().unwrap().len());
 
-        // Since the spending_pub_key is 32 bytes long, it cannot fit into a single field element.
-        assert_eq!(mst_leaf_inputs.len(), 2);
+        let mut mst_leaf_inputs = mst_leaf_accumulator.get_field_elements().unwrap();
+        debug_assert_eq!(mst_leaf_inputs.len(), 3);
+        mst_leaf_inputs.push(FieldElement::from(BoxType::CoinBox as u8));
+        
+        let mut poseidon_hash = get_poseidon_hash_constant_length(mst_leaf_inputs.len(), None);
 
-        mst_leaf_inputs.extend(&[
-            utxo_input_data.output.amount,
-            utxo_input_data.output.nonce,
-            utxo_input_data.output.custom_hash,
-            FieldElement::from(BoxType::CoinBox as u8),
-        ]);
-
-        assert_eq!(mst_leaf_inputs.len(), 6);
-
-        let mut mst_leaf = get_poseidon_hash_constant_length(mst_leaf_inputs.len(), None);
-
-        mst_leaf_inputs.into_iter().for_each(|fe| {
-            mst_leaf.update(fe);
+        mst_leaf_inputs.into_iter().for_each(|leaf_input| {
+            println!("MST leaf hash input: {:?}", leaf_input);
+            poseidon_hash.update(leaf_input);
         });
 
-        let mst_leaf_hash = mst_leaf.finalize().unwrap();
+        let mst_leaf_hash = poseidon_hash.finalize().unwrap();
 
         mst.append(mst_leaf_hash).unwrap();
         mst.finalize_in_place().unwrap();
@@ -436,13 +465,19 @@ mod test {
             genesis_constant: FieldElement::from(14u8),
             mcb_sc_txs_com_end: FieldElement::from(15u8),
             sc_last_wcert_hash: computed_last_wcert_hash,
-            amount: utxo_input_data.output.amount,
+            amount: FieldElement::from(utxo_input_data.output.amount),
             nullifier: mst_leaf_hash,
             receiver: read_field_element_from_buffer_with_padding(&[19; MC_PK_SIZE]).unwrap(),
             last_wcert: cert_data,
-            input: utxo_input_data,
+            input: match csw_type {
+                CswType::UTXO => utxo_input_data,
+                CswType::FT => CswUtxoInputData::default(),
+            },
             mst_path_to_output: mst_path,
-            ft_input: CswFtInputData::default(),
+            ft_input: match csw_type {
+                CswType::UTXO => CswFtInputData::default(),
+                CswType::FT => ft_input_data,
+            },
             ft_input_secret_key: PHANTOM_SECRET_KEY_BITS,
             mcb_sc_txs_com_start: FieldElement::from(21u8),
             merkle_path_to_sc_hash: GingerMHTBinaryPath::default(),
@@ -461,7 +496,7 @@ mod test {
     #[test]
     fn test_csw_circuit() {
         let sidechain_id = FieldElement::from(77u8);
-        let csw_prover_data = generate_test_csw_prover_data();
+        let csw_prover_data = generate_test_csw_prover_data(CswType::UTXO);
         let circuit = CeasedSidechainWithdrawalCircuit::new(sidechain_id, csw_prover_data.clone());
 
         let failing_constraint = debug_circuit(circuit.clone()).unwrap();
