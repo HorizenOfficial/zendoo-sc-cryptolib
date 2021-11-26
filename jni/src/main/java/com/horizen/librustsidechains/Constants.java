@@ -1,7 +1,7 @@
 package com.horizen.librustsidechains;
 
 public final class Constants {
-    public class InnerConstants {
+    public final class InnerConstants {
         public int MC_PK_HASH_SIZE;
         public int SC_PK_HASH_SIZE;
         public int SC_SK_SIZE;
@@ -21,16 +21,16 @@ public final class Constants {
         public int VRF_PROOF_LENGTH;
     }
 
-    private static final InnerConstants constants;
+    private static final InnerConstants constantsAssignment;
 
     public static InnerConstants get() {
-        return constants;
+        return constantsAssignment;
     }
 
     private static native InnerConstants nativeInitializeAllConstants();
 
     static {
         Library.load();
-        constants = nativeInitializeAllConstants();
+        constantsAssignment = nativeInitializeAllConstants();
     }
 }
