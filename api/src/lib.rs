@@ -1697,7 +1697,7 @@ ffi_export!(
 //Naive threshold signature proof functions
 
 ffi_export!(
-    fn Java_com_horizen_sigproofnative_BackwardTransfer_nativeGetMcPkHashSize(
+    fn Java_com_horizen_certnative_BackwardTransfer_nativeGetMcPkHashSize(
         _env: JNIEnv,
         _class: JClass,
     ) -> jint {
@@ -1706,7 +1706,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeGetConstant(
+    fn Java_com_horizen_certnative_NaiveThresholdSigProof_nativeGetConstant(
         _env: JNIEnv,
         // this is the class that owns our
         // static method. Not going to be
@@ -1750,7 +1750,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateMsgToSign(
+    fn Java_com_horizen_certnative_NaiveThresholdSigProof_nativeCreateMsgToSign(
         _env: JNIEnv,
         // this is the class that owns our
         // static method. Not going to be
@@ -1978,7 +1978,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeSetup(
+    fn Java_com_horizen_certnative_NaiveThresholdSigProof_nativeSetup(
         _env: JNIEnv,
         _class: JClass,
         _proving_system: JObject,
@@ -2083,7 +2083,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeCreateProof(
+    fn Java_com_horizen_certnative_NaiveThresholdSigProof_nativeCreateProof(
         _env: JNIEnv,
         // this is the class that owns our
         // static method. Not going to be
@@ -2280,7 +2280,7 @@ ffi_export!(
 
                 //Create new CreateProofResult object
                 let proof_result_class = _env
-                    .find_class("com/horizen/sigproofnative/CreateProofResult")
+                    .find_class("com/horizen/provingsystemnative/CreateProofResult")
                     .expect("Should be able to find CreateProofResult class");
 
                 let result = _env
@@ -2323,7 +2323,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_sigproofnative_NaiveThresholdSigProof_nativeVerifyProof(
+    fn Java_com_horizen_certnative_NaiveThresholdSigProof_nativeVerifyProof(
         _env: JNIEnv,
         // this is the class that owns our
         // static method. Not going to be

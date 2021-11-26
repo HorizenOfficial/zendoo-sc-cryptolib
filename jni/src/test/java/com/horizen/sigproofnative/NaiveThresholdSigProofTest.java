@@ -1,9 +1,13 @@
 package com.horizen.sigproofnative;
 
+import com.horizen.certnative.BackwardTransfer;
+import com.horizen.certnative.NaiveThresholdSigProof;
+import com.horizen.librustsidechains.Constants;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.schnorrnative.SchnorrKeyPair;
 import com.horizen.schnorrnative.SchnorrPublicKey;
 import com.horizen.schnorrnative.SchnorrSignature;
+import com.horizen.provingsystemnative.CreateProofResult;
 import com.horizen.provingsystemnative.ProvingSystem;
 import com.horizen.provingsystemnative.ProvingSystemType;
 import org.junit.BeforeClass;
@@ -87,7 +91,7 @@ public class NaiveThresholdSigProofTest {
         // Create dummy Backward Transfers
         for(int i = 0; i < backwardTransferCout; i++) {
 
-            byte[] publicKeyHash = new byte[BackwardTransfer.MC_PK_HASH_SIZE];
+            byte[] publicKeyHash = new byte[Constants.get().MC_PK_HASH_SIZE];
             r.nextBytes(publicKeyHash);
             long amount = r.nextLong();
 

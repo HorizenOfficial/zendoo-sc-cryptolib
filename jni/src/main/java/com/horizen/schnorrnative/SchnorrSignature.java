@@ -1,18 +1,14 @@
 package com.horizen.schnorrnative;
 
+import com.horizen.librustsidechains.Constants;
 import com.horizen.librustsidechains.Library;
 
 public class SchnorrSignature implements AutoCloseable
 {
-  public static final int SIGNATURE_LENGTH;
-
   private long signaturePointer;
-
-  private static native int nativeGetSignatureSize();
 
   static {
     Library.load();
-    SIGNATURE_LENGTH = nativeGetSignatureSize();
   }
 
   private SchnorrSignature(long signaturePointer) {
@@ -32,8 +28,8 @@ public class SchnorrSignature implements AutoCloseable
   private static native void nativefreeSignature(long signaturePointer);
 
   public static SchnorrSignature deserialize(byte[] signatureBytes, boolean checkSignature) {
-    if (signatureBytes.length != SIGNATURE_LENGTH)
-      throw new IllegalArgumentException(String.format("Incorrect signature length, %d expected, %d found", SIGNATURE_LENGTH, signatureBytes.length));
+    if (signatureBytes.length != Constants.get().SCHNORR_SIGNATURE_LENGTH)
+      throw new IllegalArgumentException(String.format("Incorrect signature length, %d expected, %d found", Constants.get().SCHNORR_SIGNATURE_LENGTH, signatureBytes.length));
 
     return nativeDeserializeSignature(signatureBytes, checkSignature);
   }

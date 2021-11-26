@@ -4,15 +4,10 @@ import java.util.Random;
 
 public class FieldElement implements AutoCloseable {
 
-    public static final int FIELD_ELEMENT_LENGTH;
-
     private long fieldElementPointer;
-
-    private static native int nativeGetFieldElementSize();
 
     static {
         Library.load();
-        FIELD_ELEMENT_LENGTH = nativeGetFieldElementSize();
     }
 
     // Declared protected for testing purposes
@@ -52,9 +47,9 @@ public class FieldElement implements AutoCloseable {
     private static native FieldElement nativeDeserializeFieldElement(byte[] fieldElementBytes);
 
     public static FieldElement deserialize(byte[] fieldElementBytes) {
-        if (fieldElementBytes.length != FIELD_ELEMENT_LENGTH)
+        if (fieldElementBytes.length != Constants.get().FIELD_ELEMENT_LENGTH)
             throw new IllegalArgumentException(String.format("Incorrect field element length, %d expected, %d found",
-                    FIELD_ELEMENT_LENGTH, fieldElementBytes.length));
+                    Constants.get().FIELD_ELEMENT_LENGTH, fieldElementBytes.length));
 
         return nativeDeserializeFieldElement(fieldElementBytes);
     }

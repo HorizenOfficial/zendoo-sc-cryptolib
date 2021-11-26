@@ -1,8 +1,8 @@
-package com.horizen.commitmenttree;
+package com.horizen.commitmenttreenative;
 
+import com.horizen.certnative.BackwardTransfer;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
-import com.horizen.sigproofnative.BackwardTransfer;
 
 import java.util.ArrayList;
 import java.util.Arrays;

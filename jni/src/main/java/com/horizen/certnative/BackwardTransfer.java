@@ -1,22 +1,21 @@
-package com.horizen.sigproofnative;
+package com.horizen.certnative;
 
 import com.horizen.librustsidechains.Library;
+import com.horizen.librustsidechains.Constants;
 
 public class BackwardTransfer {
-
-    public static final int MC_PK_HASH_SIZE;
 
     private final byte[] publicKeyHash;
     private final long amount;
 
-    private static native int nativeGetMcPkHashSize();
-
     static {
         Library.load();
-        MC_PK_HASH_SIZE = nativeGetMcPkHashSize();
     }
 
     public BackwardTransfer(byte[] publicKeyHash, long amount) {
+        if (publicKeyHash.length != Constants.get().MC_PK_HASH_SIZE)
+            throw new IllegalArgumentException(String.format("Incorrect publicKeyHash element length, %d expected, %d found",
+            Constants.get().MC_PK_HASH_SIZE, publicKeyHash.length));
         this.publicKeyHash = publicKeyHash;
         this.amount = amount;
     }

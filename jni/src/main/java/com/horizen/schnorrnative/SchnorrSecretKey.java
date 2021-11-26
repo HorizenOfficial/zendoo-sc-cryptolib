@@ -1,17 +1,14 @@
 package com.horizen.schnorrnative;
 
+import com.horizen.librustsidechains.Constants;
 import com.horizen.librustsidechains.Library;
 
 public class SchnorrSecretKey implements AutoCloseable
 {
-    public static final int SECRET_KEY_LENGTH;
-
     private long secretKeyPointer;
 
-    private static native int nativeGetSecretKeySize();
     static {
         Library.load();
-        SECRET_KEY_LENGTH = nativeGetSecretKeySize();
     }
 
     private SchnorrSecretKey(long secretKeyPointer) {
@@ -23,8 +20,8 @@ public class SchnorrSecretKey implements AutoCloseable
     private static native SchnorrSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
 
     public static SchnorrSecretKey deserialize(byte[] secretKeyBytes) {
-        if (secretKeyBytes.length != SECRET_KEY_LENGTH)
-            throw new IllegalArgumentException(String.format("Incorrect secret key length, %d expected, %d found", SECRET_KEY_LENGTH, secretKeyBytes.length));
+        if (secretKeyBytes.length != Constants.get().SCHNORR_SK_LENGTH)
+            throw new IllegalArgumentException(String.format("Incorrect secret key length, %d expected, %d found", Constants.get().SCHNORR_SK_LENGTH, secretKeyBytes.length));
 
         return nativeDeserializeSecretKey(secretKeyBytes);
     }
