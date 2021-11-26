@@ -1,6 +1,5 @@
 use algebra::{Field, PrimeField, ProjectiveCurve, ToBits};
 
-use cctp_primitives::utils::commitment_tree::ByteAccumulator;
 use primitives::{
     crh::FieldBasedHash,
     signature::schnorr::field_based_schnorr::{
@@ -30,6 +29,7 @@ use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError}
 use crate::{
     constants::NaiveThresholdSigParams, type_mapping::*,
 };
+use cctp_primitives::utils::commitment_tree::DataAccumulator;
 
 use std::marker::PhantomData;
 use lazy_static::*;
@@ -91,7 +91,7 @@ impl<F: PrimeField>NaiveTresholdSignature<F> {
 
         //Convert needed variables into field elements
         let fees_field_elements = {
-            let fes = ByteAccumulator::init()
+            let fes = DataAccumulator::init()
                 .update(btr_fee).unwrap()
                 .update(ft_min_amount).unwrap()
                 .get_field_elements().unwrap();
@@ -390,7 +390,6 @@ mod test {
         proving_system::init::{
             load_g1_committer_key, get_g1_committer_key
         },
-        utils::commitment_tree::ByteAccumulator
     };
 
     type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, G2Projective, FieldHash>;
@@ -415,7 +414,7 @@ mod test {
         let btr_fee: u64 = rng.gen();
         let ft_min_amount: u64 = rng.gen();
         let fees_field_elements = {
-            let fes = ByteAccumulator::init()
+            let fes = DataAccumulator::init()
                 .update(btr_fee).unwrap()
                 .update(ft_min_amount).unwrap()
                 .get_field_elements().unwrap();

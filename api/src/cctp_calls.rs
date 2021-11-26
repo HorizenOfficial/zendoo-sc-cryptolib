@@ -34,7 +34,7 @@ use cctp_primitives::{
     utils::{
         get_bt_merkle_root,
         serialization::*,
-        commitment_tree::ByteAccumulator,
+        commitment_tree::DataAccumulator,
         data_structures::BackwardTransfer
     },
 };
@@ -115,7 +115,7 @@ pub fn compute_msg_to_sign(
     let mr_bt = get_bt_merkle_root(bt_list_opt)?;
 
     let fees_field_element = {
-        let fes = ByteAccumulator::init()
+        let fes = DataAccumulator::init()
             .update(btr_fee)?
             .update(ft_min_amount)?
             .get_field_elements()?;

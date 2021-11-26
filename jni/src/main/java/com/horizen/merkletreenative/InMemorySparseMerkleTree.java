@@ -1,6 +1,8 @@
 package com.horizen.merkletreenative;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
@@ -44,7 +46,7 @@ public class InMemorySparseMerkleTree implements AutoCloseable {
         return nativeIsPositionEmpty(position);
     }
 
-    private native void nativeAddLeaves(PositionLeaf[] leaves) throws Exception;
+    private native void nativeAddLeaves(Map<Long, FieldElement> leaves) throws Exception;
 
     /**
      * Add the specified leaves at the specified positions inside the tree.
@@ -52,25 +54,28 @@ public class InMemorySparseMerkleTree implements AutoCloseable {
      * @param leaves the leaves to be added to the tree and their corresponding index
      * @throws Exception if one of the indices is > 2^height - 1
      */
-    public void addLeaves(List<PositionLeaf> leaves) throws Exception{
+    public void addLeaves(Map<Long, FieldElement> leaves) throws Exception{
         if (merkleTreePointer == 0)
             throw new IllegalStateException("InMemorySparseMerkleTree instance was freed.");
-        nativeAddLeaves(leaves.toArray(new PositionLeaf[0]));
+        nativeAddLeaves(leaves);
     }
 
-    private native void nativeRemoveLeaves(long[] positions) throws Exception;
+    // TODO: Currently we don't have good utilities to deal with a Set Rust-side.
+    //       For the moment, let's pass an array, that will be converted back to
+    //       a Set Rust side
+    private native void nativeRemoveLeaves(Long[] positions) throws Exception;
 
     /**
      * Remove the specified leaves at the specified positions inside the tree.
      * No internal updates in the tree will be triggered by this operation.
-     * @param positions the indices of the leaves to be removed
+     * @param positions a set of the indices of the leaves to be removed
      * @throws Exception if one of the indices is > 2^height - 1 or if attempting
      * to remove a non-existing leaf.
      */
-    public void removeLeaves(long[] positions) throws Exception{
+    public void removeLeaves(Set<Long> positions) throws Exception{
         if (merkleTreePointer == 0)
             throw new IllegalStateException("InMemorySparseMerkleTree instance was freed.");
-        nativeRemoveLeaves(positions);
+        nativeRemoveLeaves(positions.toArray(new Long[0]));
     }
 
     private native void nativeFinalizeInPlace() throws Exception;
