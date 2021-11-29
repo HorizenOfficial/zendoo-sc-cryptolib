@@ -19,8 +19,8 @@ public class SchnorrPublicKey implements AutoCloseable
   private static native SchnorrPublicKey nativeDeserializePublicKey(byte[] publicKeyBytes, boolean checkPublicKey, boolean compressed);
 
   public static SchnorrPublicKey deserialize(byte[] publicKeyBytes, boolean checkPublicKey, boolean compressed) {
-    if (publicKeyBytes.length != Constants.get().SCHNORR_PK_LENGTH)
-      throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", Constants.get().SCHNORR_PK_LENGTH, publicKeyBytes.length));
+    if (publicKeyBytes.length != Constants.SCHNORR_PK_LENGTH())
+      throw new IllegalArgumentException(String.format("Incorrect public key length, %d expected, %d found", Constants.SCHNORR_PK_LENGTH(), publicKeyBytes.length));
 
     return nativeDeserializePublicKey(publicKeyBytes, checkPublicKey, compressed);
   }

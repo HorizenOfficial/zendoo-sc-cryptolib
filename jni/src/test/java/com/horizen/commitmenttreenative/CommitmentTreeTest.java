@@ -1,15 +1,10 @@
-package com.horizen.commitmenttree;
+package com.horizen.commitmenttreenative;
 
 import com.horizen.merkletreenative.MerklePath;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
 import com.horizen.certnative.BackwardTransfer;
-import com.horizen.commitmenttreenative.CommitmentTree;
-import com.horizen.commitmenttreenative.CustomBitvectorElementsConfig;
-import com.horizen.commitmenttreenative.CustomFieldElementsConfig;
-import com.horizen.commitmenttreenative.ScAbsenceProof;
-import com.horizen.commitmenttreenative.ScExistenceProof;
 import com.horizen.librustsidechains.Constants;
 import com.horizen.librustsidechains.FieldElement;
 
@@ -409,7 +404,7 @@ public class CommitmentTreeTest {
 
         // Initialize array of consecutive Sidechain Ids
         for (int i = 0 ; i < scId.length; i++) {
-            scId[i] = new byte[Constants.get().FIELD_ELEMENT_LENGTH];
+            scId[i] = new byte[Constants.FIELD_ELEMENT_LENGTH()];
             scId[i][0] = (byte) i;
         }
 
@@ -478,7 +473,7 @@ public class CommitmentTreeTest {
 
         // Initialize array of consecutive Sidechain Ids
         for (int i = 0 ; i < scId.length; i++) {
-            scId[i] = new byte[Constants.get().FIELD_ELEMENT_LENGTH];
+            scId[i] = new byte[Constants.FIELD_ELEMENT_LENGTH()];
             scId[i][0] = (byte) i;
         }
 

@@ -21,11 +21,11 @@ public class SchnorrSecretKeyTest {
                 byte[] publicKeyBytes = keyPair.getPublicKey().serializePublicKey();
                 byte[] secretKeyBytes = keyPair.getSecretKey().serializeSecretKey();
 
-                assertEquals("Public key size must be - " + Constants.get().SCHNORR_PK_LENGTH,
-                Constants.get().SCHNORR_PK_LENGTH,
+                assertEquals("Public key size must be - " + Constants.SCHNORR_PK_LENGTH(),
+                Constants.SCHNORR_PK_LENGTH(),
                         publicKeyBytes.length);
-                assertEquals("Secret key size must be - " + Constants.get().SCHNORR_SK_LENGTH,
-                Constants.get().SCHNORR_SK_LENGTH,
+                assertEquals("Secret key size must be - " + Constants.SCHNORR_SK_LENGTH(),
+                Constants.SCHNORR_SK_LENGTH(),
                         secretKeyBytes.length);
                 try
                 (

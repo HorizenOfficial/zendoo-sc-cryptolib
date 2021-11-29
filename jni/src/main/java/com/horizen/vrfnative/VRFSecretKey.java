@@ -22,8 +22,8 @@ public class VRFSecretKey implements AutoCloseable
     private static native VRFSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
 
     public static VRFSecretKey deserialize(byte[] secretKeyBytes) {
-        if (secretKeyBytes.length != Constants.get().VRF_SK_LENGTH)
-            throw new IllegalArgumentException(String.format("Incorrect secret key length, %d expected, %d found", Constants.get().VRF_SK_LENGTH, secretKeyBytes.length));
+        if (secretKeyBytes.length != Constants.VRF_SK_LENGTH())
+            throw new IllegalArgumentException(String.format("Incorrect secret key length, %d expected, %d found", Constants.VRF_SK_LENGTH(), secretKeyBytes.length));
 
         return nativeDeserializeSecretKey(secretKeyBytes);
     }

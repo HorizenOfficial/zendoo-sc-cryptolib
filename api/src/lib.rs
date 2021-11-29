@@ -5,12 +5,19 @@ use cctp_primitives::{
     bit_vector::merkle_tree::{
         merkle_root_from_compressed_bytes, merkle_root_from_compressed_bytes_without_checks,
     },
+    commitment_tree::{
+        proofs::{ScAbsenceProof, ScExistenceProof},
+        sidechain_tree_alive::FWT_MT_HEIGHT,
+        CommitmentTree, CMT_MT_HEIGHT,
+    },
     proving_system::{compute_proof_vk_size, init_dlog_keys, ProvingSystem, ZendooVerifierKey},
     utils::{data_structures::*, mht::*, poseidon_hash::*, serialization::*},
 };
-use demo_circuit::{generate_circuit_keypair, get_instance_for_setup, type_mapping::*};
+use demo_circuit::{
+    constants::*, generate_circuit_keypair, get_instance_for_setup, type_mapping::*,
+};
 
-use primitives::{FieldBasedMerkleTree, FieldBasedSparseMerkleTree};
+use primitives::{FieldBasedMerkleTree, FieldBasedMerkleTreePath, FieldBasedSparseMerkleTree};
 use std::{
     any::type_name,
     collections::{HashMap, HashSet},
@@ -23,9 +30,6 @@ use cctp_calls::*;
 #[macro_use]
 mod exception;
 use exception::*;
-
-use cctp_primitives::commitment_tree::proofs::{ScAbsenceProof, ScExistenceProof};
-use cctp_primitives::commitment_tree::CommitmentTree;
 
 fn read_raw_pointer<'a, T>(env: &JNIEnv, input: *const T) -> &'a T {
     if input.is_null() {
@@ -166,11 +170,42 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_librustsidechains_FieldElement_nativeGetFieldElementSize(
+    fn Java_com_horizen_librustsidechains_Constants_nativeInitializeAllConstants(
         _env: JNIEnv,
-        _field_element_class: JClass,
-    ) -> jint {
-        FIELD_SIZE as jint
+        _class: JClass,
+    ) {
+        let class = _env
+            .find_class("com/horizen/librustsidechains/Constants")
+            .expect("Should be able to find Constants class");
+
+        macro_rules! set_constant {
+            ($name: expr, $value: expr) => {
+                _env.set_static_field(
+                    class,
+                    _env.get_static_field_id(class, $name, "I")
+                        .expect(format!("Should be able to get ID of {} field", $name).as_str()),
+                    JValue::Int($value as jint),
+                )
+                .expect(format!("Should be able to set {} field", $name).as_str());
+            };
+        }
+
+        // Supply the value for all constants
+        set_constant!("MC_PK_HASH_SIZE", MC_PK_SIZE);
+        set_constant!("SC_PK_HASH_SIZE", SC_PUBLIC_KEY_LENGTH);
+        set_constant!("SC_SK_SIZE", SC_SECRET_KEY_LENGTH);
+        set_constant!("SC_TX_HASH_SIZE", SC_TX_HASH_LENGTH);
+        set_constant!("SC_CUSTOM_HASH_SIZE", SC_CUSTOM_HASH_LENGTH);
+        set_constant!("SC_MST_HEIGHT", MST_MERKLE_TREE_HEIGHT);
+        set_constant!("SC_COMM_TREE_FT_SUBTREE_HEIGHT", FWT_MT_HEIGHT);
+        set_constant!("SC_COMM_TREE_HEIGHT", CMT_MT_HEIGHT);
+        set_constant!("FIELD_ELEMENT_LENGTH", FIELD_SIZE);
+        set_constant!("SCHNORR_PK_LENGTH", SCHNORR_PK_SIZE);
+        set_constant!("SCHNORR_SK_LENGTH", SCHNORR_SK_SIZE);
+        set_constant!("SCHNORR_SIGNATURE_LENGTH", SCHNORR_SIG_SIZE);
+        set_constant!("VRF_PK_LENGTH", VRF_PK_SIZE);
+        set_constant!("VRF_SK_LENGTH", VRF_SK_SIZE);
+        set_constant!("VRF_PROOF_LENGTH", VRF_PROOF_SIZE);
     }
 );
 
@@ -298,14 +333,6 @@ ffi_export!(
 );
 
 //Public Schnorr key utility functions
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeGetPublicKeySize(
-        _env: JNIEnv,
-        _schnorr_public_key_class: JClass,
-    ) -> jint {
-        SCHNORR_PK_SIZE as jint
-    }
-);
 
 ffi_export!(
     fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeSerializePublicKey(
@@ -359,15 +386,6 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeGetSecretKeySize(
-        _env: JNIEnv,
-        _schnorr_secret_key_class: JClass,
-    ) -> jint {
-        SCHNORR_SK_SIZE as jint
-    }
-);
-
-ffi_export!(
     fn Java_com_horizen_schnorrnative_SchnorrSecretKey_nativeSerializeSecretKey(
         _env: JNIEnv,
         _schnorr_secret_key: JObject,
@@ -411,14 +429,6 @@ ffi_export!(
 );
 
 //Public VRF key utility functions
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFPublicKey_nativeGetPublicKeySize(
-        _env: JNIEnv,
-        _vrf_public_key_class: JClass,
-    ) -> jint {
-        VRF_PK_SIZE as jint
-    }
-);
 
 ffi_export!(
     fn Java_com_horizen_vrfnative_VRFPublicKey_nativeSerializePublicKey(
@@ -472,14 +482,6 @@ ffi_export!(
 );
 
 //Secret VRF key utility functions
-ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFSecretKey_nativeGetSecretKeySize(
-        _env: JNIEnv,
-        _vrf_secret_key_class: JClass,
-    ) -> jint {
-        VRF_SK_SIZE as jint
-    }
-);
 
 ffi_export!(
     fn Java_com_horizen_vrfnative_VRFSecretKey_nativeSerializeSecretKey(
@@ -525,14 +527,6 @@ ffi_export!(
 );
 
 //Schnorr signature utility functions
-ffi_export!(
-    fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeGetSignatureSize(
-        _env: JNIEnv,
-        _class: JClass,
-    ) -> jint {
-        SCHNORR_SIG_SIZE as jint
-    }
-);
 
 ffi_export!(
     fn Java_com_horizen_schnorrnative_SchnorrSignature_nativeSerializeSignature(
@@ -777,15 +771,6 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetHashSize(
-        _env: JNIEnv,
-        _class: JClass,
-    ) -> jint {
-        FIELD_SIZE as jint
-    }
-);
-
-ffi_export!(
     fn Java_com_horizen_poseidonnative_PoseidonHash_nativeGetConstantLengthPoseidonHash(
         _env: JNIEnv,
         _class: JClass,
@@ -1008,31 +993,11 @@ ffi_export!(
 //Merkle tree functions
 
 //////////// MERKLE PATH
-
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeGetLength(
         _env: JNIEnv,
         _path: JObject,
-        _height: jint,
-        _leaf: JObject,
-        _root: JObject,
-    ) -> jboolean {
-        let leaf = {
-            let fe = _env
-                .get_field(_leaf, "fieldElementPointer", "J")
-                .expect("Should be able to get field fieldElementPointer");
-
-            read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
-        };
-
-        let root = {
-            let fe = _env
-                .get_field(_root, "fieldElementPointer", "J")
-                .expect("Should be able to get field fieldElementPointer");
-
-            read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
-        };
-
+    ) -> jint {
         let path = {
             let t = _env
                 .get_field(_path, "merklePathPointer", "J")
@@ -1041,25 +1006,12 @@ ffi_export!(
             read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
         };
 
-        if !path.is_valid() {
-            return JNI_FALSE;
-        }
-
-        match verify_ginger_merkle_path(path, _height as usize, leaf, root) {
-            Ok(result) => {
-                if result {
-                    JNI_TRUE
-                } else {
-                    JNI_FALSE
-                }
-            }
-            Err(_) => JNI_FALSE, // CRYPTO_ERROR
-        }
+        path.get_length() as jint
     }
 );
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_MerklePath_nativeVerifyWithoutLengthCheck(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeVerify(
         _env: JNIEnv,
         _path: JObject,
         _leaf: JObject,
@@ -1440,15 +1392,6 @@ ffi_export!(
 //VRF utility functions
 
 ffi_export!(
-    fn Java_com_horizen_vrfnative_VRFProof_nativeGetProofSize(
-        _env: JNIEnv,
-        _class: JClass,
-    ) -> jint {
-        VRF_PROOF_SIZE as jint
-    }
-);
-
-ffi_export!(
     fn Java_com_horizen_vrfnative_VRFProof_nativeSerializeProof(
         _env: JNIEnv,
         _proof: JObject,
@@ -1703,15 +1646,6 @@ ffi_export!(
 );
 
 //Naive threshold signature proof functions
-
-ffi_export!(
-    fn Java_com_horizen_certnative_BackwardTransfer_nativeGetMcPkHashSize(
-        _env: JNIEnv,
-        _class: JClass,
-    ) -> jint {
-        MC_PK_SIZE as jint
-    }
-);
 
 ffi_export!(
     fn Java_com_horizen_certnative_NaiveThresholdSigProof_nativeGetConstant(
@@ -2500,7 +2434,7 @@ ffi_export!(
 
 ///////// COMMITMENT TREE
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeInit(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeInit(
         _env: JNIEnv,
         _class: JClass,
     ) -> jobject {
@@ -2518,7 +2452,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeFreeCommitmentTree(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeFreeCommitmentTree(
         _env: JNIEnv,
         _class: JClass,
         _commitment_tree: *mut CommitmentTree,
@@ -2531,7 +2465,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddScCr(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddScCr(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -2719,7 +2653,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddFwt(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddFwt(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -2772,7 +2706,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddBtr(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddBtr(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -2851,7 +2785,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddCert(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddCert(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -2989,7 +2923,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddCertLeaf(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddCertLeaf(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3024,7 +2958,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetFwtLeaves(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetFwtLeaves(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3096,7 +3030,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetBtrLeaves(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetBtrLeaves(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3168,7 +3102,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCrtLeaves(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetCrtLeaves(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3240,7 +3174,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeAddCsw(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddCsw(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3282,7 +3216,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScCrCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetScCrCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3337,7 +3271,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetFwtCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetFwtCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3392,7 +3326,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeBtrCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeBtrCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3447,7 +3381,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCertCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetCertCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3502,7 +3436,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCswCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetCswCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3557,7 +3491,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetScCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3612,7 +3546,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
     ) -> jobject {
@@ -3660,7 +3594,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScCommitmentMerklePath(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetScCommitmentMerklePath(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3715,7 +3649,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetFwtMerklePath(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetFwtMerklePath(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3773,7 +3707,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetBtrMerklePath(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetBtrMerklePath(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3831,7 +3765,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetCertMerklePath(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetCertMerklePath(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3890,7 +3824,7 @@ ffi_export!(
 
 // Sc Existence proof functions
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScExistenceProof(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetScExistenceProof(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3917,7 +3851,7 @@ ffi_export!(
                     jlong::from(Box::into_raw(Box::new(sc_existence_proof)) as i64);
 
                 let existence_proof_class = _env
-                    .find_class("com/horizen/commitmenttree/ScExistenceProof")
+                    .find_class("com/horizen/commitmenttreenative/ScExistenceProof")
                     .expect("Should be able to find ScExistenceProof class");
 
                 let jep = _env
@@ -3945,7 +3879,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeSerialize(
+    fn Java_com_horizen_commitmenttreenative_ScExistenceProof_nativeSerialize(
         _env: JNIEnv,
         _proof: JObject,
     ) -> jbyteArray {
@@ -3954,7 +3888,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeDeserialize(
+    fn Java_com_horizen_commitmenttreenative_ScExistenceProof_nativeDeserialize(
         _env: JNIEnv,
         _class: JClass,
         _proof_bytes: jbyteArray,
@@ -3969,7 +3903,7 @@ ffi_export!(
                     jlong::from(Box::into_raw(Box::new(sc_existence_proof)) as i64);
 
                 let existence_proof_class = _env
-                    .find_class("com/horizen/commitmenttree/ScExistenceProof")
+                    .find_class("com/horizen/commitmenttreenative/ScExistenceProof")
                     .expect("Should be able to find ScExistenceProof class");
 
                 let jep = _env
@@ -3984,7 +3918,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_ScExistenceProof_nativeFreeScExistenceProof(
+    fn Java_com_horizen_commitmenttreenative_ScExistenceProof_nativeFreeScExistenceProof(
         _env: JNIEnv,
         _class: JClass,
         _sc_existence_proof: *mut ScExistenceProof,
@@ -3998,7 +3932,7 @@ ffi_export!(
 
 // Sc Absence proof functions
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeGetScAbsenceProof(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetScAbsenceProof(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -4025,7 +3959,7 @@ ffi_export!(
                     jlong::from(Box::into_raw(Box::new(sc_absence_proof)) as i64);
 
                 let absence_proof_class = _env
-                    .find_class("com/horizen/commitmenttree/ScAbsenceProof")
+                    .find_class("com/horizen/commitmenttreenative/ScAbsenceProof")
                     .expect("Should be able to find ScAbsenceProof class");
 
                 let jep = _env
@@ -4053,7 +3987,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeSerialize(
+    fn Java_com_horizen_commitmenttreenative_ScAbsenceProof_nativeSerialize(
         _env: JNIEnv,
         _proof: JObject,
     ) -> jbyteArray {
@@ -4062,7 +3996,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeDeserialize(
+    fn Java_com_horizen_commitmenttreenative_ScAbsenceProof_nativeDeserialize(
         _env: JNIEnv,
         _class: JClass,
         _proof_bytes: jbyteArray,
@@ -4077,7 +4011,7 @@ ffi_export!(
                     jlong::from(Box::into_raw(Box::new(sc_absence_proof)) as i64);
 
                 let absence_proof_class = _env
-                    .find_class("com/horizen/commitmenttree/ScAbsenceProof")
+                    .find_class("com/horizen/commitmenttreenative/ScAbsenceProof")
                     .expect("Should be able to find ScAbsenceProof class");
 
                 let jep = _env
@@ -4092,7 +4026,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_ScAbsenceProof_nativeFreeScAbsenceProof(
+    fn Java_com_horizen_commitmenttreenative_ScAbsenceProof_nativeFreeScAbsenceProof(
         _env: JNIEnv,
         _class: JClass,
         _sc_absence_proof: *mut ScAbsenceProof,
@@ -4107,7 +4041,7 @@ ffi_export!(
 // Verify existence/absence functions.
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyScCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeVerifyScCommitment(
         _env: JNIEnv,
         _commitment_tree_class: JObject,
         _sc_commitment: JObject,
@@ -4146,7 +4080,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttree_CommitmentTree_nativeVerifyScAbsence(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeVerifyScAbsence(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,

@@ -21,11 +21,11 @@ public class VRFSecretKeyTest {
                 byte[] publicKeyBytes = keyPair.getPublicKey().serializePublicKey();
                 byte[] secretKeyBytes = keyPair.getSecretKey().serializeSecretKey();
 
-                assertEquals("Public key size must be - " + Constants.get().VRF_PK_LENGTH,
-                Constants.get().VRF_PK_LENGTH,
+                assertEquals("Public key size must be - " + Constants.VRF_PK_LENGTH(),
+                Constants.VRF_PK_LENGTH(),
                         publicKeyBytes.length);
-                assertEquals("Secret key size must be - " + Constants.get().VRF_SK_LENGTH,
-                Constants.get().VRF_SK_LENGTH,
+                assertEquals("Secret key size must be - " + Constants.VRF_SK_LENGTH(),
+                Constants.VRF_SK_LENGTH(),
                         secretKeyBytes.length);
                 try
                 (

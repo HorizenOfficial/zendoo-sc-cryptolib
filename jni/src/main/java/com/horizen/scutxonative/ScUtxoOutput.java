@@ -11,18 +11,18 @@ public class ScUtxoOutput implements PoseidonHashable {
     private final byte[] customHash;
 
     public ScUtxoOutput(byte[] spendingPubKey, long amount, long nonce, byte[] customHash) {
-        if (spendingPubKey.length != Constants.get().SC_PK_HASH_SIZE)
+        if (spendingPubKey.length != Constants.SC_PK_HASH_SIZE())
             throw new IllegalArgumentException(
-                String.format("Incorrect spendingPubKey element length, %d expected, %d found",Constants.get().SC_PK_HASH_SIZE, spendingPubKey.length)
+                String.format("Incorrect spendingPubKey element length, %d expected, %d found",Constants.SC_PK_HASH_SIZE(), spendingPubKey.length)
             );
         this.spendingPubKey = spendingPubKey;
 
         this.amount = amount;
         this.nonce = nonce;
 
-        if (customHash.length != Constants.get().SC_CUSTOM_HASH_SIZE)
+        if (customHash.length != Constants.SC_CUSTOM_HASH_SIZE())
             throw new IllegalArgumentException(
-                String.format("Incorrect customHash element length, %d expected, %d found",Constants.get().SC_CUSTOM_HASH_SIZE, customHash.length)
+                String.format("Incorrect customHash element length, %d expected, %d found",Constants.SC_CUSTOM_HASH_SIZE(), customHash.length)
             );
         this.customHash = customHash;
     }

@@ -20,22 +20,22 @@ public class FordwardTransferOutput implements PoseidonHashable {
     {
         this.amount = amount;
 
-        if (receiverPubKey.length != Constants.get().MC_PK_HASH_SIZE)
+        if (receiverPubKey.length != Constants.MC_PK_HASH_SIZE())
             throw new IllegalArgumentException(
-                String.format("Incorrect receiverPubKey element length, %d expected, %d found",Constants.get().MC_PK_HASH_SIZE, receiverPubKey.length)
+                String.format("Incorrect receiverPubKey element length, %d expected, %d found",Constants.MC_PK_HASH_SIZE(), receiverPubKey.length)
             );
         this.receiverPubKey = receiverPubKey;
 
-        if (paybackAddrDataHash.length != Constants.get().SC_PK_HASH_SIZE)
+        if (paybackAddrDataHash.length != Constants.SC_PK_HASH_SIZE())
             throw new IllegalArgumentException(
-                String.format("Incorrect paybackAddrDataHash element length, %d expected, %d found",Constants.get().SC_PK_HASH_SIZE, paybackAddrDataHash.length)
+                String.format("Incorrect paybackAddrDataHash element length, %d expected, %d found",Constants.SC_PK_HASH_SIZE(), paybackAddrDataHash.length)
             );
         this.paybackAddrDataHash = paybackAddrDataHash;
 
         
-        if (txHash.length != Constants.get().SC_TX_HASH_SIZE)
+        if (txHash.length != Constants.SC_TX_HASH_SIZE())
             throw new IllegalArgumentException(
-                String.format("Incorrect txHash element length, %d expected, %d found",Constants.get().SC_TX_HASH_SIZE, txHash.length)
+                String.format("Incorrect txHash element length, %d expected, %d found",Constants.SC_TX_HASH_SIZE(), txHash.length)
             );
         this.txHash = txHash;
 

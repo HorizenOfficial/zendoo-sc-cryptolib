@@ -10,7 +10,6 @@ public class FieldElementTest {
     public void testRandomSerializeDeserialize() throws Exception {
 
         int samples = 100;
-
         for( int i = 0; i < samples; i++ ) {
             try
             (
@@ -21,11 +20,11 @@ public class FieldElementTest {
                 byte[] serialized1 = fieldElement1.serializeFieldElement();
                 byte[] serialized2 = fieldElement2.serializeFieldElement();
 
-                assertEquals("fieldElement1 size must be - " + Constants.get().FIELD_ELEMENT_LENGTH,
-                Constants.get().FIELD_ELEMENT_LENGTH,
+                assertEquals("fieldElement1 size must be - " + Constants.FIELD_ELEMENT_LENGTH(),
+                Constants.FIELD_ELEMENT_LENGTH(),
                         serialized1.length);
-                assertEquals("fieldElement2 size must be - " + Constants.get().FIELD_ELEMENT_LENGTH,
-                Constants.get().FIELD_ELEMENT_LENGTH,
+                assertEquals("fieldElement2 size must be - " + Constants.FIELD_ELEMENT_LENGTH(),
+                Constants.FIELD_ELEMENT_LENGTH(),
                         serialized2.length);
                 try
                 (

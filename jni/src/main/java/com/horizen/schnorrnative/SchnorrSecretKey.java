@@ -20,8 +20,8 @@ public class SchnorrSecretKey implements AutoCloseable
     private static native SchnorrSecretKey nativeDeserializeSecretKey(byte[] secretKeyBytes);
 
     public static SchnorrSecretKey deserialize(byte[] secretKeyBytes) {
-        if (secretKeyBytes.length != Constants.get().SCHNORR_SK_LENGTH)
-            throw new IllegalArgumentException(String.format("Incorrect secret key length, %d expected, %d found", Constants.get().SCHNORR_SK_LENGTH, secretKeyBytes.length));
+        if (secretKeyBytes.length != Constants.SCHNORR_SK_LENGTH())
+            throw new IllegalArgumentException(String.format("Incorrect secret key length, %d expected, %d found", Constants.SCHNORR_SK_LENGTH(), secretKeyBytes.length));
 
         return nativeDeserializeSecretKey(secretKeyBytes);
     }

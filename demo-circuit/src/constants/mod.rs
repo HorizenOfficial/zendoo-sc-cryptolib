@@ -154,8 +154,11 @@ impl VRFParams {
     }
 }
 
+//TODO: Move these constants in cctp-lib
 pub const SC_PUBLIC_KEY_LENGTH: usize = 32;
 pub const SC_SECRET_KEY_LENGTH: usize = 32;
+pub const SC_TX_HASH_LENGTH: usize = 32;
+pub const SC_CUSTOM_HASH_LENGTH: usize = 32;
 pub const MST_MERKLE_TREE_HEIGHT: usize = 22;
 
 pub const PHANTOM_FIELD_ELEMENT: FieldElement = field_new!(

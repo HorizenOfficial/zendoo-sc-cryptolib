@@ -24,8 +24,8 @@ public class VRFProof implements AutoCloseable
   private static native void nativeFreeProof(long proofPointer);
 
   public static VRFProof deserialize(byte[] proofBytes, boolean checkVRFProof, boolean compressed) {
-    if (proofBytes.length != Constants.get().VRF_PROOF_LENGTH)
-      throw new IllegalArgumentException(String.format("Incorrect proof length, %d expected, %d found", Constants.get().VRF_PROOF_LENGTH, proofBytes.length));
+    if (proofBytes.length != Constants.VRF_PROOF_LENGTH())
+      throw new IllegalArgumentException(String.format("Incorrect proof length, %d expected, %d found", Constants.VRF_PROOF_LENGTH(), proofBytes.length));
 
     return nativeDeserializeProof(proofBytes, checkVRFProof, compressed);
   }

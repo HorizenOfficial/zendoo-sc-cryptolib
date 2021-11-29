@@ -91,7 +91,7 @@ public class NaiveThresholdSigProofTest {
         // Create dummy Backward Transfers
         for(int i = 0; i < backwardTransferCout; i++) {
 
-            byte[] publicKeyHash = new byte[Constants.get().MC_PK_HASH_SIZE];
+            byte[] publicKeyHash = new byte[Constants.MC_PK_HASH_SIZE()];
             r.nextBytes(publicKeyHash);
             long amount = r.nextLong();
 

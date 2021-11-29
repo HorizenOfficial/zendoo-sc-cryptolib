@@ -12,15 +12,15 @@ public class CswUtxoProverData implements AutoCloseable {
     public CswUtxoProverData(ScUtxoOutput output, byte[] utxoInputSecretKey, MerklePath mstPathToOutput) {
         this.output = output;
 
-        if (utxoInputSecretKey.length != Constants.get().SC_SK_SIZE)
+        if (utxoInputSecretKey.length != Constants.SC_SK_SIZE())
             throw new IllegalArgumentException(
-                String.format("Incorrect utxoInputSecretKey element length, %d expected, %d found",Constants.get().SC_SK_SIZE, utxoInputSecretKey.length)
+                String.format("Incorrect utxoInputSecretKey element length, %d expected, %d found",Constants.SC_SK_SIZE(), utxoInputSecretKey.length)
             );
         this.utxoInputSecretKey = utxoInputSecretKey;
 
-        if (mstPathToOutput.getLength() != Constants.get().SC_MST_HEIGHT)
+        if (mstPathToOutput.getLength() != Constants.SC_MST_HEIGHT())
             throw new IllegalArgumentException(
-                String.format("Incorrect mstPathToOutput length, %d expected, %d found",Constants.get().SC_MST_HEIGHT, mstPathToOutput.getLength())
+                String.format("Incorrect mstPathToOutput length, %d expected, %d found",Constants.SC_MST_HEIGHT(), mstPathToOutput.getLength())
             );
         this.mstPathToOutput = mstPathToOutput;
     }

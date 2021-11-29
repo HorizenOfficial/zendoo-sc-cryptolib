@@ -23,23 +23,23 @@ public class CswFtProverData implements AutoCloseable {
             FieldElement scbBtrTreeRoot, FieldElement wCertTreeRoot, List<FieldElement> scTxsComHashes) {
         this.output = output;
 
-        if (ftInputSecretKey.length != Constants.get().SC_SK_SIZE)
+        if (ftInputSecretKey.length != Constants.SC_SK_SIZE())
         throw new IllegalArgumentException(
-            String.format("Incorrect ftInputSecretKey element length, %d expected, %d found",Constants.get().SC_SK_SIZE, ftInputSecretKey.length)
+            String.format("Incorrect ftInputSecretKey element length, %d expected, %d found",Constants.SC_SK_SIZE(), ftInputSecretKey.length)
         );
         this.ftInputSecretKey = ftInputSecretKey;
 
         this.mcbScTxsComStart = mcbScTxsComStart;
 
-        if (merklePathToScHash.getLength() != Constants.get().SC_COMM_TREE_HEIGHT)
+        if (merklePathToScHash.getLength() != Constants.SC_COMM_TREE_HEIGHT())
             throw new IllegalArgumentException(
-                String.format("Incorrect merklePathToScHash element length, %d expected, %d found",Constants.get().SC_COMM_TREE_HEIGHT, merklePathToScHash.getLength())
+                String.format("Incorrect merklePathToScHash element length, %d expected, %d found",Constants.SC_COMM_TREE_HEIGHT(), merklePathToScHash.getLength())
             );
         this.merklePathToScHash = merklePathToScHash;
         
-        if (ftTreePath.getLength() != Constants.get().SC_COMM_TREE_FT_SUBTREE_HEIGHT)
+        if (ftTreePath.getLength() != Constants.SC_COMM_TREE_FT_SUBTREE_HEIGHT())
             throw new IllegalArgumentException(
-                String.format("Incorrect ftTreePath element length, %d expected, %d found",Constants.get().SC_COMM_TREE_FT_SUBTREE_HEIGHT, ftTreePath.getLength())
+                String.format("Incorrect ftTreePath element length, %d expected, %d found",Constants.SC_COMM_TREE_FT_SUBTREE_HEIGHT(), ftTreePath.getLength())
             );
         this.ftTreePath = ftTreePath;
 

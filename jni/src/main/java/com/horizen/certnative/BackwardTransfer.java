@@ -13,9 +13,9 @@ public class BackwardTransfer {
     }
 
     public BackwardTransfer(byte[] publicKeyHash, long amount) {
-        if (publicKeyHash.length != Constants.get().MC_PK_HASH_SIZE)
+        if (publicKeyHash.length != Constants.MC_PK_HASH_SIZE())
             throw new IllegalArgumentException(String.format("Incorrect publicKeyHash element length, %d expected, %d found",
-            Constants.get().MC_PK_HASH_SIZE, publicKeyHash.length));
+            Constants.MC_PK_HASH_SIZE(), publicKeyHash.length));
         this.publicKeyHash = publicKeyHash;
         this.amount = amount;
     }
