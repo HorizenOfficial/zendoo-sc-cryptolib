@@ -1,9 +1,26 @@
-use cctp_primitives::type_mapping::FieldElement;
+use algebra::ToConstraintField;
+use cctp_primitives::{
+    type_mapping::FieldElement,
+    utils::{commitment_tree::DataAccumulator, data_structures::BackwardTransfer},
+};
+use primitives::{FieldBasedHash, FieldHasher};
 
 use crate::{
     type_mapping::*, GingerMHTBinaryPath, MC_RETURN_ADDRESS_BYTES, PHANTOM_PUBLIC_KEY_BITS,
     PHANTOM_SECRET_KEY_BITS,
 };
+
+// Must replace old one
+pub struct WithdrawalCertificateDataNew {
+    pub sc_id: FieldElement,
+    pub epoch_number: u32,
+    pub bt_list: Vec<BackwardTransfer>,
+    pub quality: u64,
+    pub mcb_sc_txs_com: FieldElement,
+    pub ft_min_fee: u64,
+    pub btr_min_fee: u64,
+    pub custom_fields: Vec<FieldElement>,
+}
 
 #[derive(Clone)]
 pub struct WithdrawalCertificateData {
@@ -37,6 +54,28 @@ impl Default for CswUtxoOutputData {
             nonce: 0,
             custom_hash: [false; FIELD_SIZE * 8],
         }
+    }
+}
+
+impl ToConstraintField<FieldElement> for CswUtxoOutputData {
+    fn to_field_elements(&self) -> Result<Vec<FieldElement>, Error> {
+        DataAccumulator::init()
+            .update_with_bits(self.spending_pub_key.to_vec())?
+            .update(self.amount)?
+            .update(self.nonce)?
+            .update_with_bits(self.custom_hash.to_vec())?
+            .get_field_elements()
+    }
+}
+
+impl FieldHasher<FieldElement, FieldHash> for CswUtxoOutputData {
+    fn hash(&self, personalization: Option<&[FieldElement]>) -> Result<FieldElement, Error> {
+        let self_fes = self.to_field_elements()?;
+        let mut h = FieldHash::init_constant_length(self_fes.len(), personalization);
+        self_fes.into_iter().for_each(|fe| {
+            h.update(fe);
+        });
+        h.finalize()
     }
 }
 

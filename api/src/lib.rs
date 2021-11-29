@@ -6,6 +6,7 @@ use cctp_primitives::{
         merkle_root_from_compressed_bytes, merkle_root_from_compressed_bytes_without_checks,
     },
     commitment_tree::{
+        hashers::{hash_cert, hash_fwt},
         proofs::{ScAbsenceProof, ScExistenceProof},
         sidechain_tree_alive::FWT_MT_HEIGHT,
         CommitmentTree, CMT_MT_HEIGHT,
@@ -15,9 +16,13 @@ use cctp_primitives::{
 };
 use demo_circuit::{
     constants::*, generate_circuit_keypair, get_instance_for_setup, type_mapping::*,
+    CswFtInputData, CswUtxoOutputData, WithdrawalCertificateData, WithdrawalCertificateDataNew,
 };
 
-use primitives::{FieldBasedMerkleTree, FieldBasedMerkleTreePath, FieldBasedSparseMerkleTree};
+use primitives::{
+    bytes_to_bits, FieldBasedMerkleTree, FieldBasedMerkleTreePath, FieldBasedSparseMerkleTree,
+    FieldHasher,
+};
 use std::{
     any::type_name,
     collections::{HashMap, HashSet},
@@ -31,121 +36,8 @@ use cctp_calls::*;
 mod exception;
 use exception::*;
 
-fn read_raw_pointer<'a, T>(env: &JNIEnv, input: *const T) -> &'a T {
-    if input.is_null() {
-        throw_and_exit!(
-            env,
-            "java/lang/NullPointerException",
-            "Received null pointer"
-        );
-    }
-    unsafe { &*input }
-}
-
-fn read_mut_raw_pointer<'a, T>(env: &JNIEnv, input: *mut T) -> &'a mut T {
-    if input.is_null() {
-        throw_and_exit!(
-            env,
-            "java/lang/NullPointerException",
-            "Received null pointer"
-        );
-    }
-    unsafe { &mut *input }
-}
-
-fn read_nullable_raw_pointer<'a, T>(input: *const T) -> Option<&'a T> {
-    unsafe { input.as_ref() }
-}
-
-fn serialize_from_raw_pointer<T: CanonicalSerialize>(
-    _env: &JNIEnv,
-    to_write: *const T,
-    compressed: Option<bool>,
-) -> Vec<u8> {
-    serialize_to_buffer(read_raw_pointer(&_env, to_write), compressed)
-        .expect(format!("unable to write {} to buffer", type_name::<T>()).as_str())
-}
-
-fn return_jobject<'a, T: Sized>(_env: &'a JNIEnv, obj: T, class_path: &str) -> JObject<'a> {
-    //Return field element
-    let obj_ptr: jlong = jlong::from(Box::into_raw(Box::new(obj)) as i64);
-
-    let obj_class = _env
-        .find_class(class_path)
-        .expect("Should be able to find class");
-
-    _env.new_object(obj_class, "(J)V", &[JValue::Long(obj_ptr)])
-        .expect("Should be able to create new jobject")
-}
-
-fn deserialize_to_jobject<T: CanonicalDeserialize + SemanticallyValid>(
-    _env: &JNIEnv,
-    obj_bytes: jbyteArray,
-    checked: Option<jboolean>, // Can be none for types with trivial checks or without themn
-    compressed: Option<jboolean>, // Can be none for uncompressable types
-    class_path: &str,
-) -> jobject {
-    let obj_bytes = _env
-        .convert_byte_array(obj_bytes)
-        .expect("Cannot read bytes.");
-
-    let obj = deserialize_from_buffer::<T>(
-        obj_bytes.as_slice(),
-        checked.map(|jni_bool| jni_bool == JNI_TRUE),
-        compressed.map(|jni_bool| jni_bool == JNI_TRUE),
-    );
-
-    match obj {
-        Ok(obj) => *return_jobject(&_env, obj, class_path),
-        Err(_) => std::ptr::null::<jobject>() as jobject,
-    }
-}
-
-fn serialize_from_jobject<T: CanonicalSerialize>(
-    _env: &JNIEnv,
-    obj: JObject,
-    ptr_name: &str,
-    compressed: Option<jboolean>, // Can be none for uncompressable types
-) -> jbyteArray {
-    let pointer = _env
-        .get_field(obj, ptr_name, "J")
-        .expect("Cannot get object raw pointer.");
-
-    let obj_bytes = serialize_from_raw_pointer(
-        _env,
-        pointer.j().unwrap() as *const T,
-        compressed.map(|jni_bool| jni_bool == JNI_TRUE),
-    );
-
-    _env.byte_array_from_slice(obj_bytes.as_slice())
-        .expect("Cannot write object.")
-}
-
-fn parse_jbyte_array_to_vec(_env: &JNIEnv, java_byte_array: &jbyteArray, length: usize) -> Vec<u8> {
-    let vec = _env
-        .convert_byte_array(*java_byte_array)
-        .expect("Should be able to convert to Rust array");
-
-    if vec.len() != length {
-        panic!(
-            "Retrieved array size {} expected to be {}.",
-            vec.len(),
-            length
-        );
-    }
-
-    vec
-}
-
-fn get_byte_array(_env: &JNIEnv, java_byte_array: &jbyteArray, buffer: &mut [u8]) {
-    let vec = _env
-        .convert_byte_array(*java_byte_array)
-        .expect("Should be able to convert to Rust array");
-
-    for (pos, e) in vec.iter().enumerate() {
-        buffer[pos] = *e;
-    }
-}
+mod utils;
+use utils::*;
 
 use cctp_primitives::utils::compute_sc_id;
 use jni::objects::{JClass, JMap, JObject, JString, JValue};
@@ -155,10 +47,6 @@ use jni::{sys::jlongArray, JNIEnv};
 use std::convert::TryInto;
 
 //Field element related functions
-
-fn return_field_element(_env: &JNIEnv, fe: FieldElement) -> jobject {
-    return_jobject(_env, fe, "com/horizen/librustsidechains/FieldElement").into_inner()
-}
 
 ffi_export!(
     fn Java_com_horizen_librustsidechains_Library_nativePanickingFunction(
@@ -4467,5 +4355,390 @@ ffi_export!(
             return;
         }
         drop(unsafe { Box::from_raw(tree_ptr) });
+    }
+);
+
+// PGD CSW related functions
+
+fn parse_sc_utxo_output(_env: &JNIEnv, _utxo_out: JObject) -> CswUtxoOutputData {
+    // Parse spending_pub_key bits
+    let spending_pub_key = parse_fixed_size_bits_from_jbytearray_in_jobject::<
+        { SC_PUBLIC_KEY_LENGTH * 8 },
+    >(_env, _utxo_out, "spendingPubKey");
+
+    // Parse amount
+    let amount: u64 = parse_long_from_jobject(_env, _utxo_out, "amount");
+
+    // Parse nonce
+    let nonce: u64 = parse_long_from_jobject(_env, _utxo_out, "nonce");
+
+    // Parse custom hash bits
+    let custom_hash = parse_fixed_size_bits_from_jbytearray_in_jobject::<
+        { SC_CUSTOM_HASH_LENGTH * 8 },
+    >(_env, _utxo_out, "customHash");
+
+    CswUtxoOutputData {
+        spending_pub_key,
+        amount,
+        nonce,
+        custom_hash,
+    }
+}
+
+ffi_export!(
+    fn Java_com_horizen_scutxonative_ScUtxoOutput_nativeGetHash(
+        _env: JNIEnv,
+        _utxo_out: JObject,
+    ) -> jobject {
+        match parse_sc_utxo_output(&_env, _utxo_out).hash(None) {
+            Ok(digest) => return_field_element(&_env, digest),
+            Err(e) => {
+                eprintln!("Error while computing Utxo Output hash: {:?}", e);
+                JObject::null().into_inner()
+            }
+        }
+    }
+);
+
+fn parse_sc_ft_output(_env: &JNIEnv, _ft_out: JObject) -> CswFtInputData {
+    // Parse amount
+    let amount: u64 = parse_long_from_jobject(_env, _ft_out, "amount");
+
+    // Parse receiver_pub_key bits
+    let receiver_pub_key = parse_fixed_size_bits_from_jbytearray_in_jobject::<
+        { SC_PUBLIC_KEY_LENGTH * 8 },
+    >(_env, _ft_out, "receiverPubKey");
+
+    // Parse spending_pub_key bits
+    let payback_addr_data_hash = parse_fixed_size_bits_from_jbytearray_in_jobject::<
+        { MC_PK_SIZE * 8 },
+    >(_env, _ft_out, "paybackAddrDataHash");
+
+    // Parse tx hash bits
+    let tx_hash = parse_fixed_size_bits_from_jbytearray_in_jobject::<{ SC_TX_HASH_LENGTH * 8 }>(
+        _env, _ft_out, "txHash",
+    );
+
+    // Parse out_idx
+    let out_idx: u32 = parse_int_from_jobject(_env, _ft_out, "outIdx");
+
+    CswFtInputData {
+        amount,
+        receiver_pub_key,
+        payback_addr_data_hash,
+        tx_hash,
+        out_idx,
+    }
+}
+
+ffi_export!(
+    fn Java_com_horizen_fwtnative_ForwardTransferOutput_nativeGetHash(
+        _env: JNIEnv,
+        _ft_out: JObject,
+    ) -> jobject {
+        // TODO: Maybe change CswFtInputData to accept bytes instead of bits so we can use the parse_sc_ft_output function
+
+        // Parse amount
+        let amount: u64 = parse_long_from_jobject(&_env, _ft_out, "amount");
+
+        // Parse receiver_pub_key bits
+        let receiver_pub_key = parse_fixed_size_byte_array_from_jobject::<SC_PUBLIC_KEY_LENGTH>(
+            &_env,
+            _ft_out,
+            "receiverPubKey",
+        );
+
+        // Parse spending_pub_key bits
+        let payback_addr_data_hash = parse_fixed_size_byte_array_from_jobject::<MC_PK_SIZE>(
+            &_env,
+            _ft_out,
+            "paybackAddrDataHash",
+        );
+
+        // Parse tx hash bits
+        let tx_hash =
+            parse_fixed_size_byte_array_from_jobject::<SC_TX_HASH_LENGTH>(&_env, _ft_out, "txHash");
+
+        // Parse out_idx
+        let out_idx: u32 = parse_int_from_jobject(&_env, _ft_out, "outIdx");
+
+        match hash_fwt(
+            amount,
+            &receiver_pub_key,
+            &payback_addr_data_hash,
+            &tx_hash,
+            out_idx,
+        ) {
+            Ok(digest) => return_field_element(&_env, digest),
+            Err(e) => {
+                eprintln!("Error while computing FT hash: {:?}", e);
+                JObject::null().into_inner()
+            }
+        }
+    }
+);
+
+macro_rules! parse_wcert {
+    ($_env: expr, $_cert: expr) => {
+        // Parse sc_id
+        let sc_id = *parse_field_element_from_jobject(&_env, _cert, "scId");
+
+        // Parse epoch number
+        let epoch_number = parse_int_from_jobject(&_env, _cert, "epochNumber");
+
+        //Extract backward transfers
+        let bt_list_obj = parse_jobject_array_from_jobject(
+            &_env,
+            _cert,
+            "btList",
+            "com/horizen/certnative/BackwardTransfer",
+        );
+        let mut bt_list = vec![];
+
+        let bt_list_size = _env
+            .get_array_length(bt_list_obj)
+            .expect("Should be able to get bt_list size");
+
+        if bt_list_size > 0 {
+            for i in 0..bt_list_size {
+                let o = _env
+                    .get_object_array_element(bt_list_obj, i)
+                    .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+
+                let p = _env
+                    .call_method(o, "getPublicKeyHash", "()[B", &[])
+                    .expect("Should be able to call getPublicKeyHash method")
+                    .l()
+                    .unwrap()
+                    .cast();
+
+                let pk: [u8; MC_PK_SIZE] = _env
+                    .convert_byte_array(p)
+                    .expect("Should be able to convert to Rust byte array")
+                    .try_into()
+                    .expect("Should be able to write into fixed buffer of size 20");
+
+                let a = _env
+                    .call_method(o, "getAmount", "()J", &[])
+                    .expect("Should be able to call getAmount method")
+                    .j()
+                    .unwrap() as u64;
+
+                bt_list.push(BackwardTransfer {
+                    pk_dest: pk,
+                    amount: a,
+                });
+            }
+        }
+
+        // Extract custom fields
+        let custom_fields_list_obj = parse_jobject_array_from_jobject(
+            &_env,
+            _cert,
+            "customFields",
+            "com/horizen/librustsidechains/FieldElement",
+        );
+
+        let mut custom_fields = vec![];
+
+        let custom_fields_size = _env
+            .get_array_length(custom_fields_list_obj)
+            .expect("Should be able to get custom_fields size");
+
+        if custom_fields_size > 0 {
+            for i in 0..custom_fields_size {
+                let o = _env
+                    .get_object_array_element(custom_fields_list_obj, i)
+                    .expect(
+                        format!("Should be able to get elem {} of custom_fields array", i).as_str(),
+                    );
+
+                let field = {
+                    let f = _env
+                        .get_field(o, "fieldElementPointer", "J")
+                        .expect("Should be able to get field fieldElementPointer");
+
+                    read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+                };
+
+                custom_fields.push(*field);
+            }
+        }
+
+        // Parse quality
+        let quality = parse_long_from_jobject(&_env, _cert, "quality");
+
+        // Parse mcb_sc_txs_com
+        let mcb_sc_txs_com = *parse_field_element_from_jobject(&_env, _cert, "mcbScTxsCom");
+
+        // Parse btr_fee
+        let btr_min_fee = parse_long_from_jobject(&_env, _cert, "btrFee");
+
+        // Parse ft_min_amount
+        let ft_min_fee = parse_long_from_jobject(&_env, _cert, "ftMinAmount");
+
+        WithdrawalCertificateDataNew {
+            sc_id,
+            epoch_number,
+            bt_list,
+            quality,
+            mcb_sc_txs_com,
+            ft_min_fee,
+            btr_min_fee,
+            custom_fields,
+        }
+    };
+}
+
+fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateDataNew {
+    // Parse sc_id
+    let sc_id = *parse_field_element_from_jobject(&_env, _cert, "scId");
+
+    // Parse epoch number
+    let epoch_number = parse_int_from_jobject(&_env, _cert, "epochNumber");
+
+    //Extract backward transfers
+    let bt_list_obj = parse_jobject_array_from_jobject(
+        &_env,
+        _cert,
+        "btList",
+        "com/horizen/certnative/BackwardTransfer",
+    );
+    let mut bt_list = vec![];
+
+    let bt_list_size = _env
+        .get_array_length(bt_list_obj)
+        .expect("Should be able to get bt_list size");
+
+    if bt_list_size > 0 {
+        for i in 0..bt_list_size {
+            let o = _env
+                .get_object_array_element(bt_list_obj, i)
+                .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+
+            let p = _env
+                .call_method(o, "getPublicKeyHash", "()[B", &[])
+                .expect("Should be able to call getPublicKeyHash method")
+                .l()
+                .unwrap()
+                .cast();
+
+            let pk: [u8; MC_PK_SIZE] = _env
+                .convert_byte_array(p)
+                .expect("Should be able to convert to Rust byte array")
+                .try_into()
+                .expect("Should be able to write into fixed buffer of size 20");
+
+            let a = _env
+                .call_method(o, "getAmount", "()J", &[])
+                .expect("Should be able to call getAmount method")
+                .j()
+                .unwrap() as u64;
+
+            bt_list.push(BackwardTransfer {
+                pk_dest: pk,
+                amount: a,
+            });
+        }
+    }
+
+    // Extract custom fields
+    let custom_fields_list_obj = parse_jobject_array_from_jobject(
+        &_env,
+        _cert,
+        "customFields",
+        "com/horizen/librustsidechains/FieldElement",
+    );
+
+    let mut custom_fields = vec![];
+
+    let custom_fields_size = _env
+        .get_array_length(custom_fields_list_obj)
+        .expect("Should be able to get custom_fields size");
+
+    if custom_fields_size > 0 {
+        for i in 0..custom_fields_size {
+            let o = _env
+                .get_object_array_element(custom_fields_list_obj, i)
+                .expect(
+                    format!("Should be able to get elem {} of custom_fields array", i).as_str(),
+                );
+
+            let field = {
+                let f = _env
+                    .get_field(o, "fieldElementPointer", "J")
+                    .expect("Should be able to get field fieldElementPointer");
+
+                read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+            };
+
+            custom_fields.push(*field);
+        }
+    }
+
+    // Parse quality
+    let quality = parse_long_from_jobject(&_env, _cert, "quality");
+
+    // Parse mcb_sc_txs_com
+    let mcb_sc_txs_com = *parse_field_element_from_jobject(&_env, _cert, "mcbScTxsCom");
+
+    // Parse btr_fee
+    let btr_min_fee = parse_long_from_jobject(&_env, _cert, "btrFee");
+
+    // Parse ft_min_amount
+    let ft_min_fee = parse_long_from_jobject(&_env, _cert, "ftMinAmount");
+
+    WithdrawalCertificateDataNew {
+        sc_id,
+        epoch_number,
+        bt_list,
+        quality,
+        mcb_sc_txs_com,
+        ft_min_fee,
+        btr_min_fee,
+        custom_fields,
+    }
+}
+
+ffi_export!(
+    fn Java_com_horizen_certnative_WithdrawalCertificate_nativeGetHash(
+        _env: JNIEnv,
+        _cert: JObject,
+    ) -> jobject {
+
+        // Parse cert
+        let cert = parse_wcert(_env, _cert);
+
+        // Convert bt_list in the expected form
+        let bt_list = if cert.bt_list.len() == 0 {
+            None
+        } else {
+            Some(cert.bt_list.as_slice())
+        };
+
+        // Convert custom fields in the expected form
+        let custom_fields = if cert.custom_fields.len() == 0 {
+            None
+        } else {
+            Some(cert.custom_fields.iter().collect())
+        };
+
+        // Compute hash
+        match hash_cert(
+            &cert.sc_id,
+            cert.epoch_number,
+            cert.quality,
+            bt_list,
+            custom_fields,
+            &cert.mcb_sc_txs_com,
+            cert.btr_min_fee,
+            cert.ft_min_fee,
+        ) {
+            Ok(digest) => return_field_element(&_env, digest),
+            Err(e) => {
+                eprintln!("Error while computing FT hash: {:?}", e);
+                JObject::null().into_inner()
+            }
+        }
     }
 );

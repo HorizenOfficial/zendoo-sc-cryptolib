@@ -6,28 +6,35 @@ import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 import com.horizen.poseidonnative.PoseidonHashable;
 
+// TODO: Use this class also in NaiveThresholdSigProof and CommitmentTree (re use stuff also Rust side)
 public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
+    private final FieldElement scId;
     private final int epochNumber;
     private final List<BackwardTransfer> btList;
     private final long quality;
     private final FieldElement mcbScTxsCom;
     private final long ftMinFee;
     private final long btrMinFee;
-    private final FieldElement utxoMerkleRoot;
+    private final List<FieldElement> customFields;
 
     static {
         Library.load();
     }
 
-    public WithdrawalCertificate(int epochNumber, List<BackwardTransfer> btList, long quality, FieldElement mcbScTxsCom,
-            long ftMinFee, long btrMinFee, FieldElement utxoMerkleRoot) {
+    public WithdrawalCertificate(FieldElement scId, int epochNumber, List<BackwardTransfer> btList, long quality, FieldElement mcbScTxsCom,
+            long ftMinFee, long btrMinFee, List<FieldElement> customFields) {
+        this.scId = scId;
         this.epochNumber = epochNumber;
         this.btList = btList;
         this.quality = quality;
         this.mcbScTxsCom = mcbScTxsCom;
         this.ftMinFee = ftMinFee;
         this.btrMinFee = btrMinFee;
-        this.utxoMerkleRoot = utxoMerkleRoot;
+        this.customFields = customFields;
+    }
+
+    public FieldElement getScId() {
+        return scId;
     }
 
     public int getEpochNumber() {
@@ -54,8 +61,8 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
         return btrMinFee;
     }
 
-    public FieldElement getUtxoMerkleRoot() {
-        return utxoMerkleRoot;
+    public List<FieldElement> getCustomFields() {
+        return customFields;
     }
 
     private native FieldElement nativeGetHash();
@@ -67,7 +74,9 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
 
     @Override
     public void close() throws Exception {
+        this.scId.close();
         this.mcbScTxsCom.close();
-        this.utxoMerkleRoot.close();
+        for (FieldElement fe: customFields)
+            fe.close();
     }
 }
