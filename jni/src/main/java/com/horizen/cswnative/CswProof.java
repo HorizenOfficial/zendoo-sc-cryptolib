@@ -143,7 +143,7 @@ public class CswProof {
         boolean compress_proof
     ) throws IllegalArgumentException 
     {
-        if (utxoData.isPresent() && lastWcert.isEmpty())
+        if (utxoData.isPresent() && !lastWcert.isPresent())
             throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");
 
         if (utxoData.isPresent() && ftData.isPresent())
@@ -185,7 +185,7 @@ public class CswProof {
         boolean zk
     ) throws IllegalArgumentException 
     {
-        if (utxoData.isPresent() && lastWcert.isEmpty())
+        if (utxoData.isPresent() && !lastWcert.isPresent())
             throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");
 
         if (utxoData.isPresent() && ftData.isPresent())
@@ -225,7 +225,7 @@ public class CswProof {
         boolean zk
     ) throws IllegalArgumentException 
     {
-        if (utxoData.isPresent() && lastWcert.isEmpty())
+        if (utxoData.isPresent() && !lastWcert.isPresent())
             throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");
 
         if (utxoData.isPresent() && ftData.isPresent())
@@ -263,7 +263,7 @@ public class CswProof {
         String provingKeyPath
     ) throws IllegalArgumentException 
     {
-        if (utxoData.isPresent() && lastWcert.isEmpty())
+        if (utxoData.isPresent() && !lastWcert.isPresent())
             throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");
 
         if (utxoData.isPresent() && ftData.isPresent())
