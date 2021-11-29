@@ -12,9 +12,7 @@ use cctp_primitives::{
     }
 };
 use primitives::{FieldBasedMerkleTree, FieldBasedSparseMerkleTree};
-use std::{
-    any::type_name, path::Path,
-};
+use std::{any::type_name, collections::{HashMap, HashSet}, path::Path};
 
 mod cctp_calls;
 use cctp_calls::*;
@@ -124,7 +122,7 @@ fn get_byte_array(_env: &JNIEnv, java_byte_array: &jbyteArray, buffer: &mut [u8]
 }
 
 
-use jni::{JNIEnv, sys::jlongArray};
+use jni::{JNIEnv, objects::JMap, sys::jlongArray};
 use jni::objects::{JClass, JString, JObject, JValue};
 use jni::sys::{jbyteArray, jboolean, jint, jlong, jobject, jobjectArray, jbyte};
 use jni::sys::{JNI_TRUE, JNI_FALSE};
@@ -1161,28 +1159,28 @@ ffi_export!(
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeInit(
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeInit(
     _env: JNIEnv,
     _class: JClass,
     _height: jint,
     _processing_step: jlong,
 ) -> jobject
 {
-    // Create new InMemoryOptimizedMerkleTree Rust side
+    // Create new InMemoryAppendOnlyMerkleTree Rust side
     let mt = new_ginger_mht(
         _height as usize,
         _processing_step as usize
     );
 
-    // Create and return new InMemoryOptimizedMerkleTree Java side
+    // Create and return new InMemoryAppendOnlyMerkleTree Java side
     match mt {
-        Ok(mt) => return_jobject(&_env, mt, "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree").into_inner(),
+        Ok(mt) => return_jobject(&_env, mt, "com/horizen/merkletreenative/InMemoryAppendOnlyMerkleTree").into_inner(),
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
     }
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeAppend(
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeAppend(
     _env: JNIEnv,
     _tree: JObject,
     _leaf: JObject,
@@ -1211,7 +1209,7 @@ ffi_export!(
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalize(
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeFinalize(
     _env: JNIEnv,
     _tree: JObject,
 ) -> jobject
@@ -1225,13 +1223,13 @@ ffi_export!(
     };
 
     match finalize_ginger_mht(tree) {
-        Ok(tree_copy) => return_jobject(&_env, tree_copy, "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree").into_inner(),
+        Ok(tree_copy) => return_jobject(&_env, tree_copy, "com/horizen/merkletreenative/InMemoryAppendOnlyMerkleTree").into_inner(),
         Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
     }
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalizeInPlace(
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeFinalizeInPlace(
     _env: JNIEnv,
     _tree: JObject,
 ) -> jboolean
@@ -1251,7 +1249,7 @@ ffi_export!(
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeRoot(
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeRoot(
     _env: JNIEnv,
     _tree: JObject,
 ) -> jobject
@@ -1271,7 +1269,7 @@ ffi_export!(
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeGetMerklePath(
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeGetMerklePath(
     _env: JNIEnv,
     _tree: JObject,
     _leaf_index: jlong,
@@ -1293,7 +1291,7 @@ ffi_export!(
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeReset(
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeReset(
     _env: JNIEnv,
     _tree: JObject,
 )
@@ -1310,7 +1308,7 @@ ffi_export!(
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFreeInMemoryOptimizedMerkleTree(
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeFreeInMemoryOptimizedMerkleTree(
     _env: JNIEnv,
     _class: JClass,
     _tree: *mut GingerMHT,
@@ -3700,41 +3698,28 @@ ffi_export!(
     fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeAddLeaves(
     _env: JNIEnv,
     _tree: JObject,
-    _leaves: jobjectArray,
+    _leaves: JObject,
 )
 {
-    //Read _leaves as array of OperationLeaf
-    let leaves_len = _env.get_array_length(_leaves)
-        .expect("Should be able to read leaves array size");
-    let mut leaves = Vec::with_capacity(leaves_len as usize);
+    //Read _leaves as HashMap<u32, FieldElement>
+    let leaves_map = JMap::from_env(&_env, _leaves).expect("Should be able to construct JMap from _leaves JObject");
+    let mut leaves = HashMap::new();
 
-    for i in 0..leaves_len {
-        // Read PositionLeaf object
-        let position_leaf_obj = _env.get_object_array_element(_leaves, i)
-            .expect(format!("Should be able to read elem {} of the leaves array", i).as_str());
-
-        // Read FieldElement from PositionLeaf.data
+    for (pos, fe) in leaves_map.iter().expect("Should be able to get JMap iterator") {
+        // Read FieldElement
         let field = {
-            let field_object = _env.get_field(
-                position_leaf_obj,
-                "data",
-                "Lcom/horizen/librustsidechains/FieldElement;"
-            ).expect("Should be able to get field FieldElement").l().unwrap();
-
-            let f =_env.get_field(field_object, "fieldElementPointer", "J")
+            let f =_env.get_field(fe, "fieldElementPointer", "J")
                 .expect("Should be able to get field fieldElementPointer");
 
             read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         };
 
-        // Read position from PositionLeaf.position
-        let position = _env.get_field(
-            position_leaf_obj,
-            "position",
-            "J"
-        ).expect("Should be able to get field position").j().unwrap() as u32;
+        // Read position
+        let position = _env
+            .get_field(pos, "value", "J")
+            .expect("Should be able to get value member").j().unwrap() as u32;
 
-        leaves.push((position, *field));
+        leaves.insert(position, *field);
     }
 
     // Read tree
@@ -3762,10 +3747,20 @@ ffi_export!(
     //Read _positions as an array of jlongs
     let positions_len = _env.get_array_length(_positions)
         .expect("Should be able to read positions array size");
+    let mut positions = HashSet::new();
 
-    let mut positions = vec![jlong::from(0i64); positions_len as usize];
-    _env.get_long_array_region(_positions, 0, positions.as_mut_slice())
-        .expect("Should be able to read _positions into a jlong slice");
+    // Array can be empty
+    for i in 0..positions_len {
+        let long_obj = _env.get_object_array_element(_positions, i)
+            .expect(format!("Should be able to read elem {} of the positions array", i).as_str());
+
+        // Read position
+        let position = _env
+            .get_field(long_obj, "value", "J")
+            .expect("Should be able to get value member").j().unwrap() as u32;
+
+        positions.insert(position);
+    }
 
     // Read tree
     let tree = {
@@ -3775,14 +3770,8 @@ ffi_export!(
         read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerSparseMHT)
     };
 
-    // Update the tree with leaves and return the root
-    let leaves = positions
-        .into_iter()
-        .map(|position| position as u32)
-        .collect::<Vec<_>>();
-
     // Update the tree with leaves
-    match tree.remove_leaves(leaves)
+    match tree.remove_leaves(positions)
     {
         Ok(_) => return,
         Err(e) => throw!(&_env, "java/lang/Exception", format!("Cannot remove leaves: {}", e.to_string()).as_str())
