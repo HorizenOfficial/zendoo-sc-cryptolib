@@ -439,7 +439,10 @@ pub fn get_instance_for_setup(
 #[cfg(test)]
 mod test {
     use super::*;
-    use cctp_primitives::proving_system::init::{get_g1_committer_key, load_g1_committer_key};
+    use cctp_primitives::{
+        proving_system::init::{get_g1_committer_key, load_g1_committer_key},
+        utils::commitment_tree::DataAccumulator,
+    };
     use primitives::{
         crh::FieldBasedHash,
         signature::{

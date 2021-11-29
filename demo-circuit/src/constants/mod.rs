@@ -159,6 +159,9 @@ pub const SC_PUBLIC_KEY_LENGTH: usize = 32;
 pub const SC_SECRET_KEY_LENGTH: usize = 32;
 pub const SC_TX_HASH_LENGTH: usize = 32;
 pub const SC_CUSTOM_HASH_LENGTH: usize = 32;
+pub const MC_RETURN_ADDRESS_BYTES: usize = 20;
+pub const FIELD_MODULUS: usize = FIELD_CAPACITY + 1;
+
 pub const MST_MERKLE_TREE_HEIGHT: usize = 22;
 
 pub const PHANTOM_FIELD_ELEMENT: FieldElement = field_new!(
@@ -171,16 +174,54 @@ pub const PHANTOM_FIELD_ELEMENT: FieldElement = field_new!(
     ])
 );
 
-pub const PHANTOM_UINT8_ARRAY: [u8; 32] = [
-    173, 74, 232, 20, 64, 86, 11, 221, 56, 37, 12, 4, 128, 12, 79, 10, 24, 18, 174, 237, 68, 95,
-    193, 69, 196, 207, 14, 139, 28, 64, 12, 26,
+pub const PHANTOM_SECRET_KEY_BITS: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS] = [
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, true, true, false, true, true, false,
+    false, false, true, true, false, false, true, true, false, false, true, false, false, false,
+    false, false, false, true, true, false, true, true, true, false, false, true, true, false,
+    true, true, true, true, false, true, true, true, false, true, false, false, false, true, true,
+    true, false, false, false, false, false, true, true, true, true, false, false, true, false,
+    true, true, true, false, false, true, false, false, true, false, false, true, false,
+];
+pub const PHANTOM_PUBLIC_KEY_BITS: [bool; SIMULATED_FIELD_BYTE_SIZE * 8] = [
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, true, true, false, true, true, false,
+    false, false, true, true, false, false, true, true, false, false, true, false, false, false,
+    false, false, false, true, true, false, true, true, true, false, false, true, true, false,
+    true, true, true, true, false, true, true, true, false, true, false, false, false, true, true,
+    true, false, false, false, false, false, true, true, true, true, false, false, true, false,
+    true, true, true, false, false, true, false, false, true, false, false, true, false, true,
+    false, false,
 ];
 
 #[cfg(test)]
 mod test {
     use crate::read_field_element_from_buffer_with_padding;
     use algebra::{AffineCurve, FpParameters, FromCompressedBits, PrimeField};
-    use sha2::{Digest, Sha256};
 
     use super::*;
     use bit_vec::BitVec;
@@ -298,19 +339,5 @@ mod test {
         let field_element = read_field_element_from_buffer_with_padding(tag).unwrap();
         println!("Phantom field element: {:?}", field_element);
         assert_eq!(field_element, PHANTOM_FIELD_ELEMENT);
-    }
-
-    #[test]
-    fn test_csw_phantom_uint8() {
-        let tag = b"Krypton 36";
-
-        let mut hash = Sha256::new();
-        hash.update(tag);
-        let hash_result = hash.finalize();
-
-        println!("Phantom uint8 array: {:?}", hash_result);
-        assert_eq!(hash_result.as_slice(), PHANTOM_UINT8_ARRAY);
-        assert_eq!(hash_result.len(), SC_PUBLIC_KEY_LENGTH);
-        assert_eq!(hash_result.len(), SC_SECRET_KEY_LENGTH);
     }
 }
