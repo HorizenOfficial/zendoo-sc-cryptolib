@@ -118,10 +118,6 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         debug_assert_eq!(output_hash_elements_g.len(), 3);
         output_hash_elements_g.push(box_type_coin_g);
 
-        output_hash_elements_g.iter().for_each(|x| {
-            println!("Circuit output hash element: {:?}", x);
-        });
-
         let output_hash_g = FieldHashGadget::enforce_hash_constant_length(
             cs.ns(|| "H(input.output)"),
             &output_hash_elements_g,
@@ -300,14 +296,20 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         // require(input.output.amount == sys_data.amount)
         // or
         // require(ft_input.amount == sys_data.amount)
+        let mut utxo_amount_big_endian_bits_g = csw_data_g.input_g.output_g.amount_g.to_bits_le();
+        utxo_amount_big_endian_bits_g.reverse();
+
         let utxo_input_amount_g = FieldElementGadget::from_bits(
             cs.ns(|| "read utxo input amount"),
-            &csw_data_g.input_g.output_g.amount_g.to_bits_le(),
+            &utxo_amount_big_endian_bits_g,
         )?;
+
+        let mut ft_amount_big_endian_bits_g = csw_data_g.ft_input_g.amount_g.to_bits_le();
+        ft_amount_big_endian_bits_g.reverse();
 
         let ft_input_amount_g = FieldElementGadget::from_bits(
             cs.ns(|| "read ft input amount"),
-            &csw_data_g.ft_input_g.amount_g.to_bits_le(),
+            &ft_amount_big_endian_bits_g,
         )?;
 
         let selected_input_amount_g = FieldElementGadget::conditionally_select(
@@ -335,7 +337,7 @@ mod test {
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
         type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
         utils::{
-            commitment_tree::ByteAccumulator, poseidon_hash::get_poseidon_hash_constant_length,
+            commitment_tree::DataAccumulator, poseidon_hash::get_poseidon_hash_constant_length,
         },
     };
     use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree};
@@ -405,29 +407,27 @@ mod test {
 
         let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
 
-        let mut mst_leaf_accumulator = ByteAccumulator::init();
+        let mut mst_leaf_accumulator = DataAccumulator::init();
         mst_leaf_accumulator
-            .update(&utxo_input_data.output.spending_pub_key[..])
+            .update_with_bits(utxo_input_data.output.spending_pub_key.to_vec())
             .unwrap();
-            println!("ACCUMULATOR SIZE: {}", mst_leaf_accumulator.get_field_elements().unwrap().len());
-            mst_leaf_accumulator.update(utxo_input_data.output.amount)
+        mst_leaf_accumulator
+            .update(utxo_input_data.output.amount)
             .unwrap();
-            println!("ACCUMULATOR SIZE: {}", mst_leaf_accumulator.get_field_elements().unwrap().len());
-            mst_leaf_accumulator.update(utxo_input_data.output.nonce)
+        mst_leaf_accumulator
+            .update(utxo_input_data.output.nonce)
             .unwrap();
-            println!("ACCUMULATOR SIZE: {}", mst_leaf_accumulator.get_field_elements().unwrap().len());
-            mst_leaf_accumulator.update(&utxo_input_data.output.custom_hash[..])
+        mst_leaf_accumulator
+            .update_with_bits(utxo_input_data.output.custom_hash.to_vec())
             .unwrap();
-            println!("ACCUMULATOR SIZE: {}", mst_leaf_accumulator.get_field_elements().unwrap().len());
 
         let mut mst_leaf_inputs = mst_leaf_accumulator.get_field_elements().unwrap();
         debug_assert_eq!(mst_leaf_inputs.len(), 3);
         mst_leaf_inputs.push(FieldElement::from(BoxType::CoinBox as u8));
-        
+
         let mut poseidon_hash = get_poseidon_hash_constant_length(mst_leaf_inputs.len(), None);
 
         mst_leaf_inputs.into_iter().for_each(|leaf_input| {
-            println!("MST leaf hash input: {:?}", leaf_input);
             poseidon_hash.update(leaf_input);
         });
 

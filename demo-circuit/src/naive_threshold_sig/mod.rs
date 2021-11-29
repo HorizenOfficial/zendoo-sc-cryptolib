@@ -1,6 +1,6 @@
 use algebra::{Field, PrimeField, ProjectiveCurve, ToBits};
 
-use cctp_primitives::utils::commitment_tree::ByteAccumulator;
+use cctp_primitives::utils::commitment_tree::DataAccumulator;
 use primitives::{
     crh::FieldBasedHash,
     signature::schnorr::field_based_schnorr::{FieldBasedSchnorrPk, FieldBasedSchnorrSignature},
@@ -91,7 +91,7 @@ impl<F: PrimeField> NaiveTresholdSignature<F> {
     ) -> Self {
         //Convert needed variables into field elements
         let fees_field_elements = {
-            let fes = ByteAccumulator::init()
+            let fes = DataAccumulator::init()
                 .update(btr_fee)
                 .unwrap()
                 .update(ft_min_amount)
@@ -383,7 +383,7 @@ mod test {
     use super::*;
     use cctp_primitives::{
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
-        utils::commitment_tree::ByteAccumulator,
+        utils::commitment_tree::DataAccumulator,
     };
     use primitives::{
         crh::FieldBasedHash,
@@ -416,7 +416,7 @@ mod test {
         let btr_fee: u64 = rng.gen();
         let ft_min_amount: u64 = rng.gen();
         let fees_field_elements = {
-            let fes = ByteAccumulator::init()
+            let fes = DataAccumulator::init()
                 .update(btr_fee)
                 .unwrap()
                 .update(ft_min_amount)
