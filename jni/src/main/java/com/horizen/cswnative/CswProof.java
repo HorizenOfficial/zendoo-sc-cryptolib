@@ -11,9 +11,6 @@ public class CswProof {
     private static native boolean nativeSetup(
         ProvingSystemType psType,
         int rangeSize,
-        int mstTreeHeight,
-        int ftTreeHeight,
-        int scTxCommTreeHeight,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -26,9 +23,6 @@ public class CswProof {
      * Generate (provingKey, verificationKey) pair for this circuit.
      * @param psType - proving system to be used
      * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
-     * @param mstTreeHeight - Height of the MST, i.e. the SC Utxo tree
-     * @param ftTreeHeight - Height of the FT subtree of the Commitment Tree of a particular SC
-     * @param scTxCommTreeHeight - Height of the subtree of the SCsCommitmentTree having as leaves the single ScTxsCommitments 
      * @param provingKeyPath - file path to which saving the proving key
      * @param verificationKeyPath - file path to which saving the verification key
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk
@@ -51,18 +45,15 @@ public class CswProof {
     )
     {
         return nativeSetup(
-            psType, rangeSize, mstTreeHeight, ftTreeHeight, scTxCommTreeHeight,
-            provingKeyPath, verificationKeyPath, zk, maxProofPlusVkSize, compressPk, compressVk
+            psType, rangeSize, provingKeyPath, verificationKeyPath,
+            zk, maxProofPlusVkSize, compressPk, compressVk
         );
     }
 
     /**
      * Generate (provingKey, verificationKey) pair for this circuit.
      * @param psType - proving system to be used
-     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
-     * @param mstTreeHeight - Height of the MST, i.e. the SC Utxo tree
-     * @param ftTreeHeight - Height of the FT subtree of the Commitment Tree of a particular SC
-     * @param scTxCommTreeHeight - Height of the subtree of the SCsCommitmentTree having as leaves the single ScTxsCommitments 
+     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd` 
      * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
      * @param zk - used to estimate the proof and vk size, tells if the proof will be created using zk or not
@@ -72,9 +63,6 @@ public class CswProof {
     public static boolean setup(
         ProvingSystemType psType,
         int rangeSize,
-        int mstTreeHeight,
-        int ftTreeHeight,
-        int scTxCommTreeHeight,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -82,18 +70,15 @@ public class CswProof {
     )
     {
         return nativeSetup(
-            psType, rangeSize, mstTreeHeight, ftTreeHeight, scTxCommTreeHeight,
-            provingKeyPath, verificationKeyPath, zk, maxProofPlusVkSize, true, true
+            psType, rangeSize, provingKeyPath, verificationKeyPath,
+            zk, maxProofPlusVkSize, true, true
         );
     }
 
     /**
      * Generate (provingKey, verificationKey) pair for this circuit.
      * @param psType - proving system to be used
-     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
-     * @param mstTreeHeight - Height of the MST, i.e. the SC Utxo tree
-     * @param ftTreeHeight - Height of the FT subtree of the Commitment Tree of a particular SC
-     * @param scTxCommTreeHeight - Height of the subtree of the SCsCommitmentTree having as leaves the single ScTxsCommitments  
+     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd` 
      * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk, estimated assuming not to use zk property
@@ -102,17 +87,14 @@ public class CswProof {
     public static boolean setup(
         ProvingSystemType psType,
         int rangeSize,
-        int mstTreeHeight,
-        int ftTreeHeight,
-        int scTxCommTreeHeight,
         String provingKeyPath,
         String verificationKeyPath,
         int maxProofPlusVkSize
     )
     {
         return nativeSetup(
-            psType, rangeSize, mstTreeHeight, ftTreeHeight, scTxCommTreeHeight,
-            provingKeyPath, verificationKeyPath, false, maxProofPlusVkSize, true, true
+            psType, rangeSize, provingKeyPath, verificationKeyPath,
+            false, maxProofPlusVkSize, true, true
         );
     }
 
@@ -146,6 +128,7 @@ public class CswProof {
      * @param compress_proof - whether to return the proof bytes in compressed form or not
      * @return a CreateProofResult instance, i.e. the computed proof bytes and the quality of the certificate (i.e. in this case, number of valid signatures),
      *         OR null pointer if some errors occured during proof creation.
+     * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
     public static CreateProofResult createProof(
         CswSysData sysData,
@@ -158,7 +141,7 @@ public class CswProof {
         boolean zk,
         boolean compressed_pk,
         boolean compress_proof
-    )
+    ) throws IllegalArgumentException 
     {
         if (utxoData.isPresent() && lastWcert.isEmpty())
             throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");
@@ -189,6 +172,7 @@ public class CswProof {
      * @return a CreateProofResult instance, i.e. the computed proof bytes (in compressed form),
      *         and the quality of the certificate (i.e. in this case, number of valid signatures)
      *         OR null pointer if some errors occured during proof creation.
+     * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
     public static CreateProofResult createProof(
         CswSysData sysData,
@@ -199,7 +183,7 @@ public class CswProof {
         String provingKeyPath,
         boolean checkProvingKey,
         boolean zk
-    )
+    ) throws IllegalArgumentException 
     {
         if (utxoData.isPresent() && lastWcert.isEmpty())
             throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");
@@ -229,6 +213,7 @@ public class CswProof {
      * @return a CreateProofResult instance, i.e. the computed proof bytes (in compressed form),
      *         and the quality of the certificate (i.e. in this case, number of valid signatures);
      *         OR null pointer if some errors occured during proof creation.
+     * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
     public static CreateProofResult createProof(
         CswSysData sysData,
@@ -238,7 +223,7 @@ public class CswProof {
         Optional<CswFtProverData> ftData,
         String provingKeyPath,
         boolean zk
-    )
+    ) throws IllegalArgumentException 
     {
         if (utxoData.isPresent() && lastWcert.isEmpty())
             throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");
@@ -267,6 +252,7 @@ public class CswProof {
      * @return a CreateProofResult instance, i.e. the computed proof bytes (in compressed form),
      *         and the quality of the certificate (i.e. in this case, number of valid signatures);
      *         OR null pointer if some errors occured during proof creation.
+     * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
     public static CreateProofResult createProof(
         CswSysData sysData,
@@ -275,7 +261,7 @@ public class CswProof {
         Optional<CswUtxoProverData> utxoData,
         Optional<CswFtProverData> ftData,
         String provingKeyPath
-    )
+    ) throws IllegalArgumentException 
     {
         if (utxoData.isPresent() && lastWcert.isEmpty())
             throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");

@@ -13,20 +13,20 @@ public class CswFtProverData implements AutoCloseable {
     private final FieldElement mcbScTxsComStart;
     private final MerklePath merklePathToScHash;
     private final MerklePath ftTreePath;
-    private final FieldElement scCreationTxHash;
+    private final FieldElement scCreationCommitment;
     private final FieldElement scbBtrTreeRoot;
     private final FieldElement wCertTreeRoot;
     private final List<FieldElement> scTxsComHashes;
 
     public CswFtProverData(FordwardTransferOutput output, byte[] ftInputSecretKey, FieldElement mcbScTxsComStart,
-            MerklePath merklePathToScHash, MerklePath ftTreePath, FieldElement scCreationTxHash,
+            MerklePath merklePathToScHash, MerklePath ftTreePath, FieldElement scCreationCommitment,
             FieldElement scbBtrTreeRoot, FieldElement wCertTreeRoot, List<FieldElement> scTxsComHashes) {
         this.output = output;
 
         if (ftInputSecretKey.length != Constants.SC_SK_SIZE())
-        throw new IllegalArgumentException(
-            String.format("Incorrect ftInputSecretKey element length, %d expected, %d found",Constants.SC_SK_SIZE(), ftInputSecretKey.length)
-        );
+            throw new IllegalArgumentException(
+                String.format("Incorrect ftInputSecretKey element length, %d expected, %d found",Constants.SC_SK_SIZE(), ftInputSecretKey.length)
+            );
         this.ftInputSecretKey = ftInputSecretKey;
 
         this.mcbScTxsComStart = mcbScTxsComStart;
@@ -43,7 +43,7 @@ public class CswFtProverData implements AutoCloseable {
             );
         this.ftTreePath = ftTreePath;
 
-        this.scCreationTxHash = scCreationTxHash;
+        this.scCreationCommitment = scCreationCommitment;
         this.scbBtrTreeRoot = scbBtrTreeRoot;
         this.wCertTreeRoot = wCertTreeRoot;
         this.scTxsComHashes = scTxsComHashes;
@@ -70,7 +70,7 @@ public class CswFtProverData implements AutoCloseable {
     }
 
     public FieldElement getScCreationTxHash() {
-        return scCreationTxHash;
+        return scCreationCommitment;
     }
 
     public FieldElement getScbBtrTreeRoot() {
@@ -90,7 +90,7 @@ public class CswFtProverData implements AutoCloseable {
         this.mcbScTxsComStart.close();
         this.merklePathToScHash.close();
         this.ftTreePath.close();
-        this.scCreationTxHash.close();
+        this.scCreationCommitment.close();
         this.scbBtrTreeRoot.close();
         this.wCertTreeRoot.close();
         for (FieldElement fe: scTxsComHashes)

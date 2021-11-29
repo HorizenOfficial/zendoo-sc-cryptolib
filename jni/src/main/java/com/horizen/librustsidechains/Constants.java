@@ -1,5 +1,8 @@
 package com.horizen.librustsidechains;
 
+/**
+ * Holds constant values used Rust side and statically initialized by it
+ */
 public final class Constants {
 
     private static int MC_PK_HASH_SIZE;
