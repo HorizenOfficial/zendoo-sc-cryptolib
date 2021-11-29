@@ -16,7 +16,7 @@ pub struct NaiveThresholdSigParams {
 impl NaiveThresholdSigParams {
     pub fn new() -> Self {
         let e = FieldElement::one();
-        let s = e.clone();
+        let s = e;
         let null_sig = SchnorrSig::new(e, s);
 
         let x = field_new!(

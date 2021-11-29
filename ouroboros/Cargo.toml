@@ -1,6 +1,6 @@
 [package]
 name = "ouroboros"
-version = "0.1.0"
+version = "0.4.1"
 authors = ["DanieleDiBenedetto <daniele@horizenlabs.io>"]
 edition = "2018"
 

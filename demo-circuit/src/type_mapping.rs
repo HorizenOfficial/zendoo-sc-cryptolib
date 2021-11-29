@@ -8,7 +8,10 @@ use primitives::{
     vrf::ecvrf::*,
     FieldBasedBinaryMHTPath,
 };
-use r1cs_crypto::{TweedleFrDensityOptimizedPoseidonHashGadget, field_based_mht::FieldBasedBinaryMerkleTreePathGadget};
+use r1cs_crypto::{
+    field_based_mht::FieldBasedBinaryMerkleTreePathGadget,
+    TweedleFrDensityOptimizedPoseidonHashGadget,
+};
 use r1cs_std::fields::fp::FpGadget;
 
 pub const SCHNORR_PK_SIZE: usize = GROUP_COMPRESSED_SIZE;

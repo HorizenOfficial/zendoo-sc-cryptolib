@@ -18,7 +18,7 @@ use cctp_primitives::{
         ProvingSystem, ZendooProof, ZendooProverKey, ZendooVerifierKey,
     },
     utils::{
-        commitment_tree::ByteAccumulator, data_structures::BackwardTransfer, get_bt_merkle_root,
+        commitment_tree::DataAccumulator, data_structures::BackwardTransfer, get_bt_merkle_root,
         serialization::*,
     },
 };
@@ -60,7 +60,7 @@ pub fn schnorr_sign(
         &mut rng,
         &FieldBasedSchnorrPk(pk.into_projective()),
         sk,
-        msg.clone(),
+        *msg,
     )
 }
 
@@ -69,11 +69,7 @@ pub fn schnorr_verify_signature(
     pk: &SchnorrPk,
     signature: &SchnorrSig,
 ) -> Result<bool, Error> {
-    SchnorrSigScheme::verify(
-        &FieldBasedSchnorrPk(pk.into_projective()),
-        msg.clone(),
-        signature,
-    )
+    SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), *msg, signature)
 }
 
 //*****************************Naive threshold sig circuit related functions************************
@@ -112,7 +108,7 @@ pub fn compute_msg_to_sign(
     let epoch_number = FieldElement::from(epoch_number);
 
     //Compute bt_list merkle_root
-    let bt_list_opt = if bt_list.len() > 0 {
+    let bt_list_opt = if !bt_list.is_empty() {
         Some(bt_list.as_slice())
     } else {
         None
@@ -120,7 +116,7 @@ pub fn compute_msg_to_sign(
     let mr_bt = get_bt_merkle_root(bt_list_opt)?;
 
     let fees_field_element = {
-        let fes = ByteAccumulator::init()
+        let fes = DataAccumulator::init()
             .update(btr_fee)?
             .update(ft_min_amount)?
             .get_field_elements()?;
@@ -132,20 +128,19 @@ pub fn compute_msg_to_sign(
     let custom_fields_hash = if custom_fields.is_some() {
         let custom_fields = custom_fields.unwrap();
         let mut h = FieldHash::init_constant_length(custom_fields.len(), None);
-        custom_fields.into_iter().for_each(|custom_field| { h.update(custom_field); });
+        custom_fields.into_iter().for_each(|custom_field| {
+            h.update(custom_field);
+        });
         Some(h.finalize().unwrap())
     } else {
         None
     };
 
     //Compute message to be verified
-    let mut h = FieldHash::init_constant_length(
-        5 + if custom_fields_hash.is_some() { 1 } else { 0 },
-        None
-    );
+    let mut h =
+        FieldHash::init_constant_length(5 + if custom_fields_hash.is_some() { 1 } else { 0 }, None);
 
-    h
-        .update(*sc_id)
+    h.update(*sc_id)
         .update(epoch_number)
         .update(mr_bt)
         .update(*end_cumulative_sc_tx_comm_tree_root)
@@ -189,7 +184,7 @@ pub fn create_naive_threshold_sig_proof(
         btr_fee,
         ft_min_amount,
         bt_list,
-        custom_fields.clone()
+        custom_fields.clone(),
     )?;
 
     // Iterate over sigs, check and count number of valid signatures,
@@ -280,7 +275,7 @@ pub fn verify_naive_threshold_sig_proof(
     check_vk: bool,
     compressed_vk: bool,
 ) -> Result<bool, Error> {
-    let bt_list_opt = if bt_list.len() > 0 {
+    let bt_list_opt = if !bt_list.is_empty() {
         Some(bt_list.as_slice())
     } else {
         None
@@ -292,7 +287,11 @@ pub fn verify_naive_threshold_sig_proof(
         epoch_number,
         quality: valid_sigs,
         bt_list: bt_list_opt,
-        custom_fields: if custom_fields.len() == 0 { None } else { Some(custom_fields.iter().collect()) },
+        custom_fields: if custom_fields.len() == 0 {
+            None
+        } else {
+            Some(custom_fields.iter().collect())
+        },
         end_cumulative_sc_tx_commitment_tree_root,
         btr_fee,
         ft_min_amount,
@@ -359,7 +358,7 @@ pub fn vrf_prove(
         &VRF_GH_PARAMS,
         &FieldBasedEcVrfPk(pk.into_projective()),
         sk,
-        msg.clone(),
+        *msg,
     )?;
 
     //Convert gamma from proof to field elements
@@ -368,7 +367,7 @@ pub fn vrf_prove(
     //Compute VRF output
     let output = {
         let mut h = FieldHash::init_constant_length(3, None);
-        h.update(msg.clone());
+        h.update(*msg);
         gamma_coords.into_iter().for_each(|c| {
             h.update(c);
         });
@@ -386,7 +385,7 @@ pub fn vrf_proof_to_hash(
     VRFScheme::proof_to_hash(
         &VRF_GH_PARAMS,
         &FieldBasedEcVrfPk(pk.into_projective()),
-        msg.clone(),
+        *msg,
         proof,
     )
 }
@@ -438,7 +437,9 @@ mod test {
         let btr_fee: u64 = rng.gen();
         let ft_min_amount: u64 = rng.gen();
         let custom_fields = if custom_fields_len > 0 {
-            let random_fields = (0..custom_fields_len).map(|_| rng.gen()).collect::<Vec<_>>();
+            let random_fields = (0..custom_fields_len)
+                .map(|_| rng.gen())
+                .collect::<Vec<_>>();
             Some(random_fields)
         } else {
             None
@@ -455,7 +456,7 @@ mod test {
             btr_fee,
             ft_min_amount,
             bt_list.clone(),
-            custom_fields.clone()
+            custom_fields.clone(),
         )
         .unwrap();
         println!("compute_msg_to_sign finished");
@@ -554,7 +555,11 @@ mod test {
             ft_min_amount,
             bt_list.clone(),
             quality,
-            if custom_fields.is_some() { custom_fields.clone().unwrap() } else { vec![] },
+            if custom_fields.is_some() {
+                custom_fields.clone().unwrap()
+            } else {
+                vec![]
+            },
             proof.clone(),
             true,
             true,
@@ -574,7 +579,11 @@ mod test {
             ft_min_amount,
             bt_list,
             quality - 1,
-            if custom_fields.is_some() { custom_fields.unwrap() } else { vec![] },
+            if custom_fields.is_some() {
+                custom_fields.unwrap()
+            } else {
+                vec![]
+            },
             proof,
             true,
             true,
@@ -598,26 +607,26 @@ mod test {
 
             let mut pk_path = tmp_dir.clone();
             pk_path.push("sample_pk");
-    
+
             let mut vk_path = tmp_dir.clone();
             vk_path.push("sample_vk");
-    
+
             let mut proof_path = tmp_dir.clone();
             proof_path.push("sample_proof");
-    
+
             create_sample_naive_threshold_sig_circuit(10, i, &pk_path, &vk_path, &proof_path);
-    
+
             println!("****************Without BWT*******************");
-    
+
             let mut pk_path_no_bwt = tmp_dir.clone();
             pk_path_no_bwt.push("sample_pk_no_bwt");
-    
+
             let mut vk_path_no_bwt = tmp_dir.clone();
             vk_path_no_bwt.push("sample_vk_no_bwt");
-    
+
             let mut proof_path_no_bwt = tmp_dir.clone();
             proof_path_no_bwt.push("sample_proof_no_bwt");
-    
+
             create_sample_naive_threshold_sig_circuit(
                 0,
                 i,
@@ -625,7 +634,7 @@ mod test {
                 &vk_path_no_bwt,
                 &proof_path_no_bwt,
             );
-    
+
             println!("*************** Clean up **********************");
             std::fs::remove_file(pk_path).unwrap();
             std::fs::remove_file(vk_path).unwrap();
@@ -642,7 +651,7 @@ mod test {
         let msg = FieldElement::rand(&mut rng);
         {
             let msg_bytes = serialize_to_buffer(&msg, None).unwrap();
-            println!("msg bytes: {:?}", into_i8(msg_bytes.clone()));
+            println!("msg bytes: {:?}", into_i8(msg_bytes));
         }
 
         let (pk, sk) = schnorr_generate_key(); //Keygen
@@ -686,7 +695,7 @@ mod test {
         let msg = FieldElement::rand(&mut rng);
         {
             let msg_bytes = serialize_to_buffer(&msg, None).unwrap();
-            println!("msg bytes: {:?}", into_i8(msg_bytes.clone()));
+            println!("msg bytes: {:?}", into_i8(msg_bytes));
         }
 
         let (pk, sk) = vrf_generate_key(); //Keygen

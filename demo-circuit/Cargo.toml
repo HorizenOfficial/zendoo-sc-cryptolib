@@ -1,7 +1,14 @@
 [package]
 name = "demo-circuit"
-version = "0.1.0"
-authors = ["DanieleDiBenedetto <daniele@horizenlabs.io>"]
+version = "0.4.1"
+authors = [
+    "DanieleDiBenedetto <daniele@horizenlabs.io>",
+    "Oleksandr Iozhytsia <oleksandr@zensystem.io>",
+    "Volodymyr Babaiev <volodymyr.babaiev@infopulse.com>",
+    "Maksym Vereshchak <phoinic@gmail.com>",
+    "Luigi Varriale <luigi@horizenlabs.io>",
+    "cronicc <cronic@horizenlabs.io>",
+]
 edition = "2018"
 include = ["Cargo.toml", "src"]
 
@@ -14,17 +21,17 @@ r1cs-std = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/gi
 
 cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "integration" }
 
-derivative = "2.2.0"
-lazy_static = "1"
-radix_trie = "0.2.1"
-rand = { version = "0.8.4" }
-blake2 = { version = "0.8.1", default-features = false }
+derivative = "=2.2.0"
+lazy_static = "=1.4.0"
+radix_trie = "=0.2.1"
+rand = { version = "=0.8.4" }
+blake2 = { version = "=0.8.1", default-features = false }
 
 [dev-dependencies]
-digest = "0.8"
-blake2s_simd = "0.5"
-bit-vec = "0.6.1"
-sha2 = "0.9.5"
+digest = "=0.8.1"
+blake2s_simd = "=0.5.11"
+bit-vec = "=0.6.3"
+sha2 = "=0.9.5"
 
 [features]
 default = [ "asm" ]
