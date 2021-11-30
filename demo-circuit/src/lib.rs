@@ -42,8 +42,8 @@ pub use self::constants::*;
 pub mod type_mapping;
 pub use self::type_mapping::*;
 
-pub mod pgd_csw;
-pub use self::pgd_csw::*;
+pub mod blaze_csw;
+pub use self::blaze_csw::*;
 
 use algebra::SerializationError;
 use cctp_primitives::{
