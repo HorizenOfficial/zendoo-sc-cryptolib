@@ -2,13 +2,13 @@ package com.horizen.cswnative;
 
 import java.util.List;
 
-import com.horizen.fwtnative.FordwardTransferOutput;
+import com.horizen.fwtnative.ForwardTransferOutput;
 import com.horizen.librustsidechains.Constants;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.merkletreenative.MerklePath;
 
 public class CswFtProverData implements AutoCloseable {
-    private final FordwardTransferOutput output;
+    private final ForwardTransferOutput output;
     private final byte[] ftInputSecretKey;
     private final FieldElement mcbScTxsComStart;
     private final MerklePath merklePathToScHash;
@@ -18,9 +18,9 @@ public class CswFtProverData implements AutoCloseable {
     private final FieldElement wCertTreeRoot;
     private final List<FieldElement> scTxsComHashes;
 
-    public CswFtProverData(FordwardTransferOutput output, byte[] ftInputSecretKey, FieldElement mcbScTxsComStart,
-            MerklePath merklePathToScHash, MerklePath ftTreePath, FieldElement scCreationCommitment,
-            FieldElement scbBtrTreeRoot, FieldElement wCertTreeRoot, List<FieldElement> scTxsComHashes) {
+    public CswFtProverData(ForwardTransferOutput output, byte[] ftInputSecretKey, FieldElement mcbScTxsComStart,
+                           MerklePath merklePathToScHash, MerklePath ftTreePath, FieldElement scCreationCommitment,
+                           FieldElement scbBtrTreeRoot, FieldElement wCertTreeRoot, List<FieldElement> scTxsComHashes) {
         this.output = output;
 
         if (ftInputSecretKey.length != Constants.SC_SK_SIZE())
@@ -49,7 +49,7 @@ public class CswFtProverData implements AutoCloseable {
         this.scTxsComHashes = scTxsComHashes;
     }
 
-    public FordwardTransferOutput getOutput() {
+    public ForwardTransferOutput getOutput() {
         return output;
     }
 

@@ -5,7 +5,7 @@ import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 import com.horizen.poseidonnative.PoseidonHashable;
 
-public class FordwardTransferOutput implements PoseidonHashable {
+public class ForwardTransferOutput implements PoseidonHashable {
     private final long amount;
     private final byte[] receiverPubKey; 
     private final byte[] paybackAddrDataHash;
@@ -16,19 +16,19 @@ public class FordwardTransferOutput implements PoseidonHashable {
         Library.load();
     }
 
-    public FordwardTransferOutput(long amount, byte[] receiverPubKey, byte[] paybackAddrDataHash, byte[] txHash, int outIdx)
+    public ForwardTransferOutput(long amount, byte[] receiverPubKey, byte[] paybackAddrDataHash, byte[] txHash, int outIdx)
     {
         this.amount = amount;
 
-        if (receiverPubKey.length != Constants.MC_PK_HASH_SIZE())
+        if (receiverPubKey.length != Constants.SC_PK_HASH_SIZE())
             throw new IllegalArgumentException(
-                String.format("Incorrect receiverPubKey element length, %d expected, %d found",Constants.MC_PK_HASH_SIZE(), receiverPubKey.length)
+                String.format("Incorrect receiverPubKey element length, %d expected, %d found", Constants.SC_PK_HASH_SIZE(), receiverPubKey.length)
             );
         this.receiverPubKey = receiverPubKey;
 
-        if (paybackAddrDataHash.length != Constants.SC_PK_HASH_SIZE())
+        if (paybackAddrDataHash.length != Constants.MC_PK_HASH_SIZE())
             throw new IllegalArgumentException(
-                String.format("Incorrect paybackAddrDataHash element length, %d expected, %d found",Constants.SC_PK_HASH_SIZE(), paybackAddrDataHash.length)
+                String.format("Incorrect paybackAddrDataHash element length, %d expected, %d found", Constants.MC_PK_HASH_SIZE(), paybackAddrDataHash.length)
             );
         this.paybackAddrDataHash = paybackAddrDataHash;
 
