@@ -1,4 +1,4 @@
-use cctp_primitives::type_mapping::FieldElement;
+use cctp_primitives::{type_mapping::FieldElement, utils::data_structures::BackwardTransfer};
 
 use crate::{
     type_mapping::*, GingerMHTBinaryPath, MC_RETURN_ADDRESS_BYTES, PHANTOM_PUBLIC_KEY_BITS,
@@ -7,18 +7,14 @@ use crate::{
 
 #[derive(Clone)]
 pub struct WithdrawalCertificateData {
-    // sys_data [START]
     pub ledger_id: FieldElement,
-    pub epoch_id: FieldElement,
-    pub bt_list_hash: FieldElement, // Merkle root hash of all BTs from the certificate (recall that MC hashes all complex proof_data params from the certificate)
-    pub quality: FieldElement,
+    pub epoch_id: u32,
+    pub bt_list: Vec<BackwardTransfer>, // Merkle root hash of all BTs from the certificate (recall that MC hashes all complex proof_data params from the certificate)
+    pub quality: u64,
     pub mcb_sc_txs_com: FieldElement,
-    pub ft_min_fee: FieldElement,
-    pub btr_min_fee: FieldElement,
-    // sys_data [END]
-
-    // proof_data [START]
-    pub scb_new_mst_root: FieldElement, // proof_data [END]
+    pub ft_min_fee: u64,
+    pub btr_min_fee: u64,
+    pub custom_fields: Vec<FieldElement>,
 }
 
 #[derive(Clone)]

@@ -56,22 +56,71 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             cs.ns(|| "alloc csw data"),
         )?;
 
-        // val last_wcert_hash = H(last_wcert)
-        // TODO: define how to calculate the hash of a certificate
+        // val last_wcert_hash = H(last_wcert) [START]
         let last_wcert_g = csw_data_g.last_wcert_g.clone();
-        let last_wcert_hash_g = FieldHashGadget::enforce_hash_constant_length(
-            cs.ns(|| "H(last_wcert)"),
+
+        let last_wcert_epoch_id_fe_g =
+            FieldElementGadget::alloc(cs.ns(|| "last_wcert_epoch_id_fe_g"), || {
+                Ok(FieldElement::from(last_wcert_g.epoch_id_g.value.unwrap()))
+            })?;
+
+        let last_wcert_quality_fe_g =
+            FieldElementGadget::alloc(cs.ns(|| "last_wcert_quality_fe_g"), || {
+                Ok(FieldElement::from(
+                    last_wcert_g.quality_g.get_value().unwrap(),
+                ))
+            })?;
+
+        let mut last_wcert_btr_fee_bits_g = last_wcert_g.btr_min_fee_g.to_bits_le();
+        last_wcert_btr_fee_bits_g.reverse();
+
+        let mut last_wcert_ft_fee_bits_g = last_wcert_g.ft_min_fee_g.to_bits_le();
+        last_wcert_ft_fee_bits_g.reverse();
+
+        let mut last_wcert_fee_bits_g = last_wcert_btr_fee_bits_g;
+        last_wcert_fee_bits_g.append(&mut last_wcert_ft_fee_bits_g);
+
+        let last_wcert_fee_fe_g =
+            FieldElementGadget::from_bits(cs.ns(|| "last_wcert_fee_fe_g"), &last_wcert_fee_bits_g)?;
+
+        let temp_last_wcert_hash_g = FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "H(last_wcert without custom fields)"),
             &[
                 last_wcert_g.ledger_id_g.clone(),
-                last_wcert_g.epoch_id_g.clone(),
-                last_wcert_g.bt_list_hash_g.clone(),
-                last_wcert_g.quality_g.clone(),
+                last_wcert_epoch_id_fe_g,
+                last_wcert_g.bt_list_root_g.clone(),
+                last_wcert_quality_fe_g,
                 last_wcert_g.mcb_sc_txs_com_g.clone(),
-                last_wcert_g.ft_min_fee_g.clone(),
-                last_wcert_g.btr_min_fee_g.clone(),
-                last_wcert_g.scb_new_mst_root_g.clone(),
+                last_wcert_fee_fe_g,
             ],
         )?;
+
+        // Alloc custom_fields and enforce their hash, if they are present
+        let last_wcert_custom_fields_hash_g = if last_wcert_g.custom_fields_g.len() > 0 {
+            let custom_fields_hash_g = FieldHashGadget::enforce_hash_constant_length(
+                cs.ns(|| "H(custom_fields)"),
+                last_wcert_g.custom_fields_g.as_slice(),
+            )?;
+            Some(custom_fields_hash_g)
+        } else {
+            None
+        };
+
+        let preimage = if last_wcert_custom_fields_hash_g.is_some() {
+            vec![
+                last_wcert_custom_fields_hash_g.unwrap(),
+                temp_last_wcert_hash_g,
+            ]
+        } else {
+            vec![temp_last_wcert_hash_g]
+        };
+
+        let last_wcert_hash_g = FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "H([custom_fields], cert_data_hash)"),
+            preimage.as_slice(),
+        )?;
+
+        // val last_wcert_hash = H(last_wcert) [END]
 
         let should_enforce_utxo_withdrawal_g = csw_data_g
             .input_g
@@ -130,12 +179,15 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             &output_hash_g,
         )?;
 
-        // require(last_wcert.proof_data.scb_new_mst_root == mst_root)
-        mst_root_g.conditional_enforce_equal(
-            cs.ns(|| "last_wcert.proof_data.scb_new_mst_root == mst_root"),
-            &csw_data_g.last_wcert_g.scb_new_mst_root_g,
-            &should_enforce_utxo_withdrawal_g,
-        )?;
+        if last_wcert_g.custom_fields_g.len() > 0 {
+            // require(last_wcert.proof_data.scb_new_mst_root == mst_root)
+            // Note that scb_new_mst_root is now the first element of the custom fields vector
+            mst_root_g.conditional_enforce_equal(
+                cs.ns(|| "last_wcert.proof_data.scb_new_mst_root == mst_root"),
+                &last_wcert_g.custom_fields_g[0],
+                &should_enforce_utxo_withdrawal_g,
+            )?;
+        }
 
         // Check secret key ownership
         let public_key_bits_g = csw_data_g.input_g.output_g.spending_pub_key_g;
@@ -347,7 +399,8 @@ mod test {
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
         type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
         utils::{
-            commitment_tree::DataAccumulator, poseidon_hash::get_poseidon_hash_constant_length,
+            commitment_tree::DataAccumulator, get_bt_merkle_root,
+            poseidon_hash::get_poseidon_hash_constant_length,
         },
     };
     use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree};
@@ -489,26 +542,63 @@ mod test {
 
         let cert_data = WithdrawalCertificateData {
             ledger_id: FieldElement::from(1u8),
-            epoch_id: FieldElement::from(2u8),
-            bt_list_hash: FieldElement::from(3u8),
-            quality: FieldElement::from(4u8),
+            epoch_id: 2u32,
+            bt_list: Vec::new(),
+            quality: 4u64,
             mcb_sc_txs_com: FieldElement::from(5u8),
-            ft_min_fee: FieldElement::from(6u8),
-            btr_min_fee: FieldElement::from(7u8),
-            scb_new_mst_root: mst.root().unwrap(),
+            ft_min_fee: 6u64,
+            btr_min_fee: 7u64,
+            custom_fields: vec![mst.root().unwrap()],
         };
 
-        let computed_last_wcert_hash = get_poseidon_hash_constant_length(8, None)
-            .update(cert_data.ledger_id)
-            .update(cert_data.epoch_id)
-            .update(cert_data.bt_list_hash)
-            .update(cert_data.quality)
-            .update(cert_data.mcb_sc_txs_com)
-            .update(cert_data.ft_min_fee)
+        let bt_list = if !cert_data.bt_list.is_empty() {
+            Some(cert_data.bt_list.as_slice())
+        } else {
+            None
+        };
+        let bt_list_hash = get_bt_merkle_root(bt_list).unwrap();
+
+        let fees_field_elements = DataAccumulator::init()
             .update(cert_data.btr_min_fee)
-            .update(cert_data.scb_new_mst_root)
+            .unwrap()
+            .update(cert_data.ft_min_fee)
+            .unwrap()
+            .get_field_elements()
+            .unwrap();
+
+        debug_assert_eq!(fees_field_elements.len(), 1);
+
+        let temp_computed_last_wcert_hash =
+            get_poseidon_hash_constant_length(6, None)
+            .update(cert_data.ledger_id)
+            .update(FieldElement::from(cert_data.epoch_id))
+            .update(bt_list_hash)
+            .update(FieldElement::from(cert_data.quality))
+            .update(cert_data.mcb_sc_txs_com)
+            .update(fees_field_elements[0])
             .finalize()
             .unwrap();
+
+        let mut poseidon_hash = get_poseidon_hash_constant_length(cert_data.custom_fields.len(), None);
+
+        cert_data.custom_fields.iter().for_each(|custom_field| {
+            poseidon_hash.update(*custom_field);
+        });
+
+        let computed_custom_fields_hash = poseidon_hash.finalize().unwrap();
+
+        let computed_last_wcert_hash = if cert_data.custom_fields.is_empty() {
+            get_poseidon_hash_constant_length(1, None)
+            .update(temp_computed_last_wcert_hash)
+            .finalize()
+            .unwrap()
+        } else {
+            get_poseidon_hash_constant_length(2, None)
+            .update(computed_custom_fields_hash)
+            .update(temp_computed_last_wcert_hash)
+            .finalize()
+            .unwrap()
+        };
 
         let scb_btr_tree_root = FieldElement::from(22u8);
         let wcert_tree_root = FieldElement::from(23u8);

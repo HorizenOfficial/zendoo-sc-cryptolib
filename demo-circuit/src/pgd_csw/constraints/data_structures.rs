@@ -1,6 +1,9 @@
 use std::{borrow::Borrow, convert::TryInto};
 
-use cctp_primitives::type_mapping::{FieldElement, FIELD_CAPACITY, FIELD_SIZE};
+use cctp_primitives::{
+    type_mapping::{FieldElement, FIELD_CAPACITY, FIELD_SIZE},
+    utils::get_bt_merkle_root,
+};
 use r1cs_core::{ConstraintSystemAbstract, SynthesisError};
 use r1cs_std::{
     boolean::Boolean,
@@ -21,13 +24,13 @@ use crate::{
 #[derive(Clone)]
 pub struct WithdrawalCertificateDataGadget {
     pub ledger_id_g: FieldElementGadget,
-    pub epoch_id_g: FieldElementGadget,
-    pub bt_list_hash_g: FieldElementGadget,
-    pub quality_g: FieldElementGadget,
+    pub epoch_id_g: UInt32,
+    pub bt_list_root_g: FieldElementGadget,
+    pub quality_g: UInt64,
     pub mcb_sc_txs_com_g: FieldElementGadget,
-    pub ft_min_fee_g: FieldElementGadget,
-    pub btr_min_fee_g: FieldElementGadget,
-    pub scb_new_mst_root_g: FieldElementGadget,
+    pub ft_min_fee_g: UInt64,
+    pub btr_min_fee_g: UInt64,
+    pub custom_fields_g: Vec<FieldElementGadget>,
 }
 
 impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertificateDataGadget {
@@ -42,24 +45,24 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
         let (
             ledger_id,
             epoch_id,
-            bt_list_hash,
+            bt_list,
             quality,
             mcb_sc_txs_com,
             ft_min_fee,
             btr_min_fee,
-            scb_new_mst_root,
+            custom_fields,
         ) = match f() {
             Ok(certificate_data) => {
                 let certificate_data = certificate_data.borrow().clone();
                 (
                     Ok(certificate_data.ledger_id),
                     Ok(certificate_data.epoch_id),
-                    Ok(certificate_data.bt_list_hash),
+                    Ok(certificate_data.bt_list),
                     Ok(certificate_data.quality),
                     Ok(certificate_data.mcb_sc_txs_com),
                     Ok(certificate_data.ft_min_fee),
                     Ok(certificate_data.btr_min_fee),
-                    Ok(certificate_data.scb_new_mst_root),
+                    Ok(certificate_data.custom_fields),
                 )
             }
             _ => (
@@ -76,33 +79,50 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
 
         let ledger_id_g = FieldElementGadget::alloc(cs.ns(|| "alloc ledger id"), || ledger_id)?;
 
-        let epoch_id_g = FieldElementGadget::alloc(cs.ns(|| "alloc epoch id"), || epoch_id)?;
+        let epoch_id_g = UInt32::alloc(cs.ns(|| "alloc epoch id"), epoch_id.ok())?;
 
-        let bt_list_hash_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc bt list hash"), || bt_list_hash)?;
+        //Compute bt_list merkle_root
 
-        let quality_g = FieldElementGadget::alloc(cs.ns(|| "alloc quality"), || quality)?;
+        let bt_list_root_g = FieldElementGadget::alloc(cs.ns(|| "alloc bt list hash"), || {
+            let bt_list_value = bt_list?;
+            let bt_list_opt = if bt_list_value.len() > 0 {
+                Some(bt_list_value.as_slice())
+            } else {
+                None
+            };
+            Ok(get_bt_merkle_root(bt_list_opt)?)
+        })?;
+
+        let quality_g = UInt64::alloc(cs.ns(|| "alloc quality"), quality.ok())?;
 
         let mcb_sc_txs_com_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com"), || mcb_sc_txs_com)?;
 
-        let ft_min_fee_g = FieldElementGadget::alloc(cs.ns(|| "alloc ft min fee"), || ft_min_fee)?;
+        let ft_min_fee_g = UInt64::alloc(cs.ns(|| "alloc ft min fee"), ft_min_fee.ok())?;
 
-        let btr_min_fee_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc btr min fee"), || btr_min_fee)?;
+        let btr_min_fee_g = UInt64::alloc(cs.ns(|| "alloc btr min fee"), btr_min_fee.ok())?;
 
-        let scb_new_mst_root_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc scb new mst root"), || scb_new_mst_root)?;
+        let custom_fields_value = custom_fields?;
+        let mut custom_fields_g = Vec::with_capacity(custom_fields_value.len());
+
+        for (i, custom_field) in custom_fields_value.iter().enumerate() {
+            let custom_field_g =
+                FieldElementGadget::alloc(cs.ns(|| format!("alloc custom field {}", i)), || {
+                    Ok(*custom_field)
+                })?;
+
+            custom_fields_g.push(custom_field_g);
+        }
 
         let new_instance = Self {
             ledger_id_g,
             epoch_id_g,
-            bt_list_hash_g,
+            bt_list_root_g,
             quality_g,
             mcb_sc_txs_com_g,
             ft_min_fee_g,
             btr_min_fee_g,
-            scb_new_mst_root_g,
+            custom_fields_g,
         };
 
         Ok(new_instance)
