@@ -1,20 +1,66 @@
-use cctp_primitives::{type_mapping::FieldElement, utils::data_structures::BackwardTransfer};
+use cctp_primitives::{
+    type_mapping::FieldElement,
+    utils::{data_structures::BackwardTransfer, get_bt_merkle_root},
+};
 
 use crate::{
-    type_mapping::*, GingerMHTBinaryPath, MC_RETURN_ADDRESS_BYTES, PHANTOM_PUBLIC_KEY_BITS,
-    PHANTOM_SECRET_KEY_BITS,
+    type_mapping::*, GingerMHTBinaryPath, MC_RETURN_ADDRESS_BYTES, PHANTOM_FIELD_ELEMENT,
+    PHANTOM_PUBLIC_KEY_BITS, PHANTOM_SECRET_KEY_BITS,
 };
 
 #[derive(Clone)]
 pub struct WithdrawalCertificateData {
-    pub ledger_id: FieldElement,
-    pub epoch_id: u32,
-    pub bt_list: Vec<BackwardTransfer>, // Merkle root hash of all BTs from the certificate (recall that MC hashes all complex proof_data params from the certificate)
-    pub quality: u64,
-    pub mcb_sc_txs_com: FieldElement,
-    pub ft_min_fee: u64,
-    pub btr_min_fee: u64,
-    pub custom_fields: Vec<FieldElement>,
+    pub(crate) ledger_id: FieldElement,
+    pub(crate) epoch_id: u32,
+    pub(crate) bt_root: FieldElement, // Merkle root hash of all BTs from the certificate (recall that MC hashes all complex proof_data params from the certificate)
+    pub(crate) quality: u64,
+    pub(crate) mcb_sc_txs_com: FieldElement,
+    pub(crate) ft_min_fee: u64,
+    pub(crate) btr_min_fee: u64,
+    pub(crate) custom_fields: Vec<FieldElement>,
+}
+
+impl WithdrawalCertificateData {
+    pub fn new(
+        ledger_id: FieldElement,
+        epoch_id: u32,
+        bt_list: Vec<BackwardTransfer>,
+        quality: u64,
+        mcb_sc_txs_com: FieldElement,
+        ft_min_fee: u64,
+        btr_min_fee: u64,
+        custom_fields: Vec<FieldElement>,
+    ) -> Self {
+        let bt_root = get_bt_merkle_root(if !bt_list.is_empty() {
+            Some(&bt_list)
+        } else {
+            None
+        })
+        .unwrap();
+        Self {
+            ledger_id,
+            epoch_id,
+            bt_root,
+            quality,
+            mcb_sc_txs_com,
+            ft_min_fee,
+            btr_min_fee,
+            custom_fields,
+        }
+    }
+
+    pub fn get_phantom_data(num_custom_fields: usize) -> Self {
+        Self {
+            ledger_id: PHANTOM_FIELD_ELEMENT,
+            epoch_id: 0,
+            bt_root: get_bt_merkle_root(None).unwrap(),
+            quality: 0,
+            mcb_sc_txs_com: PHANTOM_FIELD_ELEMENT,
+            ft_min_fee: 0,
+            btr_min_fee: 0,
+            custom_fields: vec![PHANTOM_FIELD_ELEMENT; num_custom_fields],
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -90,7 +136,7 @@ pub struct CswProverData {
     // public inputs [END]
 
     // witnesses [START]
-    pub last_wcert: WithdrawalCertificateData, // the last confirmed wcert in the MC
+    pub last_wcert: WithdrawalCertificateData, // the last confirmed wcert in the MC, it can be NULL (phantom)
 
     // either `input` or `ft_input` must be non NULL
     pub input: CswUtxoInputData, // unspent output we are trying to withdraw

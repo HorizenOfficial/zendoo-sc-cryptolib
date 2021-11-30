@@ -27,13 +27,19 @@ pub mod data_structures;
 #[derive(Clone)]
 pub struct CeasedSidechainWithdrawalCircuit {
     sidechain_id: FieldElement,
+    num_custom_fields: usize,
     csw_data: CswProverData,
 }
 
 impl CeasedSidechainWithdrawalCircuit {
-    pub fn new(sidechain_id: FieldElement, csw_data: CswProverData) -> Self {
+    pub fn new(
+        sidechain_id: FieldElement,
+        num_custom_fields: usize,
+        csw_data: CswProverData,
+    ) -> Self {
         CeasedSidechainWithdrawalCircuit {
             sidechain_id,
+            num_custom_fields,
             csw_data,
         }
     }
@@ -145,10 +151,19 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             &true_boolean_g,
         )?;
 
+        let should_enforce_wcert_hash = last_wcert_g
+            .is_phantom(
+                cs.ns(|| "should_enforce_wcert_hash"),
+                self.num_custom_fields,
+            )?
+            .not();
+
+        // if last_wcert != NULL
         // require(sc_last_wcert_hash == last_wcert_hash)
-        last_wcert_hash_g.enforce_equal(
+        last_wcert_hash_g.conditional_enforce_equal(
             cs.ns(|| "enforce sc_last_wcert_hash == last_wcert_hash"),
             &csw_data_g.sc_last_wcert_hash_g.clone(),
+            &should_enforce_wcert_hash,
         )?;
 
         // UTXO widthdrawal [START]
@@ -399,8 +414,7 @@ mod test {
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
         type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
         utils::{
-            commitment_tree::DataAccumulator, get_bt_merkle_root,
-            poseidon_hash::get_poseidon_hash_constant_length,
+            commitment_tree::DataAccumulator, poseidon_hash::get_poseidon_hash_constant_length,
         },
     };
     use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree};
@@ -543,20 +557,13 @@ mod test {
         let cert_data = WithdrawalCertificateData {
             ledger_id: FieldElement::from(1u8),
             epoch_id: 2u32,
-            bt_list: Vec::new(),
+            bt_root: FieldElement::from(3u8),
             quality: 4u64,
             mcb_sc_txs_com: FieldElement::from(5u8),
             ft_min_fee: 6u64,
             btr_min_fee: 7u64,
             custom_fields: vec![mst.root().unwrap()],
         };
-
-        let bt_list = if !cert_data.bt_list.is_empty() {
-            Some(cert_data.bt_list.as_slice())
-        } else {
-            None
-        };
-        let bt_list_hash = get_bt_merkle_root(bt_list).unwrap();
 
         let fees_field_elements = DataAccumulator::init()
             .update(cert_data.btr_min_fee)
@@ -568,18 +575,18 @@ mod test {
 
         debug_assert_eq!(fees_field_elements.len(), 1);
 
-        let temp_computed_last_wcert_hash =
-            get_poseidon_hash_constant_length(6, None)
+        let temp_computed_last_wcert_hash = get_poseidon_hash_constant_length(6, None)
             .update(cert_data.ledger_id)
             .update(FieldElement::from(cert_data.epoch_id))
-            .update(bt_list_hash)
+            .update(cert_data.bt_root)
             .update(FieldElement::from(cert_data.quality))
             .update(cert_data.mcb_sc_txs_com)
             .update(fees_field_elements[0])
             .finalize()
             .unwrap();
 
-        let mut poseidon_hash = get_poseidon_hash_constant_length(cert_data.custom_fields.len(), None);
+        let mut poseidon_hash =
+            get_poseidon_hash_constant_length(cert_data.custom_fields.len(), None);
 
         cert_data.custom_fields.iter().for_each(|custom_field| {
             poseidon_hash.update(*custom_field);
@@ -589,15 +596,15 @@ mod test {
 
         let computed_last_wcert_hash = if cert_data.custom_fields.is_empty() {
             get_poseidon_hash_constant_length(1, None)
-            .update(temp_computed_last_wcert_hash)
-            .finalize()
-            .unwrap()
+                .update(temp_computed_last_wcert_hash)
+                .finalize()
+                .unwrap()
         } else {
             get_poseidon_hash_constant_length(2, None)
-            .update(computed_custom_fields_hash)
-            .update(temp_computed_last_wcert_hash)
-            .finalize()
-            .unwrap()
+                .update(computed_custom_fields_hash)
+                .update(temp_computed_last_wcert_hash)
+                .finalize()
+                .unwrap()
         };
 
         let scb_btr_tree_root = FieldElement::from(22u8);
@@ -679,8 +686,13 @@ mod test {
 
     fn test_csw_circuit(csw_type: CswType) {
         let sidechain_id = FieldElement::from(77u8);
+        let num_custom_fields = 1;
         let csw_prover_data = generate_test_csw_prover_data(csw_type, sidechain_id);
-        let circuit = CeasedSidechainWithdrawalCircuit::new(sidechain_id, csw_prover_data.clone());
+        let circuit = CeasedSidechainWithdrawalCircuit::new(
+            sidechain_id,
+            num_custom_fields,
+            csw_prover_data.clone(),
+        );
 
         let failing_constraint = debug_circuit(circuit.clone()).unwrap();
         println!("Failing constraint: {:?}", failing_constraint);

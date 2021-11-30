@@ -1,9 +1,6 @@
 use std::{borrow::Borrow, convert::TryInto};
 
-use cctp_primitives::{
-    type_mapping::{FieldElement, FIELD_CAPACITY, FIELD_SIZE},
-    utils::get_bt_merkle_root,
-};
+use cctp_primitives::type_mapping::{FieldElement, FIELD_CAPACITY, FIELD_SIZE};
 use r1cs_core::{ConstraintSystemAbstract, SynthesisError};
 use r1cs_std::{
     boolean::Boolean,
@@ -21,7 +18,7 @@ use crate::{
     SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS,
 };
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct WithdrawalCertificateDataGadget {
     pub ledger_id_g: FieldElementGadget,
     pub epoch_id_g: UInt32,
@@ -31,6 +28,21 @@ pub struct WithdrawalCertificateDataGadget {
     pub ft_min_fee_g: UInt64,
     pub btr_min_fee_g: UInt64,
     pub custom_fields_g: Vec<FieldElementGadget>,
+}
+
+impl WithdrawalCertificateDataGadget {
+    pub fn is_phantom<CS: ConstraintSystemAbstract<FieldElement>>(
+        &self,
+        mut cs: CS,
+        num_custom_fields: usize,
+    ) -> Result<Boolean, SynthesisError> {
+        let phantom_wcert_g = WithdrawalCertificateDataGadget::from_value(
+            cs.ns(|| "alloc phantom_wcert_g"),
+            &WithdrawalCertificateData::get_phantom_data(num_custom_fields),
+        );
+
+        self.is_eq(cs.ns(|| "is wcert phantom"), &phantom_wcert_g)
+    }
 }
 
 impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertificateDataGadget {
@@ -45,7 +57,7 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
         let (
             ledger_id,
             epoch_id,
-            bt_list,
+            bt_root,
             quality,
             mcb_sc_txs_com,
             ft_min_fee,
@@ -57,7 +69,7 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
                 (
                     Ok(certificate_data.ledger_id),
                     Ok(certificate_data.epoch_id),
-                    Ok(certificate_data.bt_list),
+                    Ok(certificate_data.bt_root),
                     Ok(certificate_data.quality),
                     Ok(certificate_data.mcb_sc_txs_com),
                     Ok(certificate_data.ft_min_fee),
@@ -83,15 +95,7 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
 
         //Compute bt_list merkle_root
 
-        let bt_list_root_g = FieldElementGadget::alloc(cs.ns(|| "alloc bt list hash"), || {
-            let bt_list_value = bt_list?;
-            let bt_list_opt = if bt_list_value.len() > 0 {
-                Some(bt_list_value.as_slice())
-            } else {
-                None
-            };
-            Ok(get_bt_merkle_root(bt_list_opt)?)
-        })?;
+        let bt_list_root_g = FieldElementGadget::alloc(cs.ns(|| "alloc bt list hash"), || bt_root)?;
 
         let quality_g = UInt64::alloc(cs.ns(|| "alloc quality"), quality.ok())?;
 
@@ -137,6 +141,101 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
         T: Borrow<WithdrawalCertificateData>,
     {
         unimplemented!()
+    }
+}
+
+impl ConstantGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertificateDataGadget {
+    fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        value: &WithdrawalCertificateData,
+    ) -> Self {
+        let ledger_id_g =
+            FieldElementGadget::from_value(cs.ns(|| "alloc constant ledger_id"), &value.ledger_id);
+        let epoch_id_g = UInt32::constant(value.epoch_id);
+        let bt_list_root_g =
+            FieldElementGadget::from_value(cs.ns(|| "alloc constant bt_list_root"), &value.bt_root);
+        let quality_g = UInt64::constant(value.quality);
+        let mcb_sc_txs_com_g = FieldElementGadget::from_value(
+            cs.ns(|| "alloc constant mcb_sc_txs_com"),
+            &value.mcb_sc_txs_com,
+        );
+        let ft_min_fee_g = UInt64::constant(value.ft_min_fee);
+        let btr_min_fee_g = UInt64::constant(value.btr_min_fee);
+        let mut custom_fields_g = Vec::with_capacity(value.custom_fields.len());
+
+        for custom_field in value.custom_fields.iter() {
+            let custom_field_g = FieldElementGadget::from_value(
+                cs.ns(|| "alloc constant custom_fields"),
+                &custom_field,
+            );
+            custom_fields_g.push(custom_field_g);
+        }
+
+        Self {
+            ledger_id_g,
+            epoch_id_g,
+            bt_list_root_g,
+            quality_g,
+            mcb_sc_txs_com_g,
+            ft_min_fee_g,
+            btr_min_fee_g,
+            custom_fields_g,
+        }
+    }
+
+    fn get_constant(&self) -> WithdrawalCertificateData {
+        WithdrawalCertificateData {
+            ledger_id: self.ledger_id_g.value.unwrap(),
+            epoch_id: self.epoch_id_g.value.unwrap(),
+            bt_root: self.bt_list_root_g.value.unwrap(),
+            quality: self.quality_g.get_value().unwrap(),
+            mcb_sc_txs_com: self.mcb_sc_txs_com_g.value.unwrap(),
+            ft_min_fee: self.ft_min_fee_g.get_value().unwrap(),
+            btr_min_fee: self.btr_min_fee_g.get_value().unwrap(),
+            custom_fields: self
+                .custom_fields_g
+                .iter()
+                .map(|custom_field_g| custom_field_g.value.unwrap())
+                .collect(),
+        }
+    }
+}
+
+impl EqGadget<FieldElement> for WithdrawalCertificateDataGadget {
+    fn is_eq<CS: ConstraintSystemAbstract<FieldElement>>(
+        &self,
+        mut cs: CS,
+        other: &Self,
+    ) -> Result<Boolean, SynthesisError> {
+        let b1 = self
+            .ledger_id_g
+            .is_eq(cs.ns(|| "is eq ledger_id"), &other.ledger_id_g)?;
+        let b2 = self
+            .epoch_id_g
+            .is_eq(cs.ns(|| "is eq epoch_id"), &other.epoch_id_g)?;
+        let b3 = self
+            .bt_list_root_g
+            .is_eq(cs.ns(|| "is eq bt_list_root"), &other.bt_list_root_g)?;
+        let b4 = self
+            .quality_g
+            .is_eq(cs.ns(|| "is eq quality"), &other.quality_g)?;
+        let b5 = self
+            .mcb_sc_txs_com_g
+            .is_eq(cs.ns(|| "is eq mcb_sc_txs_com"), &other.mcb_sc_txs_com_g)?;
+        let b6 = self
+            .ft_min_fee_g
+            .is_eq(cs.ns(|| "is eq ft_min_fee"), &other.ft_min_fee_g)?;
+        let b7 = self
+            .btr_min_fee_g
+            .is_eq(cs.ns(|| "is eq btr_min_fee"), &other.btr_min_fee_g)?;
+        let b8 = self
+            .custom_fields_g
+            .is_eq(cs.ns(|| "is eq custom_fields"), &other.custom_fields_g)?;
+
+        Boolean::kary_and(
+            cs.ns(|| "is_eq CswUtxoOutputDataGadget"),
+            &[b1, b2, b3, b4, b5, b6, b7, b8],
+        )
     }
 }
 
