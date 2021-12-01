@@ -4,13 +4,27 @@ import java.util.Optional;
 
 import com.horizen.certnative.WithdrawalCertificate;
 import com.horizen.librustsidechains.FieldElement;
-import com.horizen.provingsystemnative.CreateProofResult;
 import com.horizen.provingsystemnative.ProvingSystemType;
 
 public class CswProof {
+
+    private final int rangeSize;
+    private final int numCustomFields;
+
+    /**
+     * 
+     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
+     * @param numCustomFields - exact number of custom fields the circuit must support
+     */
+    public CswProof(int rangeSize, int numCustomFields) {
+        this.rangeSize = rangeSize;
+        this.numCustomFields = numCustomFields;
+    }
+
     private static native boolean nativeSetup(
         ProvingSystemType psType,
         int rangeSize,
+        int numCustomFields,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -22,7 +36,6 @@ public class CswProof {
     /**
      * Generate (provingKey, verificationKey) pair for this circuit.
      * @param psType - proving system to be used
-     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
      * @param provingKeyPath - file path to which saving the proving key
      * @param verificationKeyPath - file path to which saving the verification key
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk
@@ -30,12 +43,8 @@ public class CswProof {
      * @param compressVk - if the verification key must be saved to verificationKeyPath in compressed form
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise
      */
-    public static boolean setup(
+    public boolean setup(
         ProvingSystemType psType,
-        int rangeSize,
-        int mstTreeHeight,
-        int ftTreeHeight,
-        int scTxCommTreeHeight,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -45,7 +54,7 @@ public class CswProof {
     )
     {
         return nativeSetup(
-            psType, rangeSize, provingKeyPath, verificationKeyPath,
+            psType, rangeSize, numCustomFields, provingKeyPath, verificationKeyPath,
             zk, maxProofPlusVkSize, compressPk, compressVk
         );
     }
@@ -53,16 +62,14 @@ public class CswProof {
     /**
      * Generate (provingKey, verificationKey) pair for this circuit.
      * @param psType - proving system to be used
-     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd` 
      * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
      * @param zk - used to estimate the proof and vk size, tells if the proof will be created using zk or not
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise
      */
-    public static boolean setup(
+    public boolean setup(
         ProvingSystemType psType,
-        int rangeSize,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -70,35 +77,35 @@ public class CswProof {
     )
     {
         return nativeSetup(
-            psType, rangeSize, provingKeyPath, verificationKeyPath,
-            zk, maxProofPlusVkSize, true, true
+            psType, rangeSize, numCustomFields, provingKeyPath,
+            verificationKeyPath, zk, maxProofPlusVkSize, true, true
         );
     }
 
     /**
      * Generate (provingKey, verificationKey) pair for this circuit.
      * @param psType - proving system to be used
-     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd` 
      * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk, estimated assuming not to use zk property
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise.
      */
-    public static boolean setup(
+    public boolean setup(
         ProvingSystemType psType,
-        int rangeSize,
         String provingKeyPath,
         String verificationKeyPath,
         int maxProofPlusVkSize
     )
     {
         return nativeSetup(
-            psType, rangeSize, provingKeyPath, verificationKeyPath,
-            false, maxProofPlusVkSize, true, true
+            psType, rangeSize, numCustomFields, provingKeyPath,
+            verificationKeyPath, false, maxProofPlusVkSize, true, true
         );
     }
 
-    private static native CreateProofResult nativeCreateProof(
+    private static native byte[] nativeCreateProof(
+        int rangeSize,
+        int numCustomFields,
         CswSysData sysData,
         FieldElement scId,
         WithdrawalCertificate lastWcert,
@@ -126,11 +133,10 @@ public class CswProof {
      * @param zk - if proof must be created using zk property or not
      * @param compressed_pk - if the pk read from provingKeyPath is in compressed form or not
      * @param compress_proof - whether to return the proof bytes in compressed form or not
-     * @return a CreateProofResult instance, i.e. the computed proof bytes and the quality of the certificate (i.e. in this case, number of valid signatures),
-     *         OR null pointer if some errors occured during proof creation.
+     * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
-    public static CreateProofResult createProof(
+    public byte[] createProof(
         CswSysData sysData,
         FieldElement scId,
         Optional<WithdrawalCertificate> lastWcert,
@@ -151,7 +157,7 @@ public class CswProof {
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
-            sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
+            rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
             provingKeyPath, checkProvingKey, zk, compressed_pk, compress_proof
         );
     }
@@ -169,12 +175,10 @@ public class CswProof {
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
      * @param checkProvingKey - enable semantic checks on the proving key (WARNING: very expensive)
      * @param zk - if proof must be created using zk property or not
-     * @return a CreateProofResult instance, i.e. the computed proof bytes (in compressed form),
-     *         and the quality of the certificate (i.e. in this case, number of valid signatures)
-     *         OR null pointer if some errors occured during proof creation.
+     * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
-    public static CreateProofResult createProof(
+    public byte[] createProof(
         CswSysData sysData,
         FieldElement scId,
         Optional<WithdrawalCertificate> lastWcert,
@@ -193,7 +197,7 @@ public class CswProof {
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
-            sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
+            rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
             provingKeyPath, checkProvingKey, zk, true, true
         );
     }
@@ -210,12 +214,10 @@ public class CswProof {
      *                 withdraw of a SC utxo instead.
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
      * @param zk - if proof must be created using zk property or not
-     * @return a CreateProofResult instance, i.e. the computed proof bytes (in compressed form),
-     *         and the quality of the certificate (i.e. in this case, number of valid signatures);
-     *         OR null pointer if some errors occured during proof creation.
+     * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
-    public static CreateProofResult createProof(
+    public byte[] createProof(
         CswSysData sysData,
         FieldElement scId,
         Optional<WithdrawalCertificate> lastWcert,
@@ -233,7 +235,7 @@ public class CswProof {
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
-            sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
+            rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
             provingKeyPath, false, zk, true, true
         );
     }
@@ -249,12 +251,10 @@ public class CswProof {
      * @param ftData - data required to prove withdraw of a FT. It's empty if the prover wants to prove
      *                 withdraw of a SC utxo instead.
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
-     * @return a CreateProofResult instance, i.e. the computed proof bytes (in compressed form),
-     *         and the quality of the certificate (i.e. in this case, number of valid signatures);
-     *         OR null pointer if some errors occured during proof creation.
+     * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
-    public static CreateProofResult createProof(
+    public byte[] createProof(
         CswSysData sysData,
         FieldElement scId,
         Optional<WithdrawalCertificate> lastWcert,
@@ -271,13 +271,14 @@ public class CswProof {
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
-            sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
+            rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
             provingKeyPath, false, true, true, true
         );
     }
 
     private static native boolean nativeVerifyProof(
         CswSysData sysData,
+        FieldElement scId,
         byte[] proof,
         boolean checkProof,
         boolean compressedProof,
@@ -289,14 +290,16 @@ public class CswProof {
     /**
      * Verify proof using the supplied parameters
      * @param sysData - certificate sys data.
+     * @param scId - the id of the corresponding sidechain
      * @param proof - the bytes of the proof to be verified, expected to be in compressed form
      * @param checkProof - enable semantic checks on the proof
      * @param verificationKeyPath - file path from which loading the verification key, expected to be in compressed form
      * @param checkVerificationKey - enable semantic checks on the verification key
      * @return true, if proof verification was successfull, false if proof verification failed or if some errors occured during verification
      */
-    public static boolean verifyProof(
+    public boolean verifyProof(
         CswSysData sysData,
+        FieldElement scId,
         byte[] proof,
         boolean checkProof,
         String verificationKeyPath,
@@ -304,25 +307,27 @@ public class CswProof {
     )
     {
         return nativeVerifyProof(
-            sysData, proof, checkProof, true, verificationKeyPath, checkVerificationKey, true
+            sysData, scId, proof, checkProof, true, verificationKeyPath, checkVerificationKey, true
         );
     }
 
     /**
      * Verify proof using the supplied parameters
      * @param sysData - certificate sys data.
+     * @param scId - the id of the corresponding sidechain
      * @param proof - the bytes of the proof to be verified, expected to be in compressed form
      * @param verificationKeyPath - file path from which loading the verification key, expected to be in compressed form
      * @return true, if proof verification was successfull, false if proof verification failed or if some errors occured during verification
      */
-    public static boolean verifyProof(
+    public boolean verifyProof(
         CswSysData sysData,
+        FieldElement scId,
         byte[] proof,
         String verificationKeyPath
     )
     {
         return nativeVerifyProof(
-                sysData, proof, true, true, verificationKeyPath, false, true
+            sysData, scId, proof, true, true, verificationKeyPath, false, true
         );
     }
 }

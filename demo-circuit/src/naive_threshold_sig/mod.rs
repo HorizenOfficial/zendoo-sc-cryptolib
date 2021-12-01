@@ -29,7 +29,6 @@ use crate::{constants::NaiveThresholdSigParams, type_mapping::*};
 use cctp_primitives::utils::commitment_tree::DataAccumulator;
 
 use lazy_static::*;
-use std::marker::PhantomData;
 
 lazy_static! {
     pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
@@ -51,7 +50,7 @@ pub(crate) type SchnorrPkGadget =
 pub(crate) type FrGadget = FpGadget<FieldElement>;
 
 #[derive(Clone)]
-pub struct NaiveTresholdSignature<F: PrimeField> {
+pub struct NaiveTresholdSignature {
     //Witnesses
     pks: Vec<Option<FieldBasedSchnorrPk<G2Projective>>>, //pk_n = g^sk_n
     //sig_n = sign(sk_n, H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount))
@@ -72,10 +71,36 @@ pub struct NaiveTresholdSignature<F: PrimeField> {
 
     //Other
     max_pks: usize,
-    _field: PhantomData<F>,
 }
 
-impl<F: PrimeField> NaiveTresholdSignature<F> {
+impl NaiveTresholdSignature {
+    pub fn get_instance_for_setup(max_pks: usize, custom_fields_len: usize) -> Self {
+        //Istantiating supported number of pks and sigs
+        let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
+
+        // Create parameters for our circuit
+        NaiveTresholdSignature {
+            pks: vec![None; max_pks],
+            sigs: vec![None; max_pks],
+            threshold: None,
+            b: vec![None; log_max_pks + 1],
+            sc_id: None,
+            epoch_number: None,
+            end_cumulative_sc_tx_comm_tree_root: None,
+            mr_bt: None,
+            ft_min_amount: None,
+            btr_fee: None,
+            pks_threshold_hash: None,
+            cert_data_hash: None,
+            max_pks,
+            custom_fields: if custom_fields_len == 0 {
+                None
+            } else {
+                Some(vec![FieldElement::zero(); custom_fields_len])
+            },
+        }
+    }
+
     pub fn new(
         pks: Vec<FieldBasedSchnorrPk<G2Projective>>,
         sigs: Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>>,
@@ -175,12 +200,11 @@ impl<F: PrimeField> NaiveTresholdSignature<F> {
             pks_threshold_hash: Some(pks_threshold_hash),
             cert_data_hash: Some(cert_data_hash),
             custom_fields,
-            _field: PhantomData,
         }
     }
 }
 
-impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature<F> {
+impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
     fn generate_constraints<CS: ConstraintSystemAbstract<FieldElement>>(
         self,
         cs: &mut CS,
@@ -404,38 +428,6 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
     }
 }
 
-#[allow(dead_code)]
-pub fn get_instance_for_setup(
-    max_pks: usize,
-    custom_fields_len: usize,
-) -> NaiveTresholdSignature<FieldElement> {
-    //Istantiating supported number of pks and sigs
-    let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
-
-    // Create parameters for our circuit
-    NaiveTresholdSignature::<FieldElement> {
-        pks: vec![None; max_pks],
-        sigs: vec![None; max_pks],
-        threshold: None,
-        b: vec![None; log_max_pks + 1],
-        sc_id: None,
-        epoch_number: None,
-        end_cumulative_sc_tx_comm_tree_root: None,
-        mr_bt: None,
-        ft_min_amount: None,
-        btr_fee: None,
-        pks_threshold_hash: None,
-        cert_data_hash: None,
-        max_pks,
-        custom_fields: if custom_fields_len == 0 {
-            None
-        } else {
-            Some(vec![FieldElement::zero(); custom_fields_len])
-        },
-        _field: PhantomData,
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -462,7 +454,7 @@ mod test {
         threshold: usize,
         wrong_pks_threshold_hash: bool,
         wrong_cert_data_hash: bool,
-    ) -> NaiveTresholdSignature<FieldElement> {
+    ) -> NaiveTresholdSignature {
         //Istantiate rng
         let mut rng = OsRng::default();
         let mut h =
@@ -554,7 +546,7 @@ mod test {
         let b_field = valid_field - &t_field;
 
         //Return concrete circuit instance
-        let mut c = NaiveTresholdSignature::<FieldElement>::new(
+        let mut c = NaiveTresholdSignature::new(
             pks,
             sigs,
             t_field,
@@ -635,7 +627,7 @@ mod test {
 
         load_g1_committer_key(1 << 17, 1 << 15).unwrap();
         let ck = get_g1_committer_key().unwrap();
-        let circ = get_instance_for_setup(n, 1);
+        let circ = NaiveTresholdSignature::get_instance_for_setup(n, 1);
 
         let params = CoboundaryMarlin::index(ck.as_ref().unwrap(), circ).unwrap();
 

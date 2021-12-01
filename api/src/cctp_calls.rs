@@ -5,7 +5,10 @@ use primitives::{
     vrf::{ecvrf::FieldBasedEcVrfPk, FieldBasedVrf},
 };
 
-use demo_circuit::{constants::VRFParams, naive_threshold_sig::*, type_mapping::*};
+use demo_circuit::{
+    constants::VRFParams, constraints::CeasedSidechainWithdrawalCircuit, naive_threshold_sig::*,
+    type_mapping::*, CswFtProverData, CswSysData, CswUtxoProverData, WithdrawalCertificateDataNew,
+};
 use lazy_static::*;
 use rand::{rngs::OsRng, SeedableRng};
 use rand_xorshift::XorShiftRng;
@@ -14,7 +17,10 @@ use cctp_primitives::{
     proving_system::{
         error::ProvingSystemError,
         init::get_g1_committer_key,
-        verifier::{certificate::CertificateProofUserInputs, verify_zendoo_proof},
+        verifier::{
+            ceased_sidechain_withdrawal::CSWProofUserInputs,
+            certificate::CertificateProofUserInputs, verify_zendoo_proof,
+        },
         ProvingSystem, ZendooProof, ZendooProverKey, ZendooVerifierKey,
     },
     utils::{
@@ -213,7 +219,7 @@ pub fn create_naive_threshold_sig_proof(
     //Convert needed variables into field elements
     let threshold = FieldElement::from(threshold);
 
-    let c = NaiveTresholdSignature::<FieldElement>::new(
+    let c = NaiveTresholdSignature::new(
         pks,
         sigs,
         threshold,
@@ -295,6 +301,104 @@ pub fn verify_naive_threshold_sig_proof(
         end_cumulative_sc_tx_commitment_tree_root,
         btr_fee,
         ft_min_amount,
+    };
+
+    // Check that the proving system type of the vk and proof are the same, before
+    // deserializing them all
+    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None)?;
+
+    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)?;
+
+    if vk_ps_type != proof_ps_type {
+        Err(ProvingSystemError::ProvingSystemMismatch)?
+    }
+
+    // Deserialize proof and vk
+    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))?;
+
+    let proof: ZendooProof =
+        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))?;
+
+    // Verify proof
+    let rng = &mut OsRng;
+    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))?;
+
+    Ok(is_verified)
+}
+
+// ******************************* CSW Proof ***************************
+pub fn create_csw_proof(
+    sidechain_id: FieldElement,
+    sys_data: CswSysData,
+    last_wcert: Option<WithdrawalCertificateDataNew>,
+    utxo_data: Option<CswUtxoProverData>,
+    ft_data: Option<CswFtProverData>,
+    range_size: u32,
+    num_custom_fields: u32,
+    proving_key_path: &Path,
+    enforce_membership: bool,
+    zk: bool,
+    compressed_pk: bool,
+    compress_proof: bool,
+) -> Result<Vec<u8>, Error> {
+    let c = CeasedSidechainWithdrawalCircuit::new(
+        sidechain_id,
+        sys_data,
+        last_wcert,
+        utxo_data,
+        ft_data,
+        range_size,
+        num_custom_fields,
+    );
+
+    let pk: ZendooProverKey = read_from_file(
+        proving_key_path,
+        Some(enforce_membership),
+        Some(compressed_pk),
+    )?;
+
+    let g1_ck = get_g1_committer_key()?;
+
+    let proof = match pk {
+        ZendooProverKey::Darlin(_) => unimplemented!(),
+        ZendooProverKey::CoboundaryMarlin(pk) => {
+            // Call prover
+            let rng = &mut OsRng;
+            let proof = CoboundaryMarlin::prove(
+                &pk,
+                g1_ck.as_ref().unwrap(),
+                c,
+                zk,
+                if zk { Some(rng) } else { None },
+            )?;
+            serialize_to_buffer(
+                &ZendooProof::CoboundaryMarlin(MarlinProof(proof)),
+                Some(compress_proof),
+            )?
+        }
+    };
+    Ok(proof)
+}
+
+pub fn verify_csw_proof(
+    sc_id: &FieldElement,
+    sys_data: CswSysData,
+    proof: Vec<u8>,
+    check_proof: bool,
+    compressed_proof: bool,
+    vk_path: &Path,
+    check_vk: bool,
+    compressed_vk: bool,
+) -> Result<bool, Error> {
+
+    let ins = CSWProofUserInputs {
+        amount: sys_data.amount,
+        constant: sys_data.genesis_constant.as_ref(),
+        sc_id,
+        nullifier: &sys_data.nullifier,
+        pub_key_hash: &sys_data.receiver,
+        cert_data_hash: &sys_data.sc_last_wcert_hash,
+        end_cumulative_sc_tx_commitment_tree_root: &sys_data.mcb_sc_txs_com_end,
     };
 
     // Check that the proving system type of the vk and proof are the same, before
@@ -462,7 +566,7 @@ mod test {
         println!("compute_msg_to_sign finished");
 
         //Generate params and write them to file
-        let circ = get_instance_for_setup(3, custom_fields_len);
+        let circ = NaiveTresholdSignature::get_instance_for_setup(3, custom_fields_len);
         generate_circuit_keypair(
             circ,
             ProvingSystem::CoboundaryMarlin,

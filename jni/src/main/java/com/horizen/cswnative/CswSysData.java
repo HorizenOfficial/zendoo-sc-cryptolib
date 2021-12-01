@@ -7,8 +7,8 @@ import com.horizen.librustsidechains.Library;
 import com.horizen.librustsidechains.Constants;
 
 public class CswSysData implements AutoCloseable {
-    private final FieldElement constant;
-    private final FieldElement scLastWcertHash;
+    private final Optional<FieldElement> constant;
+    private final Optional<FieldElement> scLastWcertHash;
     private final Optional<FieldElement> mcbScTxsComEnd;
     private final long amount;
     private final FieldElement nullifier;
@@ -18,7 +18,7 @@ public class CswSysData implements AutoCloseable {
         Library.load();
     }
 
-    public CswSysData(FieldElement constant, FieldElement scLastWcertHash, Optional<FieldElement> mcbScTxsComEnd,
+    public CswSysData(Optional<FieldElement> constant, Optional<FieldElement> scLastWcertHash, Optional<FieldElement> mcbScTxsComEnd,
             long amount, FieldElement nullifier, byte[] receiver)
     {
         if (receiver.length != Constants.MC_PK_HASH_SIZE())
@@ -33,11 +33,11 @@ public class CswSysData implements AutoCloseable {
         this.receiver = receiver;
     }
 
-    public FieldElement getConstant() {
+    public Optional<FieldElement> getConstant() {
         return constant;
     }
 
-    public FieldElement getScLastWcertHash() {
+    public Optional<FieldElement> getScLastWcertHash() {
         return scLastWcertHash;
     }
 
@@ -59,10 +59,15 @@ public class CswSysData implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        this.constant.close();
-        this.scLastWcertHash.close();
+        if (this.constant.isPresent())
+            this.constant.get().close();
+
+        if (this.scLastWcertHash.isPresent())
+            this.scLastWcertHash.get().close();
+
         if (this.mcbScTxsComEnd.isPresent())
             this.mcbScTxsComEnd.get().close();
+
         this.nullifier.close();
         
     }

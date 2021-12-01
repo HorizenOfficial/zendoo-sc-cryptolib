@@ -136,6 +136,7 @@ fn parse_jbyte_array_from_jobject(_env: &JNIEnv, obj: JObject, name: &str) -> jb
         .cast()
 }
 
+#[allow(unused)]
 pub(crate) fn parse_byte_array_from_jobject(_env: &JNIEnv, obj: JObject, name: &str) -> Vec<u8> {
     _env.convert_byte_array(parse_jbyte_array_from_jobject(_env, obj, name))
         .unwrap()
@@ -158,8 +159,9 @@ pub(crate) fn parse_fixed_size_bits_from_jbytearray_in_jobject<const N: usize>(
     name: &str,
 ) -> [bool; N] {
     let j_bytes = parse_jbyte_array_from_jobject(_env, obj, name);
-    let fixed_bytes = parse_jbyte_array_to_vec(_env, &j_bytes, N / 8);
-    bytes_to_bits(&fixed_bytes).try_into().unwrap()
+    let len = (N as f32 / 8f32).ceil() as usize;
+    let fixed_bytes = parse_jbyte_array_to_vec(_env, &j_bytes, len);
+    bytes_to_bits(&fixed_bytes)[..N].try_into().unwrap()
 }
 
 pub(crate) fn parse_long_from_jobject(_env: &JNIEnv, obj: JObject, name: &str) -> u64 {
@@ -192,6 +194,59 @@ pub(crate) fn parse_field_element_from_jobject<'a>(
         .expect("Should be able to get field fieldElementPointer");
 
     read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+}
+
+pub(crate) fn parse_merkle_path_from_jobject<'a>(
+    _env: &JNIEnv,
+    obj: JObject,
+    name: &str,
+) -> &'a GingerMHTPath {
+    let path_obj = _env
+        .get_field(obj, name, "Lcom/horizen/merkletreenative/MerklePath")
+        .expect("Should be able to get MerklePath field")
+        .l()
+        .unwrap();
+
+    let t = _env
+        .get_field(path_obj, "merklePathPointer", "J")
+        .expect("Should be able to get field merklePathPointer");
+
+    read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
+}
+
+pub(crate) fn cast_joption_to_rust_option<'a>(
+    _env: &'a JNIEnv,
+    obj: JObject<'a>,
+    opt_name: &str,
+    wrapped_obj_class_path: &str,
+) -> Option<JObject<'a>> {
+    // Parse Optional object
+    let opt_object = _env
+        .get_field(obj, opt_name, "Ljava/util/Optional;")
+        .expect(format!("Should be able to get {} Optional", opt_name).as_str())
+        .l()
+        .unwrap();
+
+    if !_env
+        .call_method(opt_object, "isPresent", "()Z", &[])
+        .expect("Should be able to call isPresent method on Optional object")
+        .z()
+        .unwrap()
+    {
+        None
+    } else {
+        Some(
+            _env.call_method(
+                opt_object,
+                "get",
+                format!("()L{};", wrapped_obj_class_path).as_str(),
+                &[],
+            )
+            .expect("Should be able to unwrap a non empty Optional")
+            .l()
+            .unwrap(),
+        )
+    }
 }
 
 pub(crate) fn parse_jobject_array_from_jobject(

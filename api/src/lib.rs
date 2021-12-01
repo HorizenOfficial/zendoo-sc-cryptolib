@@ -6,17 +6,23 @@ use cctp_primitives::{
         merkle_root_from_compressed_bytes, merkle_root_from_compressed_bytes_without_checks,
     },
     commitment_tree::{
-        hashers::{hash_cert, hash_fwt},
+        hashers::hash_fwt,
         proofs::{ScAbsenceProof, ScExistenceProof},
         sidechain_tree_alive::FWT_MT_HEIGHT,
         CommitmentTree, CMT_MT_HEIGHT,
     },
     proving_system::{compute_proof_vk_size, init_dlog_keys, ProvingSystem, ZendooVerifierKey},
-    utils::{data_structures::*, mht::*, poseidon_hash::*, serialization::*},
+    utils::{
+        commitment_tree::hash_vec, data_structures::*,
+        get_cert_data_hash_from_bt_root_and_custom_fields_hash, mht::*, poseidon_hash::*,
+        serialization::*,
+    },
 };
 use demo_circuit::{
-    constants::*, generate_circuit_keypair, get_instance_for_setup, type_mapping::*,
-    CswFtInputData, CswUtxoOutputData, WithdrawalCertificateData, WithdrawalCertificateDataNew,
+    constants::*, constraints::CeasedSidechainWithdrawalCircuit, generate_circuit_keypair,
+    type_mapping::*, CswFtOutputData, CswFtProverData, CswSysData, CswUtxoInputData,
+    CswUtxoOutputData, CswUtxoProverData, NaiveTresholdSignature,
+    WithdrawalCertificateDataNew,
 };
 
 use primitives::{
@@ -1833,7 +1839,8 @@ ffi_export!(
 
         let max_pks = _max_pks as usize;
 
-        let circ = get_instance_for_setup(max_pks, _num_custom_fields as usize);
+        let circ =
+            NaiveTresholdSignature::get_instance_for_setup(max_pks, _num_custom_fields as usize);
 
         // Read zk value
         let zk = _zk == JNI_TRUE;
@@ -4400,29 +4407,32 @@ ffi_export!(
     }
 );
 
-fn parse_sc_ft_output(_env: &JNIEnv, _ft_out: JObject) -> CswFtInputData {
+fn parse_sc_ft_output(_env: &JNIEnv, _ft_out: JObject) -> CswFtOutputData {
     // Parse amount
-    let amount: u64 = parse_long_from_jobject(_env, _ft_out, "amount");
+    let amount: u64 = parse_long_from_jobject(&_env, _ft_out, "amount");
 
     // Parse receiver_pub_key bits
-    let receiver_pub_key = parse_fixed_size_bits_from_jbytearray_in_jobject::<
-        { SC_PUBLIC_KEY_LENGTH * 8 },
-    >(_env, _ft_out, "receiverPubKey");
-
-    // Parse spending_pub_key bits
-    let payback_addr_data_hash = parse_fixed_size_bits_from_jbytearray_in_jobject::<
-        { MC_PK_SIZE * 8 },
-    >(_env, _ft_out, "paybackAddrDataHash");
-
-    // Parse tx hash bits
-    let tx_hash = parse_fixed_size_bits_from_jbytearray_in_jobject::<{ SC_TX_HASH_LENGTH * 8 }>(
-        _env, _ft_out, "txHash",
+    let receiver_pub_key = parse_fixed_size_byte_array_from_jobject::<SC_PUBLIC_KEY_LENGTH>(
+        &_env,
+        _ft_out,
+        "receiverPubKey",
     );
 
-    // Parse out_idx
-    let out_idx: u32 = parse_int_from_jobject(_env, _ft_out, "outIdx");
+    // Parse spending_pub_key bits
+    let payback_addr_data_hash = parse_fixed_size_byte_array_from_jobject::<MC_PK_SIZE>(
+        &_env,
+        _ft_out,
+        "paybackAddrDataHash",
+    );
 
-    CswFtInputData {
+    // Parse tx hash bits
+    let tx_hash =
+        parse_fixed_size_byte_array_from_jobject::<SC_TX_HASH_LENGTH>(&_env, _ft_out, "txHash");
+
+    // Parse out_idx
+    let out_idx: u32 = parse_int_from_jobject(&_env, _ft_out, "outIdx");
+
+    CswFtOutputData {
         amount,
         receiver_pub_key,
         payback_addr_data_hash,
@@ -4436,38 +4446,15 @@ ffi_export!(
         _env: JNIEnv,
         _ft_out: JObject,
     ) -> jobject {
-        // TODO: Maybe change CswFtInputData to accept bytes instead of bits so we can use the parse_sc_ft_output function
-
-        // Parse amount
-        let amount: u64 = parse_long_from_jobject(&_env, _ft_out, "amount");
-
-        // Parse receiver_pub_key bits
-        let receiver_pub_key = parse_fixed_size_byte_array_from_jobject::<SC_PUBLIC_KEY_LENGTH>(
-            &_env,
-            _ft_out,
-            "receiverPubKey",
-        );
-
-        // Parse spending_pub_key bits
-        let payback_addr_data_hash = parse_fixed_size_byte_array_from_jobject::<MC_PK_SIZE>(
-            &_env,
-            _ft_out,
-            "paybackAddrDataHash",
-        );
-
-        // Parse tx hash bits
-        let tx_hash =
-            parse_fixed_size_byte_array_from_jobject::<SC_TX_HASH_LENGTH>(&_env, _ft_out, "txHash");
-
-        // Parse out_idx
-        let out_idx: u32 = parse_int_from_jobject(&_env, _ft_out, "outIdx");
+        // Parse sc_ft_output
+        let sc_ft_output = parse_sc_ft_output(&_env, _ft_out);
 
         match hash_fwt(
-            amount,
-            &receiver_pub_key,
-            &payback_addr_data_hash,
-            &tx_hash,
-            out_idx,
+            sc_ft_output.amount,
+            &sc_ft_output.receiver_pub_key,
+            &sc_ft_output.payback_addr_data_hash,
+            &sc_ft_output.tx_hash,
+            sc_ft_output.out_idx,
         ) {
             Ok(digest) => return_field_element(&_env, digest),
             Err(e) => {
@@ -4576,7 +4563,7 @@ fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateDataNew {
     // Parse ft_min_amount
     let ft_min_fee = parse_long_from_jobject(&_env, _cert, "ftMinAmount");
 
-    WithdrawalCertificateDataNew {
+    WithdrawalCertificateDataNew::new(
         sc_id,
         epoch_number,
         bt_list,
@@ -4585,7 +4572,7 @@ fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateDataNew {
         ft_min_fee,
         btr_min_fee,
         custom_fields,
-    }
+    )
 }
 
 ffi_export!(
@@ -4593,31 +4580,23 @@ ffi_export!(
         _env: JNIEnv,
         _cert: JObject,
     ) -> jobject {
-
         // Parse cert
         let cert = parse_wcert(_env, _cert);
 
-        // Convert bt_list in the expected form
-        let bt_list = if cert.bt_list.len() == 0 {
-            None
-        } else {
-            Some(cert.bt_list.as_slice())
-        };
-
         // Convert custom fields in the expected form
-        let custom_fields = if cert.custom_fields.len() == 0 {
+        let custom_fields_hash = if cert.custom_fields.len() == 0 {
             None
         } else {
-            Some(cert.custom_fields.iter().collect())
+            Some(hash_vec(cert.custom_fields).unwrap())
         };
 
         // Compute hash
-        match hash_cert(
+        match get_cert_data_hash_from_bt_root_and_custom_fields_hash(
             &cert.sc_id,
             cert.epoch_number,
             cert.quality,
-            bt_list,
-            custom_fields,
+            cert.bt_root,
+            custom_fields_hash,
             &cert.mcb_sc_txs_com,
             cert.btr_min_fee,
             cert.ft_min_fee,
@@ -4627,6 +4606,373 @@ ffi_export!(
                 eprintln!("Error while computing FT hash: {:?}", e);
                 JObject::null().into_inner()
             }
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_cswnative_CswProof_nativeSetup(
+        _env: JNIEnv,
+        _class: JClass,
+        _proving_system: JObject,
+        _range_size: jint,
+        _num_custom_fields: jint,
+        _proving_key_path: JString,
+        _verification_key_path: JString,
+        _zk: jboolean,
+        _max_proof_plus_vk_size: jint,
+        _compress_pk: jboolean,
+        _compress_vk: jboolean,
+    ) -> jboolean {
+        // Get proving system type
+        let proving_system = get_proving_system_type(&_env, _proving_system);
+
+        // Read paths
+        let proving_key_path = _env
+            .get_string(_proving_key_path)
+            .expect("Should be able to read jstring as Rust String");
+
+        let verification_key_path = _env
+            .get_string(_verification_key_path)
+            .expect("Should be able to read jstring as Rust String");
+
+        let circ = CeasedSidechainWithdrawalCircuit::get_instance_for_setup(
+            _range_size as u32,
+            _num_custom_fields as u32,
+        );
+
+        // Read zk value
+        let zk = _zk == JNI_TRUE;
+
+        // Generate snark keypair
+        match generate_circuit_keypair(
+            circ,
+            proving_system,
+            Path::new(proving_key_path.to_str().unwrap()),
+            Path::new(verification_key_path.to_str().unwrap()),
+            _max_proof_plus_vk_size as usize,
+            zk,
+            Some(_compress_pk == JNI_TRUE),
+            Some(_compress_vk == JNI_TRUE),
+        ) {
+            Ok(_) => JNI_TRUE,
+            Err(e) => {
+                println!("{:?}", e);
+                JNI_FALSE
+            }
+        }
+    }
+);
+
+fn parse_sys_data(_env: JNIEnv, _sys_data: JObject) -> CswSysData {
+    CswSysData::new(
+        cast_joption_to_rust_option(
+            &_env,
+            _sys_data,
+            "constant",
+            "com/horizen/librustsidechains/FieldElement",
+        )
+        .map(|field_object| {
+            let f = _env
+                .get_field(field_object, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            *read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+        }),
+        // Map a JObject which is a Java's Optional<FieldElement> into Option<JObject>.
+        // If Option is present, converts it into an Option<FieldElement>, otherwise converts it to None.
+        cast_joption_to_rust_option(
+            &_env,
+            _sys_data,
+            "mcbScTxsComEnd",
+            "com/horizen/librustsidechains/FieldElement",
+        )
+        .map(|field_object| {
+            let f = _env
+                .get_field(field_object, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            *read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+        }),
+        cast_joption_to_rust_option(
+            &_env,
+            _sys_data,
+            "scLastWcertHash",
+            "com/horizen/librustsidechains/FieldElement",
+        )
+        .map(|field_object| {
+            let f = _env
+                .get_field(field_object, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            *read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+        }),
+        parse_long_from_jobject(&_env, _sys_data, "amount"),
+        *parse_field_element_from_jobject(&_env, _sys_data, "nullifier"),
+        parse_fixed_size_byte_array_from_jobject::<MC_PK_SIZE>(&_env, _sys_data, "receiver"),
+    )
+}
+
+fn parse_utxo_prover_data(_env: JNIEnv, _utxo_data: JObject) -> CswUtxoProverData {
+    // Parse utxo output
+    let output = {
+        let utxo_out_obj = _env
+            .get_field(
+                _utxo_data,
+                "output",
+                "Lcom/horizen/scutxonative/ScUtxoOutput",
+            )
+            .expect("Should be able to parse ScUtxoOutput")
+            .l()
+            .unwrap();
+        parse_sc_utxo_output(&_env, utxo_out_obj)
+    };
+
+    // Parse input
+    let input = CswUtxoInputData {
+        output,
+        secret_key: parse_fixed_size_bits_from_jbytearray_in_jobject::<
+            SIMULATED_SCALAR_FIELD_MODULUS_BITS,
+        >(&_env, _utxo_data, "utxoInputSecretKey"),
+    };
+
+    // Parse mst_path_to_output
+    let mst_path_to_output: GingerMHTBinaryPath =
+        parse_merkle_path_from_jobject(&_env, _utxo_data, "mstPathToOutput")
+            .clone()
+            .try_into()
+            .unwrap();
+
+    CswUtxoProverData {
+        input,
+        mst_path_to_output,
+    }
+}
+
+fn parse_ft_prover_data(_env: JNIEnv, _ft_data: JObject) -> CswFtProverData {
+    // Parse ForwardTransferOutput
+    let ft_output = {
+        let ft_out_obj = _env
+            .get_field(
+                _ft_data,
+                "output",
+                "Lcom/horizen/fwtnative/ForwardTransferOutput",
+            )
+            .expect("Should be able to parse ForwardTransferOutput")
+            .l()
+            .unwrap();
+        parse_sc_ft_output(&_env, ft_out_obj)
+    };
+
+    // Parse merkle_path_to_sc_hash
+    let merkle_path_to_sc_hash: GingerMHTBinaryPath =
+        parse_merkle_path_from_jobject(&_env, _ft_data, "merklePathToScHash")
+            .clone()
+            .try_into()
+            .unwrap();
+
+    // Parse ft_tree_path
+    let ft_tree_path: GingerMHTBinaryPath =
+        parse_merkle_path_from_jobject(&_env, _ft_data, "ftTreePath")
+            .clone()
+            .try_into()
+            .unwrap();
+
+    // Parse sc_txs_com_hashes
+    let sc_txs_com_hashes_list_obj = parse_jobject_array_from_jobject(
+        &_env,
+        _ft_data,
+        "scTxsComHashes",
+        "com/horizen/librustsidechains/FieldElement",
+    );
+
+    let mut sc_txs_com_hashes = vec![];
+
+    let sc_txs_com_hashes_size = _env
+        .get_array_length(sc_txs_com_hashes_list_obj)
+        .expect("Should be able to get sc_txs_com_hashes size");
+
+    for i in 0..sc_txs_com_hashes_size {
+        let o = _env
+            .get_object_array_element(sc_txs_com_hashes_list_obj, i)
+            .expect(
+                format!(
+                    "Should be able to get elem {} of sc_txs_com_hashes array",
+                    i
+                )
+                .as_str(),
+            );
+
+        let field = {
+            let f = _env
+                .get_field(o, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+        };
+
+        sc_txs_com_hashes.push(*field);
+    }
+
+    CswFtProverData {
+        ft_output,
+        ft_input_secret_key: parse_fixed_size_bits_from_jbytearray_in_jobject::<
+            SIMULATED_SCALAR_FIELD_MODULUS_BITS,
+        >(&_env, _ft_data, "ftInputSecretKey"),
+        mcb_sc_txs_com_start: *parse_field_element_from_jobject(
+            &_env,
+            _ft_data,
+            "mcbScTxsComStart",
+        ),
+        merkle_path_to_sc_hash,
+        ft_tree_path,
+        sc_creation_commitment: *parse_field_element_from_jobject(
+            &_env,
+            _ft_data,
+            "scCreationCommitment",
+        ),
+        scb_btr_tree_root: *parse_field_element_from_jobject(&_env, _ft_data, "scbBtrTreeRoot"),
+        wcert_tree_root: *parse_field_element_from_jobject(&_env, _ft_data, "wCertTreeRoot"),
+        sc_txs_com_hashes,
+    }
+}
+
+ffi_export!(
+    fn Java_com_horizen_cswnative_CswProof_nativeCreateProof(
+        _env: JNIEnv,
+        _class: JClass,
+        _range_size: jint,
+        _num_custom_fields: jint,
+        _sys_data: JObject,
+        _sc_id: JObject,
+        _last_wcert: JObject,
+        _utxo_data: JObject,
+        _ft_data: JObject,
+        _proving_key_path: JString,
+        _check_proving_key: jboolean,
+        _zk: jboolean,
+        _compressed_pk: jboolean,
+        _compress_proof: jboolean,
+    ) -> jbyteArray {
+        // Parse cert if present
+        let cert = if _last_wcert.into_inner().is_null() {
+            None
+        } else {
+            Some(parse_wcert(_env, _last_wcert))
+        };
+
+        // Parse sys_data
+        let sys_data = parse_sys_data(_env, _sys_data);
+
+        // Parse csw utxo prover data
+        let csw_utxo_prover_data = if _utxo_data.is_null() {
+            None
+        } else {
+            Some(parse_utxo_prover_data(_env, _utxo_data))
+        };
+
+        // Parse csw ft prover data
+        let csw_ft_prover_data = if _ft_data.is_null() {
+            None
+        } else {
+            Some(parse_ft_prover_data(_env, _ft_data))
+        };
+
+        // Parse sc_id
+        let sc_id = {
+            let f = _env
+                .get_field(_sc_id, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+        };
+
+        //Extract params_path str
+        let proving_key_path = _env
+            .get_string(_proving_key_path)
+            .expect("Should be able to read jstring as Rust String");
+
+        //create proof
+        match create_csw_proof(
+            *sc_id,
+            sys_data,
+            cert,
+            csw_utxo_prover_data,
+            csw_ft_prover_data,
+            _range_size as u32,
+            _num_custom_fields as u32,
+            Path::new(proving_key_path.to_str().unwrap()),
+            _check_proving_key == JNI_TRUE,
+            _zk == JNI_TRUE,
+            _compressed_pk == JNI_TRUE,
+            _compress_proof == JNI_TRUE,
+        ) {
+            Ok(proof) => _env
+                .byte_array_from_slice(proof.as_slice())
+                .expect("Should be able to convert Rust slice into jbytearray"),
+
+            Err(e) => {
+                eprintln!("Error creating proof {:?}", e);
+                JObject::null().into_inner()
+            }
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_cswnative_CswProof_nativeVerifyProof(
+        _env: JNIEnv,
+        _class: JClass,
+        _sc_id: JObject,
+        _sys_data: JObject,
+        _sc_proof_bytes: jbyteArray,
+        _check_proof: jboolean,
+        _compressed_proof: jboolean,
+        _verification_key_path: JString,
+        _check_vk: jboolean,
+        _compressed_vk: jboolean,
+    ) -> jboolean {
+        // Parse sys_data
+        let sys_data = parse_sys_data(_env, _sys_data);
+
+        // Parse sc_id
+        let sc_id = {
+            let f = _env
+                .get_field(_sc_id, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+        };
+
+        //Extract proof
+        let proof_bytes = _env
+            .convert_byte_array(_sc_proof_bytes)
+            .expect("Should be able to convert to Rust byte array");
+
+        //Extract vk path
+        let vk_path = _env
+            .get_string(_verification_key_path)
+            .expect("Should be able to read jstring as Rust String");
+
+        //Verify proof
+        match verify_csw_proof(
+            sc_id,
+            sys_data,
+            proof_bytes,
+            _check_proof == JNI_TRUE,
+            _compressed_proof == JNI_TRUE,
+            Path::new(vk_path.to_str().unwrap()),
+            _check_vk == JNI_TRUE,
+            _compressed_vk == JNI_TRUE,
+        ) {
+            Ok(result) => {
+                if result {
+                    JNI_TRUE
+                } else {
+                    JNI_FALSE
+                }
+            }
+            Err(_) => JNI_FALSE, // CRYPTO_ERROR or IO_ERROR
         }
     }
 );

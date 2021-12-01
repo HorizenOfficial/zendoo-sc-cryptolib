@@ -1,6 +1,7 @@
 use std::{borrow::Borrow, convert::TryInto};
 
 use cctp_primitives::type_mapping::{FieldElement, FIELD_CAPACITY, FIELD_SIZE};
+use primitives::bytes_to_bits;
 use r1cs_core::{ConstraintSystemAbstract, SynthesisError};
 use r1cs_std::{
     boolean::Boolean,
@@ -12,10 +13,10 @@ use r1cs_std::{
 };
 
 use crate::{
-    constants::constants::CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER, CswFtInputData, CswProverData,
+    constants::constants::CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER, CswFtOutputData, CswProverData,
     CswUtxoInputData, CswUtxoOutputData, FieldElementGadget, GingerMHTBinaryGadget,
     WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES, PHANTOM_SECRET_KEY_BITS,
-    SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS,
+    SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS, read_field_element_from_buffer_with_padding,
 };
 
 #[derive(Clone)]
@@ -462,7 +463,7 @@ impl EqGadget<FieldElement> for CswUtxoInputDataGadget {
 }
 
 #[derive(PartialEq, Eq)]
-pub struct CswFtInputDataGadget {
+pub struct CswFtOutputDataGadget {
     pub amount_g: UInt64,
     pub receiver_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
     pub payback_addr_data_hash_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
@@ -470,28 +471,28 @@ pub struct CswFtInputDataGadget {
     pub out_idx_g: UInt32,
 }
 
-impl CswFtInputDataGadget {
+impl CswFtOutputDataGadget {
     pub fn is_phantom<CS: ConstraintSystemAbstract<FieldElement>>(
         &self,
         mut cs: CS,
     ) -> Result<Boolean, SynthesisError> {
-        let phantom_ft_input_g = CswFtInputDataGadget::from_value(
+        let phantom_ft_input_g = CswFtOutputDataGadget::from_value(
             cs.ns(|| "alloc constant FT input phantom gadget"),
-            &CswFtInputData::default(),
+            &CswFtOutputData::default(),
         );
 
         self.is_eq(cs.ns(|| "is FT output phantom"), &phantom_ft_input_g)
     }
 }
 
-impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
+impl AllocGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
     fn alloc<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
         mut cs: CS,
         f: F,
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswFtInputData>,
+        T: Borrow<CswFtOutputData>,
     {
         let (amount, receiver_pub_key, payback_addr_data_hash, tx_hash, out_idx) = match f() {
             Ok(csw_ft_input_data) => {
@@ -516,7 +517,7 @@ impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
         let amount_g = UInt64::alloc(cs.ns(|| "alloc amount"), amount.ok())?;
 
         let receiver_pub_key_g =
-            Vec::<Boolean>::alloc(cs.ns(|| "alloc receiver pub key"), || receiver_pub_key)?
+            Vec::<Boolean>::alloc(cs.ns(|| "alloc receiver pub key"), || Ok(bytes_to_bits(&receiver_pub_key?)))?
                 .try_into()
                 .map_err(|_| {
                     SynthesisError::Other(format!(
@@ -526,9 +527,7 @@ impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
                 })?;
 
         let payback_addr_data_hash_g =
-            Vec::<Boolean>::alloc(cs.ns(|| "alloc payback addr data hash"), || {
-                payback_addr_data_hash
-            })?
+            Vec::<Boolean>::alloc(cs.ns(|| "alloc payback addr data hash"), || Ok(bytes_to_bits(&payback_addr_data_hash?)))?
             .try_into()
             .map_err(|_| {
                 SynthesisError::Other(format!(
@@ -537,7 +536,7 @@ impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
                 ))
             })?;
 
-        let tx_hash_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc tx hash"), || tx_hash)?
+        let tx_hash_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc tx hash"), || Ok(bytes_to_bits(&tx_hash?)))?
             .try_into()
             .map_err(|_| {
                 SynthesisError::Other(format!(
@@ -565,36 +564,33 @@ impl AllocGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswFtInputData>,
+        T: Borrow<CswFtOutputData>,
     {
         unimplemented!()
     }
 }
 
-impl ConstantGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
+impl ConstantGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
     fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
         _cs: CS,
-        value: &CswFtInputData,
+        value: &CswFtOutputData,
     ) -> Self {
         let amount_g = UInt64::constant(value.amount);
-        let receiver_pub_key_g = value
-            .receiver_pub_key
+        let receiver_pub_key_g = bytes_to_bits(&value.receiver_pub_key)
             .iter()
             .map(|&bit| Boolean::constant(bit))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
 
-        let payback_addr_data_hash_g = value
-            .payback_addr_data_hash
+        let payback_addr_data_hash_g = bytes_to_bits(&value.payback_addr_data_hash)
             .iter()
             .map(|&bit| Boolean::constant(bit))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
 
-        let tx_hash_g = value
-            .tx_hash
+        let tx_hash_g = bytes_to_bits(&value.tx_hash)
             .iter()
             .map(|&bit| Boolean::constant(bit))
             .collect::<Vec<_>>()
@@ -612,36 +608,12 @@ impl ConstantGadget<CswFtInputData, FieldElement> for CswFtInputDataGadget {
         }
     }
 
-    fn get_constant(&self) -> CswFtInputData {
-        CswFtInputData {
-            amount: self.amount_g.get_value().unwrap(),
-            receiver_pub_key: self
-                .receiver_pub_key_g
-                .iter()
-                .map(|bit| bit.get_value().unwrap())
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
-            payback_addr_data_hash: self
-                .payback_addr_data_hash_g
-                .iter()
-                .map(|bit| bit.get_value().unwrap())
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
-            tx_hash: self
-                .tx_hash_g
-                .iter()
-                .map(|bit| bit.get_value().unwrap())
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
-            out_idx: self.out_idx_g.value.unwrap(),
-        }
+    fn get_constant(&self) -> CswFtOutputData {
+        unimplemented!();
     }
 }
 
-impl EqGadget<FieldElement> for CswFtInputDataGadget {
+impl EqGadget<FieldElement> for CswFtOutputDataGadget {
     fn is_eq<CS: ConstraintSystemAbstract<FieldElement>>(
         &self,
         mut cs: CS,
@@ -672,7 +644,7 @@ impl EqGadget<FieldElement> for CswFtInputDataGadget {
     }
 }
 
-impl ToConstraintFieldGadget<FieldElement> for CswFtInputDataGadget {
+impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
     type FieldGadget = FieldElementGadget;
 
     fn to_field_gadget_elements<CS: ConstraintSystemAbstract<FieldElement>>(
@@ -706,7 +678,7 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtInputDataGadget {
 
 pub struct CswProverDataGadget {
     // public inputs [START]
-    pub genesis_constant_g: FieldElementGadget,
+    pub genesis_constant_g: Option<FieldElementGadget>,
     pub mcb_sc_txs_com_end_g: FieldElementGadget,
     pub sc_last_wcert_hash_g: FieldElementGadget,
     pub amount_g: FieldElementGadget,
@@ -718,11 +690,12 @@ pub struct CswProverDataGadget {
     pub last_wcert_g: WithdrawalCertificateDataGadget,
     pub input_g: CswUtxoInputDataGadget,
     pub mst_path_to_output_g: GingerMHTBinaryGadget,
-    pub ft_input_g: CswFtInputDataGadget,
+    pub ft_input_g: CswFtOutputDataGadget,
     pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
     pub mcb_sc_txs_com_start_g: FieldElementGadget,
     pub merkle_path_to_sc_hash_g: GingerMHTBinaryGadget,
     pub ft_tree_path_g: GingerMHTBinaryGadget,
+    pub sc_creation_commitment_g: FieldElementGadget,
     pub scb_btr_tree_root_g: FieldElementGadget,
     pub wcert_tree_root_g: FieldElementGadget,
     pub sc_txs_com_hashes_g: Vec<FieldElementGadget>, // witnesses [END]
@@ -733,49 +706,58 @@ impl FromGadget<CswProverData, FieldElement> for CswProverDataGadget {
         data: CswProverData,
         mut cs: CS,
     ) -> Result<Self, SynthesisError> {
-        let genesis_constant_g =
-            FieldElementGadget::alloc_input(cs.ns(|| "alloc genesis constant"), || {
-                Ok(data.genesis_constant)
-            })?;
+        let mut genesis_constant_g = None;
+        if data.sys_data.genesis_constant.is_some() {
+            genesis_constant_g = Some(
+                FieldElementGadget::alloc_input(cs.ns(|| "alloc genesis constant"), || {
+                    Ok(data.sys_data.genesis_constant.unwrap())
+                })?
+            );
+        }
 
         let mcb_sc_txs_com_end_g =
             FieldElementGadget::alloc_input(cs.ns(|| "alloc mcb sc txs com end"), || {
-                Ok(data.mcb_sc_txs_com_end)
+                Ok(data.sys_data.mcb_sc_txs_com_end)
             })?;
 
         let sc_last_wcert_hash_g =
             FieldElementGadget::alloc_input(cs.ns(|| "alloc sc last wcert hash"), || {
-                Ok(data.sc_last_wcert_hash)
+                Ok(data.sys_data.sc_last_wcert_hash)
             })?;
 
         let amount_g =
-            FieldElementGadget::alloc_input(cs.ns(|| "alloc amount"), || Ok(data.amount))?;
+            FieldElementGadget::alloc_input(cs.ns(|| "alloc amount"), || Ok(FieldElement::from(data.sys_data.amount)))?;
 
-        let nullifier_g =
-            FieldElementGadget::alloc_input(cs.ns(|| "alloc nullifier"), || Ok(data.nullifier))?;
+        let nullifier_g = FieldElementGadget::alloc_input(cs.ns(|| "alloc nullifier"), || {
+            Ok(data.sys_data.nullifier)
+        })?;
 
-        let receiver_g =
-            FieldElementGadget::alloc_input(cs.ns(|| "alloc receiver"), || Ok(data.receiver))?;
+        let receiver_g = FieldElementGadget::alloc_input(cs.ns(|| "alloc receiver"), || {
+            read_field_element_from_buffer_with_padding(&data.sys_data.receiver)
+                .map_err(|e| SynthesisError::Other(e.to_string()))
+        })?;
 
         let last_wcert_g =
             WithdrawalCertificateDataGadget::alloc(cs.ns(|| "alloc last wcert"), || {
                 Ok(data.last_wcert.clone())
             })?;
 
-        let input_g =
-            CswUtxoInputDataGadget::alloc(cs.ns(|| "alloc input"), || Ok(data.input.clone()))?;
+        let input_g = CswUtxoInputDataGadget::alloc(cs.ns(|| "alloc input"), || {
+            Ok(data.utxo_data.input.clone())
+        })?;
 
         let mst_path_to_output_g =
             GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc mst path to output"), || {
-                Ok(data.mst_path_to_output.clone())
+                Ok(data.utxo_data.mst_path_to_output.clone())
             })?;
 
-        let ft_input_g =
-            CswFtInputDataGadget::alloc(cs.ns(|| "alloc ft input"), || Ok(data.ft_input.clone()))?;
+        let ft_input_g = CswFtOutputDataGadget::alloc(cs.ns(|| "alloc ft input"), || {
+            Ok(data.ft_data.ft_output.clone())
+        })?;
 
         let ft_input_secret_key_g =
             Vec::<Boolean>::alloc(cs.ns(|| "alloc ft input secret key"), || {
-                Ok(data.ft_input_secret_key)
+                Ok(data.ft_data.ft_input_secret_key)
             })?
             .try_into()
             .map_err(|_| {
@@ -787,35 +769,40 @@ impl FromGadget<CswProverData, FieldElement> for CswProverDataGadget {
 
         let mcb_sc_txs_com_start_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com start"), || {
-                Ok(data.mcb_sc_txs_com_start)
+                Ok(data.ft_data.mcb_sc_txs_com_start)
             })?;
 
         let merkle_path_to_sc_hash_g =
             GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc merkle path to sc hash"), || {
-                Ok(&data.merkle_path_to_sc_hash)
+                Ok(&data.ft_data.merkle_path_to_sc_hash)
             })?;
 
         let ft_tree_path_g = GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc ft tree path"), || {
-            Ok(data.ft_tree_path.clone())
+            Ok(data.ft_data.ft_tree_path.clone())
         })?;
+
+        let sc_creation_commitment_g =
+            FieldElementGadget::alloc(cs.ns(|| "alloc scb btr tree root"), || {
+                Ok(data.ft_data.sc_creation_commitment)
+            })?;
 
         let scb_btr_tree_root_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc scb btr tree root"), || {
-                Ok(data.scb_btr_tree_root)
+                Ok(data.ft_data.scb_btr_tree_root)
             })?;
 
         let wcert_tree_root_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc wcert tree root"), || {
-                Ok(data.wcert_tree_root)
+                Ok(data.ft_data.wcert_tree_root)
             })?;
 
-        assert!(data.sc_txs_com_hashes.len() == CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER);
+        assert!(data.ft_data.sc_txs_com_hashes.len() == CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER);
         let mut sc_txs_com_hashes_g = Vec::with_capacity(CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER);
 
-        for index in 0..data.sc_txs_com_hashes.len() {
+        for index in 0..data.ft_data.sc_txs_com_hashes.len() {
             let sc_txs_com_hash_g = FieldElementGadget::alloc(
                 cs.ns(|| format!("alloc sc txs com hash {}", index)),
-                || Ok(data.sc_txs_com_hashes[index]),
+                || Ok(data.ft_data.sc_txs_com_hashes[index]),
             )?;
             sc_txs_com_hashes_g.push(sc_txs_com_hash_g);
         }
@@ -835,6 +822,7 @@ impl FromGadget<CswProverData, FieldElement> for CswProverDataGadget {
             mcb_sc_txs_com_start_g,
             merkle_path_to_sc_hash_g,
             ft_tree_path_g,
+            sc_creation_commitment_g,
             scb_btr_tree_root_g,
             wcert_tree_root_g,
             sc_txs_com_hashes_g,

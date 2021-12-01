@@ -1,4 +1,4 @@
-package com.horizen.provingsystemnative;
+package com.horizen.certnative;
 
 import com.horizen.librustsidechains.Library;
 

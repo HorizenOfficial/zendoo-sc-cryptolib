@@ -17,7 +17,8 @@ use r1cs_std::{
 use crate::{
     constants::constants::{BoxType, CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER},
     type_mapping::*,
-    CswProverData, FieldElementGadget, FieldHashGadget,
+    CswFtProverData, CswProverData, CswSysData, CswUtxoProverData, FieldElementGadget,
+    FieldHashGadget, WithdrawalCertificateDataNew,
 };
 
 use self::data_structures::CswProverDataGadget;
@@ -28,14 +29,40 @@ pub mod data_structures;
 pub struct CeasedSidechainWithdrawalCircuit {
     sidechain_id: FieldElement,
     csw_data: CswProverData,
+    range_size: u32,
+    num_custom_fields: u32,
 }
 
 impl CeasedSidechainWithdrawalCircuit {
-    pub fn new(sidechain_id: FieldElement, csw_data: CswProverData) -> Self {
+    pub fn new(
+        _sidechain_id: FieldElement,
+        _sys_data: CswSysData,
+        _last_wcert: Option<WithdrawalCertificateDataNew>,
+        _utxo_data: Option<CswUtxoProverData>,
+        _ft_data: Option<CswFtProverData>,
+        _range_size: u32,
+        _num_custom_fields: u32,
+    ) -> Self {
+        unimplemented!();
+    }
+
+    // For testing, if useful
+    pub fn from_prover_data(
+        sidechain_id: FieldElement,
+        csw_data: CswProverData,
+        range_size: u32,
+        num_custom_fields: u32,
+    ) -> Self {
         CeasedSidechainWithdrawalCircuit {
             sidechain_id,
             csw_data,
+            range_size,
+            num_custom_fields,
         }
+    }
+
+    pub fn get_instance_for_setup(_range_size: u32, _num_custom_fields: u32) -> Self {
+        unimplemented!();
     }
 }
 
@@ -328,220 +355,246 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use algebra::{
-        fields::ed25519::fr::Fr as ed25519Fr, Group, ProjectiveCurve, ToBits, UniformRand,
-    };
-    use cctp_primitives::{
-        proving_system::init::{get_g1_committer_key, load_g1_committer_key},
-        type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
-        utils::{
-            commitment_tree::DataAccumulator, poseidon_hash::get_poseidon_hash_constant_length,
-        },
-    };
-    use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree};
-    use r1cs_core::debug_circuit;
-    use rand::rngs::OsRng;
-    use std::{convert::TryInto, ops::AddAssign};
+// #[cfg(test)]
+// mod test {
+//     use algebra::{
+//         fields::ed25519::fr::Fr as ed25519Fr, Group, ProjectiveCurve, ToBits, UniformRand,
+//     };
+//     use cctp_primitives::{
+//         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
+//         type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
+//         utils::{
+//             commitment_tree::DataAccumulator, poseidon_hash::get_poseidon_hash_constant_length,
+//         },
+//     };
+//     use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree};
+//     use r1cs_core::debug_circuit;
+//     use rand::rngs::OsRng;
+//     use std::{convert::TryInto, ops::AddAssign};
 
-    use crate::{
-        constants::constants::{BoxType, CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER},
-        read_field_element_from_buffer_with_padding, CswFtInputData, CswProverData,
-        CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
-        MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT, PHANTOM_SECRET_KEY_BITS,
-    };
+//     use crate::{
+//         constants::constants::{BoxType, CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER},
+//         read_field_element_from_buffer_with_padding, CswFtOutputData, CswProverData,
+//         CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
+//         MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT, PHANTOM_SECRET_KEY_BITS,
+//     };
 
-    use super::*;
+//     use super::*;
 
-    type SimulatedScalarFieldElement = ed25519Fr;
+//     type SimulatedScalarFieldElement = ed25519Fr;
 
-    enum CswType {
-        UTXO,
-        FT,
-    }
+//     enum CswType {
+//         UTXO,
+//         FT,
+//     }
 
-    fn generate_test_csw_prover_data(csw_type: CswType) -> CswProverData {
-        let rng = &mut OsRng::default();
+//     fn generate_test_csw_prover_data(csw_type: CswType) -> CswProverData {
+//         let rng = &mut OsRng::default();
 
-        // Generate the secret key
-        let secret = SimulatedScalarFieldElement::rand(rng);
-        //let secret = SimulatedScalarFieldElement::from_str("1234567890").unwrap();
+//         // Generate the secret key
+//         let secret = SimulatedScalarFieldElement::rand(rng);
+//         //let secret = SimulatedScalarFieldElement::from_str("1234567890").unwrap();
 
-        // Compute GENERATOR^SECRET_KEY
-        let public_key = SimulatedGroup::prime_subgroup_generator()
-            .into_projective()
-            .mul(&secret)
-            .into_affine();
+//         // Compute GENERATOR^SECRET_KEY
+//         let public_key = SimulatedGroup::prime_subgroup_generator()
+//             .into_projective()
+//             .mul(&secret)
+//             .into_affine();
 
-        // Store the sign (last bit) of the X coordinate
-        let x_sign = if public_key.x.is_odd() { true } else { false };
+//         // Store the sign (last bit) of the X coordinate
+//         let x_sign = if public_key.x.is_odd() { true } else { false };
 
-        // Extract the public key bytes as Y coordinate
-        let y_coordinate = public_key.y;
+//         // Extract the public key bytes as Y coordinate
+//         let y_coordinate = public_key.y;
 
-        // Use the last (null) bit of the public key to store the sign of the X coordinate
-        // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus
-        let mut pk_bits = vec![x_sign];
-        pk_bits.append(&mut y_coordinate.write_bits());
+//         // Use the last (null) bit of the public key to store the sign of the X coordinate
+//         // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus
+//         let mut pk_bits = vec![x_sign];
+//         pk_bits.append(&mut y_coordinate.write_bits());
 
-        let utxo_input_data = CswUtxoInputData {
-            output: CswUtxoOutputData {
-                spending_pub_key: pk_bits.clone().try_into().unwrap(),
-                amount: 10,
-                nonce: 11,
-                custom_hash: bytes_to_bits(&[12; FIELD_SIZE]).try_into().unwrap(),
-            },
-            secret_key: secret.write_bits().try_into().unwrap(),
-        };
+//         let utxo_input_data = CswUtxoInputData {
+//             output: CswUtxoOutputData {
+//                 spending_pub_key: pk_bits.clone().try_into().unwrap(),
+//                 amount: 10,
+//                 nonce: 11,
+//                 custom_hash: bytes_to_bits(&[12; FIELD_SIZE]).try_into().unwrap(),
+//             },
+//             secret_key: secret.write_bits().try_into().unwrap(),
+//         };
 
-        let ft_input_data = CswFtInputData {
-            amount: 100,
-            receiver_pub_key: pk_bits.try_into().unwrap(),
-            payback_addr_data_hash: bytes_to_bits(&[101; MC_RETURN_ADDRESS_BYTES])
-                .try_into()
-                .unwrap(),
-            tx_hash: bytes_to_bits(&[102; FIELD_SIZE]).try_into().unwrap(),
-            out_idx: 103,
-        };
+//         let ft_input_data = CswFtOutputData {
+//             amount: 100,
+//             receiver_pub_key: pk_bits.try_into().unwrap(),
+//             payback_addr_data_hash: bytes_to_bits(&[101; MC_RETURN_ADDRESS_BYTES])
+//                 .try_into()
+//                 .unwrap(),
+//             tx_hash: bytes_to_bits(&[102; FIELD_SIZE]).try_into().unwrap(),
+//             out_idx: 103,
+//         };
 
-        let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
+//         let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
 
-        let mut mst_leaf_accumulator = DataAccumulator::init();
-        mst_leaf_accumulator
-            .update_with_bits(utxo_input_data.output.spending_pub_key.to_vec())
-            .unwrap();
-        mst_leaf_accumulator
-            .update(utxo_input_data.output.amount)
-            .unwrap();
-        mst_leaf_accumulator
-            .update(utxo_input_data.output.nonce)
-            .unwrap();
-        mst_leaf_accumulator
-            .update_with_bits(utxo_input_data.output.custom_hash.to_vec())
-            .unwrap();
+//         let mut mst_leaf_accumulator = DataAccumulator::init();
+//         mst_leaf_accumulator
+//             .update_with_bits(utxo_input_data.output.spending_pub_key.to_vec())
+//             .unwrap();
+//         mst_leaf_accumulator
+//             .update(utxo_input_data.output.amount)
+//             .unwrap();
+//         mst_leaf_accumulator
+//             .update(utxo_input_data.output.nonce)
+//             .unwrap();
+//         mst_leaf_accumulator
+//             .update_with_bits(utxo_input_data.output.custom_hash.to_vec())
+//             .unwrap();
 
-        let mut mst_leaf_inputs = mst_leaf_accumulator.get_field_elements().unwrap();
-        debug_assert_eq!(mst_leaf_inputs.len(), 3);
-        mst_leaf_inputs.push(FieldElement::from(BoxType::CoinBox as u8));
+//         let mut mst_leaf_inputs = mst_leaf_accumulator.get_field_elements().unwrap();
+//         debug_assert_eq!(mst_leaf_inputs.len(), 3);
+//         mst_leaf_inputs.push(FieldElement::from(BoxType::CoinBox as u8));
 
-        let mut poseidon_hash = get_poseidon_hash_constant_length(mst_leaf_inputs.len(), None);
+//         let mut poseidon_hash = get_poseidon_hash_constant_length(mst_leaf_inputs.len(), None);
 
-        mst_leaf_inputs.into_iter().for_each(|leaf_input| {
-            poseidon_hash.update(leaf_input);
-        });
+//         mst_leaf_inputs.into_iter().for_each(|leaf_input| {
+//             poseidon_hash.update(leaf_input);
+//         });
 
-        let mst_leaf_hash = poseidon_hash.finalize().unwrap();
+//         let mst_leaf_hash = poseidon_hash.finalize().unwrap();
 
-        mst.append(mst_leaf_hash).unwrap();
-        mst.finalize_in_place().unwrap();
+//         mst.append(mst_leaf_hash).unwrap();
+//         mst.finalize_in_place().unwrap();
 
-        let mst_path: GingerMHTBinaryPath = mst.get_merkle_path(0).unwrap().try_into().unwrap();
+//         let mst_path: GingerMHTBinaryPath = mst.get_merkle_path(0).unwrap().try_into().unwrap();
 
-        let cert_data = WithdrawalCertificateData {
-            ledger_id: FieldElement::from(1u8),
-            epoch_id: FieldElement::from(2u8),
-            bt_list_hash: FieldElement::from(3u8),
-            quality: FieldElement::from(4u8),
-            mcb_sc_txs_com: FieldElement::from(5u8),
-            ft_min_fee: FieldElement::from(6u8),
-            btr_min_fee: FieldElement::from(7u8),
-            scb_new_mst_root: mst.root().unwrap(),
-        };
+//         let cert_data = WithdrawalCertificateData {
+//             ledger_id: FieldElement::from(1u8),
+//             epoch_id: FieldElement::from(2u8),
+//             bt_list_hash: FieldElement::from(3u8),
+//             quality: FieldElement::from(4u8),
+//             mcb_sc_txs_com: FieldElement::from(5u8),
+//             ft_min_fee: FieldElement::from(6u8),
+//             btr_min_fee: FieldElement::from(7u8),
+//             scb_new_mst_root: mst.root().unwrap(),
+//         };
 
-        let computed_last_wcert_hash = get_poseidon_hash_constant_length(8, None)
-            .update(cert_data.ledger_id)
-            .update(cert_data.epoch_id)
-            .update(cert_data.bt_list_hash)
-            .update(cert_data.quality)
-            .update(cert_data.mcb_sc_txs_com)
-            .update(cert_data.ft_min_fee)
-            .update(cert_data.btr_min_fee)
-            .update(cert_data.scb_new_mst_root)
-            .finalize()
-            .unwrap();
+//         let computed_last_wcert_hash = get_poseidon_hash_constant_length(8, None)
+//             .update(cert_data.ledger_id)
+//             .update(cert_data.epoch_id)
+//             .update(cert_data.bt_list_hash)
+//             .update(cert_data.quality)
+//             .update(cert_data.mcb_sc_txs_com)
+//             .update(cert_data.ft_min_fee)
+//             .update(cert_data.btr_min_fee)
+//             .update(cert_data.scb_new_mst_root)
+//             .finalize()
+//             .unwrap();
 
-        let csw_prover_data = CswProverData {
-            genesis_constant: FieldElement::from(14u8),
-            mcb_sc_txs_com_end: FieldElement::from(15u8),
-            sc_last_wcert_hash: computed_last_wcert_hash,
-            amount: FieldElement::from(utxo_input_data.output.amount),
-            nullifier: mst_leaf_hash,
-            receiver: read_field_element_from_buffer_with_padding(&[19; MC_PK_SIZE]).unwrap(),
-            last_wcert: cert_data,
-            input: match csw_type {
-                CswType::UTXO => utxo_input_data,
-                CswType::FT => CswUtxoInputData::default(),
-            },
-            mst_path_to_output: mst_path,
-            ft_input: match csw_type {
-                CswType::UTXO => CswFtInputData::default(),
-                CswType::FT => ft_input_data,
-            },
-            ft_input_secret_key: PHANTOM_SECRET_KEY_BITS,
-            mcb_sc_txs_com_start: FieldElement::from(21u8),
-            merkle_path_to_sc_hash: GingerMHTBinaryPath::default(),
-            ft_tree_path: GingerMHTBinaryPath::default(),
-            scb_btr_tree_root: FieldElement::from(22u8),
-            wcert_tree_root: FieldElement::from(23u8),
-            sc_txs_com_hashes: vec![
-                FieldElement::from(24u8);
-                CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER
-            ],
-        };
+//         let sys_data = CswSysData {
+//             genesis_constant: FieldElement::from(14u8),
+//             mcb_sc_txs_com_end: FieldElement::from(15u8),
+//             sc_last_wcert_hash: computed_last_wcert_hash,
+//             amount: FieldElement::from(utxo_input_data.output.amount),
+//             nullifier: mst_leaf_hash,
+//             receiver: read_field_element_from_buffer_with_padding(&[19; MC_PK_SIZE]).unwrap(),
+//         };
 
-        csw_prover_data
-    }
+//         let last_wcert = cert_data;
 
-    #[test]
-    fn test_csw_circuit() {
-        let sidechain_id = FieldElement::from(77u8);
-        let csw_prover_data = generate_test_csw_prover_data(CswType::UTXO);
-        let circuit = CeasedSidechainWithdrawalCircuit::new(sidechain_id, csw_prover_data.clone());
+//         let utxo_data = {
+//             let input = match csw_type {
+//                 CswType::UTXO => utxo_input_data,
+//                 CswType::FT => CswUtxoInputData::default(),
+//             };
 
-        let failing_constraint = debug_circuit(circuit.clone()).unwrap();
-        println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint.is_none());
+//             CswUtxoProverData {
+//                 input,
+//                 mst_path_to_output: mst_path,
+//             }
+//         };
 
-        load_g1_committer_key(1 << 17, 1 << 15).unwrap();
-        let ck_g1 = get_g1_committer_key().unwrap();
-        let params = CoboundaryMarlin::index(ck_g1.as_ref().unwrap(), circuit.clone()).unwrap();
+//         let ft_data = {
+//             let ft_output = match csw_type {
+//                 CswType::UTXO => CswFtOutputData::default(),
+//                 CswType::FT => ft_input_data,
+//             };
 
-        let proof = CoboundaryMarlin::prove(
-            &params.0.clone(),
-            ck_g1.as_ref().unwrap(),
-            circuit,
-            false,
-            None,
-        )
-        .unwrap();
+//             CswFtProverData {
+//                 ft_output,
+//                 ft_input_secret_key: PHANTOM_SECRET_KEY_BITS,
+//                 mcb_sc_txs_com_start: FieldElement::from(21u8),
+//                 merkle_path_to_sc_hash: GingerMHTBinaryPath::default(),
+//                 ft_tree_path: GingerMHTBinaryPath::default(),
+//                 sc_creation_commitment: FieldElement::from(22u8),
+//                 scb_btr_tree_root: FieldElement::from(23u8),
+//                 wcert_tree_root: FieldElement::from(24u8),
+//                 sc_txs_com_hashes: vec![
+//                     FieldElement::from(24u8);
+//                     CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER
+//                 ],
+//             }
+//         };
 
-        let mut public_inputs = vec![
-            csw_prover_data.genesis_constant,
-            csw_prover_data.mcb_sc_txs_com_end,
-            csw_prover_data.sc_last_wcert_hash,
-            FieldElement::from(csw_prover_data.amount),
-            csw_prover_data.nullifier,
-            csw_prover_data.receiver,
-        ];
+//         CswProverData {
+//             sys_data,
+//             last_wcert,
+//             utxo_data,
+//             ft_data,
+//         }
+//     }
 
-        // Check that the proof gets correctly verified
-        assert!(CoboundaryMarlin::verify(
-            &params.1.clone(),
-            ck_g1.as_ref().unwrap(),
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
+//     #[test]
+//     fn test_csw_circuit() {
+//         let sidechain_id = FieldElement::from(77u8);
+//         let csw_prover_data = generate_test_csw_prover_data(CswType::UTXO);
+//         let circuit = CeasedSidechainWithdrawalCircuit::from_prover_data(
+//             sidechain_id,
+//             csw_prover_data.clone(),
+//             CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER as u32,
+//             1,
+//         );
 
-        // Change one public input and check that the proof fails
-        public_inputs[0].add_assign(&FieldElement::from(1u8));
-        assert!(!CoboundaryMarlin::verify(
-            &params.1.clone(),
-            ck_g1.as_ref().unwrap(),
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
-    }
-}
+//         let failing_constraint = debug_circuit(circuit.clone()).unwrap();
+//         println!("Failing constraint: {:?}", failing_constraint);
+//         assert!(failing_constraint.is_none());
+
+//         load_g1_committer_key(1 << 17, 1 << 15).unwrap();
+//         let ck_g1 = get_g1_committer_key().unwrap();
+//         let params = CoboundaryMarlin::index(ck_g1.as_ref().unwrap(), circuit.clone()).unwrap();
+
+//         let proof = CoboundaryMarlin::prove(
+//             &params.0.clone(),
+//             ck_g1.as_ref().unwrap(),
+//             circuit,
+//             false,
+//             None,
+//         )
+//         .unwrap();
+
+//         let mut public_inputs = vec![
+//             csw_prover_data.sys_data.genesis_constant,
+//             csw_prover_data.sys_data.mcb_sc_txs_com_end,
+//             csw_prover_data.sys_data.sc_last_wcert_hash,
+//             FieldElement::from(csw_prover_data.sys_data.amount),
+//             csw_prover_data.sys_data.nullifier,
+//             csw_prover_data.sys_data.receiver,
+//         ];
+
+//         // Check that the proof gets correctly verified
+//         assert!(CoboundaryMarlin::verify(
+//             &params.1.clone(),
+//             ck_g1.as_ref().unwrap(),
+//             public_inputs.as_slice(),
+//             &proof
+//         )
+//         .unwrap());
+
+//         // Change one public input and check that the proof fails
+//         public_inputs[0].add_assign(&FieldElement::from(1u8));
+//         assert!(!CoboundaryMarlin::verify(
+//             &params.1.clone(),
+//             ck_g1.as_ref().unwrap(),
+//             public_inputs.as_slice(),
+//             &proof
+//         )
+//         .unwrap());
+//     }
+// }
