@@ -15,7 +15,7 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
     private final BackwardTransfer[] btList;
     private final long quality;
     private final FieldElement mcbScTxsCom;
-    private final long ftMinFee;
+    private final long ftMinAmount;
     private final long btrMinFee;
     private final FieldElement[] customFields;
 
@@ -24,13 +24,13 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
     }
 
     public WithdrawalCertificate(FieldElement scId, int epochNumber, List<BackwardTransfer> btList, long quality, FieldElement mcbScTxsCom,
-            long ftMinFee, long btrMinFee, List<FieldElement> customFields) {
+            long ftMinAmount, long btrMinFee, List<FieldElement> customFields) {
         this.scId = scId;
         this.epochNumber = epochNumber;
         this.btList = btList.toArray(new BackwardTransfer[0]);
         this.quality = quality;
         this.mcbScTxsCom = mcbScTxsCom;
-        this.ftMinFee = ftMinFee;
+        this.ftMinAmount = ftMinAmount;
         this.btrMinFee = btrMinFee;
         this.customFields = customFields.toArray(new FieldElement[0]);
     }
@@ -55,8 +55,8 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
         return mcbScTxsCom;
     }
 
-    public long getFtMinFee() {
-        return ftMinFee;
+    public long getFtMinAmount() {
+        return ftMinAmount;
     }
 
     public long getBtrMinFee() {

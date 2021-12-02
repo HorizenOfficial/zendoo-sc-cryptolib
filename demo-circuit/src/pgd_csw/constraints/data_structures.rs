@@ -26,7 +26,7 @@ pub struct WithdrawalCertificateDataGadget {
     pub bt_list_hash_g: FieldElementGadget,
     pub quality_g: FieldElementGadget,
     pub mcb_sc_txs_com_g: FieldElementGadget,
-    pub ft_min_fee_g: FieldElementGadget,
+    pub ft_min_amount_g: FieldElementGadget,
     pub btr_min_fee_g: FieldElementGadget,
     pub scb_new_mst_root_g: FieldElementGadget,
 }
@@ -46,7 +46,7 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
             bt_list_hash,
             quality,
             mcb_sc_txs_com,
-            ft_min_fee,
+            ft_min_amount,
             btr_min_fee,
             scb_new_mst_root,
         ) = match f() {
@@ -58,7 +58,7 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
                     Ok(certificate_data.bt_list_hash),
                     Ok(certificate_data.quality),
                     Ok(certificate_data.mcb_sc_txs_com),
-                    Ok(certificate_data.ft_min_fee),
+                    Ok(certificate_data.ft_min_amount),
                     Ok(certificate_data.btr_min_fee),
                     Ok(certificate_data.scb_new_mst_root),
                 )
@@ -87,7 +87,7 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
         let mcb_sc_txs_com_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com"), || mcb_sc_txs_com)?;
 
-        let ft_min_fee_g = FieldElementGadget::alloc(cs.ns(|| "alloc ft min fee"), || ft_min_fee)?;
+        let ft_min_amount_g = FieldElementGadget::alloc(cs.ns(|| "alloc ft min fee"), || ft_min_amount)?;
 
         let btr_min_fee_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc btr min fee"), || btr_min_fee)?;
@@ -101,7 +101,7 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
             bt_list_hash_g,
             quality_g,
             mcb_sc_txs_com_g,
-            ft_min_fee_g,
+            ft_min_amount_g,
             btr_min_fee_g,
             scb_new_mst_root_g,
         };

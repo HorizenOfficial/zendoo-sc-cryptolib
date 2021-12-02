@@ -94,7 +94,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
                 last_wcert_g.bt_list_hash_g.clone(),
                 last_wcert_g.quality_g.clone(),
                 last_wcert_g.mcb_sc_txs_com_g.clone(),
-                last_wcert_g.ft_min_fee_g.clone(),
+                last_wcert_g.ft_min_amount_g.clone(),
                 last_wcert_g.btr_min_fee_g.clone(),
                 last_wcert_g.scb_new_mst_root_g.clone(),
             ],
@@ -471,7 +471,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 //             bt_list_hash: FieldElement::from(3u8),
 //             quality: FieldElement::from(4u8),
 //             mcb_sc_txs_com: FieldElement::from(5u8),
-//             ft_min_fee: FieldElement::from(6u8),
+//             ft_min_amount: FieldElement::from(6u8),
 //             btr_min_fee: FieldElement::from(7u8),
 //             scb_new_mst_root: mst.root().unwrap(),
 //         };
@@ -482,7 +482,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 //             .update(cert_data.bt_list_hash)
 //             .update(cert_data.quality)
 //             .update(cert_data.mcb_sc_txs_com)
-//             .update(cert_data.ft_min_fee)
+//             .update(cert_data.ft_min_amount)
 //             .update(cert_data.btr_min_fee)
 //             .update(cert_data.scb_new_mst_root)
 //             .finalize()

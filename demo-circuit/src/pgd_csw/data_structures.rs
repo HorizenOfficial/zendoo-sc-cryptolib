@@ -19,7 +19,7 @@ pub struct WithdrawalCertificateDataNew {
     pub bt_root: FieldElement,
     pub quality: u64,
     pub mcb_sc_txs_com: FieldElement,
-    pub ft_min_fee: u64,
+    pub ft_min_amount: u64,
     pub btr_min_fee: u64,
     pub custom_fields: Vec<FieldElement>,
 }
@@ -31,7 +31,7 @@ impl WithdrawalCertificateDataNew {
         bt_list: Vec<BackwardTransfer>,
         quality: u64,
         mcb_sc_txs_com: FieldElement,
-        ft_min_fee: u64,
+        ft_min_amount: u64,
         btr_min_fee: u64,
         custom_fields: Vec<FieldElement>,
     ) -> Self {
@@ -46,7 +46,7 @@ impl WithdrawalCertificateDataNew {
             .unwrap(),
             quality,
             mcb_sc_txs_com,
-            ft_min_fee,
+            ft_min_amount,
             btr_min_fee,
             custom_fields,
         }
@@ -61,7 +61,7 @@ pub struct WithdrawalCertificateData {
     pub bt_list_hash: FieldElement, // Merkle root hash of all BTs from the certificate (recall that MC hashes all complex proof_data params from the certificate)
     pub quality: FieldElement,
     pub mcb_sc_txs_com: FieldElement,
-    pub ft_min_fee: FieldElement,
+    pub ft_min_amount: FieldElement,
     pub btr_min_fee: FieldElement,
     // sys_data [END]
 

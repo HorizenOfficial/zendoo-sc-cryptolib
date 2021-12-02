@@ -4563,7 +4563,7 @@ fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateDataNew {
     let btr_min_fee = parse_long_from_jobject(&_env, _cert, "btrMinFee");
 
     // Parse ft_min_amount
-    let ft_min_fee = parse_long_from_jobject(&_env, _cert, "ftMinFee");
+    let ft_min_amount = parse_long_from_jobject(&_env, _cert, "ftMinAmount");
 
     WithdrawalCertificateDataNew::new(
         sc_id,
@@ -4571,7 +4571,7 @@ fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateDataNew {
         bt_list,
         quality,
         mcb_sc_txs_com,
-        ft_min_fee,
+        ft_min_amount,
         btr_min_fee,
         custom_fields,
     )
@@ -4601,7 +4601,7 @@ ffi_export!(
             custom_fields_hash,
             &cert.mcb_sc_txs_com,
             cert.btr_min_fee,
-            cert.ft_min_fee,
+            cert.ft_min_amount,
         ) {
             Ok(digest) => return_field_element(&_env, digest),
             Err(e) => {
