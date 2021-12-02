@@ -318,7 +318,6 @@ public class NaiveThresholdSigProof {
         );
     }
 
-    // TODO: check type of `constant` and `endCumulativeScTxCommTreeRoot`. Why not a byte[]?
     private static native boolean nativeVerifyProof(
             BackwardTransfer[] btList,
             FieldElement scId,
