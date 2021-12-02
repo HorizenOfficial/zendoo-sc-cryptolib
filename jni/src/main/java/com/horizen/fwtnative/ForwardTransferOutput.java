@@ -8,11 +8,11 @@ import com.horizen.librustsidechains.Library;
 import com.horizen.poseidonnative.PoseidonHashable;
 
 public class ForwardTransferOutput implements PoseidonHashable {
-    private final long amount;
-    private final byte[] receiverPubKey; 
-    private final byte[] paybackAddrDataHash;
-    private final byte[] txHash;
-    private final int outIdx;
+    private long amount;
+    private byte[] receiverPubKey; 
+    private byte[] paybackAddrDataHash;
+    private byte[] txHash;
+    private int outIdx;
 
     static {
         Library.load();
@@ -62,6 +62,26 @@ public class ForwardTransferOutput implements PoseidonHashable {
 
     public int getOutIdx() {
         return outIdx;
+    }
+
+    public void setAmount(long amount) {
+        this.amount = amount;
+    }
+
+    public void setReceiverPubKey(byte[] receiverPubKey) {
+        this.receiverPubKey = receiverPubKey;
+    }
+
+    public void setPaybackAddrDataHash(byte[] paybackAddrDataHash) {
+        this.paybackAddrDataHash = paybackAddrDataHash;
+    }
+
+    public void setTxHash(byte[] txHash) {
+        this.txHash = txHash;
+    }
+
+    public void setOutIdx(int outIdx) {
+        this.outIdx = outIdx;
     }
 
     public static ForwardTransferOutput getRandom(Random r) {

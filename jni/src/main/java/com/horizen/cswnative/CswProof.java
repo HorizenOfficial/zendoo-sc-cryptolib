@@ -32,7 +32,7 @@ public class CswProof {
      * @param compressVk - if the verification key must be saved to verificationKeyPath in compressed form
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise
      */
-    public boolean setup(
+    public static boolean setup(
         ProvingSystemType psType,
         int rangeSize,
         int numCustomFields,
@@ -61,7 +61,7 @@ public class CswProof {
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise
      */
-    public boolean setup(
+    public static boolean setup(
         ProvingSystemType psType,
         int rangeSize,
         int numCustomFields,
@@ -87,7 +87,7 @@ public class CswProof {
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk, estimated assuming not to use zk property
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise.
      */
-    public boolean setup(
+    public static boolean setup(
         ProvingSystemType psType,
         int rangeSize,
         int numCustomFields,
@@ -137,7 +137,7 @@ public class CswProof {
      * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
-    public byte[] createProof(
+    public static byte[] createProof(
         int rangeSize,
         int numCustomFields,
         CswSysData sysData,
@@ -183,7 +183,7 @@ public class CswProof {
      * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
-    public byte[] createProof(
+    public static byte[] createProof(
         int rangeSize,
         int numCustomFields,
         CswSysData sysData,
@@ -226,7 +226,7 @@ public class CswProof {
      * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
-    public byte[] createProof(
+    public static byte[] createProof(
         int rangeSize,
         int numCustomFields,
         CswSysData sysData,
@@ -267,7 +267,7 @@ public class CswProof {
      * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
-    public byte[] createProof(
+    public static byte[] createProof(
         int rangeSize,
         int numCustomFields,
         CswSysData sysData,
@@ -312,7 +312,7 @@ public class CswProof {
      * @param checkVerificationKey - enable semantic checks on the verification key
      * @return true, if proof verification was successfull, false if proof verification failed or if some errors occured during verification
      */
-    public boolean verifyProof(
+    public static boolean verifyProof(
         CswSysData sysData,
         FieldElement scId,
         byte[] proof,
@@ -334,7 +334,7 @@ public class CswProof {
      * @param verificationKeyPath - file path from which loading the verification key, expected to be in compressed form
      * @return true, if proof verification was successfull, false if proof verification failed or if some errors occured during verification
      */
-    public boolean verifyProof(
+    public static boolean verifyProof(
         CswSysData sysData,
         FieldElement scId,
         byte[] proof,

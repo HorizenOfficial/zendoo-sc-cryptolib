@@ -9,7 +9,7 @@ use primitives::{FieldBasedHash, FieldHasher};
 
 use crate::{
     type_mapping::*, GingerMHTBinaryPath, PHANTOM_PUBLIC_KEY_BITS, PHANTOM_SECRET_KEY_BITS,
-    SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
+    SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, constants::constants::BoxType,
 };
 
 // Must replace old one
@@ -106,6 +106,7 @@ impl FieldHasher<FieldElement, FieldHash> for CswUtxoOutputData {
         self_fes.into_iter().for_each(|fe| {
             h.update(fe);
         });
+        h.update(FieldElement::from(BoxType::CoinBox as u8));
         h.finalize()
     }
 }

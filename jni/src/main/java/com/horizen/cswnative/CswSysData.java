@@ -21,15 +21,16 @@ public class CswSysData implements AutoCloseable {
     public CswSysData(Optional<FieldElement> constant, Optional<FieldElement> scLastWcertHash, Optional<FieldElement> mcbScTxsComEnd,
             long amount, FieldElement nullifier, byte[] receiver)
     {
-        if (receiver.length != Constants.MC_PK_HASH_SIZE())
-            throw new IllegalArgumentException(
-                String.format("Incorrect receiver element length, %d expected, %d found",Constants.MC_PK_HASH_SIZE(), receiver.length)
-            );
         this.constant = constant;
         this.scLastWcertHash = scLastWcertHash;
         this.mcbScTxsComEnd = mcbScTxsComEnd;
         this.amount = amount;
         this.nullifier = nullifier;
+        
+        if (receiver.length != Constants.MC_PK_HASH_SIZE())
+        throw new IllegalArgumentException(
+            String.format("Incorrect receiver element length, %d expected, %d found",Constants.MC_PK_HASH_SIZE(), receiver.length)
+        );
         this.receiver = receiver;
     }
 

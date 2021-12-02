@@ -10,14 +10,14 @@ import com.horizen.poseidonnative.PoseidonHashable;
 
 // TODO: Use this class also in NaiveThresholdSigProof and CommitmentTree (re use stuff also Rust side)
 public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
-    private final FieldElement scId;
-    private final int epochNumber;
-    private final BackwardTransfer[] btList;
-    private final long quality;
-    private final FieldElement mcbScTxsCom;
-    private final long ftMinAmount;
-    private final long btrMinFee;
-    private final FieldElement[] customFields;
+    private FieldElement scId;
+    private int epochNumber;
+    private BackwardTransfer[] btList;
+    private long quality;
+    private FieldElement mcbScTxsCom;
+    private long ftMinAmount;
+    private long btrMinFee;
+    private FieldElement[] customFields;
 
     static {
         Library.load();
@@ -65,6 +65,38 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
 
     public FieldElement[] getCustomFields() {
         return customFields;
+    }
+
+    public void setScId(FieldElement scId) {
+        this.scId = scId;
+    }
+
+    public void setEpochNumber(int epochNumber) {
+        this.epochNumber = epochNumber;
+    }
+
+    public void setBtList(BackwardTransfer[] btList) {
+        this.btList = btList;
+    }
+
+    public void setQuality(long quality) {
+        this.quality = quality;
+    }
+
+    public void setMcbScTxsCom(FieldElement mcbScTxsCom) {
+        this.mcbScTxsCom = mcbScTxsCom;
+    }
+
+    public void setFtMinAmount(long ftMinAmount) {
+        this.ftMinAmount = ftMinAmount;
+    }
+
+    public void setBtrMinFee(long btrMinFee) {
+        this.btrMinFee = btrMinFee;
+    }
+
+    public void setCustomFields(FieldElement[] customFields) {
+        this.customFields = customFields;
     }
 
     private native FieldElement nativeGetHash();

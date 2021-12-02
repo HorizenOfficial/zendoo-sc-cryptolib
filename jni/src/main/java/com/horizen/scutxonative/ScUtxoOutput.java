@@ -7,10 +7,10 @@ import com.horizen.librustsidechains.FieldElement;
 import com.horizen.poseidonnative.PoseidonHashable;
 
 public class ScUtxoOutput implements PoseidonHashable {
-    private final byte[] spendingPubKey;
-    private final long amount;
-    private final long nonce;
-    private final byte[] customHash;
+    private byte[] spendingPubKey;
+    private long amount;
+    private long nonce;
+    private byte[] customHash;
 
     public ScUtxoOutput(byte[] spendingPubKey, long amount, long nonce, byte[] customHash) {
         if (spendingPubKey.length != Constants.SC_PK_HASH_SIZE())
@@ -43,6 +43,22 @@ public class ScUtxoOutput implements PoseidonHashable {
 
     public byte[] getCustomHash() {
         return customHash;
+    }
+
+    public void setSpendingPubKey(byte[] spendingPubKey) {
+        this.spendingPubKey = spendingPubKey;
+    }
+
+    public void setAmount(long amount) {
+        this.amount = amount;
+    }
+
+    public void setNonce(long nonce) {
+        this.nonce = nonce;
+    }
+
+    public void setCustomHash(byte[] customHash) {
+        this.customHash = customHash;
     }
 
     public static ScUtxoOutput getRandom(Random r) {
