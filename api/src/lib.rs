@@ -22,7 +22,7 @@ use demo_circuit::{
     constants::*, constraints::CeasedSidechainWithdrawalCircuit, generate_circuit_keypair,
     type_mapping::*, CswFtOutputData, CswFtProverData, CswSysData, CswUtxoInputData,
     CswUtxoOutputData, CswUtxoProverData, NaiveTresholdSignature,
-    WithdrawalCertificateDataNew,
+    WithdrawalCertificateDataNew, read_field_element_from_buffer_with_padding,
 };
 
 use primitives::{
@@ -118,13 +118,15 @@ ffi_export!(
         _class: JClass,
         _field_element_bytes: jbyteArray,
     ) -> jobject {
-        deserialize_to_jobject::<FieldElement>(
-            &_env,
-            _field_element_bytes,
-            None,
-            None,
-            "com/horizen/librustsidechains/FieldElement",
-        )
+
+        let fe_bytes = _env
+            .convert_byte_array(_field_element_bytes)
+            .expect("Cannot read bytes.");
+
+        match read_field_element_from_buffer_with_padding(fe_bytes.as_slice()) {
+            Ok(fe) => return_field_element(&_env, fe),
+            Err(_) => std::ptr::null::<jobject>() as jobject,
+        }
     }
 );
 
