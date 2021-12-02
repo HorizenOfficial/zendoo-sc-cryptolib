@@ -1,6 +1,8 @@
 package com.horizen.certnative;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
@@ -10,12 +12,12 @@ import com.horizen.poseidonnative.PoseidonHashable;
 public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
     private final FieldElement scId;
     private final int epochNumber;
-    private final List<BackwardTransfer> btList;
+    private final BackwardTransfer[] btList;
     private final long quality;
     private final FieldElement mcbScTxsCom;
     private final long ftMinFee;
     private final long btrMinFee;
-    private final List<FieldElement> customFields;
+    private final FieldElement[] customFields;
 
     static {
         Library.load();
@@ -25,12 +27,12 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
             long ftMinFee, long btrMinFee, List<FieldElement> customFields) {
         this.scId = scId;
         this.epochNumber = epochNumber;
-        this.btList = btList;
+        this.btList = btList.toArray(new BackwardTransfer[0]);
         this.quality = quality;
         this.mcbScTxsCom = mcbScTxsCom;
         this.ftMinFee = ftMinFee;
         this.btrMinFee = btrMinFee;
-        this.customFields = customFields;
+        this.customFields = customFields.toArray(new FieldElement[0]);
     }
 
     public FieldElement getScId() {
@@ -41,7 +43,7 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
         return epochNumber;
     }
 
-    public List<BackwardTransfer> getBtList() {
+    public BackwardTransfer[] getBtList() {
         return btList;
     }
 
@@ -61,7 +63,7 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
         return btrMinFee;
     }
 
-    public List<FieldElement> getCustomFields() {
+    public FieldElement[] getCustomFields() {
         return customFields;
     }
 
@@ -70,6 +72,29 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
     @Override
     public FieldElement getHash() {
         return nativeGetHash();
+    }
+
+    public static WithdrawalCertificate getRandom(Random r, int numBt, int numCustomFields) {
+        // Generate random BTs
+        List<BackwardTransfer> btList = new ArrayList<>();
+        if (numBt > 0) {            
+            for(int i = 0; i < numBt; i++) {
+                btList.add(BackwardTransfer.getRandom(r));
+            }
+        }
+
+        // Generate random custom fields
+        List<FieldElement> customFields = new ArrayList<>();
+        if (numCustomFields > 0) {
+            for(int i = 0; i < numCustomFields; i++)   
+                customFields.add(FieldElement.createRandom(r));
+        }
+
+        // Generate and return random wCert
+        return new WithdrawalCertificate(
+            FieldElement.createRandom(r), r.nextInt(), btList, r.nextLong(),
+            FieldElement.createRandom(r), r.nextLong(), r.nextLong(), customFields
+        );
     }
 
     @Override

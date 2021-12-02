@@ -33,6 +33,11 @@ public class FieldElement implements AutoCloseable {
         return nativeCreateRandom(seed);
     }
 
+    public static FieldElement createRandom(Random r) {
+        long seed = r.nextLong();
+        return nativeCreateRandom(seed);
+    }
+
     // Declared protected for testing purposes
     protected native byte[] nativeSerializeFieldElement();
 

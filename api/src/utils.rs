@@ -256,7 +256,7 @@ pub(crate) fn parse_jobject_array_from_jobject(
     list_obj_name: &str,
 ) -> jobjectArray {
     _env.get_field(obj, field_name, format!("[L{};", list_obj_name).as_str())
-        .expect("Should be able to get customFields")
+        .expect(format!("Should be able to get {}", field_name).as_str())
         .l()
         .unwrap()
         .cast()

@@ -16,7 +16,7 @@ public class CswFtProverData implements AutoCloseable {
     private final FieldElement scCreationCommitment;
     private final FieldElement scbBtrTreeRoot;
     private final FieldElement wCertTreeRoot;
-    private final List<FieldElement> scTxsComHashes;
+    private final FieldElement[] scTxsComHashes;
 
     public CswFtProverData(ForwardTransferOutput output, byte[] ftInputSecretKey, FieldElement mcbScTxsComStart,
                            MerklePath merklePathToScHash, MerklePath ftTreePath, FieldElement scCreationCommitment,
@@ -46,7 +46,7 @@ public class CswFtProverData implements AutoCloseable {
         this.scCreationCommitment = scCreationCommitment;
         this.scbBtrTreeRoot = scbBtrTreeRoot;
         this.wCertTreeRoot = wCertTreeRoot;
-        this.scTxsComHashes = scTxsComHashes;
+        this.scTxsComHashes = scTxsComHashes.toArray(new FieldElement[0]);
     }
 
     public ForwardTransferOutput getOutput() {
@@ -81,7 +81,7 @@ public class CswFtProverData implements AutoCloseable {
         return wCertTreeRoot;
     }
 
-    public List<FieldElement> getScTxsComHashes() {
+    public FieldElement[] getScTxsComHashes() {
         return scTxsComHashes;
     }
 

@@ -1,5 +1,7 @@
 package com.horizen.scutxonative;
 
+import java.util.Random;
+
 import com.horizen.librustsidechains.Constants;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.poseidonnative.PoseidonHashable;
@@ -41,6 +43,17 @@ public class ScUtxoOutput implements PoseidonHashable {
 
     public byte[] getCustomHash() {
         return customHash;
+    }
+
+    public static ScUtxoOutput getRandom(Random r) {
+
+        byte[] spendingPubKey = new byte[Constants.SC_PK_HASH_SIZE()];
+        r.nextBytes(spendingPubKey);
+
+        byte[] customHash = new byte[Constants.SC_CUSTOM_HASH_SIZE()];
+        r.nextBytes(customHash);
+
+        return new ScUtxoOutput(spendingPubKey, r.nextLong(), r.nextLong(), customHash);
     }
 
     private native FieldElement nativeGetHash();

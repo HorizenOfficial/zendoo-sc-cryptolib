@@ -1,6 +1,9 @@
 package com.horizen.certnative;
 
 import com.horizen.librustsidechains.Library;
+
+import java.util.Random;
+
 import com.horizen.librustsidechains.Constants;
 
 public class BackwardTransfer {
@@ -26,5 +29,13 @@ public class BackwardTransfer {
 
     public long getAmount() {
         return this.amount;
+    }
+
+    public static BackwardTransfer getRandom(Random r) {
+        byte[] publicKeyHash = new byte[Constants.MC_PK_HASH_SIZE()];
+        r.nextBytes(publicKeyHash);
+        long amount = r.nextLong();
+
+        return new BackwardTransfer(publicKeyHash, amount);
     }
 }

@@ -8,19 +8,6 @@ import com.horizen.provingsystemnative.ProvingSystemType;
 
 public class CswProof {
 
-    private final int rangeSize;
-    private final int numCustomFields;
-
-    /**
-     * 
-     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
-     * @param numCustomFields - exact number of custom fields the circuit must support
-     */
-    public CswProof(int rangeSize, int numCustomFields) {
-        this.rangeSize = rangeSize;
-        this.numCustomFields = numCustomFields;
-    }
-
     private static native boolean nativeSetup(
         ProvingSystemType psType,
         int rangeSize,
@@ -36,6 +23,8 @@ public class CswProof {
     /**
      * Generate (provingKey, verificationKey) pair for this circuit.
      * @param psType - proving system to be used
+     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
+     * @param numCustomFields - exact number of custom fields the circuit must support
      * @param provingKeyPath - file path to which saving the proving key
      * @param verificationKeyPath - file path to which saving the verification key
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk
@@ -45,6 +34,8 @@ public class CswProof {
      */
     public boolean setup(
         ProvingSystemType psType,
+        int rangeSize,
+        int numCustomFields,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -62,6 +53,8 @@ public class CswProof {
     /**
      * Generate (provingKey, verificationKey) pair for this circuit.
      * @param psType - proving system to be used
+     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
+     * @param numCustomFields - exact number of custom fields the circuit must support
      * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
      * @param zk - used to estimate the proof and vk size, tells if the proof will be created using zk or not
@@ -70,6 +63,8 @@ public class CswProof {
      */
     public boolean setup(
         ProvingSystemType psType,
+        int rangeSize,
+        int numCustomFields,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -85,6 +80,8 @@ public class CswProof {
     /**
      * Generate (provingKey, verificationKey) pair for this circuit.
      * @param psType - proving system to be used
+     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
+     * @param numCustomFields - exact number of custom fields the circuit must support
      * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk, estimated assuming not to use zk property
@@ -92,6 +89,8 @@ public class CswProof {
      */
     public boolean setup(
         ProvingSystemType psType,
+        int rangeSize,
+        int numCustomFields,
         String provingKeyPath,
         String verificationKeyPath,
         int maxProofPlusVkSize
@@ -120,6 +119,8 @@ public class CswProof {
 
     /**
      * Compute proof for given parameters
+     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
+     * @param numCustomFields - exact number of custom fields the circuit must support
      * @param sysData - certificate sys data.
      * @param scId - the id of the corresponding sidechain
      * @param lastWcert - the last confirmed wcert in the MC. Can be empty if SC has ceased before we have at least
@@ -137,6 +138,8 @@ public class CswProof {
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
     public byte[] createProof(
+        int rangeSize,
+        int numCustomFields,
         CswSysData sysData,
         FieldElement scId,
         Optional<WithdrawalCertificate> lastWcert,
@@ -164,6 +167,8 @@ public class CswProof {
 
     /**
      * Compute proof for given parameters
+     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
+     * @param numCustomFields - exact number of custom fields the circuit must support
      * @param sysData - certificate sys data.
      * @param scId - the id of the corresponding sidechain
      * @param lastWcert - the last confirmed wcert in the MC. Can be empty if SC has ceased before we have at least
@@ -179,6 +184,8 @@ public class CswProof {
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
     public byte[] createProof(
+        int rangeSize,
+        int numCustomFields,
         CswSysData sysData,
         FieldElement scId,
         Optional<WithdrawalCertificate> lastWcert,
@@ -204,6 +211,8 @@ public class CswProof {
 
     /**
      * Compute proof for given parameters
+     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
+     * @param numCustomFields - exact number of custom fields the circuit must support
      * @param sysData - certificate sys data.
      * @param scId - the id of the corresponding sidechain
      * @param lastWcert - the last confirmed wcert in the MC. Can be empty if SC has ceased before we have at least
@@ -218,6 +227,8 @@ public class CswProof {
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
     public byte[] createProof(
+        int rangeSize,
+        int numCustomFields,
         CswSysData sysData,
         FieldElement scId,
         Optional<WithdrawalCertificate> lastWcert,
@@ -242,6 +253,8 @@ public class CswProof {
 
     /**
      * Compute proof for given parameters. Zero knowledge will be used.
+     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
+     * @param numCustomFields - exact number of custom fields the circuit must support
      * @param sysData - certificate sys data.
      * @param scId - the id of the corresponding sidechain
      * @param lastWcert - the last confirmed wcert in the MC. Can be empty if SC has ceased before we have at least
@@ -255,6 +268,8 @@ public class CswProof {
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
     public byte[] createProof(
+        int rangeSize,
+        int numCustomFields,
         CswSysData sysData,
         FieldElement scId,
         Optional<WithdrawalCertificate> lastWcert,

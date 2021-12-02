@@ -1,5 +1,7 @@
 package com.horizen.fwtnative;
 
+import java.util.Random;
+
 import com.horizen.librustsidechains.Constants;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
@@ -60,6 +62,19 @@ public class ForwardTransferOutput implements PoseidonHashable {
 
     public int getOutIdx() {
         return outIdx;
+    }
+
+    public static ForwardTransferOutput getRandom(Random r) {
+        byte[] receiverPubKey = new byte[Constants.SC_PK_HASH_SIZE()];
+        r.nextBytes(receiverPubKey);
+
+        byte[] paybackAddrDataHash = new byte[Constants.MC_PK_HASH_SIZE()];
+        r.nextBytes(paybackAddrDataHash);
+
+        byte[] txHash = new byte[Constants.SC_TX_HASH_SIZE()];
+        r.nextBytes(txHash);
+
+        return new ForwardTransferOutput(r.nextLong(), receiverPubKey, paybackAddrDataHash, txHash, r.nextInt());
     }
 
     private native FieldElement nativeGetHash();

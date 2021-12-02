@@ -2117,7 +2117,7 @@ ffi_export!(
 
                 //Create new CreateProofResult object
                 let proof_result_class = _env
-                    .find_class("com/horizen/provingsystemnative/CreateProofResult")
+                    .find_class("com/horizen/certnative/CreateProofResult")
                     .expect("Should be able to find CreateProofResult class");
 
                 let result = _env
@@ -4558,10 +4558,10 @@ fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateDataNew {
     let mcb_sc_txs_com = *parse_field_element_from_jobject(&_env, _cert, "mcbScTxsCom");
 
     // Parse btr_fee
-    let btr_min_fee = parse_long_from_jobject(&_env, _cert, "btrFee");
+    let btr_min_fee = parse_long_from_jobject(&_env, _cert, "btrMinFee");
 
     // Parse ft_min_amount
-    let ft_min_fee = parse_long_from_jobject(&_env, _cert, "ftMinAmount");
+    let ft_min_fee = parse_long_from_jobject(&_env, _cert, "ftMinFee");
 
     WithdrawalCertificateDataNew::new(
         sc_id,

@@ -1,9 +1,5 @@
-package com.horizen.sigproofnative;
+package com.horizen.certnative;
 
-import com.horizen.certnative.BackwardTransfer;
-import com.horizen.certnative.CreateProofResult;
-import com.horizen.certnative.NaiveThresholdSigProof;
-import com.horizen.librustsidechains.Constants;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.schnorrnative.SchnorrKeyPair;
 import com.horizen.schnorrnative.SchnorrPublicKey;
@@ -89,14 +85,8 @@ public class NaiveThresholdSigProofTest {
 
         backwardTransferCout = r.nextInt(backwardTransferCout + 1);
         // Create dummy Backward Transfers
-        for(int i = 0; i < backwardTransferCout; i++) {
-
-            byte[] publicKeyHash = new byte[Constants.MC_PK_HASH_SIZE()];
-            r.nextBytes(publicKeyHash);
-            long amount = r.nextLong();
-
-            btList.add(new BackwardTransfer(publicKeyHash, amount));
-        }
+        for(int i = 0; i < backwardTransferCout; i++)
+            btList.add(BackwardTransfer.getRandom(r));
 
         // Compute keys and signatures
         List<SchnorrKeyPair> keyPairList = new ArrayList<>();
@@ -113,9 +103,8 @@ public class NaiveThresholdSigProofTest {
 
         // Generate random custom fields if requested
         if (numCustomFields > 0) {
-            for (int i = 0; i < numCustomFields; i++) {
+            for (int i = 0; i < numCustomFields; i++)
                 customFields.add(FieldElement.createRandom());
-            }
         }
 
         for (int i = 0; i<keyCount; i++) {
