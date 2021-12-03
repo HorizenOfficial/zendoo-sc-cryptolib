@@ -39,7 +39,7 @@ public class CswProofTest {
     static ForwardTransferOutput ftOutput;
     static WithdrawalCertificate wCert;
 
-    static String testScSecretKey = "08eb1969be10581600c812f6ef0eea3b16c432854588698d78696e8ff7a7d163";
+    static String testScSecretKey = "50d5e4c0b15402013941a3c525c6af85e7ab8a2da39a59707211ddd53def965e";
     static String testScPublicKey = "f165e1e5f7c290e52f2edef3fbab60cbae74bfd3274f8e5ee1de3345c954a166";
     
     static String snarkPkPath = "./test_csw_snark_pk";
