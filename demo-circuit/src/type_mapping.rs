@@ -18,14 +18,14 @@ pub const VRF_PROOF_SIZE: usize = GROUP_COMPRESSED_SIZE + 2 * FIELD_SIZE;
 
 pub type Error = Box<dyn std::error::Error>;
 
-pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, G2Projective, FieldHash>;
-pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement, G2Projective>;
+pub type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, G2, FieldHash>;
+pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement, G2>;
 pub type SchnorrPk = G2;
 pub type SchnorrSk = ScalarFieldElement;
 
-pub type GroupHash = BoweHopwoodPedersenCRH<G2Projective, VRFWindow>;
+pub type GroupHash = BoweHopwoodPedersenCRH<G2, VRFWindow>;
 
-pub type VRFScheme = FieldBasedEcVrf<FieldElement, G2Projective, FieldHash, GroupHash>;
-pub type VRFProof = FieldBasedEcVrfProof<FieldElement, G2Projective>;
+pub type VRFScheme = FieldBasedEcVrf<FieldElement, G2, FieldHash, GroupHash>;
+pub type VRFProof = FieldBasedEcVrfProof<FieldElement, G2>;
 pub type VRFPk = G2;
 pub type VRFSk = ScalarFieldElement;

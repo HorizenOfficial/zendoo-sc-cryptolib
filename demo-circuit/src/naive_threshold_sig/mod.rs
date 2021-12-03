@@ -40,11 +40,11 @@ lazy_static! {
 }
 
 //Sig types
-pub(crate) type SchnorrSigGadget = FieldBasedSchnorrSigGadget<FieldElement, G2Projective>;
+pub(crate) type SchnorrSigGadget = FieldBasedSchnorrSigGadget<FieldElement, G2>;
 pub(crate) type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
-    FieldElement, G2Projective, CurveGadget, FieldHash, PoseidonHashGadget
+    FieldElement, G2, CurveGadget, FieldHash, PoseidonHashGadget
 >;
-pub(crate) type SchnorrPkGadget = FieldBasedSchnorrPkGadget<FieldElement, G2Projective, CurveGadget>;
+pub(crate) type SchnorrPkGadget = FieldBasedSchnorrPkGadget<FieldElement, G2, CurveGadget>;
 
 //Field types
 pub(crate) type FrGadget = FpGadget<FieldElement>;
@@ -53,9 +53,9 @@ pub(crate) type FrGadget = FpGadget<FieldElement>;
 pub struct NaiveTresholdSignature<F: PrimeField>{
 
     //Witnesses
-    pks:                                  Vec<Option<FieldBasedSchnorrPk<G2Projective>>>, //pk_n = g^sk_n
+    pks:                                  Vec<Option<FieldBasedSchnorrPk<G2>>>, //pk_n = g^sk_n
     //sig_n = sign(sk_n, H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount))
-    sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>>,
+    sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2>>>,
     threshold:                            Option<FieldElement>,
     b:                                    Vec<Option<bool>>,
     sc_id:                                Option<FieldElement>,
@@ -72,8 +72,8 @@ pub struct NaiveTresholdSignature<F: PrimeField>{
 
 impl<F: PrimeField>NaiveTresholdSignature<F> {
     pub fn new(
-        pks:                                  Vec<FieldBasedSchnorrPk<G2Projective>>,
-        sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>>,
+        pks:                                  Vec<FieldBasedSchnorrPk<G2>>,
+        sigs:                                 Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2>>>,
         threshold:                            FieldElement,
         b:                                    FieldElement,
         sc_id:                                FieldElement,
@@ -338,7 +338,7 @@ pub fn get_instance_for_setup(max_pks: usize) -> NaiveTresholdSignature<FieldEle
 #[cfg(test)]
 mod test {
     use super::*;
-    use algebra::ProjectiveCurve;
+    use algebra::Curve;
     use primitives::{
         crh::FieldBasedHash,
         signature::{
@@ -353,7 +353,7 @@ mod test {
         utils::commitment_tree::ByteAccumulator
     };
 
-    type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, G2Projective, FieldHash>;
+    type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, G2, FieldHash>;
 
     fn generate_test_proof(
         max_pks:                  usize,
@@ -428,7 +428,7 @@ mod test {
 
         //Compute pks_threshold_hash
         let mut h = FieldHash::init_constant_length(pks.len(), None);
-        pks.iter().for_each(|pk| { h.update(pk.0.into_affine().x); });
+        pks.iter().for_each(|pk| { h.update(pk.0.into_affine().unwrap().x); });
         let pks_hash = h.finalize().unwrap();
         let pks_threshold_hash = if !wrong_pks_threshold_hash {
             FieldHash::init_constant_length(2, None)

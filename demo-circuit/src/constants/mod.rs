@@ -1,6 +1,6 @@
 use algebra::{
     biginteger::BigInteger256 as BigInteger,
-    Field, ProjectiveCurve, field_new
+    Group, Field, field_new
 };
 
 use primitives::{
@@ -14,7 +14,7 @@ pub mod constants;
 
 pub struct NaiveThresholdSigParams {
     pub null_sig:   SchnorrSig,
-    pub null_pk:    FieldBasedSchnorrPk<G2Projective>,
+    pub null_pk:    FieldBasedSchnorrPk<G2>,
 }
 
 impl NaiveThresholdSigParams {
@@ -56,7 +56,7 @@ impl NaiveThresholdSigParams {
             )
         );
 
-        let null_pk = FieldBasedSchnorrPk(G2Projective::new(x, y, z));
+        let null_pk = FieldBasedSchnorrPk(G2::new(x, y, z));
 
         Self{null_sig, null_pk}
     }
@@ -70,13 +70,13 @@ impl PedersenWindow for VRFWindow {
 }
 
 pub struct VRFParams{
-    pub group_hash_generators: Vec<Vec<G2Projective>>,
+    pub group_hash_generators: Vec<Vec<G2>>,
 }
 
 impl VRFParams {
     pub fn new() -> Self {
 
-        let gen_1 = G2Projective::new(
+        let gen_1 = G2::new(
         field_new!(FieldElement,
             BigInteger([
                 12926485790763496744,
@@ -100,7 +100,7 @@ impl VRFParams {
             ])),
         );
 
-        let gen_2 = G2Projective::new(
+        let gen_2 = G2::new(
         field_new!(FieldElement,
             BigInteger([
                 15342121784330514541,
@@ -129,8 +129,8 @@ impl VRFParams {
         Self{group_hash_generators}
     }
 
-    pub(crate) fn compute_group_hash_table(generators: Vec<G2Projective>)
-    -> Vec<Vec<G2Projective>>
+    pub(crate) fn compute_group_hash_table(generators: Vec<G2>)
+    -> Vec<Vec<G2>>
     {
         let mut gen_table = Vec::new();
         for i in 0..VRFWindow::NUM_WINDOWS {
@@ -151,14 +151,14 @@ impl VRFParams {
 #[cfg(test)]
 mod test
 {
-    use algebra::{PrimeField, FpParameters, FromCompressedBits, AffineCurve};
+    use algebra::{PrimeField, FpParameters, FromCompressedBits, Curve};
     use super::*;
     use blake2s_simd::{
         Hash, Params
     };
     use bit_vec::BitVec;
 
-    fn hash_to_curve<F: PrimeField, G: AffineCurve + FromCompressedBits>(
+    fn hash_to_curve<F: PrimeField, G: Curve + FromCompressedBits>(
         tag: &[u8],
         personalization: &[u8]
     ) -> Option<G> {
@@ -234,8 +234,7 @@ mod test
         let tag = b"Strontium Sr 90";
         let personalization = constants::NULL_PK_PERSONALIZATION;
         let htc_out = hash_to_curve::<FieldElement, G2>(tag, personalization)
-            .unwrap()
-            .into_projective();
+            .unwrap();
         println!("{:#?}", htc_out);
         let null_pk = NaiveThresholdSigParams::new().null_pk.0;
         assert_eq!(htc_out, null_pk);
@@ -248,14 +247,12 @@ mod test
         //Gen1
         let tag = b"Magnesium Mg 12";
         let htc_g1_out = hash_to_curve::<FieldElement, G2>(tag, personalization)
-            .unwrap()
-            .into_projective();
+            .unwrap();
 
         //Gen2
         let tag = b"Gold Au 79";
         let htc_g2_out = hash_to_curve::<FieldElement, G2>(tag, personalization)
-            .unwrap()
-            .into_projective();
+            .unwrap();
 
         //Check GH generators
         let gh_generators = VRFParams::compute_group_hash_table(

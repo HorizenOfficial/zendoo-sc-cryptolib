@@ -1,5 +1,4 @@
 use algebra::{
-    ProjectiveCurve, AffineCurve,
     ToConstraintField, UniformRand,
 };
 use primitives::{crh::{
@@ -55,24 +54,24 @@ pub fn get_random_field_element(seed: u64) -> FieldElement {
 pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
     let mut rng = OsRng;
     let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
-    (pk.0.into_affine(), sk)
+    (pk.0, sk)
 }
 
 pub fn schnorr_get_public_key(sk: &SchnorrSk) -> SchnorrPk {
-    SchnorrSigScheme::get_public_key(sk).0.into_affine()
+    SchnorrSigScheme::get_public_key(sk).0
 }
 
 pub fn schnorr_verify_public_key(pk: &SchnorrPk) -> bool {
-    SchnorrSigScheme::keyverify(&FieldBasedSchnorrPk(pk.into_projective()))
+    SchnorrSigScheme::keyverify(&FieldBasedSchnorrPk(*pk))
 }
 
 pub fn schnorr_sign(msg: &FieldElement, sk: &SchnorrSk, pk: &SchnorrPk) -> Result<SchnorrSig, Error> {
     let mut rng = OsRng;
-    SchnorrSigScheme::sign(&mut rng, &FieldBasedSchnorrPk(pk.into_projective()), sk, msg.clone())
+    SchnorrSigScheme::sign(&mut rng, &FieldBasedSchnorrPk(*pk), sk, msg.clone())
 }
 
 pub fn schnorr_verify_signature(msg: &FieldElement, pk: &SchnorrPk, signature: &SchnorrSig) -> Result<bool, Error> {
-    SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), msg.clone(), signature)
+    SchnorrSigScheme::verify(&FieldBasedSchnorrPk(*pk), msg.clone(), signature)
 }
 
 //*****************************Naive threshold sig circuit related functions************************
@@ -182,14 +181,13 @@ pub fn create_naive_threshold_sig_proof(
     //Compute b as v-t and convert it to field element
     let b = FieldElement::from(valid_signatures - threshold);
 
-    //Convert affine pks to projective
-    let pks = pks.iter().map(|&pk| FieldBasedSchnorrPk(pk.into_projective())).collect::<Vec<_>>();
+    let pks = pks.iter().map(|&pk| FieldBasedSchnorrPk(pk)).collect::<Vec<_>>();
 
     //Convert needed variables into field elements
     let threshold = FieldElement::from(threshold);
 
     let c = NaiveTresholdSignature::<FieldElement>::new(
-        pks, sigs, threshold, b, *sc_id, FieldElement::from(epoch_number),
+        pks.to_vec(), sigs, threshold, b, *sc_id, FieldElement::from(epoch_number),
         *end_cumulative_sc_tx_comm_tree_root, mr_bt, ft_min_amount, btr_fee, max_pks,
     );
 
@@ -288,24 +286,24 @@ pub fn verify_naive_threshold_sig_proof(
 //VRF types and functions
 
 lazy_static! {
-    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<G2Projective> = {
+    pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<G2> = {
         let params = VRFParams::new();
-        BoweHopwoodPedersenParameters::<G2Projective>{generators: params.group_hash_generators}
+        BoweHopwoodPedersenParameters::<G2>{generators: params.group_hash_generators}
     };
 }
 
 pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
     let mut rng = OsRng;
     let (pk, sk) = VRFScheme::keygen(&mut rng);
-    (pk.0.into_affine(), sk)
+    (pk.0, sk)
 }
 
 pub fn vrf_get_public_key(sk: &VRFSk) -> VRFPk {
-    VRFScheme::get_public_key(sk).0.into_affine()
+    VRFScheme::get_public_key(sk).0
 }
 
 pub fn vrf_verify_public_key(pk: &VRFPk) -> bool {
-    VRFScheme::keyverify(&FieldBasedEcVrfPk(pk.into_projective()))
+    VRFScheme::keyverify(&FieldBasedEcVrfPk(*pk))
 }
 
 pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof, FieldElement), Error> {
@@ -315,7 +313,7 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
     let proof = VRFScheme::prove(
         &mut rng,
         &VRF_GH_PARAMS,
-        &FieldBasedEcVrfPk(pk.into_projective()),
+        &FieldBasedEcVrfPk(*pk),
         sk,
         msg.clone()
     )?;
@@ -337,7 +335,7 @@ pub fn vrf_prove(msg: &FieldElement, sk: &VRFSk, pk: &VRFPk) -> Result<(VRFProof
 pub fn vrf_proof_to_hash(msg: &FieldElement, pk: &VRFPk, proof: &VRFProof) -> Result<FieldElement, Error> {
     VRFScheme::proof_to_hash(
         &VRF_GH_PARAMS,
-        &FieldBasedEcVrfPk(pk.into_projective()),
+        &FieldBasedEcVrfPk(*pk),
         msg.clone(),
         proof
     )
@@ -363,7 +361,7 @@ pub(crate) fn into_i8(v: Vec<u8>) -> Vec<i8> {
 mod test {
     use super::*;
     use rand::Rng;
-    use algebra::Field;
+    use algebra::Group;
     use cctp_primitives::utils::{
         poseidon_hash::*, mht::*
     };

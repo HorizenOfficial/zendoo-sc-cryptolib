@@ -1,5 +1,5 @@
 use algebra::{
-    Field, PrimeField, ToBits, ProjectiveCurve,
+    Field, PrimeField, ToBits, Curve,
 };
 
 use primitives::{
@@ -43,8 +43,8 @@ lazy_static! {
 struct NaiveTresholdSignatureTest {
 
     //Witnesses
-    pks:                                    Vec<FieldBasedSchnorrPk<G2Projective>>,
-    sigs:                                   Vec<FieldBasedSchnorrSignature<FieldElement, G2Projective>>,
+    pks:                                    Vec<FieldBasedSchnorrPk<G2>>,
+    sigs:                                   Vec<FieldBasedSchnorrSignature<FieldElement, G2>>,
     threshold:                              FieldElement,
     b:                                      Vec<bool>,
     sc_id:                                  FieldElement,
@@ -138,7 +138,7 @@ fn generate_inputs
 
     //Compute pks_threshold_hash
     let mut h = FieldHash::init_constant_length(pks.len(), None);
-    pks.iter().for_each(|pk| { h.update(pk.0.into_affine().x); });
+    pks.iter().for_each(|pk| { h.update(pk.0.into_affine().unwrap().x); });
     let pks_hash = h.finalize().unwrap();
     let pks_threshold_hash = if !wrong_pks_threshold_hash {
         FieldHash::init_constant_length(2, None)
