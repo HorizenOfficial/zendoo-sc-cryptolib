@@ -9,7 +9,7 @@ include = ["Cargo.toml", "src"]
 algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "refactor_ginger_dev"}
 primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "refactor_ginger_dev"}
 r1cs-crypto = {features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "refactor_ginger_dev"}
-r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "refactor_ginger_dev"}
 r1cs-std = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "refactor_ginger_dev"}
 
 cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "refactor_ginger_dev" }

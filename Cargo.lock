@@ -9,26 +9,12 @@ checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 [[package]]
 name = "algebra"
 version = "0.3.0"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#5abd1a7ff6a4f9ccfe1254b754b21f3e4a0180a5"
-dependencies = [
- "byteorder",
- "derivative",
- "field-assembly 0.1.1-alpha.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development)",
- "rand",
- "rustc_version",
- "serde",
- "unroll",
-]
-
-[[package]]
-name = "algebra"
-version = "0.3.0"
 source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev#7ef8626b749a96eeb7c8cb817e94045bc0e4b0f9"
 dependencies = [
  "algebra-derive",
  "byteorder",
  "derivative",
- "field-assembly 0.1.1-alpha.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "field-assembly",
  "rand",
  "rayon",
  "rustc_version",
@@ -50,7 +36,7 @@ dependencies = [
 name = "api"
 version = "0.1.0"
 dependencies = [
- "algebra 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "algebra",
  "blake2",
  "cctp_primitives",
  "demo-circuit",
@@ -165,7 +151,7 @@ name = "cctp_primitives"
 version = "0.1.1"
 source = "git+https://github.com/HorizenOfficial/zendoo-cctp-lib.git?branch=refactor_ginger_dev#f1e466d0019f16b92781d68fa77f89b0cb601b49"
 dependencies = [
- "algebra 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "algebra",
  "bit-vec",
  "blake2",
  "byteorder",
@@ -275,7 +261,7 @@ dependencies = [
 name = "demo-circuit"
 version = "0.1.0"
 dependencies = [
- "algebra 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "algebra",
  "bit-vec",
  "blake2",
  "blake2s_simd",
@@ -284,7 +270,7 @@ dependencies = [
  "digest",
  "lazy_static",
  "primitives",
- "r1cs-core 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development)",
+ "r1cs-core",
  "r1cs-crypto",
  "r1cs-std",
  "radix_trie",
@@ -326,17 +312,9 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 [[package]]
 name = "field-assembly"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#5abd1a7ff6a4f9ccfe1254b754b21f3e4a0180a5"
-dependencies = [
- "mince 0.1.1-alpha.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development)",
-]
-
-[[package]]
-name = "field-assembly"
-version = "0.1.1-alpha.0"
 source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev#7ef8626b749a96eeb7c8cb817e94045bc0e4b0f9"
 dependencies = [
- "mince 0.1.1-alpha.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "mince",
 ]
 
 [[package]]
@@ -432,12 +410,12 @@ name = "marlin"
 version = "0.2.0"
 source = "git+https://github.com/HorizenLabs/marlin?branch=refactor_ginger_dev#7a027f9de95f12040cc82111d36a07bee332f831"
 dependencies = [
- "algebra 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "algebra",
  "bench-utils",
  "derivative",
  "digest",
  "poly-commit",
- "r1cs-core 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "r1cs-core",
  "r1cs-std",
  "rand",
  "rand_chacha",
@@ -458,15 +436,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59accc507f1338036a0477ef61afdae33cde60840f4dfe481319ce3ad116ddf9"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "mince"
-version = "0.1.1-alpha.0"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#5abd1a7ff6a4f9ccfe1254b754b21f3e4a0180a5"
-dependencies = [
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -524,7 +493,7 @@ name = "poly-commit"
 version = "0.1.0"
 source = "git+https://github.com/HorizenLabs/poly-commit?branch=refactor_ginger_dev#853fe600b1c5f9ec782ab76c96c9958436d3936b"
 dependencies = [
- "algebra 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "algebra",
  "bench-utils",
  "derivative",
  "digest",
@@ -545,7 +514,7 @@ name = "primitives"
 version = "0.3.0"
 source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev#7ef8626b749a96eeb7c8cb817e94045bc0e4b0f9"
 dependencies = [
- "algebra 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "algebra",
  "bench-utils",
  "blake2",
  "derivative",
@@ -570,14 +539,14 @@ name = "proof-systems"
 version = "0.3.0"
 source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev#7ef8626b749a96eeb7c8cb817e94045bc0e4b0f9"
 dependencies = [
- "algebra 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "algebra",
  "bench-utils",
  "byteorder",
  "derivative",
  "digest",
  "marlin",
  "poly-commit",
- "r1cs-core 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "r1cs-core",
  "r1cs-std",
  "rand",
  "rayon",
@@ -597,18 +566,9 @@ dependencies = [
 [[package]]
 name = "r1cs-core"
 version = "0.3.0"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#5abd1a7ff6a4f9ccfe1254b754b21f3e4a0180a5"
-dependencies = [
- "algebra 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development)",
- "smallvec",
-]
-
-[[package]]
-name = "r1cs-core"
-version = "0.3.0"
 source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev#7ef8626b749a96eeb7c8cb817e94045bc0e4b0f9"
 dependencies = [
- "algebra 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "algebra",
  "smallvec",
 ]
 
@@ -617,12 +577,12 @@ name = "r1cs-crypto"
 version = "0.3.0"
 source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev#7ef8626b749a96eeb7c8cb817e94045bc0e4b0f9"
 dependencies = [
- "algebra 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "algebra",
  "bench-utils",
  "derivative",
  "digest",
  "primitives",
- "r1cs-core 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "r1cs-core",
  "r1cs-std",
  "rand",
  "rayon",
@@ -633,10 +593,10 @@ name = "r1cs-std"
 version = "0.3.0"
 source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev#7ef8626b749a96eeb7c8cb817e94045bc0e4b0f9"
 dependencies = [
- "algebra 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "algebra",
  "derivative",
  "hex",
- "r1cs-core 0.3.0 (git+https://github.com/HorizenOfficial/ginger-lib.git?branch=refactor_ginger_dev)",
+ "r1cs-core",
  "radix_trie",
  "rand",
 ]
