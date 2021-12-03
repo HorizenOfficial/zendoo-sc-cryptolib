@@ -202,7 +202,7 @@ pub(crate) fn parse_merkle_path_from_jobject<'a>(
     name: &str,
 ) -> &'a GingerMHTPath {
     let path_obj = _env
-        .get_field(obj, name, "Lcom/horizen/merkletreenative/MerklePath")
+        .get_field(obj, name, "Lcom/horizen/merkletreenative/MerklePath;")
         .expect("Should be able to get MerklePath field")
         .l()
         .unwrap();
@@ -218,7 +218,7 @@ pub(crate) fn cast_joption_to_rust_option<'a>(
     _env: &'a JNIEnv,
     obj: JObject<'a>,
     opt_name: &str,
-    wrapped_obj_class_path: &str,
+    _wrapped_obj_class_path: &str,
 ) -> Option<JObject<'a>> {
     // Parse Optional object
     let opt_object = _env
@@ -239,7 +239,8 @@ pub(crate) fn cast_joption_to_rust_option<'a>(
             _env.call_method(
                 opt_object,
                 "get",
-                format!("()L{};", wrapped_obj_class_path).as_str(),
+                //format!("()L{};", wrapped_obj_class_path).as_str(),
+                "()Ljava/lang/Object;",
                 &[],
             )
             .expect("Should be able to unwrap a non empty Optional")

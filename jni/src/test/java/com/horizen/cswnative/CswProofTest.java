@@ -1,5 +1,6 @@
 package com.horizen.cswnative;
 
+import com.horizen.TestUtils;
 import com.horizen.certnative.WithdrawalCertificate;
 import com.horizen.fwtnative.ForwardTransferOutput;
 import com.horizen.librustsidechains.Constants;
@@ -38,8 +39,8 @@ public class CswProofTest {
     static ForwardTransferOutput ftOutput;
     static WithdrawalCertificate wCert;
 
-    static byte[] testScSecretKey;
-    static byte[] testScPublicKey;
+    static String testScSecretKey = "08eb1969be10581600c812f6ef0eea3b16c432854588698d78696e8ff7a7d163";
+    static String testScPublicKey = "f165e1e5f7c290e52f2edef3fbab60cbae74bfd3274f8e5ee1de3345c954a166";
     
     static String snarkPkPath = "./test_csw_snark_pk";
     static String snarkVkPath = "./test_csw_snark_vk";
@@ -49,18 +50,18 @@ public class CswProofTest {
     
     @BeforeClass
     public static void initKeys() {
-        // Generate keys
-        assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
-        assertTrue(CswProof.setup(psType, rangeSize, 2, snarkPkPath, snarkVkPath, zk, maxProofPlusVkSize));
-        assertFalse(CswProof.setup(psType, rangeSize, 0, snarkPkPath, snarkVkPath, zk, 1));
-        assertEquals(
-            psType,
-            ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
-        );
-        assertEquals(
-            ProvingSystem.getProverKeyProvingSystemType(snarkPkPath),
-            ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
-        );
+        // // Generate keys
+        // assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
+        // assertTrue(CswProof.setup(psType, rangeSize, 2, snarkPkPath, snarkVkPath, zk, maxProofPlusVkSize));
+        // assertFalse(CswProof.setup(psType, rangeSize, 0, snarkPkPath, snarkVkPath, zk, 1));
+        // assertEquals(
+        //     psType,
+        //     ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
+        // );
+        // assertEquals(
+        //     ProvingSystem.getProverKeyProvingSystemType(snarkPkPath),
+        //     ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
+        // );
 
         // Generate random (but consistent) data
         Random r = new Random(seed);
@@ -68,10 +69,10 @@ public class CswProofTest {
         wCert = WithdrawalCertificate.getRandom(r, numBt, 0);
 
         scUtxoOutput = ScUtxoOutput.getRandom(r);
-        scUtxoOutput.setSpendingPubKey(testScPublicKey);
+        scUtxoOutput.setSpendingPubKey(TestUtils.fromHexString(testScPublicKey));
 
         ftOutput = ForwardTransferOutput.getRandom(r);
-        ftOutput.setReceiverPubKey(testScPublicKey);
+        ftOutput.setReceiverPubKey(TestUtils.fromHexString(testScPublicKey));
     }
 
     @Test
@@ -97,7 +98,7 @@ public class CswProofTest {
         // Generate CswUtxoProverData
         CswUtxoProverData utxoData = new CswUtxoProverData(
             scUtxoOutput,
-            testScSecretKey,
+            TestUtils.fromHexString(testScSecretKey),
             mstPathToOutput
         );
 
@@ -169,9 +170,9 @@ public class CswProofTest {
         mhtNew.append(scHash);
         mhtNew.finalizeTreeInPlace();
         
-        FieldElement scTxsComTreeRoot = mht.root();
-        MerklePath merklePathToScHash = mht.getMerklePath(0);
-        mht.close(); // Free tree as we don't need it anymore
+        FieldElement scTxsComTreeRoot = mhtNew.root();
+        MerklePath merklePathToScHash = mhtNew.getMerklePath(0);
+        mhtNew.close(); // Free tree as we don't need it anymore
 
         // Now generate scTxsComHashes list, putting scTxsComTreeRoot in one of them
         // and contextually compute mcbScTxsComEnd
@@ -200,7 +201,7 @@ public class CswProofTest {
         // Generate FtCswProverData
         CswFtProverData ftData = new CswFtProverData(
             ftOutput,
-            testScSecretKey,
+            TestUtils.fromHexString(testScSecretKey),
             mcbScTxsComStart,
             merklePathToScHash,
             ftTreePath,
@@ -335,9 +336,7 @@ public class CswProofTest {
     // @AfterClass
     // public static void deleteKeys(){
     //     // Delete proving keys and verification keys
-    //     new File(snarkPkPathNoCustomFields).delete();
-    //     new File(snarkVkPathNoCustomFields).delete();
-    //     new File(snarkPkPathCustomFields).delete();
-    //     new File(snarkVkPathCustomFields).delete();
+    //     new File(snarkPkPath).delete();
+    //     new File(snarkVkPath).delete();
     // }
 }

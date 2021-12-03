@@ -46,7 +46,7 @@ mod utils;
 use utils::*;
 
 use cctp_primitives::utils::compute_sc_id;
-use jni::objects::{JClass, JMap, JObject, JString, JValue};
+use jni::{objects::{JClass, JMap, JObject, JString, JValue}, signature::JavaType};
 use jni::sys::{jboolean, jbyte, jbyteArray, jint, jlong, jobject, jobjectArray};
 use jni::sys::{JNI_FALSE, JNI_TRUE};
 use jni::{sys::jlongArray, JNIEnv};
@@ -4722,7 +4722,7 @@ fn parse_utxo_prover_data(_env: JNIEnv, _utxo_data: JObject) -> CswUtxoProverDat
             .get_field(
                 _utxo_data,
                 "output",
-                "Lcom/horizen/scutxonative/ScUtxoOutput",
+                "Lcom/horizen/scutxonative/ScUtxoOutput;",
             )
             .expect("Should be able to parse ScUtxoOutput")
             .l()
@@ -4758,7 +4758,7 @@ fn parse_ft_prover_data(_env: JNIEnv, _ft_data: JObject) -> CswFtProverData {
             .get_field(
                 _ft_data,
                 "output",
-                "Lcom/horizen/fwtnative/ForwardTransferOutput",
+                "Lcom/horizen/fwtnative/ForwardTransferOutput;",
             )
             .expect("Should be able to parse ForwardTransferOutput")
             .l()
@@ -4867,14 +4867,14 @@ ffi_export!(
         let sys_data = parse_sys_data(_env, _sys_data);
 
         // Parse csw utxo prover data
-        let csw_utxo_prover_data = if _utxo_data.is_null() {
+        let csw_utxo_prover_data = if _utxo_data.into_inner().is_null() {
             None
         } else {
             Some(parse_utxo_prover_data(_env, _utxo_data))
         };
 
         // Parse csw ft prover data
-        let csw_ft_prover_data = if _ft_data.is_null() {
+        let csw_ft_prover_data = if _ft_data.into_inner().is_null() {
             None
         } else {
             Some(parse_ft_prover_data(_env, _ft_data))

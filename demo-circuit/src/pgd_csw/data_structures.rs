@@ -102,7 +102,7 @@ impl ToConstraintField<FieldElement> for CswUtxoOutputData {
 impl FieldHasher<FieldElement, FieldHash> for CswUtxoOutputData {
     fn hash(&self, personalization: Option<&[FieldElement]>) -> Result<FieldElement, Error> {
         let self_fes = self.to_field_elements()?;
-        let mut h = FieldHash::init_constant_length(self_fes.len(), personalization);
+        let mut h = FieldHash::init_constant_length(self_fes.len() + 1, personalization);
         self_fes.into_iter().for_each(|fe| {
             h.update(fe);
         });

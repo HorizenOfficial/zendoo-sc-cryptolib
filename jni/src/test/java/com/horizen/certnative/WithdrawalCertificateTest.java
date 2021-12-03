@@ -4,17 +4,17 @@ import static org.junit.Assert.assertEquals;
 
 import java.util.Random;
 
+import com.horizen.TestUtils;
 import com.horizen.librustsidechains.FieldElement;
-import com.horizen.librustsidechains.Utils;
 
 import org.junit.Test;
 
 public class WithdrawalCertificateTest {
 
-    static String expectedWCertNoBtNoCFFieldHashHex  = "4C02EB7B6FAC2484C743A873E82090B31548FF7E2AC97982BE0B72C2785F252E";
-    static String expectedWCertWithBtWithCFFieldHashHex  = "2CDC3C6DEC6D2F9936AF913956F80E6D5E2049D2C9C7B86D4A5388AC7C25501D";
-    static String expectedWCertNoBtWithCFFieldHashHex  = "4696E1B178025FA7F826893BBC7B00AC3DBA3261677BC0696303D098D639512F";
-    static String expectedWCertWithBtNoCFFieldHashHex  = "5CAA1419BB3A6F5F8DF8948E3F2880C7FF5413B8CF7121D775BB431331A94029";
+    static String expectedWCertNoBtNoCFFieldHashHex  = "4c02eb7b6fac2484c743a873e82090b31548ff7e2ac97982be0b72c2785f252e";
+    static String expectedWCertWithBtWithCFFieldHashHex  = "2cdc3c6dec6d2f9936af913956f80e6d5e2049d2c9c7b86d4a5388ac7c25501d";
+    static String expectedWCertNoBtWithCFFieldHashHex  = "4696e1b178025fa7f826893bbc7b00ac3dba3261677bc0696303d098d639512f";
+    static String expectedWCertWithBtNoCFFieldHashHex  = "5caa1419bb3a6f5f8df8948e3f2880c7ff5413b8cf7121d775bb431331a94029";
 
     static long seed = 1234567890L;
     static int backwardTransferCout = 10;
@@ -42,6 +42,6 @@ public class WithdrawalCertificateTest {
         cert.close();
         certHash.close();
 
-        return Utils.bytesToHex(certHashBytes);
+        return TestUtils.toHexString(certHashBytes);
     }
 }

@@ -72,5 +72,4 @@ public class UtilsTest {
         }
         assertTrue("Excecption expected.", exceptionOccurred);
     }
-
 }
