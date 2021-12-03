@@ -12,7 +12,6 @@ import com.horizen.scutxonative.ScUtxoOutput;
 import com.horizen.provingsystemnative.ProvingSystem;
 import com.horizen.provingsystemnative.ProvingSystemType;
 import org.junit.BeforeClass;
-import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Test;
 
@@ -22,7 +21,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
@@ -50,18 +48,18 @@ public class CswProofTest {
     
     @BeforeClass
     public static void initKeys() {
-        // // Generate keys
-        // assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
-        // assertTrue(CswProof.setup(psType, rangeSize, 2, snarkPkPath, snarkVkPath, zk, maxProofPlusVkSize));
-        // assertFalse(CswProof.setup(psType, rangeSize, 0, snarkPkPath, snarkVkPath, zk, 1));
-        // assertEquals(
-        //     psType,
-        //     ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
-        // );
-        // assertEquals(
-        //     ProvingSystem.getProverKeyProvingSystemType(snarkPkPath),
-        //     ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
-        // );
+        // Generate keys
+        assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
+        assertTrue(CswProof.setup(psType, rangeSize, 2, snarkPkPath, snarkVkPath, zk, maxProofPlusVkSize));
+        assertFalse(CswProof.setup(psType, rangeSize, 0, snarkPkPath, snarkVkPath, zk, 1));
+        assertEquals(
+            psType,
+            ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
+        );
+        assertEquals(
+            ProvingSystem.getProverKeyProvingSystemType(snarkPkPath),
+            ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
+        );
 
         // Generate random (but consistent) data
         Random r = new Random(seed);
@@ -93,6 +91,7 @@ public class CswProofTest {
 
         // Split the mstRoot into 2 FieldElements to be declared as custom fields and put them inside wCert
         List<FieldElement> customFields = mstRoot.splitAt(Constants.FIELD_ELEMENT_LENGTH()/2);
+        mstRoot.close(); // Free after split, we don't need it anymore
         wCert.setCustomFields(customFields.toArray(new FieldElement[0]));
 
         // Generate CswUtxoProverData
@@ -128,6 +127,16 @@ public class CswProofTest {
             rangeSize, 2, sysData, wCert.getScId(),
             Optional.of(wCert), Optional.of(utxoData), Optional.empty(), snarkPkPath
         );
+
+        // Proof verification must be successfull
+        assertTrue(CswProof.verifyProof(sysData, wCert.getScId(), proof, snarkVkPath));
+
+        // Change one of the params and assert failure
+        assertFalse(CswProof.verifyProof(sysData, FieldElement.createRandom(r), proof, snarkVkPath));
+
+        // Free local data
+        utxoData.close();
+        sysData.close();
     }
 
     @Test
@@ -226,117 +235,25 @@ public class CswProofTest {
             rangeSize, 2, sysData, wCert.getScId(), Optional.empty(),
             Optional.empty(), Optional.of(ftData), snarkPkPath
         );
+        
+        // Proof verification must be successfull
+        assertTrue(CswProof.verifyProof(sysData, wCert.getScId(), proof, snarkVkPath));
+
+        // Change one of the params and assert failure
+        assertFalse(CswProof.verifyProof(sysData, FieldElement.createRandom(r), proof, snarkVkPath));
+
+        // Free local data
+        ftTreeRoot.close();
+        scHash.close();
+        ftData.close();
+        sysData.close();
     }
 
-    // private void testCreateVerifyRandomProof(String snarkPkPath, String snarkVkPath) throws Exception {
-    //     Random r = new Random();
-
-    //     scId = FieldElement.createRandom();
-    //     endCumulativeScTxCommTreeRoot = FieldElement.createRandom();
-
-    //     backwardTransferCout = r.nextInt(backwardTransferCout + 1);
-    //     // Create dummy Backward Transfers
-    //     for(int i = 0; i < backwardTransferCout; i++)
-    //         btList.add(BackwardTransfer.getRandom(r));
-
-    //     // Compute keys and signatures
-    //     List<SchnorrKeyPair> keyPairList = new ArrayList<>();
-
-    //     for (int i = 0; i<keyCount; i++) {
-    //         SchnorrKeyPair keyPair = SchnorrKeyPair.generate();
-
-    //         assertNotNull("Key pair generation was unsuccessful.", keyPair);
-    //         assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
-
-    //         keyPairList.add(keyPair);
-    //         publicKeyList.add(keyPair.getPublicKey());
-    //     }
-
-    //     // Generate random custom fields if requested
-    //     if (numCustomFields > 0) {
-    //         for (int i = 0; i < numCustomFields; i++)
-    //             customFields.add(FieldElement.createRandom());
-    //     }
-
-    //     for (int i = 0; i<keyCount; i++) {
-    //         if (i < threshold) {
-    //             FieldElement msgToSign = NaiveThresholdSigProof.createMsgToSign(
-    //                 btList.toArray(new BackwardTransfer[0]),
-    //                 scId,
-    //                 epochNumber,
-    //                 endCumulativeScTxCommTreeRoot,
-    //                 btrFee,
-    //                 ftMinAmount,
-    //                 customFields
-    //             );
-    //             signatureList.add(keyPairList.get(i).signMessage(msgToSign));
-    //         } else {
-    //             signatureList.add(new SchnorrSignature());
-    //         }
-    //     }
-
-    //     //Free memory from the secret keys
-    //     for (SchnorrKeyPair kp: keyPairList)
-    //         kp.getSecretKey().freeSecretKey();
-
-    //     // Create and verify proof
-
-    //     // Positive test
-    //     CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
-    //         btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
-    //         btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
-    //         customFields, snarkPkPath, false, zk
-    //     );
-
-    //     assertNotNull("Proof creation must be successful", proofResult);
-
-    //     byte[] proof = proofResult.getProof();
-    //     assertEquals(psType, ProvingSystem.getProofProvingSystemType(proof));
-
-    //     long quality = proofResult.getQuality();
-
-    //     FieldElement constant = NaiveThresholdSigProof.getConstant(publicKeyList, threshold);
-    //     assertNotNull("Constant creation must be successful", constant);
-
-    //     boolean isProofVerified = NaiveThresholdSigProof.verifyProof(
-    //         btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
-    //         btrFee, ftMinAmount, constant, quality, customFields, proof, true, snarkVkPath, true
-    //     );
-
-    //     assertTrue("Proof must be verified", isProofVerified);
-
-    //     // Negative test
-    //     quality = threshold - 1;
-    //     isProofVerified = NaiveThresholdSigProof.verifyProof(
-    //         btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
-    //         btrFee, ftMinAmount, constant, quality, customFields, proof, true, snarkVkPath, true
-    //     );
-
-    //     assertFalse("Proof must not be verified", isProofVerified);
-    // }
-
-    // @After
-    // public void freeData() {
-    //     for (SchnorrPublicKey pk: publicKeyList)
-    //         pk.freePublicKey();
-    //     publicKeyList.clear();
-
-    //     for (SchnorrSignature sig: signatureList)
-    //         sig.freeSignature();
-    //     signatureList.clear();
-
-    //     for (FieldElement fe: customFields)
-    //         fe.freeFieldElement();
-    //     customFields.clear();
-
-    //     scId.freeFieldElement();
-    //     endCumulativeScTxCommTreeRoot.freeFieldElement();
-    // }
-
-    // @AfterClass
-    // public static void deleteKeys(){
-    //     // Delete proving keys and verification keys
-    //     new File(snarkPkPath).delete();
-    //     new File(snarkVkPath).delete();
-    // }
+    @AfterClass
+    public static void free() throws Exception {
+        wCert.close();
+        // Delete proving keys and verification keys
+        new File(snarkPkPath).delete();
+        new File(snarkVkPath).delete();
+    }
 }
