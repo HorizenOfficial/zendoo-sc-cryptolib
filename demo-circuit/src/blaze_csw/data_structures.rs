@@ -170,6 +170,15 @@ pub struct CswUtxoProverData {
     pub mst_path_to_output: GingerMHTBinaryPath, // path to output in the MST of the known state
 }
 
+impl Default for CswUtxoProverData {
+    fn default() -> Self {
+        Self {
+            input: CswUtxoInputData::default(),
+            mst_path_to_output: GingerMHTBinaryPath::default(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct CswFtProverData {
     pub ft_output: CswFtOutputData, // FT output in the MC block
@@ -184,6 +193,25 @@ pub struct CswFtProverData {
                                               // RANGE_SIZE is a number of blocks between `mcb_sc_txs_com_start` and `mcb_sc_txs_com_end`.
                                               // It seems it can be a constant as the number of blocks between the last confirmed block and SC ceasing block should be fixed for a particular sidechain
                                               // witnesses [END]
+}
+
+impl Default for CswFtProverData {
+    fn default() -> Self {
+        Self {
+            ft_output: CswFtOutputData::default(),
+            ft_input_secret_key: [false; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+            mcb_sc_txs_com_start: PHANTOM_FIELD_ELEMENT,
+            merkle_path_to_sc_hash: GingerMHTBinaryPath::default(),
+            ft_tree_path: GingerMHTBinaryPath::default(),
+            sc_creation_commitment: PHANTOM_FIELD_ELEMENT,
+            scb_btr_tree_root: PHANTOM_FIELD_ELEMENT,
+            wcert_tree_root: PHANTOM_FIELD_ELEMENT,
+            sc_txs_com_hashes: vec![
+                PHANTOM_FIELD_ELEMENT;
+                CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER
+            ],
+        }
+    }
 }
 
 #[derive(Clone)]

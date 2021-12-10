@@ -283,438 +283,446 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
     }
 }
 
-// #[cfg(test)]
-// mod test {
-//     use algebra::{
-//         fields::ed25519::fr::Fr as ed25519Fr, Group, ProjectiveCurve, ToBits, UniformRand,
-//     };
-//     use cctp_primitives::{
-//         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
-//         type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
-//         utils::{
-//             commitment_tree::DataAccumulator, poseidon_hash::get_poseidon_hash_constant_length,
-//         },
-//     };
-//     use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree};
-//     use r1cs_core::debug_circuit;
-//     use rand::rngs::OsRng;
-//     use std::{convert::TryInto, ops::AddAssign};
-
-//     use crate::{
-//         constants::constants::{BoxType, CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER},
-//         read_field_element_from_buffer_with_padding, CswFtOutputData, CswProverData,
-//         CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
-//         MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT,
-//     };
-
-//     use super::*;
-
-//     type SimulatedScalarFieldElement = ed25519Fr;
-
-//     enum CswType {
-//         UTXO,
-//         FT,
-//     }
-
-//     fn generate_key_pair() -> (Vec<bool>, Vec<bool>) {
-//         let rng = &mut OsRng::default();
-
-//         // Generate the secret key
-//         let secret = SimulatedScalarFieldElement::rand(rng);
-
-//         // Compute GENERATOR^SECRET_KEY
-//         let public_key = SimulatedGroup::prime_subgroup_generator()
-//             .into_projective()
-//             .mul(&secret)
-//             .into_affine();
-
-//         // Store the sign (last bit) of the X coordinate
-//         let x_sign = if public_key.x.is_odd() { true } else { false };
-
-//         // Extract the public key bytes as Y coordinate
-//         let y_coordinate = public_key.y;
-
-//         // Use the last (null) bit of the public key to store the sign of the X coordinate
-//         // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus
-//         let mut pk_bits = vec![x_sign];
-//         pk_bits.append(&mut y_coordinate.write_bits());
-
-//         let secret_bits = secret.write_bits();
-
-//         (secret_bits, pk_bits)
-//     }
-
-//     fn compute_mst_tree_data(
-//         utxo_input_data: CswUtxoInputData,
-//     ) -> (FieldElement, FieldElement, GingerMHTBinaryPath) {
-//         let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
-
-//         let mut mst_leaf_accumulator = DataAccumulator::init();
-//         mst_leaf_accumulator
-//             .update_with_bits(utxo_input_data.output.spending_pub_key.to_vec())
-//             .unwrap();
-//         mst_leaf_accumulator
-//             .update(utxo_input_data.output.amount)
-//             .unwrap();
-//         mst_leaf_accumulator
-//             .update(utxo_input_data.output.nonce)
-//             .unwrap();
-//         mst_leaf_accumulator
-//             .update_with_bits(utxo_input_data.output.custom_hash.to_vec())
-//             .unwrap();
-
-//         let mut mst_leaf_inputs = mst_leaf_accumulator.get_field_elements().unwrap();
-//         debug_assert_eq!(mst_leaf_inputs.len(), 3);
-//         mst_leaf_inputs.push(FieldElement::from(BoxType::CoinBox as u8));
-
-//         let mut poseidon_hash = get_poseidon_hash_constant_length(mst_leaf_inputs.len(), None);
-
-//         mst_leaf_inputs.into_iter().for_each(|leaf_input| {
-//             poseidon_hash.update(leaf_input);
-//         });
-
-//         let mst_leaf_hash = poseidon_hash.finalize().unwrap();
-
-//         mst.append(mst_leaf_hash).unwrap();
-//         mst.finalize_in_place().unwrap();
-
-//         let mst_path: GingerMHTBinaryPath = mst.get_merkle_path(0).unwrap().try_into().unwrap();
-
-//         let mst_root = mst.root().unwrap();
-
-//         (mst_root, mst_leaf_hash, mst_path)
-//     }
-
-//     fn compute_cert_data(
-//         custom_fields: Vec<FieldElement>,
-//     ) -> (WithdrawalCertificateData, FieldElement) {
-//         let cert_data = WithdrawalCertificateData {
-//             ledger_id: FieldElement::from(1u8),
-//             epoch_id: 2u32,
-//             bt_root: FieldElement::from(3u8),
-//             quality: 4u64,
-//             mcb_sc_txs_com: FieldElement::from(5u8),
-//             ft_min_amount: 6u64,
-//             btr_min_fee: 7u64,
-//             custom_fields: custom_fields,
-//         };
-
-//         let fees_field_elements = DataAccumulator::init()
-//             .update(cert_data.btr_min_fee)
-//             .unwrap()
-//             .update(cert_data.ft_min_amount)
-//             .unwrap()
-//             .get_field_elements()
-//             .unwrap();
-
-//         debug_assert_eq!(fees_field_elements.len(), 1);
-
-//         let temp_computed_last_wcert_hash = get_poseidon_hash_constant_length(6, None)
-//             .update(cert_data.ledger_id)
-//             .update(FieldElement::from(cert_data.epoch_id))
-//             .update(cert_data.bt_root)
-//             .update(FieldElement::from(cert_data.quality))
-//             .update(cert_data.mcb_sc_txs_com)
-//             .update(fees_field_elements[0])
-//             .finalize()
-//             .unwrap();
-
-//         let mut poseidon_hash =
-//             get_poseidon_hash_constant_length(cert_data.custom_fields.len(), None);
-
-//         cert_data.custom_fields.iter().for_each(|custom_field| {
-//             poseidon_hash.update(*custom_field);
-//         });
-
-//         let computed_custom_fields_hash = poseidon_hash.finalize().unwrap();
-
-//         let computed_last_wcert_hash = if cert_data.custom_fields.is_empty() {
-//             get_poseidon_hash_constant_length(1, None)
-//                 .update(temp_computed_last_wcert_hash)
-//                 .finalize()
-//                 .unwrap()
-//         } else {
-//             get_poseidon_hash_constant_length(2, None)
-//                 .update(computed_custom_fields_hash)
-//                 .update(temp_computed_last_wcert_hash)
-//                 .finalize()
-//                 .unwrap()
-//         };
-
-//         (cert_data, computed_last_wcert_hash)
-//     }
-
-//     fn generate_test_utxo_csw_data(
-//         num_custom_fields: usize,
-//         secret_key_bits: Vec<bool>,
-//         public_key_bits: Vec<bool>,
-//     ) -> CswProverData {
-//         let utxo_input_data = CswUtxoInputData {
-//             output: CswUtxoOutputData {
-//                 spending_pub_key: public_key_bits.try_into().unwrap(),
-//                 amount: 10,
-//                 nonce: 11,
-//                 custom_hash: bytes_to_bits(&[12; FIELD_SIZE]).try_into().unwrap(),
-//             },
-//             secret_key: secret_key_bits.try_into().unwrap(),
-//         };
-
-//         let (mst_root, mst_leaf_hash, mst_path) = compute_mst_tree_data(utxo_input_data.clone());
-
-//         // To generate valid test data we need at least one custom field to store the MST root
-//         debug_assert!(num_custom_fields > 0);
-//         let mut custom_fields = vec![mst_root];
-
-//         for _ in 0..num_custom_fields - 1 {
-//             custom_fields.push(PHANTOM_FIELD_ELEMENT);
-//         }
-
-//         let (cert_data, last_wcert_hash) = compute_cert_data(custom_fields);
-
-//         let sys_data = CswSysData {
-//             genesis_constant: FieldElement::from(14u8),
-//             mcb_sc_txs_com_end: FieldElement::from(15u8),
-//             sc_last_wcert_hash: last_wcert_hash,
-//             amount: FieldElement::from(utxo_input_data.output.amount),
-//             nullifier: mst_leaf_hash,
-//             receiver: read_field_element_from_buffer_with_padding(&[0; MC_PK_SIZE]).unwrap(),
-//         };
-
-//         let utxo_data = CswUtxoProverData {
-//             input: utxo_input_data.clone(),
-//             mst_path_to_output: mst_path,
-//         };
-
-//         let ft_data = CswFtProverData {
-//             ft_output: CswFtOutputData::default(),
-//             ft_input_secret_key: [false; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
-//             mcb_sc_txs_com_start: PHANTOM_FIELD_ELEMENT,
-//             merkle_path_to_sc_hash: GingerMHTBinaryPath::default(),
-//             ft_tree_path: GingerMHTBinaryPath::default(),
-//             sc_creation_commitment: PHANTOM_FIELD_ELEMENT,
-//             scb_btr_tree_root: PHANTOM_FIELD_ELEMENT,
-//             wcert_tree_root: PHANTOM_FIELD_ELEMENT,
-//             sc_txs_com_hashes: vec![
-//                 PHANTOM_FIELD_ELEMENT;
-//                 CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER
-//             ],
-//         };
-
-//         let csw_prover_data = CswProverData {
-//             sys_data,
-//             last_wcert: cert_data,
-//             utxo_data,
-//             ft_data,
-//         };
-
-//         csw_prover_data
-//     }
-
-//     fn generate_ft_tree_data(
-//         ft_input_data: CswFtOutputData,
-//     ) -> (FieldElement, GingerMHTBinaryPath, FieldElement) {
-//         let mut ft_output_hash_accumulator = DataAccumulator::init();
-//         ft_output_hash_accumulator
-//             .update(ft_input_data.amount)
-//             .unwrap();
-//         ft_output_hash_accumulator
-//             .update_with_bits(ft_input_data.receiver_pub_key.to_vec())
-//             .unwrap();
-//         ft_output_hash_accumulator
-//             .update_with_bits(ft_input_data.payback_addr_data_hash.to_vec())
-//             .unwrap();
-//         ft_output_hash_accumulator
-//             .update_with_bits(ft_input_data.tx_hash.to_vec())
-//             .unwrap();
-//         ft_output_hash_accumulator
-//             .update(ft_input_data.out_idx)
-//             .unwrap();
-
-//         let ft_output_hash_elements = ft_output_hash_accumulator.get_field_elements().unwrap();
-
-//         let mut poseidon_hash =
-//             get_poseidon_hash_constant_length(ft_output_hash_elements.len(), None);
-//         ft_output_hash_elements.into_iter().for_each(|leaf_input| {
-//             poseidon_hash.update(leaf_input);
-//         });
-
-//         let ft_output_hash = poseidon_hash.finalize().unwrap();
-
-//         // TODO: set a proper height for the FT tree
-//         let mut ft_tree =
-//             GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
-//         ft_tree.append(ft_output_hash).unwrap();
-//         ft_tree.finalize_in_place().unwrap();
-
-//         let ft_tree_path = ft_tree.get_merkle_path(0).unwrap().try_into().unwrap();
-//         let ft_tree_root = ft_tree.root().unwrap();
-
-//         (ft_output_hash, ft_tree_path, ft_tree_root)
-//     }
-
-//     fn generate_test_ft_csw_data(
-//         sidechain_id: FieldElement,
-//         num_custom_fields: usize,
-//         secret_key_bits: Vec<bool>,
-//         public_key_bits: Vec<bool>,
-//     ) -> CswProverData {
-//         let ft_input_data = CswFtOutputData {
-//             amount: 100,
-//             receiver_pub_key: public_key_bits.try_into().unwrap(),
-//             payback_addr_data_hash: bytes_to_bits(&[101; MC_RETURN_ADDRESS_BYTES])
-//                 .try_into()
-//                 .unwrap(),
-//             tx_hash: bytes_to_bits(&[102; FIELD_SIZE]).try_into().unwrap(),
-//             out_idx: 103,
-//         };
-
-//         let (ft_output_hash, ft_tree_path, ft_tree_root) =
-//             generate_ft_tree_data(ft_input_data.clone());
-
-//         let scb_btr_tree_root = FieldElement::from(22u8);
-//         let wcert_tree_root = FieldElement::from(23u8);
-
-//         let sc_hash = get_poseidon_hash_constant_length(4, None)
-//             .update(ft_tree_root)
-//             .update(scb_btr_tree_root)
-//             .update(wcert_tree_root)
-//             .update(sidechain_id)
-//             .finalize()
-//             .unwrap();
-
-//         // TODO: set a proper height for the SC tree
-//         let mut sc_tree =
-//             GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
-//         sc_tree.append(sc_hash).unwrap();
-//         sc_tree.finalize_in_place().unwrap();
-
-//         let sc_tree_path = sc_tree.get_merkle_path(0).unwrap().try_into().unwrap();
-//         let sc_tree_root = sc_tree.root().unwrap();
-
-//         let mut csw_prover_data = CswProverData {
-//             genesis_constant: PHANTOM_FIELD_ELEMENT,
-//             mcb_sc_txs_com_end: PHANTOM_FIELD_ELEMENT,
-//             sc_last_wcert_hash: PHANTOM_FIELD_ELEMENT,
-//             amount: FieldElement::from(ft_input_data.amount),
-//             nullifier: ft_output_hash,
-//             receiver: read_field_element_from_buffer_with_padding(&[0; MC_PK_SIZE]).unwrap(),
-//             last_wcert: WithdrawalCertificateData::get_phantom_data(num_custom_fields),
-//             input: CswUtxoInputData::default(),
-//             mst_path_to_output: GingerMHTBinaryPath::default(),
-//             ft_input: ft_input_data,
-//             ft_input_secret_key: secret_key_bits.try_into().unwrap(),
-//             mcb_sc_txs_com_start: FieldElement::from(21u8),
-//             merkle_path_to_sc_hash: sc_tree_path,
-//             ft_tree_path: ft_tree_path,
-//             scb_btr_tree_root: scb_btr_tree_root,
-//             wcert_tree_root: wcert_tree_root,
-//             sc_txs_com_hashes: vec![
-//                 PHANTOM_FIELD_ELEMENT;
-//                 CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER
-//             ],
-//         };
-
-//         csw_prover_data.sc_txs_com_hashes[0] = sc_tree_root;
-
-//         let mut mcb_sc_txs_com_end = csw_prover_data.mcb_sc_txs_com_start;
-
-//         csw_prover_data
-//             .sc_txs_com_hashes
-//             .iter()
-//             .for_each(|sc_txs_com_hash| {
-//                 if !sc_txs_com_hash.eq(&PHANTOM_FIELD_ELEMENT) {
-//                     mcb_sc_txs_com_end = get_poseidon_hash_constant_length(2, None)
-//                         .update(mcb_sc_txs_com_end)
-//                         .update(*sc_txs_com_hash)
-//                         .finalize()
-//                         .unwrap();
-//                 }
-//             });
-
-//         csw_prover_data.mcb_sc_txs_com_end = mcb_sc_txs_com_end;
-
-//         csw_prover_data
-//     }
-
-//     fn generate_test_csw_prover_data(
-//         csw_type: CswType,
-//         sidechain_id: FieldElement,
-//         num_custom_fields: usize,
-//     ) -> CswProverData {
-//         let (secret_key, public_key) = generate_key_pair();
-
-//         match csw_type {
-//             CswType::UTXO => generate_test_utxo_csw_data(num_custom_fields, secret_key, public_key),
-//             CswType::FT => {
-//                 generate_test_ft_csw_data(sidechain_id, num_custom_fields, secret_key, public_key)
-//             }
-//         }
-//     }
-
-//     fn test_csw_circuit(csw_type: CswType) {
-//         let sidechain_id = FieldElement::from(77u8);
-//         let num_custom_fields = 1;
-//         let csw_prover_data =
-//             generate_test_csw_prover_data(csw_type, sidechain_id, num_custom_fields);
-//         let circuit = CeasedSidechainWithdrawalCircuit::new(
-//             sidechain_id,
-//             num_custom_fields,
-//             csw_prover_data.clone(),
-//         );
-
-//         let failing_constraint = debug_circuit(circuit.clone()).unwrap();
-//         println!("Failing constraint: {:?}", failing_constraint);
-//         assert!(failing_constraint.is_none());
-
-//         load_g1_committer_key(1 << 17, 1 << 15).unwrap();
-//         let ck_g1 = get_g1_committer_key().unwrap();
-//         let params = CoboundaryMarlin::index(ck_g1.as_ref().unwrap(), circuit.clone()).unwrap();
-
-//         let proof = CoboundaryMarlin::prove(
-//             &params.0.clone(),
-//             ck_g1.as_ref().unwrap(),
-//             circuit,
-//             false,
-//             None,
-//         )
-//         .unwrap();
-
-//         let mut public_inputs = vec![
-//             csw_prover_data.genesis_constant,
-//             csw_prover_data.mcb_sc_txs_com_end,
-//             csw_prover_data.sc_last_wcert_hash,
-//             FieldElement::from(csw_prover_data.amount),
-//             csw_prover_data.nullifier,
-//             csw_prover_data.receiver,
-//         ];
-
-//         // Check that the proof gets correctly verified
-//         assert!(CoboundaryMarlin::verify(
-//             &params.1.clone(),
-//             ck_g1.as_ref().unwrap(),
-//             public_inputs.as_slice(),
-//             &proof
-//         )
-//         .unwrap());
-
-//         // Change one public input and check that the proof fails
-//         public_inputs[0].add_assign(&FieldElement::from(1u8));
-//         assert!(!CoboundaryMarlin::verify(
-//             &params.1.clone(),
-//             ck_g1.as_ref().unwrap(),
-//             public_inputs.as_slice(),
-//             &proof
-//         )
-//         .unwrap());
-//     }
-
-//     #[test]
-//     fn test_csw_circuit_utxo() {
-//         test_csw_circuit(CswType::UTXO);
-//     }
-
-//     #[test]
-//     fn test_csw_circuit_ft() {
-//         test_csw_circuit(CswType::FT);
-//     }
-// }
+#[cfg(test)]
+mod test {
+    use algebra::{
+        fields::ed25519::fr::Fr as ed25519Fr, Group, ProjectiveCurve, UniformRand, Field,
+    };
+    use cctp_primitives::{
+        proving_system::{init::{get_g1_committer_key, load_g1_committer_key}, error::ProvingSystemError},
+        type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
+        utils::{
+            commitment_tree::{DataAccumulator, hash_vec}, poseidon_hash::get_poseidon_hash_constant_length, serialization::serialize_to_buffer,
+        },
+    };
+    use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree};
+    use r1cs_core::debug_circuit;
+    use rand::rngs::OsRng;
+    use std::{convert::TryInto, ops::AddAssign};
+
+    use crate::{
+        constants::constants::BoxType, CswFtOutputData, CswProverData,
+        CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
+        MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT, PHANTOM_FIELD_ELEMENT,
+    };
+
+    use super::*;
+
+    type SimulatedScalarFieldElement = ed25519Fr;
+
+    enum CswType {
+        UTXO,
+        FT,
+    }
+
+    fn generate_key_pair() -> (Vec<u8>, Vec<u8>) {
+        let rng = &mut OsRng::default();
+
+        // Generate the secret key
+        let secret = SimulatedScalarFieldElement::rand(rng);
+
+        // Compute GENERATOR^SECRET_KEY
+        let public_key = SimulatedGroup::prime_subgroup_generator()
+            .into_projective()
+            .mul(&secret)
+            .into_affine();
+
+        // Store the sign (last bit) of the X coordinate
+        // The value is left-shifted to be used later in an OR operation
+        let x_sign = if public_key.x.is_odd() { 1 << 7 } else { 0u8 };
+
+        // Extract the public key bytes as Y coordinate
+        let y_coordinate = public_key.y;
+        let mut pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
+
+        // Use the last (null) bit of the public key to store the sign of the X coordinate
+        // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus
+        let len = pk_bytes.len();
+        pk_bytes[len - 1] |= x_sign;
+
+        let secret_bytes = serialize_to_buffer(&secret, None).unwrap();
+
+        (secret_bytes, pk_bytes)
+    }
+
+    fn compute_mst_tree_data(
+        utxo_input_data: CswUtxoInputData,
+    ) -> (FieldElement, FieldElement, GingerMHTBinaryPath) {
+        let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
+
+        let mut mst_leaf_accumulator = DataAccumulator::init();
+        mst_leaf_accumulator
+            .update_with_bits(utxo_input_data.output.spending_pub_key.to_vec())
+            .unwrap();
+        mst_leaf_accumulator
+            .update(utxo_input_data.output.amount)
+            .unwrap();
+        mst_leaf_accumulator
+            .update(utxo_input_data.output.nonce)
+            .unwrap();
+        mst_leaf_accumulator
+            .update_with_bits(utxo_input_data.output.custom_hash.to_vec())
+            .unwrap();
+
+        let mut mst_leaf_inputs = mst_leaf_accumulator.get_field_elements().unwrap();
+        debug_assert_eq!(mst_leaf_inputs.len(), 3);
+        mst_leaf_inputs.push(FieldElement::from(BoxType::CoinBox as u8));
+
+        let mut poseidon_hash = get_poseidon_hash_constant_length(mst_leaf_inputs.len(), None);
+
+        mst_leaf_inputs.into_iter().for_each(|leaf_input| {
+            poseidon_hash.update(leaf_input);
+        });
+
+        let mst_leaf_hash = poseidon_hash.finalize().unwrap();
+
+        mst.append(mst_leaf_hash).unwrap();
+        mst.finalize_in_place().unwrap();
+
+        let mst_path: GingerMHTBinaryPath = mst.get_merkle_path(0).unwrap().try_into().unwrap();
+
+        let mst_root = mst.root().unwrap();
+
+        (mst_root, mst_leaf_hash, mst_path)
+    }
+
+    fn compute_cert_data(
+        custom_fields: Vec<FieldElement>,
+    ) -> (WithdrawalCertificateData, FieldElement) {
+        let cert_data = WithdrawalCertificateData {
+            ledger_id: FieldElement::from(1u8),
+            epoch_id: 2u32,
+            bt_root: FieldElement::from(3u8),
+            quality: 4u64,
+            mcb_sc_txs_com: FieldElement::from(5u8),
+            ft_min_amount: 6u64,
+            btr_min_fee: 7u64,
+            custom_fields: custom_fields,
+        };
+
+        let fees_field_elements = DataAccumulator::init()
+            .update(cert_data.btr_min_fee)
+            .unwrap()
+            .update(cert_data.ft_min_amount)
+            .unwrap()
+            .get_field_elements()
+            .unwrap();
+
+        debug_assert_eq!(fees_field_elements.len(), 1);
+
+        let temp_computed_last_wcert_hash = get_poseidon_hash_constant_length(6, None)
+            .update(cert_data.ledger_id)
+            .update(FieldElement::from(cert_data.epoch_id))
+            .update(cert_data.bt_root)
+            .update(FieldElement::from(cert_data.quality))
+            .update(cert_data.mcb_sc_txs_com)
+            .update(fees_field_elements[0])
+            .finalize()
+            .unwrap();
+
+        let mut poseidon_hash =
+            get_poseidon_hash_constant_length(cert_data.custom_fields.len(), None);
+
+        cert_data.custom_fields.iter().for_each(|custom_field| {
+            poseidon_hash.update(*custom_field);
+        });
+
+        let computed_custom_fields_hash = poseidon_hash.finalize().unwrap();
+
+        let computed_last_wcert_hash = if cert_data.custom_fields.is_empty() {
+            get_poseidon_hash_constant_length(1, None)
+                .update(temp_computed_last_wcert_hash)
+                .finalize()
+                .unwrap()
+        } else {
+            get_poseidon_hash_constant_length(2, None)
+                .update(computed_custom_fields_hash)
+                .update(temp_computed_last_wcert_hash)
+                .finalize()
+                .unwrap()
+        };
+
+        (cert_data, computed_last_wcert_hash)
+    }
+
+    fn generate_test_utxo_csw_data(
+        num_custom_fields: u32,
+        secret_key_bytes: Vec<u8>,
+        public_key_bytes: Vec<u8>,
+    ) -> CswProverData {
+        let utxo_input_data = CswUtxoInputData {
+            output: CswUtxoOutputData {
+                spending_pub_key: bytes_to_bits(&public_key_bytes).try_into().unwrap(),
+                amount: 10,
+                nonce: 11,
+                custom_hash: bytes_to_bits(&[12; FIELD_SIZE]).try_into().unwrap(),
+            },
+            secret_key: bytes_to_bits(&secret_key_bytes).try_into().unwrap(),
+        };
+
+        let (mst_root, mst_leaf_hash, mst_path) = compute_mst_tree_data(utxo_input_data.clone());
+
+        // To generate valid test data we need at least one custom field to store the MST root
+        debug_assert!(num_custom_fields > 0);
+        let mut custom_fields = vec![mst_root];
+
+        for _ in 0..num_custom_fields - 1 {
+            custom_fields.push(PHANTOM_FIELD_ELEMENT);
+        }
+
+        let (cert_data, last_wcert_hash) = compute_cert_data(custom_fields);
+
+        let utxo_data = CswUtxoProverData {
+            input: utxo_input_data.clone(),
+            mst_path_to_output: mst_path,
+        };
+
+        let sys_data = CswSysData {
+            genesis_constant: Some(FieldElement::from(14u8)),
+            mcb_sc_txs_com_end: FieldElement::from(15u8),
+            sc_last_wcert_hash: last_wcert_hash,
+            amount:utxo_input_data.output.amount,
+            nullifier: mst_leaf_hash,
+            receiver: [0; MC_PK_SIZE],
+        };
+
+        let csw_prover_data = CswProverData {
+            sys_data,
+            last_wcert: cert_data,
+            utxo_data,
+            ft_data: CswFtProverData::default(),
+        };
+
+        csw_prover_data
+    }
+
+    fn generate_ft_tree_data(
+        ft_output_data: CswFtOutputData,
+    ) -> (FieldElement, GingerMHTBinaryPath, FieldElement) {
+        let mut ft_input_hash_accumulator = DataAccumulator::init();
+        ft_input_hash_accumulator
+            .update(ft_output_data.amount)
+            .unwrap();
+        ft_input_hash_accumulator
+            .update(ft_output_data.receiver_pub_key.to_vec())
+            .unwrap();
+        ft_input_hash_accumulator
+            .update(ft_output_data.payback_addr_data_hash.to_vec())
+            .unwrap();
+        ft_input_hash_accumulator
+            .update(ft_output_data.tx_hash.to_vec())
+            .unwrap();
+        ft_input_hash_accumulator
+            .update(ft_output_data.out_idx)
+            .unwrap();
+
+        let ft_input_hash_elements = ft_input_hash_accumulator.get_field_elements().unwrap();
+
+        let mut poseidon_hash =
+            get_poseidon_hash_constant_length(ft_input_hash_elements.len(), None);
+        ft_input_hash_elements.into_iter().for_each(|leaf_input| {
+            poseidon_hash.update(leaf_input);
+        });
+
+        let ft_input_hash = poseidon_hash.finalize().unwrap();
+
+        // TODO: set a proper height for the FT tree
+        let mut ft_tree =
+            GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
+        ft_tree.append(ft_input_hash).unwrap();
+        ft_tree.finalize_in_place().unwrap();
+
+        let ft_tree_path = ft_tree.get_merkle_path(0).unwrap().try_into().unwrap();
+        let ft_tree_root = ft_tree.root().unwrap();
+
+        (ft_input_hash, ft_tree_path, ft_tree_root)
+    }
+
+    fn generate_test_ft_csw_data(
+        sidechain_id: FieldElement,
+        num_custom_fields: u32,
+        secret_key_bytes: Vec<u8>,
+        public_key_bytes: Vec<u8>,
+    ) -> CswProverData {
+        let ft_output_data = CswFtOutputData {
+            amount: 100,
+            receiver_pub_key: public_key_bytes.try_into().unwrap(),
+            payback_addr_data_hash: [101; MC_RETURN_ADDRESS_BYTES],
+            tx_hash: [102; FIELD_SIZE],
+            out_idx: 103,
+        };
+
+        let (ft_output_hash, ft_tree_path, ft_tree_root) =
+            generate_ft_tree_data(ft_output_data.clone());
+
+        let scb_btr_tree_root = FieldElement::from(22u8);
+        let wcert_tree_root = FieldElement::from(23u8);
+
+        let sc_hash = get_poseidon_hash_constant_length(4, None)
+            .update(ft_tree_root)
+            .update(scb_btr_tree_root)
+            .update(wcert_tree_root)
+            .update(sidechain_id)
+            .finalize()
+            .unwrap();
+
+        // TODO: set a proper height for the SC tree
+        let mut sc_tree =
+            GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
+        sc_tree.append(sc_hash).unwrap();
+        sc_tree.finalize_in_place().unwrap();
+
+        let sc_tree_path = sc_tree.get_merkle_path(0).unwrap().try_into().unwrap();
+        let sc_tree_root = sc_tree.root().unwrap();
+
+        let mut ft_data = CswFtProverData {
+            ft_output: ft_output_data,
+            ft_input_secret_key: [false; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+            mcb_sc_txs_com_start: PHANTOM_FIELD_ELEMENT,
+            merkle_path_to_sc_hash: GingerMHTBinaryPath::default(),
+            ft_tree_path: GingerMHTBinaryPath::default(),
+            sc_creation_commitment: PHANTOM_FIELD_ELEMENT,
+            scb_btr_tree_root: PHANTOM_FIELD_ELEMENT,
+            wcert_tree_root: PHANTOM_FIELD_ELEMENT,
+            sc_txs_com_hashes: vec![
+                PHANTOM_FIELD_ELEMENT;
+                CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER
+            ],
+        };
+
+        ft_data.sc_txs_com_hashes[0] = sc_tree_root;
+
+        let mut mcb_sc_txs_com_end = ft_data.mcb_sc_txs_com_start;
+
+        ft_data
+            .sc_txs_com_hashes
+            .iter()
+            .for_each(|sc_txs_com_hash| {
+                if !sc_txs_com_hash.eq(&PHANTOM_FIELD_ELEMENT) {
+                    mcb_sc_txs_com_end = get_poseidon_hash_constant_length(2, None)
+                        .update(mcb_sc_txs_com_end)
+                        .update(*sc_txs_com_hash)
+                        .finalize()
+                        .unwrap();
+                }
+            });
+
+            let sys_data = CswSysData {
+                genesis_constant: Some(FieldElement::from(14u8)),
+                mcb_sc_txs_com_end: mcb_sc_txs_com_end,
+                sc_last_wcert_hash: PHANTOM_FIELD_ELEMENT,
+                amount: ft_data.ft_output.amount,
+                nullifier: ft_output_hash,
+                receiver: [0; MC_PK_SIZE],
+            };
+
+        let csw_prover_data = CswProverData {
+            sys_data,
+            last_wcert: WithdrawalCertificateData::get_phantom_data(num_custom_fields),
+            utxo_data: CswUtxoProverData::default(),
+            ft_data,
+        };
+
+        csw_prover_data
+    }
+
+    fn generate_test_csw_prover_data(
+        csw_type: CswType,
+        sidechain_id: FieldElement,
+        num_custom_fields: u32,
+    ) -> CswProverData {
+        let (secret_key, public_key) = generate_key_pair();
+
+        match csw_type {
+            CswType::UTXO => generate_test_utxo_csw_data(num_custom_fields, secret_key, public_key),
+            CswType::FT => {
+                generate_test_ft_csw_data(sidechain_id, num_custom_fields, secret_key, public_key)
+            }
+        }
+    }
+
+    fn test_csw_circuit(csw_type: CswType) {
+        let sidechain_id = FieldElement::from(77u8);
+        let num_custom_fields = 1;
+        let csw_prover_data =
+            generate_test_csw_prover_data(csw_type, sidechain_id, num_custom_fields);
+        let circuit = CeasedSidechainWithdrawalCircuit::new(
+            sidechain_id,
+            csw_prover_data.sys_data,
+            Some(csw_prover_data.last_wcert),
+            Some(csw_prover_data.utxo_data),
+            Some(csw_prover_data.ft_data),
+            100,
+            num_custom_fields,
+        );
+
+        let failing_constraint = debug_circuit(circuit.clone()).unwrap();
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint.is_none());
+
+        load_g1_committer_key(1 << 17, 1 << 15).unwrap();
+        let ck_g1 = get_g1_committer_key().unwrap();
+        let params = CoboundaryMarlin::index(ck_g1.as_ref().unwrap(), circuit.clone()).unwrap();
+
+        let proof = CoboundaryMarlin::prove(
+            &params.0.clone(),
+            ck_g1.as_ref().unwrap(),
+            circuit,
+            false,
+            None,
+        )
+        .unwrap();
+
+        let mut public_inputs = Vec::new();
+
+        if csw_prover_data.sys_data.genesis_constant.is_some() {
+            public_inputs.push(csw_prover_data.sys_data.genesis_constant.unwrap());
+        }
+
+        let mut fes = DataAccumulator::init()
+            .update(csw_prover_data.sys_data.amount)
+            .map_err(|e| ProvingSystemError::Other(format!("{:?}", e))).unwrap()
+            .update(&csw_prover_data.sys_data.receiver[..])
+            .map_err(|e| ProvingSystemError::Other(format!("{:?}", e))).unwrap()
+            .get_field_elements()
+            .map_err(|e| ProvingSystemError::Other(format!("{:?}", e))).unwrap();
+
+        fes.append(&mut vec![
+            sidechain_id,
+            csw_prover_data.sys_data.nullifier,
+            csw_prover_data.sys_data.sc_last_wcert_hash,
+            csw_prover_data.sys_data.mcb_sc_txs_com_end,
+        ]);
+
+        public_inputs.push(hash_vec(fes).map_err(|e| ProvingSystemError::Other(format!("{:?}", e))).unwrap());
+
+        // Check that the proof gets correctly verified
+        assert!(CoboundaryMarlin::verify(
+            &params.1.clone(),
+            ck_g1.as_ref().unwrap(),
+            public_inputs.as_slice(),
+            &proof
+        )
+        .unwrap());
+
+        // Change one public input and check that the proof fails
+        public_inputs[0].add_assign(&FieldElement::from(1u8));
+        assert!(!CoboundaryMarlin::verify(
+            &params.1.clone(),
+            ck_g1.as_ref().unwrap(),
+            public_inputs.as_slice(),
+            &proof
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn test_csw_circuit_utxo() {
+        test_csw_circuit(CswType::UTXO);
+    }
+
+    #[test]
+    fn test_csw_circuit_ft() {
+        test_csw_circuit(CswType::FT);
+    }
+}
