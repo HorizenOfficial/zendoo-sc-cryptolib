@@ -34,6 +34,7 @@
 #![forbid(unsafe_code)]
 
 pub mod naive_threshold_sig;
+pub mod utils;
 pub use self::naive_threshold_sig::*;
 
 pub mod constants;

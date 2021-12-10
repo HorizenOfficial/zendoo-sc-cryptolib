@@ -844,7 +844,8 @@ pub struct CswProverDataGadget {
     pub ft_tree_path_g: GingerMHTBinaryGadget,
     pub scb_btr_tree_root_g: FieldElementGadget,
     pub wcert_tree_root_g: FieldElementGadget,
-    pub sc_txs_com_hashes_g: Vec<FieldElementGadget>, // witnesses [END]
+    pub sc_txs_com_hashes_g: Vec<FieldElementGadget>,
+    // witnesses [END]
 }
 
 impl FromGadget<CswProverData, FieldElement> for CswProverDataGadget {
