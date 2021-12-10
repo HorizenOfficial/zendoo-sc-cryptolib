@@ -1,22 +1,26 @@
 use std::{borrow::Borrow, convert::TryInto};
 
-use cctp_primitives::type_mapping::{FieldElement, FIELD_CAPACITY, FIELD_SIZE};
+use algebra::Field;
+use cctp_primitives::type_mapping::{FieldElement, FIELD_CAPACITY, FIELD_SIZE, FieldHash};
 use primitives::bytes_to_bits;
 use r1cs_core::{ConstraintSystemAbstract, SynthesisError};
+use r1cs_crypto::{FieldBasedHashGadget, FieldHasherGadget, FieldBasedMerkleTreePathGadget};
 use r1cs_std::{
     boolean::Boolean,
+    select::CondSelectGadget,
     prelude::{AllocGadget, ConstantGadget, EqGadget},
     to_field_gadget_vec::ToConstraintFieldGadget,
     uint32::UInt32,
     uint64::UInt64,
-    FromBitsGadget, FromGadget, ToBitsGadget,
+    FromBitsGadget,
+    ToBitsGadget, fields::FieldGadget,
 };
 
 use crate::{
-    constants::constants::CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER, CswFtOutputData, CswProverData,
+    CswFtOutputData, CswProverData,
     CswUtxoInputData, CswUtxoOutputData, FieldElementGadget, GingerMHTBinaryGadget,
     WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES, PHANTOM_SECRET_KEY_BITS,
-    SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS, read_field_element_from_buffer_with_padding,
+    SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS, read_field_element_from_buffer_with_padding, CswSysData, CswUtxoProverData, CswFtProverData, FieldHashGadget, constants::constants::BoxType, PHANTOM_FIELD_ELEMENT,
 };
 
 #[derive(Clone, PartialEq, Eq)]
@@ -199,6 +203,83 @@ impl ConstantGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCerti
                 .map(|custom_field_g| custom_field_g.value.unwrap())
                 .collect(),
         }
+    }
+}
+
+impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for WithdrawalCertificateDataGadget {
+    fn enforce_hash<CS: ConstraintSystemAbstract<FieldElement>>(
+        &self,
+        mut cs: CS,
+        _personalization: Option<&[FieldElementGadget]>,
+    ) -> Result<FieldElementGadget, SynthesisError> 
+    {
+
+        let last_wcert_epoch_id_fe_g = {
+            let bits = self.epoch_id_g.clone().into_bits_be();
+            FieldElementGadget::from_bits(
+                cs.ns(|| "last_wcert_epoch_id_fe_g"),
+                bits.as_slice()
+            )
+        }?;
+
+        let last_wcert_quality_fe_g = {
+            let mut bits = self.quality_g.to_bits_le();
+            bits.reverse();
+
+            FieldElementGadget::from_bits(
+                cs.ns(|| "last_wcert_quality_fe_g"),
+                bits.as_slice()
+            )
+        }?;
+
+        let mut last_wcert_btr_fee_bits_g = self.btr_min_fee_g.to_bits_le();
+        last_wcert_btr_fee_bits_g.reverse();
+
+        let mut last_wcert_ft_fee_bits_g = self.ft_min_amount_g.to_bits_le();
+        last_wcert_ft_fee_bits_g.reverse();
+
+        let mut last_wcert_fee_bits_g = last_wcert_btr_fee_bits_g;
+        last_wcert_fee_bits_g.append(&mut last_wcert_ft_fee_bits_g);
+
+        let last_wcert_fee_fe_g =
+            FieldElementGadget::from_bits(cs.ns(|| "last_wcert_fee_fe_g"), &last_wcert_fee_bits_g)?;
+
+        let temp_last_wcert_hash_g = FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "H(last_wcert without custom fields)"),
+            &[
+                self.ledger_id_g.clone(),
+                last_wcert_epoch_id_fe_g,
+                self.bt_list_root_g.clone(),
+                last_wcert_quality_fe_g,
+                self.mcb_sc_txs_com_g.clone(),
+                last_wcert_fee_fe_g,
+            ],
+        )?;
+
+        // Alloc custom_fields and enforce their hash, if they are present
+        let last_wcert_custom_fields_hash_g = if self.custom_fields_g.len() > 0 {
+            let custom_fields_hash_g = FieldHashGadget::enforce_hash_constant_length(
+                cs.ns(|| "H(custom_fields)"),
+                self.custom_fields_g.as_slice(),
+            )?;
+            Some(custom_fields_hash_g)
+        } else {
+            None
+        };
+
+        let preimage = if last_wcert_custom_fields_hash_g.is_some() {
+            vec![
+                last_wcert_custom_fields_hash_g.unwrap(),
+                temp_last_wcert_hash_g,
+            ]
+        } else {
+            vec![temp_last_wcert_hash_g]
+        };
+
+        FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "H([custom_fields], cert_data_hash)"),
+            preimage.as_slice(),
+        )
     }
 }
 
@@ -581,6 +662,130 @@ impl EqGadget<FieldElement> for CswUtxoInputDataGadget {
     }
 }
 
+pub struct CswUtxoProverDataGadget {
+    pub input_g: CswUtxoInputDataGadget, // unspent output we are trying to withdraw
+    pub mst_path_to_output_g: GingerMHTBinaryGadget, // path to output in the MST of the known state
+}
+
+impl CswUtxoProverDataGadget {
+    
+    /// Enforce that: 
+    /// 1) H(self.input_g.output_g) belongs to merkle tree with root 'scb_new_mst_root_g';
+    /// 2) H(self.input_g.output_g) == 'nullifier_g'
+    /// 3) self.input_g.output_g.amount_g == 'amount_g'
+    pub(crate) fn conditionally_enforce_utxo_withdrawal<CS: ConstraintSystemAbstract<FieldElement>>(
+        &self,
+        mut cs: CS,
+        scb_new_mst_root_g: &FieldElementGadget,
+        nullifier_g: &FieldElementGadget,
+        amount_g: &FieldElementGadget,
+        should_enforce: &Boolean,
+    ) -> Result<(), SynthesisError> 
+    {
+        // Enfore UTXO output hash computation
+        let box_type_coin_g = FieldElementGadget::from(
+            cs.ns(|| "alloc BoxType.Coin constant"),
+            &FieldElement::from(BoxType::CoinBox as u8),
+        );
+
+        let mut output_hash_elements_g = self
+            .input_g
+            .output_g
+            .to_field_gadget_elements(cs.ns(|| "alloc output hash elements"))?;
+
+        debug_assert_eq!(output_hash_elements_g.len(), 3);
+        output_hash_elements_g.push(box_type_coin_g);
+
+        let output_hash_g = FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "H(input.output)"),
+            &output_hash_elements_g,
+        )?;
+
+        // 1 Check output presence in the known state
+        // mst_root = reconstruct_merkle_root_hash(outputHash, mst_path_to_output)
+        let mst_root_g = self.mst_path_to_output_g.enforce_root_from_leaf(
+            cs.ns(|| "reconstruct_merkle_root_hash(outputHash, mst_path_to_output)"),
+            &output_hash_g,
+        )?;
+
+        // require(last_wcert.proof_data.scb_new_mst_root == mst_root)
+        mst_root_g.conditional_enforce_equal(
+            cs.ns(|| "last_wcert.proof_data.scb_new_mst_root == mst_root"),
+            scb_new_mst_root_g,
+            should_enforce,
+        )?;
+
+        // 2 Enforce nullifier
+        output_hash_g.conditional_enforce_equal(
+            cs.ns(|| "require(nullifier == outputHash)"),
+            nullifier_g,
+            should_enforce
+        )?;
+
+        // 3. Enforce amount
+        let mut utxo_amount_big_endian_bits_g = self.input_g.output_g.amount_g.to_bits_le();
+        utxo_amount_big_endian_bits_g.reverse();
+
+        let utxo_input_amount_g = FieldElementGadget::from_bits(
+            cs.ns(|| "read utxo input amount"),
+            &utxo_amount_big_endian_bits_g,
+        )?;
+
+        utxo_input_amount_g.conditional_enforce_equal(
+            cs.ns(|| "input.amount == sys_data.amount"),
+            amount_g,
+            should_enforce
+        )?;
+
+        Ok(())
+    }
+}
+
+impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
+    fn alloc<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        f: F,
+    ) -> Result<Self, SynthesisError>
+    where
+        F: FnOnce() -> Result<T, SynthesisError>,
+        T: Borrow<CswUtxoProverData> 
+    {
+        let (input, mst_path_to_output) = match f() {
+            Ok(csw_utxo_prover_data) => {
+                let csw_utxo_prover_data = csw_utxo_prover_data.borrow().clone();
+                (
+                    Ok(csw_utxo_prover_data.input),
+                    Ok(csw_utxo_prover_data.mst_path_to_output),
+                )
+            }
+            _ => (
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+            ),
+        };
+        
+        let input_g = CswUtxoInputDataGadget::alloc(cs.ns(|| "alloc input"), || input)?;
+
+        let mst_path_to_output_g =
+            GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc mst path to output"), || mst_path_to_output)?;
+
+        Ok(Self {
+            input_g,
+            mst_path_to_output_g,
+        })
+    }
+
+    fn alloc_input<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
+        _cs: CS,
+        _f: F,
+    ) -> Result<Self, SynthesisError>
+    where
+        F: FnOnce() -> Result<T, SynthesisError>,
+        T: Borrow<CswUtxoProverData> {
+        unimplemented!()
+    }
+}
+
 #[derive(PartialEq, Eq)]
 pub struct CswFtOutputDataGadget {
     pub amount_g: UInt64,
@@ -795,21 +1000,8 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
     }
 }
 
-pub struct CswProverDataGadget {
-    // public inputs [START]
-    pub genesis_constant_g: Option<FieldElementGadget>,
-    pub mcb_sc_txs_com_end_g: FieldElementGadget,
-    pub sc_last_wcert_hash_g: FieldElementGadget,
-    pub amount_g: FieldElementGadget,
-    pub nullifier_g: FieldElementGadget,
-    pub receiver_g: FieldElementGadget,
-    // public inputs [END]
-
-    // witnesses [START]
-    pub last_wcert_g: WithdrawalCertificateDataGadget,
-    pub input_g: CswUtxoInputDataGadget,
-    pub mst_path_to_output_g: GingerMHTBinaryGadget,
-    pub ft_input_g: CswFtOutputDataGadget,
+pub struct CswFtProverDataGadget {
+    pub ft_output_g: CswFtOutputDataGadget,
     pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
     pub mcb_sc_txs_com_start_g: FieldElementGadget,
     pub merkle_path_to_sc_hash_g: GingerMHTBinaryGadget,
@@ -818,67 +1010,202 @@ pub struct CswProverDataGadget {
     pub scb_btr_tree_root_g: FieldElementGadget,
     pub wcert_tree_root_g: FieldElementGadget,
     pub sc_txs_com_hashes_g: Vec<FieldElementGadget>,
-    // witnesses [END]
 }
 
-impl FromGadget<CswProverData, FieldElement> for CswProverDataGadget {
-    fn from<CS: ConstraintSystemAbstract<FieldElement>>(
-        data: CswProverData,
+impl CswFtProverDataGadget {
+    
+    /// Enforce that: 
+    /// 1) H(self.ft_output_g) belongs to one of the sc_txs_com_hashes between self.mcb_sc_txs_com_start_g and 'mcb_sc_txs_com_end_g'
+    /// 2) H(self.ft_output_g) == 'nullifier_g'
+    /// 3) self.ft_output_g.amount_g == 'amount_g'
+    pub(crate) fn conditionally_enforce_ft_withdrawal<CS: ConstraintSystemAbstract<FieldElement>>(
+        &self,
         mut cs: CS,
-    ) -> Result<Self, SynthesisError> {
-        let mut genesis_constant_g = None;
-        if data.sys_data.genesis_constant.is_some() {
-            genesis_constant_g = Some(
-                FieldElementGadget::alloc_input(cs.ns(|| "alloc genesis constant"), || {
-                    Ok(data.sys_data.genesis_constant.unwrap())
-                })?
-            );
+        sidechain_id_g: &FieldElementGadget,
+        range_size: u32,
+        mcb_sc_txs_com_end_g: &FieldElementGadget,
+        nullifier_g: &FieldElementGadget,
+        amount_g: &FieldElementGadget,
+        should_enforce: &Boolean,
+    ) -> Result<(), SynthesisError> 
+    {
+
+        // Enforce FT output hash
+        let ft_output_hash_elements = self
+            .ft_output_g
+            .to_field_gadget_elements(cs.ns(|| "alloc ft_output_hash input elements"))?;
+
+        let ft_output_hash_g = FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "H(ft_input)"),
+            &ft_output_hash_elements,
+        )?;
+
+        // 1) H(self.ft_output_g) belongs to one of the sc_txs_com_hashes between self.mcb_sc_txs_com_start_g and 'mcb_sc_txs_com_end_g'
+        
+        // Reconstruct the sc tx commitment tree root to which this ft output hash should belong
+
+        // val scb_ft_tree_root = reconstruct_merkle_root_hash(ft_output_hash, ft_tree_path)
+        let scb_ft_tree_root_g = self.ft_tree_path_g.enforce_root_from_leaf(
+            cs.ns(|| "reconstruct_merkle_root_hash(ft_output_hash, ft_tree_path)"),
+            &ft_output_hash_g,
+        )?;
+
+        // val txs_hash = H(scb_ft_tree_root | scb_btr_tree_root | wcert_tree_root)     // Q: what about sc_creation_tx that may be included in txs_hash? Should we add NULL instead?
+        let sc_hash_g = FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "H(scb_ft_tree_root | scb_btr_tree_root | wcert_tree_root | ledgerId)"),
+            &[
+                scb_ft_tree_root_g.clone(),
+                self.scb_btr_tree_root_g.clone(),
+                self.wcert_tree_root_g.clone(),
+                sidechain_id_g.clone(),
+            ],
+        )?;
+
+        // val sc_txs_com_tree_root = reconstruct_merkle_root_hash(sc_hash, merkle_path_to_scHash)
+        let sc_txs_com_tree_root_g = self.merkle_path_to_sc_hash_g.enforce_root_from_leaf(
+            cs.ns(|| "reconstruct_merkle_root_hash(sc_hash, merkle_path_to_scHash)"),
+            &sc_hash_g,
+        )?;
+
+        // Check that sc_txs_com_tree_root is one of those between self.mcb_sc_txs_com_start_g and 'mcb_sc_txs_com_end_g'
+
+        // var sc_txs_com_cumulative = mcb_sc_txs_com_start
+        let mut sc_txs_com_cumulative_g = self.mcb_sc_txs_com_start_g.clone();
+
+        // var cnt = 0
+        let mut counter_g = FieldElementGadget::from_value(
+            cs.ns(|| "alloc initial counter"),
+            &FieldElement::from(0u8),
+        );
+
+        // Alloc phantom field element
+        let phantom_g = FieldElementGadget::from_value(cs.ns(|| "Break"), &PHANTOM_FIELD_ELEMENT);
+
+        for i in 0..range_size as usize {
+            // if (sc_txs_com_tree_root == sc_txs_com_hashes[i]) { cnt++ }
+            let should_increase_counter = sc_txs_com_tree_root_g.is_eq(
+                cs.ns(|| format!("sc_txs_com_tree_root == sc_txs_com_hashes[{}]", i)),
+                &self.sc_txs_com_hashes_g[i],
+            )?;
+
+            // cnt++
+            counter_g = counter_g.conditionally_add_constant(
+                cs.ns(|| format!("cnt++ [{}]", i)),
+                &should_increase_counter,
+                FieldElement::one(),
+            )?;
+
+            // sc_txs_com_cumulative = H(sc_txs_com_cumulative, sc_txs_com_hashes[i])
+            let temp_sc_txs_com_cumulative = FieldHashGadget::enforce_hash_constant_length(
+                cs.ns(|| format!("H(sc_txs_com_cumulative, sc_txs_com_hashes[{}])", i)),
+                &[
+                    sc_txs_com_cumulative_g.clone(),
+                    self.sc_txs_com_hashes_g[i].clone(),
+                ],
+            )?;
+
+            // Ignore NULL hashes
+            let should_ignore_hash = self.sc_txs_com_hashes_g[i].is_eq(
+                cs.ns(|| format!("sc_txs_com_hashes[{}] == PHANTOM", i)),
+                &phantom_g,
+            )?;
+
+            sc_txs_com_cumulative_g = FieldElementGadget::conditionally_select(
+                cs.ns(|| format!("Conditionally select hash at iteration {}", i)),
+                &should_ignore_hash,
+                &sc_txs_com_cumulative_g,
+                &temp_sc_txs_com_cumulative,
+            )?;
         }
 
-        let mcb_sc_txs_com_end_g =
-            FieldElementGadget::alloc_input(cs.ns(|| "alloc mcb sc txs com end"), || {
-                Ok(data.sys_data.mcb_sc_txs_com_end)
-            })?;
+        // require(cnt == 1)   // We must have exactly one match
+        let constant_one_g =
+            FieldElementGadget::from_value(cs.ns(|| "alloc constant 1"), &FieldElement::from(1u8));
+        counter_g.conditional_enforce_equal(
+            cs.ns(|| "require(cnt == 1)"),
+            &constant_one_g,
+            &should_enforce,
+        )?;
 
-        let sc_last_wcert_hash_g =
-            FieldElementGadget::alloc_input(cs.ns(|| "alloc sc last wcert hash"), || {
-                Ok(data.sys_data.sc_last_wcert_hash)
-            })?;
+        // require(mcb_sc_txs_com_end = sc_txs_com_cumulative)
+        mcb_sc_txs_com_end_g.conditional_enforce_equal(
+            cs.ns(|| "mcb_sc_txs_com_end = sc_txs_com_cumulative"),
+            &sc_txs_com_cumulative_g,
+            &should_enforce,
+        )?;
 
-        let amount_g =
-            FieldElementGadget::alloc_input(cs.ns(|| "alloc amount"), || Ok(FieldElement::from(data.sys_data.amount)))?;
+        // 2 Enforce nullifier
+        ft_output_hash_g.conditional_enforce_equal(
+            cs.ns(|| "require(nullifier == outputHash)"),
+            nullifier_g,
+            should_enforce
+        )?;
 
-        let nullifier_g = FieldElementGadget::alloc_input(cs.ns(|| "alloc nullifier"), || {
-            Ok(data.sys_data.nullifier)
-        })?;
+        // 3. Enforce amount
+        let mut ft_amount_big_endian_bits_g = self.ft_output_g.amount_g.to_bits_le();
+        ft_amount_big_endian_bits_g.reverse();
 
-        let receiver_g = FieldElementGadget::alloc_input(cs.ns(|| "alloc receiver"), || {
-            read_field_element_from_buffer_with_padding(&data.sys_data.receiver)
-                .map_err(|e| SynthesisError::Other(e.to_string()))
-        })?;
+        let ft_input_amount_g = FieldElementGadget::from_bits(
+            cs.ns(|| "read ft input amount"),
+            &ft_amount_big_endian_bits_g,
+        )?;
 
-        let last_wcert_g =
-            WithdrawalCertificateDataGadget::alloc(cs.ns(|| "alloc last wcert"), || {
-                Ok(data.last_wcert.clone())
-            })?;
+        ft_input_amount_g.conditional_enforce_equal(
+            cs.ns(|| "input.amount == sys_data.amount"),
+            amount_g,
+            should_enforce
+        )?;
 
-        let input_g = CswUtxoInputDataGadget::alloc(cs.ns(|| "alloc input"), || {
-            Ok(data.utxo_data.input.clone())
-        })?;
+        Ok(())
+    }
+}
 
-        let mst_path_to_output_g =
-            GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc mst path to output"), || {
-                Ok(data.utxo_data.mst_path_to_output.clone())
-            })?;
+impl AllocGadget<CswFtProverData, FieldElement> for CswFtProverDataGadget {
+    fn alloc<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        f: F,
+    ) -> Result<Self, SynthesisError>
+    where
+        F: FnOnce() -> Result<T, SynthesisError>,
+        T: Borrow<CswFtProverData>
+    {
+        let (
+            ft_output, ft_input_secret_key, mcb_sc_txs_com_start,
+            merkle_path_to_sc_hash, ft_tree_path, sc_creation_commitment,
+            scb_btr_tree_root, wcert_tree_root, sc_txs_com_hashes
+            ) = match f() 
+        {
+            Ok(csw_ft_prover_data) => {
+                let csw_ft_prover_data = csw_ft_prover_data.borrow().clone();
+                (
+                    Ok(csw_ft_prover_data.ft_output),
+                    Ok(csw_ft_prover_data.ft_input_secret_key),
+                    Ok(csw_ft_prover_data.mcb_sc_txs_com_start),
+                    Ok(csw_ft_prover_data.merkle_path_to_sc_hash),
+                    Ok(csw_ft_prover_data.ft_tree_path),
+                    Ok(csw_ft_prover_data.sc_creation_commitment),
+                    Ok(csw_ft_prover_data.scb_btr_tree_root),
+                    Ok(csw_ft_prover_data.wcert_tree_root),
+                    Ok(csw_ft_prover_data.sc_txs_com_hashes),
+                )
+            }
+            _ => (
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+            ),
+        };
 
-        let ft_input_g = CswFtOutputDataGadget::alloc(cs.ns(|| "alloc ft input"), || {
-            Ok(data.ft_data.ft_output.clone())
-        })?;
+        let ft_output_g = CswFtOutputDataGadget::alloc(cs.ns(|| "alloc ft input"), || ft_output)?;
 
         let ft_input_secret_key_g =
-            Vec::<Boolean>::alloc(cs.ns(|| "alloc ft input secret key"), || {
-                Ok(data.ft_data.ft_input_secret_key)
-            })?
+            Vec::<Boolean>::alloc(cs.ns(|| "alloc ft input secret key"), || ft_input_secret_key)?
             .try_into()
             .map_err(|_| {
                 SynthesisError::Other(format!(
@@ -888,66 +1215,177 @@ impl FromGadget<CswProverData, FieldElement> for CswProverDataGadget {
             })?;
 
         let mcb_sc_txs_com_start_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com start"), || {
-                Ok(data.ft_data.mcb_sc_txs_com_start)
-            })?;
+            FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com start"), || mcb_sc_txs_com_start)?;
 
         let merkle_path_to_sc_hash_g =
-            GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc merkle path to sc hash"), || {
-                Ok(&data.ft_data.merkle_path_to_sc_hash)
-            })?;
+            GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc merkle path to sc hash"), || merkle_path_to_sc_hash)?;
 
-        let ft_tree_path_g = GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc ft tree path"), || {
-            Ok(data.ft_data.ft_tree_path.clone())
-        })?;
+        let ft_tree_path_g = GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc ft tree path"), || ft_tree_path)?;
 
         let sc_creation_commitment_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc scb btr tree root"), || {
-                Ok(data.ft_data.sc_creation_commitment)
-            })?;
+            FieldElementGadget::alloc(cs.ns(|| "alloc scb btr tree root"), || sc_creation_commitment)?;
 
         let scb_btr_tree_root_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc scb btr tree root"), || {
-                Ok(data.ft_data.scb_btr_tree_root)
-            })?;
+            FieldElementGadget::alloc(cs.ns(|| "alloc scb btr tree root"), || scb_btr_tree_root)?;
 
         let wcert_tree_root_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc wcert tree root"), || {
-                Ok(data.ft_data.wcert_tree_root)
-            })?;
+            FieldElementGadget::alloc(cs.ns(|| "alloc wcert tree root"), || wcert_tree_root)?;
 
-        assert!(data.ft_data.sc_txs_com_hashes.len() == CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER);
-        let mut sc_txs_com_hashes_g = Vec::with_capacity(CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER);
+        let sc_txs_com_hashes_g = Vec::<FieldElementGadget>::alloc(
+            cs.ns(|| "alloc custom fields"),
+            || sc_txs_com_hashes
+        )?;
 
-        for index in 0..data.ft_data.sc_txs_com_hashes.len() {
-            let sc_txs_com_hash_g = FieldElementGadget::alloc(
-                cs.ns(|| format!("alloc sc txs com hash {}", index)),
-                || Ok(data.ft_data.sc_txs_com_hashes[index]),
-            )?;
-            sc_txs_com_hashes_g.push(sc_txs_com_hash_g);
-        }
+        Ok(
+            Self {
+                ft_output_g,
+                ft_input_secret_key_g,
+                mcb_sc_txs_com_start_g,
+                merkle_path_to_sc_hash_g,
+                ft_tree_path_g,
+                sc_creation_commitment_g,
+                scb_btr_tree_root_g,
+                wcert_tree_root_g,
+                sc_txs_com_hashes_g,
+            }
+        )
+    }
 
-        let new_instance = Self {
-            genesis_constant_g,
-            mcb_sc_txs_com_end_g,
-            sc_last_wcert_hash_g,
-            amount_g,
-            nullifier_g,
-            receiver_g,
-            last_wcert_g,
-            input_g,
-            mst_path_to_output_g,
-            ft_input_g,
-            ft_input_secret_key_g,
-            mcb_sc_txs_com_start_g,
-            merkle_path_to_sc_hash_g,
-            ft_tree_path_g,
-            sc_creation_commitment_g,
-            scb_btr_tree_root_g,
-            wcert_tree_root_g,
-            sc_txs_com_hashes_g,
+    fn alloc_input<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
+        _cs: CS,
+        _f: F,
+    ) -> Result<Self, SynthesisError>
+    where
+        F: FnOnce() -> Result<T, SynthesisError>,
+        T: Borrow<CswFtProverData> {
+        todo!()
+    }
+}
+
+pub struct CswSysDataGadget {
+    pub genesis_constant_g: Option<FieldElementGadget>,
+    pub mcb_sc_txs_com_end_g: FieldElementGadget,
+    pub sc_last_wcert_hash_g: FieldElementGadget,
+    pub amount_g: FieldElementGadget,
+    pub nullifier_g: FieldElementGadget,
+    pub receiver_g: FieldElementGadget,
+}
+
+impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
+    fn alloc<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        f: F,
+    ) -> Result<Self, SynthesisError>
+    where
+        F: FnOnce() -> Result<T, SynthesisError>,
+        T: Borrow<CswSysData> 
+    {
+        let (genesis_constant, mcb_sc_txs_com_end, sc_last_wcert_hash, amount, nullifier, receiver) = match f() {
+            Ok(csw_sys_data) => {
+                let csw_sys_data = csw_sys_data.borrow().clone();
+                (
+                    Ok(csw_sys_data.genesis_constant),
+                    Ok(csw_sys_data.mcb_sc_txs_com_end),
+                    Ok(csw_sys_data.sc_last_wcert_hash),
+                    Ok(csw_sys_data.amount),
+                    Ok(csw_sys_data.nullifier),
+                    Ok(csw_sys_data.receiver)
+                )
+            }
+            _ => (
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+            ),
         };
 
-        Ok(new_instance)
+        let mut genesis_constant_g = None;
+        let genesis_constant = genesis_constant?;
+        if genesis_constant.is_some() {
+            genesis_constant_g = Some(
+                FieldElementGadget::alloc(cs.ns(|| "alloc genesis constant"), || Ok(genesis_constant.unwrap()))?
+            );
+        }
+
+        let mcb_sc_txs_com_end_g = FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com end"), || mcb_sc_txs_com_end)?;
+
+        let sc_last_wcert_hash_g = FieldElementGadget::alloc(cs.ns(|| "alloc sc last wcert hash"), || sc_last_wcert_hash)?;
+
+        let amount_g = FieldElementGadget::alloc(cs.ns(|| "alloc amount"), || Ok(FieldElement::from(amount?)))?;
+
+        let nullifier_g = FieldElementGadget::alloc(cs.ns(|| "alloc nullifier"), || nullifier)?;
+
+        let receiver_g = FieldElementGadget::alloc(cs.ns(|| "alloc receiver"), || {
+            read_field_element_from_buffer_with_padding(&receiver?)
+                .map_err(|e| SynthesisError::Other(e.to_string()))
+        })?;
+
+        Ok(Self { genesis_constant_g, mcb_sc_txs_com_end_g, sc_last_wcert_hash_g, amount_g, nullifier_g, receiver_g })
+    }
+
+    fn alloc_input<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
+        _cs: CS,
+        _f: F,
+    ) -> Result<Self, SynthesisError>
+    where
+        F: FnOnce() -> Result<T, SynthesisError>,
+        T: Borrow<CswSysData> {
+        todo!()
+    }
+}
+
+pub struct CswProverDataGadget {
+    pub sys_data_g: CswSysDataGadget,
+    pub last_wcert_g: WithdrawalCertificateDataGadget, // the last confirmed wcert in the MC
+    pub utxo_data_g: CswUtxoProverDataGadget,
+    pub ft_data_g: CswFtProverDataGadget,
+}
+
+impl AllocGadget<CswProverData, FieldElement> for CswProverDataGadget {
+    fn alloc<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        f: F,
+    ) -> Result<Self, SynthesisError>
+    where
+        F: FnOnce() -> Result<T, SynthesisError>,
+        T: Borrow<CswProverData> 
+    {
+        let (sys_data, last_wcert, utxo_data, ft_data) = match f() {
+            Ok(csw_prover_data) => {
+                let csw_prover_data = csw_prover_data.borrow().clone();
+                (
+                    Ok(csw_prover_data.sys_data),
+                    Ok(csw_prover_data.last_wcert),
+                    Ok(csw_prover_data.utxo_data),
+                    Ok(csw_prover_data.ft_data),
+                )
+            }
+            _ => (
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+            ),
+        };
+
+        let sys_data_g = CswSysDataGadget::alloc(cs.ns(|| "alloc csw sys data"), || sys_data)?;
+        let last_wcert_g = WithdrawalCertificateDataGadget::alloc(cs.ns(|| "alloc wcert data"), || last_wcert)?;
+        let utxo_data_g = CswUtxoProverDataGadget::alloc(cs.ns(|| "alloc ft data"), || utxo_data)?;
+        let ft_data_g = CswFtProverDataGadget::alloc(cs.ns(|| "alloc csw ft prover data"), || ft_data)?;
+
+        Ok(Self { sys_data_g, last_wcert_g, utxo_data_g, ft_data_g })
+    }
+
+    fn alloc_input<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
+        _cs: CS,
+        _f: F,
+    ) -> Result<Self, SynthesisError>
+    where
+        F: FnOnce() -> Result<T, SynthesisError>,
+        T: Borrow<CswProverData> {
+        unimplemented!();
     }
 }

@@ -188,10 +188,7 @@ pub struct CswFtProverData {
 
 #[derive(Clone)]
 pub struct CswProverData {
-    // public inputs
     pub sys_data: CswSysData,
-
-    // witnesses
     pub last_wcert: WithdrawalCertificateData, // the last confirmed wcert in the MC
     pub utxo_data: CswUtxoProverData,
     pub ft_data: CswFtProverData,
