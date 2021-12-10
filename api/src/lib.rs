@@ -22,7 +22,7 @@ use demo_circuit::{
     constants::*, constraints::CeasedSidechainWithdrawalCircuit, generate_circuit_keypair,
     type_mapping::*, CswFtOutputData, CswFtProverData, CswSysData, CswUtxoInputData,
     CswUtxoOutputData, CswUtxoProverData, NaiveTresholdSignature,
-    WithdrawalCertificateDataNew, read_field_element_from_buffer_with_padding,
+    WithdrawalCertificateData, read_field_element_from_buffer_with_padding,
 };
 
 use primitives::{
@@ -46,7 +46,7 @@ mod utils;
 use utils::*;
 
 use cctp_primitives::utils::compute_sc_id;
-use jni::{objects::{JClass, JMap, JObject, JString, JValue}, signature::JavaType};
+use jni::objects::{JClass, JMap, JObject, JString, JValue};
 use jni::sys::{jboolean, jbyte, jbyteArray, jint, jlong, jobject, jobjectArray};
 use jni::sys::{JNI_FALSE, JNI_TRUE};
 use jni::{sys::jlongArray, JNIEnv};
@@ -4467,7 +4467,7 @@ ffi_export!(
     }
 );
 
-fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateDataNew {
+fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateData {
     // Parse sc_id
     let sc_id = *parse_field_element_from_jobject(&_env, _cert, "scId");
 
@@ -4565,7 +4565,7 @@ fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateDataNew {
     // Parse ft_min_amount
     let ft_min_amount = parse_long_from_jobject(&_env, _cert, "ftMinAmount");
 
-    WithdrawalCertificateDataNew::new(
+    WithdrawalCertificateData::new(
         sc_id,
         epoch_number,
         bt_list,
@@ -4594,8 +4594,8 @@ ffi_export!(
 
         // Compute hash
         match get_cert_data_hash_from_bt_root_and_custom_fields_hash(
-            &cert.sc_id,
-            cert.epoch_number,
+            &cert.ledger_id,
+            cert.epoch_id,
             cert.quality,
             cert.bt_root,
             custom_fields_hash,

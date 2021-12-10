@@ -7,7 +7,7 @@ use primitives::{
 
 use demo_circuit::{
     constants::VRFParams, constraints::CeasedSidechainWithdrawalCircuit, naive_threshold_sig::*,
-    type_mapping::*, CswFtProverData, CswSysData, CswUtxoProverData, WithdrawalCertificateDataNew,
+    type_mapping::*, CswFtProverData, CswSysData, CswUtxoProverData, WithdrawalCertificateData,
 };
 use lazy_static::*;
 use rand::{rngs::OsRng, SeedableRng};
@@ -330,7 +330,7 @@ pub fn verify_naive_threshold_sig_proof(
 pub fn create_csw_proof(
     sidechain_id: FieldElement,
     sys_data: CswSysData,
-    last_wcert: Option<WithdrawalCertificateDataNew>,
+    last_wcert: Option<WithdrawalCertificateData>,
     utxo_data: Option<CswUtxoProverData>,
     ft_data: Option<CswFtProverData>,
     range_size: u32,

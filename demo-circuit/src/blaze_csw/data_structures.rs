@@ -9,14 +9,14 @@ use primitives::{FieldBasedHash, FieldHasher};
 
 use crate::{
     type_mapping::*, GingerMHTBinaryPath, PHANTOM_PUBLIC_KEY_BITS, PHANTOM_SECRET_KEY_BITS,
-    SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, constants::constants::BoxType,
+    SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, constants::constants::BoxType, PHANTOM_FIELD_ELEMENT,
 };
 
-// Must replace old one
-pub struct WithdrawalCertificateDataNew {
-    pub sc_id: FieldElement,
-    pub epoch_number: u32,
-    pub bt_root: FieldElement,
+#[derive(Clone)]
+pub struct WithdrawalCertificateData {
+    pub ledger_id: FieldElement,
+    pub epoch_id: u32,
+    pub bt_root: FieldElement, // Merkle root hash of all BTs from the certificate (recall that MC hashes all complex proof_data params from the certificate)
     pub quality: u64,
     pub mcb_sc_txs_com: FieldElement,
     pub ft_min_amount: u64,
@@ -24,10 +24,10 @@ pub struct WithdrawalCertificateDataNew {
     pub custom_fields: Vec<FieldElement>,
 }
 
-impl WithdrawalCertificateDataNew {
+impl WithdrawalCertificateData {
     pub fn new(
-        sc_id: FieldElement,
-        epoch_number: u32,
+        ledger_id: FieldElement,
+        epoch_id: u32,
         bt_list: Vec<BackwardTransfer>,
         quality: u64,
         mcb_sc_txs_com: FieldElement,
@@ -36,8 +36,8 @@ impl WithdrawalCertificateDataNew {
         custom_fields: Vec<FieldElement>,
     ) -> Self {
         Self {
-            sc_id,
-            epoch_number,
+            ledger_id,
+            epoch_id,
             bt_root: get_bt_merkle_root(if bt_list.is_empty() {
                 None
             } else {
@@ -51,22 +51,19 @@ impl WithdrawalCertificateDataNew {
             custom_fields,
         }
     }
-}
 
-#[derive(Clone)]
-pub struct WithdrawalCertificateData {
-    // sys_data [START]
-    pub ledger_id: FieldElement,
-    pub epoch_id: FieldElement,
-    pub bt_list_hash: FieldElement, // Merkle root hash of all BTs from the certificate (recall that MC hashes all complex proof_data params from the certificate)
-    pub quality: FieldElement,
-    pub mcb_sc_txs_com: FieldElement,
-    pub ft_min_amount: FieldElement,
-    pub btr_min_fee: FieldElement,
-    // sys_data [END]
-
-    // proof_data [START]
-    pub scb_new_mst_root: FieldElement, // proof_data [END]
+    pub fn get_phantom_data(num_custom_fields: u32) -> Self {
+        Self {
+            ledger_id: PHANTOM_FIELD_ELEMENT,
+            epoch_id: 0,
+            bt_root: get_bt_merkle_root(None).unwrap(),
+            quality: 0,
+            mcb_sc_txs_com: PHANTOM_FIELD_ELEMENT,
+            ft_min_amount: 0,
+            btr_min_fee: 0,
+            custom_fields: vec![PHANTOM_FIELD_ELEMENT; num_custom_fields as usize],
+        }
+    }
 }
 
 #[derive(Clone)]
