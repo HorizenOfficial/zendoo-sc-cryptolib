@@ -20,7 +20,7 @@ use crate::{
     CswFtOutputData, CswProverData,
     CswUtxoInputData, CswUtxoOutputData, FieldElementGadget, GingerMHTBinaryGadget,
     WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES, PHANTOM_SECRET_KEY_BITS,
-    SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS, read_field_element_from_buffer_with_padding, CswSysData, CswUtxoProverData, CswFtProverData, FieldHashGadget, constants::constants::BoxType, PHANTOM_FIELD_ELEMENT,
+    SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS, CswSysData, CswUtxoProverData, CswFtProverData, FieldHashGadget, constants::constants::BoxType, PHANTOM_FIELD_ELEMENT,
 };
 
 #[derive(Clone, PartialEq, Eq)]
@@ -1268,7 +1268,7 @@ pub struct CswSysDataGadget {
     pub sc_last_wcert_hash_g: FieldElementGadget,
     pub amount_g: FieldElementGadget,
     pub nullifier_g: FieldElementGadget,
-    pub receiver_g: FieldElementGadget,
+    pub receiver_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
 }
 
 impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
@@ -1318,10 +1318,15 @@ impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
 
         let nullifier_g = FieldElementGadget::alloc(cs.ns(|| "alloc nullifier"), || nullifier)?;
 
-        let receiver_g = FieldElementGadget::alloc(cs.ns(|| "alloc receiver"), || {
-            read_field_element_from_buffer_with_padding(&receiver?)
-                .map_err(|e| SynthesisError::Other(e.to_string()))
-        })?;
+        let receiver_g =
+            Vec::<Boolean>::alloc(cs.ns(|| "alloc receiver"), || Ok(bytes_to_bits(&receiver?)))?
+            .try_into()
+            .map_err(|_| {
+                SynthesisError::Other(format!(
+                    "invalid size for payback_addr_data_hash, expected {} bits",
+                    MC_RETURN_ADDRESS_BYTES * 8
+                ))
+            })?;
 
         Ok(Self { genesis_constant_g, mcb_sc_txs_com_end_g, sc_last_wcert_hash_g, amount_g, nullifier_g, receiver_g })
     }

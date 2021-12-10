@@ -3,15 +3,15 @@ use std::convert::TryInto;
 use algebra::AffineCurve;
 use cctp_primitives::type_mapping::FieldElement;
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
-use r1cs_crypto::FieldHasherGadget;
+use r1cs_crypto::{FieldBasedHashGadget, FieldHasherGadget};
 use r1cs_std::{
     alloc::AllocGadget,
     boolean::Boolean,
-    fields::nonnative::nonnative_field_gadget::NonNativeFieldGadget,
+    fields::{nonnative::nonnative_field_gadget::NonNativeFieldGadget, FieldGadget},
     groups::GroupGadget,
     prelude::EqGadget,
     select::CondSelectGadget,
-    FromBitsGadget,
+    FromBitsGadget, Assignment,
 };
 
 use crate::{
@@ -241,6 +241,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         //       to have cleaner code (we lose only 2 constraints anyway)
 
         // Check secret key ownership
+
         let mut public_key_bits_g = Vec::<Boolean>::with_capacity(SIMULATED_FIELD_BYTE_SIZE * 8);
 
         // Conditionally select the public key
@@ -277,6 +278,68 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             cs.ns(|| "enforce pk ownership"),
             secret_key_bits_g.as_slice().try_into().unwrap(),
             public_key_bits_g.as_slice().try_into().unwrap()
+        )?;
+
+        // Let's build up the public inputs
+
+        // Allocate constant as public input if needed and simply check equality with the one in the sys data
+        // QUESTION: Design document seems a bit misleading here:
+        //       Shouldn't we have the constant in the WithdrawalCertificateData (if present) ? Why is in the CSWSysData ?
+        //       And shouldn't we enforce that is the same as the one passed as public input rather than not using it ?
+        //        
+        if csw_data_g.sys_data_g.genesis_constant_g.is_some() {
+            let expected_constant = FieldElementGadget::alloc_input(
+                cs.ns(|| "alloc constant as input"),
+                || csw_data_g.sys_data_g.genesis_constant_g.unwrap().get_value().get()
+            )?;
+
+            // NOTE: Assuming that the previous QUESTION is not relevant, maybe this is not needed.
+            expected_constant.enforce_equal(
+                cs.ns(|| "expected constant == actual constant"),
+                &csw_data_g.sys_data_g.genesis_constant_g.unwrap()
+            )?;
+        }
+
+        // Deserialize a FieldElement out of amount_g and receiver_g
+        // QUESTION: About receiver usage design document suggests to pass it as public input and not using it.
+        //       But in the CSWVerifier interface we defined in cctp-lib, receiver is used to build a hash passed
+        //       as public input. Is it correct ?
+        //        
+        let amount_and_receiver_fe_g = {
+            let mut amount_and_receiver_bits_g = csw_data_g
+            .sys_data_g
+            .amount_g
+            .to_bits_with_length_restriction(
+                cs.ns(|| "amount to bits"),
+                (FIELD_SIZE * 8) - 64
+            )?;
+
+            amount_and_receiver_bits_g.extend_from_slice(&csw_data_g.sys_data_g.receiver_g[..]);
+
+            FieldElementGadget::from_bits(
+                cs.ns(|| "read field element out of amount and bits"),
+                amount_and_receiver_bits_g.as_slice()
+            )
+        }?;
+
+        // Enforce sys_data_hash computation
+        let sys_data_hash_g = FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "compute sys data hash"),
+            &[
+                amount_and_receiver_fe_g, sidechain_id_g, csw_data_g.sys_data_g.nullifier_g.clone(),
+                csw_data_g.sys_data_g.sc_last_wcert_hash_g.clone(), csw_data_g.sys_data_g.mcb_sc_txs_com_end_g]
+        )?;
+
+        // Alloc it as public input
+        let expected_sys_data_hash_g = FieldElementGadget::alloc_input(
+            cs.ns(|| "alloc input sys_data_hash_g"),
+            || sys_data_hash_g.get_value().get()
+        )?;
+
+        // Enforce equality
+        expected_sys_data_hash_g.enforce_equal(
+            cs.ns(|| "expected_sys_data_hash == actual_sys_data_hash"),
+            &sys_data_hash_g
         )?;
 
         Ok(())
