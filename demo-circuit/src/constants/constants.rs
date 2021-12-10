@@ -11,10 +11,6 @@ pub const NULL_PK_PERSONALIZATION: &[u8; 8] = b"ZenullPK";
 /// BLAKE2s Personalization for Group hash generators used for VRF.
 pub const VRF_GROUP_HASH_GENERATORS_PERSONALIZATION: &[u8; 8] = b"ZenVrfPH";
 
-// TODO: define the correct max value.
-// It might be a parameter of the circuit (since it depends on the epoch length and it is fixed after creation).
-pub const CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER: usize = 100;
-
 pub enum BoxType {
     NonCoinBox = 0,
     CoinBox = 1,

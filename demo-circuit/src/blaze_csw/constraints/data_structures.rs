@@ -13,7 +13,7 @@ use r1cs_std::{
 };
 
 use crate::{
-    constants::constants::CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER, CswFtOutputData, CswProverData,
+    CswFtOutputData, CswProverData,
     CswUtxoInputData, CswUtxoOutputData, FieldElementGadget, GingerMHTBinaryGadget,
     WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES, PHANTOM_SECRET_KEY_BITS,
     SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS, read_field_element_from_buffer_with_padding,
