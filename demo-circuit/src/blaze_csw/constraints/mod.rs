@@ -26,10 +26,17 @@ pub mod data_structures;
 
 #[derive(Clone)]
 pub struct CeasedSidechainWithdrawalCircuit {
-    sidechain_id: FieldElement,
-    csw_data: CswProverData,
+    // Setup params
     range_size: u32,
     num_custom_fields: u32,
+    
+    // Witnesses
+    sidechain_id: FieldElement,
+    csw_data: CswProverData,
+
+    // Public inputs
+    constant: Option<FieldElement>,
+    csw_sys_data_hash: FieldElement,
 }
 
 impl CeasedSidechainWithdrawalCircuit {
@@ -287,16 +294,16 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         //       Shouldn't we have the constant in the WithdrawalCertificateData (if present) ? Why is in the CSWSysData ?
         //       And shouldn't we enforce that is the same as the one passed as public input rather than not using it ?
         //        
-        if csw_data_g.sys_data_g.genesis_constant_g.is_some() {
+        if self.constant.is_some() {
             let expected_constant = FieldElementGadget::alloc_input(
                 cs.ns(|| "alloc constant as input"),
-                || csw_data_g.sys_data_g.genesis_constant_g.unwrap().get_value().get()
+                || Ok(self.constant.unwrap())
             )?;
 
             // NOTE: Assuming that the previous QUESTION is not relevant, maybe this is not needed.
             expected_constant.enforce_equal(
                 cs.ns(|| "expected constant == actual constant"),
-                &csw_data_g.sys_data_g.genesis_constant_g.unwrap()
+                &csw_data_g.sys_data_g.genesis_constant_g.unwrap() // Must be present
             )?;
         }
 
@@ -333,7 +340,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         // Alloc it as public input
         let expected_sys_data_hash_g = FieldElementGadget::alloc_input(
             cs.ns(|| "alloc input sys_data_hash_g"),
-            || sys_data_hash_g.get_value().get()
+            || Ok(self.csw_sys_data_hash)
         )?;
 
         // Enforce equality
