@@ -106,7 +106,7 @@ public class FieldElement implements AutoCloseable {
      * @return the FieldElement obtained from combining fe1.bytes[0..index1) with fe2.bytes[0..index2)
      * @throws IllegalArgumentException if the combine operation would produce a byte array bigger than FIELD_ELEMENT_LENGTH
      */
-    protected static FieldElement joinAt(FieldElement fe1, int index1, FieldElement fe2, int index2) throws IllegalArgumentException {
+    public static FieldElement joinAt(FieldElement fe1, int index1, FieldElement fe2, int index2) throws IllegalArgumentException {
         // Check that the resulting array dimension wouldn't be bigger than FIELD_ELEMENT_LENGTH
         if (index1 + index2 > Constants.FIELD_ELEMENT_LENGTH()) {
             throw new IllegalArgumentException("Invalid values for index1 + index2: the resulting array would overflow FIELD_ELEMENT_LENGTH");
