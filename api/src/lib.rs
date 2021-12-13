@@ -20,9 +20,9 @@ use cctp_primitives::{
 };
 use demo_circuit::{
     constants::*, constraints::CeasedSidechainWithdrawalCircuit, generate_circuit_keypair,
-    type_mapping::*, CswFtOutputData, CswFtProverData, CswSysData, CswUtxoInputData,
-    CswUtxoOutputData, CswUtxoProverData, NaiveTresholdSignature,
-    WithdrawalCertificateData, read_field_element_from_buffer_with_padding,
+    read_field_element_from_buffer_with_padding, type_mapping::*, CswFtOutputData, CswFtProverData,
+    CswSysData, CswUtxoInputData, CswUtxoOutputData, CswUtxoProverData, NaiveTresholdSignature,
+    WithdrawalCertificateData,
 };
 
 use primitives::{
@@ -118,7 +118,6 @@ ffi_export!(
         _class: JClass,
         _field_element_bytes: jbyteArray,
     ) -> jobject {
-
         let fe_bytes = _env
             .convert_byte_array(_field_element_bytes)
             .expect("Cannot read bytes.");

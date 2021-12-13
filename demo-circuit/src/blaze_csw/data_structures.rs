@@ -8,8 +8,8 @@ use cctp_primitives::{
 use primitives::{FieldBasedHash, FieldHasher};
 
 use crate::{
-    type_mapping::*, GingerMHTBinaryPath, PHANTOM_PUBLIC_KEY_BITS, PHANTOM_SECRET_KEY_BITS,
-    SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, constants::constants::BoxType, PHANTOM_FIELD_ELEMENT,
+    constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, PHANTOM_FIELD_ELEMENT,
+    PHANTOM_PUBLIC_KEY_BITS, PHANTOM_SECRET_KEY_BITS, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
 };
 
 #[derive(Clone)]
@@ -68,10 +68,10 @@ impl WithdrawalCertificateData {
 
 #[derive(Clone)]
 pub struct CswUtxoOutputData {
-    pub spending_pub_key: [bool; SIMULATED_FIELD_BYTE_SIZE * 8],
+    pub spending_pub_key: [bool; SIMULATED_FIELD_BYTE_SIZE * 8], // Assumed to be big endian endian
     pub amount: u64,
     pub nonce: u64,
-    pub custom_hash: [bool; FIELD_SIZE * 8],
+    pub custom_hash: [bool; FIELD_SIZE * 8], // Assumed to be big endian
 }
 
 impl Default for CswUtxoOutputData {
@@ -112,7 +112,7 @@ impl FieldHasher<FieldElement, FieldHash> for CswUtxoOutputData {
 #[derive(Clone)]
 pub struct CswUtxoInputData {
     pub output: CswUtxoOutputData,
-    pub secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+    pub secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // Assumed to be big endian
 }
 
 impl Default for CswUtxoInputData {
@@ -128,9 +128,9 @@ impl Default for CswUtxoInputData {
 #[derive(Clone, Default)]
 pub struct CswFtOutputData {
     pub amount: u64,
-    pub receiver_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
-    pub payback_addr_data_hash: [u8; MC_PK_SIZE],
-    pub tx_hash: [u8; SC_TX_HASH_LENGTH],
+    pub receiver_pub_key: [u8; SC_PUBLIC_KEY_LENGTH], // Assumed to be big endian
+    pub payback_addr_data_hash: [u8; MC_PK_SIZE],     // Assumed to be big endian
+    pub tx_hash: [u8; SC_TX_HASH_LENGTH],             // Assumed to be big endian
     pub out_idx: u32,
 }
 
@@ -141,7 +141,7 @@ pub struct CswSysData {
     pub sc_last_wcert_hash: FieldElement, // hash of the last confirmed WCert (excluding reverted) for this sidechain (calculated directly by MC). Note that it should be a hash of WithdrawalCertificateData
     pub amount: u64,                      // taken from CSW and passed directly by the MC
     pub nullifier: FieldElement,          // taken from CSW and passed directly by the MC
-    pub receiver: [u8; MC_PK_SIZE], // the receiver is fixed by the proof, otherwise someone will be able to front-run the tx and steel the proof. Note that we actually don't need to do anything with the receiver in the circuit, it's enough just to have it as a public input
+    pub receiver: [u8; MC_PK_SIZE], // (assumed to be big endian) the receiver is fixed by the proof, otherwise someone will be able to front-run the tx and steel the proof. Note that we actually don't need to do anything with the receiver in the circuit, it's enough just to have it as a public input
 }
 
 impl CswSysData {
@@ -182,7 +182,7 @@ impl Default for CswUtxoProverData {
 #[derive(Clone)]
 pub struct CswFtProverData {
     pub ft_output: CswFtOutputData, // FT output in the MC block
-    pub ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // secret key that authorizes ft_input spending
+    pub ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // secret key that authorizes ft_input spending, assumed to be big endian
     pub mcb_sc_txs_com_start: FieldElement, // Cumulative ScTxsCommittment taken from the last MC block of the last confirmed (not reverted) epoch
     pub merkle_path_to_sc_hash: GingerMHTBinaryPath, // Merkle path to a particular sidechain in the ScTxsComm tree
     pub ft_tree_path: GingerMHTBinaryPath, // path to the ft_input_hash in the FT Merkle tree included in ScTxsComm tree
@@ -195,8 +195,8 @@ pub struct CswFtProverData {
                                               // witnesses [END]
 }
 
-impl Default for CswFtProverData {
-    fn default() -> Self {
+impl CswFtProverData {
+    pub fn get_phantom(commitment_hashes_number: usize) -> Self {
         Self {
             ft_output: CswFtOutputData::default(),
             ft_input_secret_key: [false; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
@@ -206,10 +206,7 @@ impl Default for CswFtProverData {
             sc_creation_commitment: PHANTOM_FIELD_ELEMENT,
             scb_btr_tree_root: PHANTOM_FIELD_ELEMENT,
             wcert_tree_root: PHANTOM_FIELD_ELEMENT,
-            sc_txs_com_hashes: vec![
-                PHANTOM_FIELD_ELEMENT;
-                CSW_TRANSACTION_COMMITMENT_HASHES_NUMBER
-            ],
+            sc_txs_com_hashes: vec![PHANTOM_FIELD_ELEMENT; commitment_hashes_number],
         }
     }
 }

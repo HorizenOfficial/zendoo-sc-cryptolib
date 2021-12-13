@@ -390,7 +390,6 @@ pub fn verify_csw_proof(
     check_vk: bool,
     compressed_vk: bool,
 ) -> Result<bool, Error> {
-
     let ins = CSWProofUserInputs {
         amount: sys_data.amount,
         constant: sys_data.genesis_constant.as_ref(),

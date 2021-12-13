@@ -1,26 +1,27 @@
 use std::{borrow::Borrow, convert::TryInto};
 
 use algebra::Field;
-use cctp_primitives::type_mapping::{FieldElement, FIELD_CAPACITY, FIELD_SIZE, FieldHash};
+use cctp_primitives::type_mapping::{FieldElement, FieldHash, FIELD_CAPACITY, FIELD_SIZE};
 use primitives::bytes_to_bits;
 use r1cs_core::{ConstraintSystemAbstract, SynthesisError};
-use r1cs_crypto::{FieldBasedHashGadget, FieldHasherGadget, FieldBasedMerkleTreePathGadget};
+use r1cs_crypto::{FieldBasedHashGadget, FieldBasedMerkleTreePathGadget, FieldHasherGadget};
 use r1cs_std::{
     boolean::Boolean,
-    select::CondSelectGadget,
+    fields::FieldGadget,
     prelude::{AllocGadget, ConstantGadget, EqGadget},
+    select::CondSelectGadget,
     to_field_gadget_vec::ToConstraintFieldGadget,
     uint32::UInt32,
     uint64::UInt64,
-    FromBitsGadget,
-    ToBitsGadget, fields::FieldGadget,
+    FromBitsGadget, ToBitsGadget,
 };
 
 use crate::{
-    CswFtOutputData, CswProverData,
-    CswUtxoInputData, CswUtxoOutputData, FieldElementGadget, GingerMHTBinaryGadget,
-    WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES, PHANTOM_SECRET_KEY_BITS,
-    SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS, CswSysData, CswUtxoProverData, CswFtProverData, FieldHashGadget, constants::constants::BoxType, PHANTOM_FIELD_ELEMENT,
+    constants::constants::BoxType, CswFtOutputData, CswFtProverData, CswProverData, CswSysData,
+    CswUtxoInputData, CswUtxoOutputData, CswUtxoProverData, FieldElementGadget, FieldHashGadget,
+    GingerMHTBinaryGadget, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
+    PHANTOM_FIELD_ELEMENT, PHANTOM_SECRET_KEY_BITS, SIMULATED_FIELD_BYTE_SIZE,
+    SIMULATED_SCALAR_FIELD_MODULUS_BITS,
 };
 
 #[derive(Clone, PartialEq, Eq)]
@@ -206,30 +207,24 @@ impl ConstantGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCerti
     }
 }
 
-impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for WithdrawalCertificateDataGadget {
+impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget>
+    for WithdrawalCertificateDataGadget
+{
     fn enforce_hash<CS: ConstraintSystemAbstract<FieldElement>>(
         &self,
         mut cs: CS,
         _personalization: Option<&[FieldElementGadget]>,
-    ) -> Result<FieldElementGadget, SynthesisError> 
-    {
-
+    ) -> Result<FieldElementGadget, SynthesisError> {
         let last_wcert_epoch_id_fe_g = {
             let bits = self.epoch_id_g.clone().into_bits_be();
-            FieldElementGadget::from_bits(
-                cs.ns(|| "last_wcert_epoch_id_fe_g"),
-                bits.as_slice()
-            )
+            FieldElementGadget::from_bits(cs.ns(|| "last_wcert_epoch_id_fe_g"), bits.as_slice())
         }?;
 
         let last_wcert_quality_fe_g = {
             let mut bits = self.quality_g.to_bits_le();
             bits.reverse();
 
-            FieldElementGadget::from_bits(
-                cs.ns(|| "last_wcert_quality_fe_g"),
-                bits.as_slice()
-            )
+            FieldElementGadget::from_bits(cs.ns(|| "last_wcert_quality_fe_g"), bits.as_slice())
         }?;
 
         let mut last_wcert_btr_fee_bits_g = self.btr_min_fee_g.to_bits_le();
@@ -323,10 +318,10 @@ impl EqGadget<FieldElement> for WithdrawalCertificateDataGadget {
 
 #[derive(PartialEq, Eq)]
 pub struct CswUtxoOutputDataGadget {
-    pub spending_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
+    pub spending_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8], // Assumed to be big endian
     pub amount_g: UInt64,
     pub nonce_g: UInt64,
-    pub custom_hash_g: [Boolean; FIELD_SIZE * 8],
+    pub custom_hash_g: [Boolean; FIELD_SIZE * 8], // Assumed to be big endian
 }
 
 impl CswUtxoOutputDataGadget {
@@ -381,7 +376,6 @@ impl AllocGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
                     ))
                 })?;
 
-        // TODO: to save some constraints, it would be possible to allocate amount and nonce as Vec<Boolean>
         let amount_g = UInt64::alloc(cs.ns(|| "alloc amount"), amount.ok())?;
 
         let nonce_g = UInt64::alloc(cs.ns(|| "alloc nonce"), nonce.ok())?;
@@ -533,7 +527,7 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
 #[derive(PartialEq, Eq)]
 pub struct CswUtxoInputDataGadget {
     pub output_g: CswUtxoOutputDataGadget,
-    pub secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+    pub secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // Assumed to be big endian
 }
 
 impl CswUtxoInputDataGadget {
@@ -668,20 +662,20 @@ pub struct CswUtxoProverDataGadget {
 }
 
 impl CswUtxoProverDataGadget {
-    
-    /// Enforce that: 
+    /// Enforce that:
     /// 1) H(self.input_g.output_g) belongs to merkle tree with root 'scb_new_mst_root_g';
     /// 2) H(self.input_g.output_g) == 'nullifier_g'
     /// 3) self.input_g.output_g.amount_g == 'amount_g'
-    pub(crate) fn conditionally_enforce_utxo_withdrawal<CS: ConstraintSystemAbstract<FieldElement>>(
+    pub(crate) fn conditionally_enforce_utxo_withdrawal<
+        CS: ConstraintSystemAbstract<FieldElement>,
+    >(
         &self,
         mut cs: CS,
         scb_new_mst_root_g: &FieldElementGadget,
         nullifier_g: &FieldElementGadget,
         amount_g: &FieldElementGadget,
         should_enforce: &Boolean,
-    ) -> Result<(), SynthesisError> 
-    {
+    ) -> Result<(), SynthesisError> {
         // Enfore UTXO output hash computation
         let box_type_coin_g = FieldElementGadget::from(
             cs.ns(|| "alloc BoxType.Coin constant"),
@@ -719,7 +713,7 @@ impl CswUtxoProverDataGadget {
         output_hash_g.conditional_enforce_equal(
             cs.ns(|| "require(nullifier == outputHash)"),
             nullifier_g,
-            should_enforce
+            should_enforce,
         )?;
 
         // 3. Enforce amount
@@ -734,7 +728,7 @@ impl CswUtxoProverDataGadget {
         utxo_input_amount_g.conditional_enforce_equal(
             cs.ns(|| "input.amount == sys_data.amount"),
             amount_g,
-            should_enforce
+            should_enforce,
         )?;
 
         Ok(())
@@ -748,7 +742,7 @@ impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswUtxoProverData> 
+        T: Borrow<CswUtxoProverData>,
     {
         let (input, mst_path_to_output) = match f() {
             Ok(csw_utxo_prover_data) => {
@@ -763,11 +757,13 @@ impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
                 Err(SynthesisError::AssignmentMissing),
             ),
         };
-        
+
         let input_g = CswUtxoInputDataGadget::alloc(cs.ns(|| "alloc input"), || input)?;
 
         let mst_path_to_output_g =
-            GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc mst path to output"), || mst_path_to_output)?;
+            GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc mst path to output"), || {
+                mst_path_to_output
+            })?;
 
         Ok(Self {
             input_g,
@@ -781,7 +777,8 @@ impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswUtxoProverData> {
+        T: Borrow<CswUtxoProverData>,
+    {
         unimplemented!()
     }
 }
@@ -789,9 +786,9 @@ impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
 #[derive(PartialEq, Eq)]
 pub struct CswFtOutputDataGadget {
     pub amount_g: UInt64,
-    pub receiver_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
-    pub payback_addr_data_hash_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
-    pub tx_hash_g: [Boolean; FIELD_SIZE * 8],
+    pub receiver_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8], // Assumed to be big endian
+    pub payback_addr_data_hash_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8], // Assumed to be big endian
+    pub tx_hash_g: [Boolean; FIELD_SIZE * 8], // Assumed to be big endian
     pub out_idx_g: UInt32,
 }
 
@@ -840,18 +837,21 @@ impl AllocGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
 
         let amount_g = UInt64::alloc(cs.ns(|| "alloc amount"), amount.ok())?;
 
-        let receiver_pub_key_g =
-            Vec::<Boolean>::alloc(cs.ns(|| "alloc receiver pub key"), || Ok(bytes_to_bits(&receiver_pub_key?)))?
-                .try_into()
-                .map_err(|_| {
-                    SynthesisError::Other(format!(
-                        "invalid size for public key, expected {} bits",
-                        SIMULATED_FIELD_BYTE_SIZE * 8
-                    ))
-                })?;
+        let receiver_pub_key_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc receiver pub key"), || {
+            Ok(bytes_to_bits(&receiver_pub_key?))
+        })?
+        .try_into()
+        .map_err(|_| {
+            SynthesisError::Other(format!(
+                "invalid size for public key, expected {} bits",
+                SIMULATED_FIELD_BYTE_SIZE * 8
+            ))
+        })?;
 
         let payback_addr_data_hash_g =
-            Vec::<Boolean>::alloc(cs.ns(|| "alloc payback addr data hash"), || Ok(bytes_to_bits(&payback_addr_data_hash?)))?
+            Vec::<Boolean>::alloc(cs.ns(|| "alloc payback addr data hash"), || {
+                Ok(bytes_to_bits(&payback_addr_data_hash?))
+            })?
             .try_into()
             .map_err(|_| {
                 SynthesisError::Other(format!(
@@ -860,14 +860,15 @@ impl AllocGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
                 ))
             })?;
 
-        let tx_hash_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc tx hash"), || Ok(bytes_to_bits(&tx_hash?)))?
-            .try_into()
-            .map_err(|_| {
-                SynthesisError::Other(format!(
-                    "invalid size for tx hash, expected {} bits",
-                    FIELD_SIZE * 8
-                ))
-            })?;
+        let tx_hash_g =
+            Vec::<Boolean>::alloc(cs.ns(|| "alloc tx hash"), || Ok(bytes_to_bits(&tx_hash?)))?
+                .try_into()
+                .map_err(|_| {
+                    SynthesisError::Other(format!(
+                        "invalid size for tx hash, expected {} bits",
+                        FIELD_SIZE * 8
+                    ))
+                })?;
 
         let out_idx_g = UInt32::alloc(cs.ns(|| "alloc out idx"), out_idx.ok())?;
 
@@ -1002,7 +1003,7 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
 
 pub struct CswFtProverDataGadget {
     pub ft_output_g: CswFtOutputDataGadget,
-    pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+    pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // Assumed to be big endian
     pub mcb_sc_txs_com_start_g: FieldElementGadget,
     pub merkle_path_to_sc_hash_g: GingerMHTBinaryGadget,
     pub ft_tree_path_g: GingerMHTBinaryGadget,
@@ -1013,12 +1014,13 @@ pub struct CswFtProverDataGadget {
 }
 
 impl CswFtProverDataGadget {
-    
-    /// Enforce that: 
+    /// Enforce that:
     /// 1) H(self.ft_output_g) belongs to one of the sc_txs_com_hashes between self.mcb_sc_txs_com_start_g and 'mcb_sc_txs_com_end_g'
     /// 2) H(self.ft_output_g) == 'nullifier_g'
     /// 3) self.ft_output_g.amount_g == 'amount_g'
-    pub(crate) fn conditionally_enforce_ft_withdrawal<CS: ConstraintSystemAbstract<FieldElement>>(
+    pub(crate) fn conditionally_enforce_ft_withdrawal<
+        CS: ConstraintSystemAbstract<FieldElement>,
+    >(
         &self,
         mut cs: CS,
         sidechain_id_g: &FieldElementGadget,
@@ -1027,9 +1029,7 @@ impl CswFtProverDataGadget {
         nullifier_g: &FieldElementGadget,
         amount_g: &FieldElementGadget,
         should_enforce: &Boolean,
-    ) -> Result<(), SynthesisError> 
-    {
-
+    ) -> Result<(), SynthesisError> {
         // Enforce FT output hash
         let ft_output_hash_elements = self
             .ft_output_g
@@ -1041,7 +1041,7 @@ impl CswFtProverDataGadget {
         )?;
 
         // 1) H(self.ft_output_g) belongs to one of the sc_txs_com_hashes between self.mcb_sc_txs_com_start_g and 'mcb_sc_txs_com_end_g'
-        
+
         // Reconstruct the sc tx commitment tree root to which this ft output hash should belong
 
         // val scb_ft_tree_root = reconstruct_merkle_root_hash(ft_output_hash, ft_tree_path)
@@ -1138,7 +1138,7 @@ impl CswFtProverDataGadget {
         ft_output_hash_g.conditional_enforce_equal(
             cs.ns(|| "require(nullifier == outputHash)"),
             nullifier_g,
-            should_enforce
+            should_enforce,
         )?;
 
         // 3. Enforce amount
@@ -1153,7 +1153,7 @@ impl CswFtProverDataGadget {
         ft_input_amount_g.conditional_enforce_equal(
             cs.ns(|| "input.amount == sys_data.amount"),
             amount_g,
-            should_enforce
+            should_enforce,
         )?;
 
         Ok(())
@@ -1167,14 +1167,19 @@ impl AllocGadget<CswFtProverData, FieldElement> for CswFtProverDataGadget {
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswFtProverData>
+        T: Borrow<CswFtProverData>,
     {
         let (
-            ft_output, ft_input_secret_key, mcb_sc_txs_com_start,
-            merkle_path_to_sc_hash, ft_tree_path, sc_creation_commitment,
-            scb_btr_tree_root, wcert_tree_root, sc_txs_com_hashes
-            ) = match f() 
-        {
+            ft_output,
+            ft_input_secret_key,
+            mcb_sc_txs_com_start,
+            merkle_path_to_sc_hash,
+            ft_tree_path,
+            sc_creation_commitment,
+            scb_btr_tree_root,
+            wcert_tree_root,
+            sc_txs_com_hashes,
+        ) = match f() {
             Ok(csw_ft_prover_data) => {
                 let csw_ft_prover_data = csw_ft_prover_data.borrow().clone();
                 (
@@ -1205,7 +1210,9 @@ impl AllocGadget<CswFtProverData, FieldElement> for CswFtProverDataGadget {
         let ft_output_g = CswFtOutputDataGadget::alloc(cs.ns(|| "alloc ft input"), || ft_output)?;
 
         let ft_input_secret_key_g =
-            Vec::<Boolean>::alloc(cs.ns(|| "alloc ft input secret key"), || ft_input_secret_key)?
+            Vec::<Boolean>::alloc(cs.ns(|| "alloc ft input secret key"), || {
+                ft_input_secret_key
+            })?
             .try_into()
             .map_err(|_| {
                 SynthesisError::Other(format!(
@@ -1215,15 +1222,22 @@ impl AllocGadget<CswFtProverData, FieldElement> for CswFtProverDataGadget {
             })?;
 
         let mcb_sc_txs_com_start_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com start"), || mcb_sc_txs_com_start)?;
+            FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com start"), || {
+                mcb_sc_txs_com_start
+            })?;
 
         let merkle_path_to_sc_hash_g =
-            GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc merkle path to sc hash"), || merkle_path_to_sc_hash)?;
+            GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc merkle path to sc hash"), || {
+                merkle_path_to_sc_hash
+            })?;
 
-        let ft_tree_path_g = GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc ft tree path"), || ft_tree_path)?;
+        let ft_tree_path_g =
+            GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc ft tree path"), || ft_tree_path)?;
 
         let sc_creation_commitment_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc scb btr tree root"), || sc_creation_commitment)?;
+            FieldElementGadget::alloc(cs.ns(|| "alloc sc creation commitment"), || {
+                sc_creation_commitment
+            })?;
 
         let scb_btr_tree_root_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc scb btr tree root"), || scb_btr_tree_root)?;
@@ -1231,24 +1245,22 @@ impl AllocGadget<CswFtProverData, FieldElement> for CswFtProverDataGadget {
         let wcert_tree_root_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc wcert tree root"), || wcert_tree_root)?;
 
-        let sc_txs_com_hashes_g = Vec::<FieldElementGadget>::alloc(
-            cs.ns(|| "alloc custom fields"),
-            || sc_txs_com_hashes
-        )?;
+        let sc_txs_com_hashes_g =
+            Vec::<FieldElementGadget>::alloc(cs.ns(|| "alloc custom fields"), || {
+                sc_txs_com_hashes
+            })?;
 
-        Ok(
-            Self {
-                ft_output_g,
-                ft_input_secret_key_g,
-                mcb_sc_txs_com_start_g,
-                merkle_path_to_sc_hash_g,
-                ft_tree_path_g,
-                sc_creation_commitment_g,
-                scb_btr_tree_root_g,
-                wcert_tree_root_g,
-                sc_txs_com_hashes_g,
-            }
-        )
+        Ok(Self {
+            ft_output_g,
+            ft_input_secret_key_g,
+            mcb_sc_txs_com_start_g,
+            merkle_path_to_sc_hash_g,
+            ft_tree_path_g,
+            sc_creation_commitment_g,
+            scb_btr_tree_root_g,
+            wcert_tree_root_g,
+            sc_txs_com_hashes_g,
+        })
     }
 
     fn alloc_input<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
@@ -1257,7 +1269,8 @@ impl AllocGadget<CswFtProverData, FieldElement> for CswFtProverDataGadget {
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswFtProverData> {
+        T: Borrow<CswFtProverData>,
+    {
         todo!()
     }
 }
@@ -1268,7 +1281,7 @@ pub struct CswSysDataGadget {
     pub sc_last_wcert_hash_g: FieldElementGadget,
     pub amount_g: FieldElementGadget,
     pub nullifier_g: FieldElementGadget,
-    pub receiver_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
+    pub receiver_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8], // Assumed to be big endian
 }
 
 impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
@@ -1278,57 +1291,70 @@ impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswSysData> 
+        T: Borrow<CswSysData>,
     {
-        let (genesis_constant, mcb_sc_txs_com_end, sc_last_wcert_hash, amount, nullifier, receiver) = match f() {
-            Ok(csw_sys_data) => {
-                let csw_sys_data = csw_sys_data.borrow().clone();
-                (
-                    Ok(csw_sys_data.genesis_constant),
-                    Ok(csw_sys_data.mcb_sc_txs_com_end),
-                    Ok(csw_sys_data.sc_last_wcert_hash),
-                    Ok(csw_sys_data.amount),
-                    Ok(csw_sys_data.nullifier),
-                    Ok(csw_sys_data.receiver)
-                )
-            }
-            _ => (
-                Err(SynthesisError::AssignmentMissing),
-                Err(SynthesisError::AssignmentMissing),
-                Err(SynthesisError::AssignmentMissing),
-                Err(SynthesisError::AssignmentMissing),
-                Err(SynthesisError::AssignmentMissing),
-                Err(SynthesisError::AssignmentMissing),
-            ),
-        };
+        let (genesis_constant, mcb_sc_txs_com_end, sc_last_wcert_hash, amount, nullifier, receiver) =
+            match f() {
+                Ok(csw_sys_data) => {
+                    let csw_sys_data = csw_sys_data.borrow().clone();
+                    (
+                        Ok(csw_sys_data.genesis_constant),
+                        Ok(csw_sys_data.mcb_sc_txs_com_end),
+                        Ok(csw_sys_data.sc_last_wcert_hash),
+                        Ok(csw_sys_data.amount),
+                        Ok(csw_sys_data.nullifier),
+                        Ok(csw_sys_data.receiver),
+                    )
+                }
+                _ => (
+                    Err(SynthesisError::AssignmentMissing),
+                    Err(SynthesisError::AssignmentMissing),
+                    Err(SynthesisError::AssignmentMissing),
+                    Err(SynthesisError::AssignmentMissing),
+                    Err(SynthesisError::AssignmentMissing),
+                    Err(SynthesisError::AssignmentMissing),
+                ),
+            };
 
         let mut genesis_constant_g = None;
         let genesis_constant = genesis_constant?;
         if genesis_constant.is_some() {
-            genesis_constant_g = Some(
-                FieldElementGadget::alloc(cs.ns(|| "alloc genesis constant"), || Ok(genesis_constant.unwrap()))?
-            );
+            genesis_constant_g = Some(FieldElementGadget::alloc(
+                cs.ns(|| "alloc genesis constant"),
+                || Ok(genesis_constant.unwrap()),
+            )?);
         }
 
-        let mcb_sc_txs_com_end_g = FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com end"), || mcb_sc_txs_com_end)?;
+        let mcb_sc_txs_com_end_g =
+            FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com end"), || mcb_sc_txs_com_end)?;
 
-        let sc_last_wcert_hash_g = FieldElementGadget::alloc(cs.ns(|| "alloc sc last wcert hash"), || sc_last_wcert_hash)?;
+        let sc_last_wcert_hash_g =
+            FieldElementGadget::alloc(cs.ns(|| "alloc sc last wcert hash"), || sc_last_wcert_hash)?;
 
-        let amount_g = FieldElementGadget::alloc(cs.ns(|| "alloc amount"), || Ok(FieldElement::from(amount?)))?;
+        let amount_g = FieldElementGadget::alloc(cs.ns(|| "alloc amount"), || {
+            Ok(FieldElement::from(amount?))
+        })?;
 
         let nullifier_g = FieldElementGadget::alloc(cs.ns(|| "alloc nullifier"), || nullifier)?;
 
         let receiver_g =
             Vec::<Boolean>::alloc(cs.ns(|| "alloc receiver"), || Ok(bytes_to_bits(&receiver?)))?
-            .try_into()
-            .map_err(|_| {
-                SynthesisError::Other(format!(
-                    "invalid size for payback_addr_data_hash, expected {} bits",
-                    MC_RETURN_ADDRESS_BYTES * 8
-                ))
-            })?;
+                .try_into()
+                .map_err(|_| {
+                    SynthesisError::Other(format!(
+                        "invalid size for payback_addr_data_hash, expected {} bits",
+                        MC_RETURN_ADDRESS_BYTES * 8
+                    ))
+                })?;
 
-        Ok(Self { genesis_constant_g, mcb_sc_txs_com_end_g, sc_last_wcert_hash_g, amount_g, nullifier_g, receiver_g })
+        Ok(Self {
+            genesis_constant_g,
+            mcb_sc_txs_com_end_g,
+            sc_last_wcert_hash_g,
+            amount_g,
+            nullifier_g,
+            receiver_g,
+        })
     }
 
     fn alloc_input<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
@@ -1337,7 +1363,8 @@ impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswSysData> {
+        T: Borrow<CswSysData>,
+    {
         todo!()
     }
 }
@@ -1356,7 +1383,7 @@ impl AllocGadget<CswProverData, FieldElement> for CswProverDataGadget {
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswProverData> 
+        T: Borrow<CswProverData>,
     {
         let (sys_data, last_wcert, utxo_data, ft_data) = match f() {
             Ok(csw_prover_data) => {
@@ -1377,11 +1404,18 @@ impl AllocGadget<CswProverData, FieldElement> for CswProverDataGadget {
         };
 
         let sys_data_g = CswSysDataGadget::alloc(cs.ns(|| "alloc csw sys data"), || sys_data)?;
-        let last_wcert_g = WithdrawalCertificateDataGadget::alloc(cs.ns(|| "alloc wcert data"), || last_wcert)?;
+        let last_wcert_g =
+            WithdrawalCertificateDataGadget::alloc(cs.ns(|| "alloc wcert data"), || last_wcert)?;
         let utxo_data_g = CswUtxoProverDataGadget::alloc(cs.ns(|| "alloc ft data"), || utxo_data)?;
-        let ft_data_g = CswFtProverDataGadget::alloc(cs.ns(|| "alloc csw ft prover data"), || ft_data)?;
+        let ft_data_g =
+            CswFtProverDataGadget::alloc(cs.ns(|| "alloc csw ft prover data"), || ft_data)?;
 
-        Ok(Self { sys_data_g, last_wcert_g, utxo_data_g, ft_data_g })
+        Ok(Self {
+            sys_data_g,
+            last_wcert_g,
+            utxo_data_g,
+            ft_data_g,
+        })
     }
 
     fn alloc_input<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
@@ -1390,7 +1424,8 @@ impl AllocGadget<CswProverData, FieldElement> for CswProverDataGadget {
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswProverData> {
+        T: Borrow<CswProverData>,
+    {
         unimplemented!();
     }
 }

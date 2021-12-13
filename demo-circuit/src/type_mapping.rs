@@ -50,6 +50,9 @@ pub type SimulatedScalarFieldElement = ed25519Fr;
 pub const SIMULATED_SCALAR_FIELD_MODULUS_BITS: usize =
     <SimulatedScalarFieldElement as PrimeField>::Params::MODULUS_BITS as usize;
 
+pub const SIMULATED_SCALAR_FIELD_REPR_SHAVE_BITS: usize =
+    <SimulatedScalarFieldElement as PrimeField>::Params::REPR_SHAVE_BITS as usize;
+
 pub type SimulatedFieldElement = ed25519Fq;
 pub const SIMULATED_FIELD_BYTE_SIZE: usize =
     ((<SimulatedFieldElement as PrimeField>::Params::MODULUS_BITS
