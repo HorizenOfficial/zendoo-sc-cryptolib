@@ -90,7 +90,7 @@ pub fn combine_field_elements_at_index(
 #[cfg(test)]
 #[test]
 fn split_combine_test() {
-    use algebra::UniformRand;
+    use algebra::{Field, UniformRand};
     use rand::thread_rng;
 
     let rng = &mut thread_rng();
@@ -98,6 +98,8 @@ fn split_combine_test() {
     for i in 1..FIELD_SIZE {
         let fe = FieldElement::rand(rng);
         let (fe_1, fe_2) = split_field_element_at_index(&fe, i).unwrap();
+
+        // Restore by combining bits
         let restored_fe = combine_field_elements_at_index(
             &fe_1,
             i,
@@ -105,6 +107,11 @@ fn split_combine_test() {
             FIELD_SIZE - i,
             true
         ).unwrap();
+        assert_eq!(fe, restored_fe);
+
+        // Also this way of restoring (used inside CSW circuit) should work
+        let pow = FieldElement::one().double().pow(&[(i * 8) as u64]);
+        let restored_fe = fe_1 + &(pow * &fe_2);
         assert_eq!(fe, restored_fe);
     }
 }

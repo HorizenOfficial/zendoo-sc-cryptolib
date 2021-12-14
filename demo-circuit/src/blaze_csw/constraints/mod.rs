@@ -1,6 +1,5 @@
 use algebra::AffineCurve;
 use cctp_primitives::{
-    proving_system::error::ProvingSystemError,
     type_mapping::FieldElement,
     utils::commitment_tree::{hash_vec, DataAccumulator},
 };
@@ -14,7 +13,7 @@ use r1cs_std::{
 
 use crate::{
     type_mapping::*, CswFtProverData, CswProverData, CswSysData, CswUtxoProverData,
-    FieldElementGadget, WithdrawalCertificateData,
+    FieldElementGadget, WithdrawalCertificateData, PHANTOM_FIELD_ELEMENT,
 };
 
 use self::data_structures::CswProverDataGadget;
@@ -37,17 +36,95 @@ pub struct CeasedSidechainWithdrawalCircuit {
 }
 
 impl CeasedSidechainWithdrawalCircuit {
+    fn compute_csw_data_hash(
+        sys_data: &CswSysData,
+        sidechain_id: FieldElement
+    ) -> Result<FieldElement, Error> 
+    {
+        let mut sys_data_hash_inputs = DataAccumulator::init()
+            .update(sys_data.amount)?
+            .update(&sys_data.receiver[..])?
+            .get_field_elements()?;
+
+        debug_assert!(sys_data_hash_inputs.len() == 1);
+
+        sys_data_hash_inputs.extend_from_slice(&[
+            sidechain_id,
+            sys_data.nullifier,
+            sys_data.sc_last_wcert_hash,
+            sys_data.mcb_sc_txs_com_end,
+        ]);
+
+        hash_vec(sys_data_hash_inputs)
+    }
+
     pub fn new(
-        _sidechain_id: FieldElement,
-        _constant: Option<FieldElement>,
-        _sys_data: CswSysData,
-        _last_wcert: Option<WithdrawalCertificateData>,
-        _utxo_data: Option<CswUtxoProverData>,
-        _ft_data: Option<CswFtProverData>,
-        _range_size: u32,
-        _num_custom_fields: u32,
-    ) -> Self {
-        unimplemented!();
+        sidechain_id: FieldElement,
+        constant: Option<FieldElement>,
+        sys_data: CswSysData,
+        last_wcert: Option<WithdrawalCertificateData>,
+        utxo_data: Option<CswUtxoProverData>,
+        ft_data: Option<CswFtProverData>,
+        range_size: u32,
+        num_custom_fields: u32,
+    ) -> Result<Self, Error> 
+    {
+        // Compute csw sys_data hash
+        let csw_sys_data_hash = Self::compute_csw_data_hash(&sys_data, sidechain_id)?;
+
+        // Handle all cases
+        let csw_data = match (last_wcert, utxo_data, ft_data) {
+            // SC Utxo withdraw
+            (Some(last_wcert), Some(utxo_data), None) => {
+                Ok(
+                    CswProverData {
+                        sys_data,
+                        last_wcert,
+                        utxo_data,
+                        ft_data: CswFtProverData::get_phantom(range_size),
+                    }
+                )
+            },
+            // FT withdraw, with last_wcert present
+            (Some(last_wcert), None, Some(ft_data)) => {
+                Ok(
+                    CswProverData {
+                        sys_data,
+                        last_wcert,
+                        utxo_data: CswUtxoProverData::default(),
+                        ft_data,
+                    }
+                )
+            },
+            // FT withdraw, with last_wcert not present
+            (None, None, Some(ft_data)) => {
+                Ok(
+                    CswProverData {
+                        sys_data,
+                        last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
+                        utxo_data: CswUtxoProverData::default(),
+                        ft_data,
+                    }
+                )
+            },
+            // Attempt to withdraw a sc utxo without having specified a last_wcert
+            (None, Some(_), _) => Err(Error::from("Attempt to withdraw SC Utxo without specifying last WCert")),
+            // Attempt to withdraw both a sc utxo and a ft
+            (_, Some(_), Some(_)) => Err(Error::from("Cannot create a CSW proof for retrieving both a SC UTXO and a FT")),
+            // Any other combination is not admissable
+            _ => Err(Error::from("Unexpected inputs combination"))
+        }?;
+
+        Ok(
+            Self {
+                range_size,
+                num_custom_fields,
+                sidechain_id,
+                csw_data,
+                constant,
+                csw_sys_data_hash,
+            }
+        )
     }
 
     // For testing, if useful
@@ -57,45 +134,34 @@ impl CeasedSidechainWithdrawalCircuit {
         csw_data: CswProverData,
         range_size: u32,
         num_custom_fields: u32,
-    ) -> Self {
-        let mut sys_data_hash_inputs = DataAccumulator::init()
-            .update(csw_data.sys_data.amount)
-            .map_err(|e| ProvingSystemError::Other(format!("{:?}", e)))
-            .unwrap()
-            .update(&csw_data.sys_data.receiver[..])
-            .map_err(|e| ProvingSystemError::Other(format!("{:?}", e)))
-            .unwrap()
-            .get_field_elements()
-            .map_err(|e| ProvingSystemError::Other(format!("{:?}", e)))
-            .unwrap();
+    ) -> Result<Self, Error> 
+    {
+        let csw_sys_data_hash = Self::compute_csw_data_hash(&csw_data.sys_data, sidechain_id)?;
 
-        debug_assert!(sys_data_hash_inputs.len() == 1);
-
-        sys_data_hash_inputs.extend_from_slice(&[
+        Ok(CeasedSidechainWithdrawalCircuit {
             sidechain_id,
-            csw_data.sys_data.nullifier,
-            csw_data.sys_data.sc_last_wcert_hash,
-            csw_data.sys_data.mcb_sc_txs_com_end,
-        ]);
-
-        let sys_data_hash = hash_vec(sys_data_hash_inputs.clone()).unwrap();
-
-        CeasedSidechainWithdrawalCircuit {
-            sidechain_id,
-            csw_data: csw_data.clone(),
+            csw_data,
             range_size,
             num_custom_fields,
             constant,
-            csw_sys_data_hash: sys_data_hash,
-        }
+            csw_sys_data_hash,
+        })
     }
 
     pub fn get_instance_for_setup(
-        _range_size: u32,
-        _num_custom_fields: u32,
-        _is_constant_present: bool,
-    ) -> Self {
-        unimplemented!();
+        range_size: u32,
+        num_custom_fields: u32,
+        is_constant_present: bool,
+    ) -> Self 
+    {
+        Self {
+            range_size,
+            num_custom_fields,
+            sidechain_id: PHANTOM_FIELD_ELEMENT,
+            csw_data: CswProverData::get_phantom(range_size, num_custom_fields),
+            constant: if is_constant_present { Some(PHANTOM_FIELD_ELEMENT) } else { None },
+            csw_sys_data_hash: PHANTOM_FIELD_ELEMENT,
+        }
     }
 
     /// Extract the sign of the x coordinate and the y coordinate itself from
@@ -608,7 +674,7 @@ mod test {
             sys_data,
             last_wcert: cert_data,
             utxo_data,
-            ft_data: CswFtProverData::get_phantom(num_commitment_hashes as usize),
+            ft_data: CswFtProverData::get_phantom(num_commitment_hashes),
         };
 
         csw_prover_data
@@ -737,7 +803,7 @@ mod test {
 
         let csw_prover_data = CswProverData {
             sys_data,
-            last_wcert: WithdrawalCertificateData::get_phantom_data(num_custom_fields),
+            last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
             utxo_data: CswUtxoProverData::default(),
             ft_data,
         };
@@ -787,7 +853,7 @@ mod test {
             csw_prover_data.clone(),
             num_commitment_hashes,
             num_custom_fields,
-        );
+        ).unwrap();
 
         let failing_constraint = debug_circuit(circuit.clone()).unwrap();
         println!("Failing constraint: {:?}", failing_constraint);

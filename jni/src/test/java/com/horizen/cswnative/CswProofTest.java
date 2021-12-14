@@ -49,17 +49,17 @@
 //     @BeforeClass
 //     public static void initKeys() {
 //         // Generate keys
-//         //assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
-//         //assertTrue(CswProof.setup(psType, rangeSize, 2, false, snarkPkPath, snarkVkPath, zk, maxProofPlusVkSize));
-//         //assertFalse(CswProof.setup(psType, rangeSize, 0, false, snarkPkPath, snarkVkPath, zk, 1));
-//         // assertEquals(
-//         //     psType,
-//         //     ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
-//         // );
-//         // assertEquals(
-//         //     ProvingSystem.getProverKeyProvingSystemType(snarkPkPath),
-//         //     ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
-//         // );
+//         assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
+//         assertTrue(CswProof.setup(psType, rangeSize, 2, false, snarkPkPath, snarkVkPath, zk, maxProofPlusVkSize));
+//         assertFalse(CswProof.setup(psType, rangeSize, 0, false, snarkPkPath, snarkVkPath, zk, 1));
+//         assertEquals(
+//             psType,
+//             ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
+//         );
+//         assertEquals(
+//             ProvingSystem.getProverKeyProvingSystemType(snarkPkPath),
+//             ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
+//         );
 
 //         // Generate random (but consistent) data
 //         Random r = new Random(seed);

@@ -3,13 +3,13 @@ use cctp_primitives::{
     type_mapping::FieldElement,
     utils::{
         commitment_tree::DataAccumulator, data_structures::BackwardTransfer, get_bt_merkle_root,
-    },
+    }, proving_system::verifier::ceased_sidechain_withdrawal::PHANTOM_CERT_DATA_HASH, commitment_tree::{CMT_MT_HEIGHT, sidechain_tree_alive::FWT_MT_HEIGHT},
 };
-use primitives::{FieldBasedHash, FieldHasher};
+use primitives::{FieldBasedHash, FieldHasher, FieldBasedMerkleTreePath};
 
 use crate::{
     constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, PHANTOM_FIELD_ELEMENT,
-    PHANTOM_PUBLIC_KEY_BITS, PHANTOM_SECRET_KEY_BITS, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
+    PHANTOM_PUBLIC_KEY_BITS, PHANTOM_SECRET_KEY_BITS, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, MST_MERKLE_TREE_HEIGHT,
 };
 
 #[derive(Clone)]
@@ -52,7 +52,7 @@ impl WithdrawalCertificateData {
         }
     }
 
-    pub fn get_phantom_data(num_custom_fields: u32) -> Self {
+    pub(crate) fn get_phantom(num_custom_fields: u32) -> Self {
         Self {
             ledger_id: PHANTOM_FIELD_ELEMENT,
             epoch_id: 0,
@@ -108,7 +108,6 @@ impl FieldHasher<FieldElement, FieldHash> for CswUtxoOutputData {
     }
 }
 
-// TODO: is it ok to consider "phantom" the default instance of this struct?
 #[derive(Clone)]
 pub struct CswUtxoInputData {
     pub output: CswUtxoOutputData,
@@ -124,7 +123,6 @@ impl Default for CswUtxoInputData {
     }
 }
 
-// TODO: is it ok to consider "phantom" the default instance of this struct?
 #[derive(Clone, Default)]
 pub struct CswFtOutputData {
     pub amount: u64,
@@ -134,13 +132,14 @@ pub struct CswFtOutputData {
     pub out_idx: u32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct CswSysData {
     pub mcb_sc_txs_com_end: FieldElement, // Passed directly by MC. The cumulative SCTxsCommitment hash taken from the MC block where the SC was ceased (needed to recover FTs in reverted epochs).
     pub sc_last_wcert_hash: FieldElement, // hash of the last confirmed WCert (excluding reverted) for this sidechain (calculated directly by MC). Note that it should be a hash of WithdrawalCertificateData
     pub amount: u64,                      // taken from CSW and passed directly by the MC
     pub nullifier: FieldElement,          // taken from CSW and passed directly by the MC
-    pub receiver: [u8; MC_PK_SIZE], // (assumed to be big endian) the receiver is fixed by the proof, otherwise someone will be able to front-run the tx and steel the proof. Note that we actually don't need to do anything with the receiver in the circuit, it's enough just to have it as a public input
+    pub receiver: [u8; MC_PK_SIZE],       // (assumed to be big endian) the receiver is fixed by the proof, otherwise someone will be able to front-run the tx and steel the proof.
+                                          // Note that we actually don't need to do anything with the receiver in the circuit, it's enough just to have it as a public input
 }
 
 impl CswSysData {
@@ -152,8 +151,8 @@ impl CswSysData {
         receiver: [u8; MC_PK_SIZE],
     ) -> Self {
         Self {
-            mcb_sc_txs_com_end: mcb_sc_txs_com_end.unwrap_or_default(),
-            sc_last_wcert_hash: sc_last_wcert_hash.unwrap_or_default(),
+            mcb_sc_txs_com_end: mcb_sc_txs_com_end.unwrap_or_else(|| PHANTOM_FIELD_ELEMENT),
+            sc_last_wcert_hash: sc_last_wcert_hash.unwrap_or_else(|| PHANTOM_CERT_DATA_HASH),
             amount,
             nullifier,
             receiver,
@@ -171,7 +170,7 @@ impl Default for CswUtxoProverData {
     fn default() -> Self {
         Self {
             input: CswUtxoInputData::default(),
-            mst_path_to_output: GingerMHTBinaryPath::default(),
+            mst_path_to_output: GingerMHTBinaryPath::new(vec![(PHANTOM_FIELD_ELEMENT, false); MST_MERKLE_TREE_HEIGHT]),
         }
     }
 }
@@ -193,17 +192,17 @@ pub struct CswFtProverData {
 }
 
 impl CswFtProverData {
-    pub fn get_phantom(commitment_hashes_number: usize) -> Self {
+    pub(crate) fn get_phantom(commitment_hashes_number: u32) -> Self {
         Self {
             ft_output: CswFtOutputData::default(),
             ft_input_secret_key: [false; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
             mcb_sc_txs_com_start: PHANTOM_FIELD_ELEMENT,
-            merkle_path_to_sc_hash: GingerMHTBinaryPath::default(),
-            ft_tree_path: GingerMHTBinaryPath::default(),
+            merkle_path_to_sc_hash: GingerMHTBinaryPath::new(vec![(PHANTOM_FIELD_ELEMENT, false); CMT_MT_HEIGHT]),
+            ft_tree_path: GingerMHTBinaryPath::new(vec![(PHANTOM_FIELD_ELEMENT, false); FWT_MT_HEIGHT]),
             sc_creation_commitment: PHANTOM_FIELD_ELEMENT,
             scb_btr_tree_root: PHANTOM_FIELD_ELEMENT,
             wcert_tree_root: PHANTOM_FIELD_ELEMENT,
-            sc_txs_com_hashes: vec![PHANTOM_FIELD_ELEMENT; commitment_hashes_number],
+            sc_txs_com_hashes: vec![PHANTOM_FIELD_ELEMENT; commitment_hashes_number as usize],
         }
     }
 }
@@ -214,4 +213,19 @@ pub struct CswProverData {
     pub last_wcert: WithdrawalCertificateData, // the last confirmed wcert in the MC
     pub utxo_data: CswUtxoProverData,
     pub ft_data: CswFtProverData,
+}
+
+impl CswProverData {
+    pub(crate) fn get_phantom(
+        range_size: u32,
+        num_custom_fields: u32
+    ) -> Self 
+    {
+        Self {
+            sys_data: CswSysData::default(),
+            last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
+            utxo_data: CswUtxoProverData::default(),
+            ft_data: CswFtProverData::get_phantom(range_size),
+        }
+    }
 }

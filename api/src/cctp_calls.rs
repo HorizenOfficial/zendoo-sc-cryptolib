@@ -351,7 +351,7 @@ pub fn create_csw_proof(
         ft_data,
         range_size,
         num_custom_fields,
-    );
+    )?;
 
     let pk: ZendooProverKey = read_from_file(
         proving_key_path,

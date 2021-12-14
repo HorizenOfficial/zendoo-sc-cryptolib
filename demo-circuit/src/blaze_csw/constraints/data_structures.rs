@@ -44,7 +44,7 @@ impl WithdrawalCertificateDataGadget {
     ) -> Result<Boolean, SynthesisError> {
         let phantom_wcert_g = WithdrawalCertificateDataGadget::from_value(
             cs.ns(|| "alloc phantom_wcert_g"),
-            &WithdrawalCertificateData::get_phantom_data(num_custom_fields),
+            &WithdrawalCertificateData::get_phantom(num_custom_fields),
         );
 
         self.is_eq(cs.ns(|| "is wcert phantom"), &phantom_wcert_g)
@@ -305,9 +305,12 @@ impl EqGadget<FieldElement> for WithdrawalCertificateDataGadget {
         let b7 = self
             .btr_min_fee_g
             .is_eq(cs.ns(|| "is eq btr_min_fee"), &other.btr_min_fee_g)?;
-        let b8 = self
-            .custom_fields_g
-            .is_eq(cs.ns(|| "is eq custom_fields"), &other.custom_fields_g)?;
+        let mut b8 = Boolean::Constant(true);
+        if !self.custom_fields_g.is_empty() {
+            b8 = self
+                .custom_fields_g
+                .is_eq(cs.ns(|| "is eq custom_fields"), &other.custom_fields_g)?;
+        }
 
         Boolean::kary_and(
             cs.ns(|| "is_eq CswUtxoOutputDataGadget"),
@@ -652,7 +655,7 @@ impl EqGadget<FieldElement> for CswUtxoInputDataGadget {
             .secret_key_g
             .is_eq(cs.ns(|| "is eq secret_key_g"), &other.secret_key_g)?;
 
-        Boolean::kary_and(cs.ns(|| "is_eq CswUtxoInputDataGadget"), &[b1, b2])
+        Boolean::and(cs.ns(|| "is_eq CswUtxoInputDataGadget"), &b1, &b2)
     }
 }
 
