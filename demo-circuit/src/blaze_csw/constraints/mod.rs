@@ -1,9 +1,8 @@
-use algebra::{AffineCurve, FromBits};
+use algebra::AffineCurve;
 use cctp_primitives::{
     type_mapping::FieldElement,
-    utils::{poseidon_hash::get_poseidon_hash_constant_length, serialization::serialize_to_buffer},
+    utils::{commitment_tree::{DataAccumulator, hash_vec}}, proving_system::error::ProvingSystemError,
 };
-use primitives::{bytes_to_bits, FieldBasedHash};
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 use r1cs_crypto::{FieldBasedHashGadget, FieldHasherGadget};
 use r1cs_std::{
@@ -58,24 +57,23 @@ impl CeasedSidechainWithdrawalCircuit {
         range_size: u32,
         num_custom_fields: u32,
     ) -> Self {
-        let amount_and_receiver_fe = {
-            let mut amount_and_receiver_bytes =
-                serialize_to_buffer(&csw_data.sys_data.amount, None).unwrap();
-            amount_and_receiver_bytes.extend_from_slice(&csw_data.sys_data.receiver[..]);
 
-            let amount_and_receiver_bits = bytes_to_bits(&amount_and_receiver_bytes);
-
-            FieldElement::read_bits(amount_and_receiver_bits).unwrap()
-        };
-
-        let sys_data_hash = get_poseidon_hash_constant_length(5, None)
-            .update(amount_and_receiver_fe)
-            .update(sidechain_id)
-            .update(csw_data.sys_data.nullifier)
-            .update(csw_data.sys_data.sc_last_wcert_hash)
-            .update(csw_data.sys_data.mcb_sc_txs_com_end)
-            .finalize()
+        let mut sys_data_hash_inputs = DataAccumulator::init()
+            .update(csw_data.sys_data.amount)
+            .map_err(|e| ProvingSystemError::Other(format!("{:?}", e)))
+            .unwrap()
+            .update(&csw_data.sys_data.receiver[..])
+            .map_err(|e| ProvingSystemError::Other(format!("{:?}", e)))
+            .unwrap()
+            .get_field_elements()
+            .map_err(|e| ProvingSystemError::Other(format!("{:?}", e)))
             .unwrap();
+
+        debug_assert!(sys_data_hash_inputs.len() == 1);
+
+        sys_data_hash_inputs.extend_from_slice(&[sidechain_id, csw_data.sys_data.nullifier, csw_data.sys_data.sc_last_wcert_hash, csw_data.sys_data.mcb_sc_txs_com_end]);
+
+        let sys_data_hash = hash_vec(sys_data_hash_inputs.clone()).unwrap();
 
         CeasedSidechainWithdrawalCircuit {
             sidechain_id,
