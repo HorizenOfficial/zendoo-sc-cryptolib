@@ -979,8 +979,15 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
         let mut bits = self.amount_g.to_bits_le();
         bits.reverse();
 
-        bits.extend_from_slice(&self.receiver_pub_key_g);
-        bits.extend_from_slice(&self.payback_addr_data_hash_g);
+        let mut receiver_pub_key_bits = self.receiver_pub_key_g.clone();
+        receiver_pub_key_bits.reverse();
+
+        bits.extend_from_slice(&receiver_pub_key_bits);
+
+        let mut payback_addr_data_hash_bits = self.payback_addr_data_hash_g.clone();
+        payback_addr_data_hash_bits.reverse();
+
+        bits.extend_from_slice(&payback_addr_data_hash_bits);
         bits.extend_from_slice(&self.tx_hash_g);
 
         let mut out_idx_big_endian_g = self.out_idx_g.to_bits_le();
@@ -1292,26 +1299,25 @@ impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
         F: FnOnce() -> Result<T, SynthesisError>,
         T: Borrow<CswSysData>,
     {
-        let (mcb_sc_txs_com_end, sc_last_wcert_hash, amount, nullifier, receiver) =
-            match f() {
-                Ok(csw_sys_data) => {
-                    let csw_sys_data = csw_sys_data.borrow().clone();
-                    (
-                        Ok(csw_sys_data.mcb_sc_txs_com_end),
-                        Ok(csw_sys_data.sc_last_wcert_hash),
-                        Ok(csw_sys_data.amount),
-                        Ok(csw_sys_data.nullifier),
-                        Ok(csw_sys_data.receiver),
-                    )
-                }
-                _ => (
-                    Err(SynthesisError::AssignmentMissing),
-                    Err(SynthesisError::AssignmentMissing),
-                    Err(SynthesisError::AssignmentMissing),
-                    Err(SynthesisError::AssignmentMissing),
-                    Err(SynthesisError::AssignmentMissing),
-                ),
-            };
+        let (mcb_sc_txs_com_end, sc_last_wcert_hash, amount, nullifier, receiver) = match f() {
+            Ok(csw_sys_data) => {
+                let csw_sys_data = csw_sys_data.borrow().clone();
+                (
+                    Ok(csw_sys_data.mcb_sc_txs_com_end),
+                    Ok(csw_sys_data.sc_last_wcert_hash),
+                    Ok(csw_sys_data.amount),
+                    Ok(csw_sys_data.nullifier),
+                    Ok(csw_sys_data.receiver),
+                )
+            }
+            _ => (
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+                Err(SynthesisError::AssignmentMissing),
+            ),
+        };
 
         let mcb_sc_txs_com_end_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com end"), || mcb_sc_txs_com_end)?;
