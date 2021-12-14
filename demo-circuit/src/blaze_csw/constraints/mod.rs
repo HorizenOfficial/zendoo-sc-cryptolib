@@ -252,33 +252,30 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             let scb_new_mst_root = csw_data_g.last_wcert_g.custom_fields_g[0].clone();
             // // Reconstruct scb_new_mst_root from custom fields
             // let scb_new_mst_root = {
-            //     let mut first_half = (&csw_data_g)
-            //         .last_wcert_g
-            //         .custom_fields_g[0]
-            //         .to_bits_with_length_restriction(
-            //             cs.ns(|| "first custom field half to bits"),
-            //             8 * (FIELD_SIZE/2)
-            //         )?;
+            //     use algebra::Field;
+            //     use r1cs_std::fields::FieldGadget;
+            
+            //     // Compute 2^128 in the field
+            //     let pow = FieldElement::one().double().pow(&[128u64]);
 
-            //     let mut second_half = (&csw_data_g)
+            //     // Combine the two custom fields as custom_fields[0] + (2^128) * custom_fields[1]
+            //     // We assume here that the 2 FieldElements were originally truncated at the 128th bit .
+            //     // Note that the prover is able to find multiple custom_fields[0], custom_fields[1]
+            //     // leading to the same result but this will change the certificate hash, binded to 
+            //     // the sys_data_hash public input, for which he would need to find a collision,
+            //     // and this is unfeasible.
+            //     let first_half = &csw_data_g.last_wcert_g.custom_fields_g[0];
+            //     let second_half = csw_data_g
             //         .last_wcert_g
             //         .custom_fields_g[1]
-            //         .to_bits_with_length_restriction(
-            //             cs.ns(|| "first custom field half to bits"),
-            //             8 * (FIELD_SIZE/2)
+            //         .mul_by_constant(
+            //             cs.ns(|| "2^128 * custom_fields[1]"),
+            //             &pow
             //         )?;
-
-            //     first_half.append(&mut second_half);
-
-            //     // TODO: This won't work as from_bits gadget pack until CAPACITY but,
-            //     //       most likely, since it's a hash, this will have full modulus
-            //     //       bit length. We need another from_bits variant that packs up until
-            //     //       modulus bits.
-            //     //       @PaoloT: Comment this piece and restore one custom fields if you want to test/debug
-            //     //                in the mean time.
-            //     FieldElementGadget::from_bits(
-            //         cs.ns(|| "read scb_new_mst_root from bits"),
-            //         first_half.as_slice()
+                
+            //     first_half.add(
+            //         cs.ns(|| "custom_fields[0] + (2^128) * custom_fields[1]"),
+            //         &second_half
             //     )
             // }?;
 

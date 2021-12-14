@@ -56,7 +56,7 @@ public class FieldElementTest {
             assertEquals(splitFes.size(), 2);
 
             // Rejoin the two FieldElements at the same index and check equality with the original one
-            FieldElement restoredFe = FieldElement.joinAt(splitFes.get(0), i, splitFes.get(1), Constants.FIELD_ELEMENT_LENGTH() - i);
+            FieldElement restoredFe = FieldElement.joinAt(splitFes.get(0), i, splitFes.get(1), Constants.FIELD_ELEMENT_LENGTH() - i, true);
             assertEquals("Must be able to reconstruct the original FieldElement split ad index:" + i, feToBeSplit, restoredFe);
 
             // Free memory
@@ -97,18 +97,66 @@ public class FieldElementTest {
 
     @Test
     public void testSplitExceptions() throws Exception {
-        FieldElement fe = FieldElement.createRandom();
+        FieldElement fe1 = FieldElement.createRandom();
+        FieldElement fe2 = FieldElement.createRandom();
 
         // Try to split at 0
         try {
-            fe.splitAt(0);
+            fe1.splitAt(0);
             assertTrue(false); // Mustn't be able to reach this point
-        } catch (IndexOutOfBoundsException ex) {};
+        } catch (IndexOutOfBoundsException ex) {
+            assertTrue(ex.getMessage().contains("Invalid split index"));
+        };
 
         // Try to split at FIELD_ELEMENT_LENGTH
         try {
-            fe.splitAt(Constants.FIELD_ELEMENT_LENGTH());
+            fe1.splitAt(Constants.FIELD_ELEMENT_LENGTH());
             assertTrue(false); // Mustn't be able to reach this point
-        } catch (IndexOutOfBoundsException ex) {};
+        } catch (IndexOutOfBoundsException ex) {
+            assertTrue(ex.getMessage().contains("Invalid split index"));
+        };
+
+        // Try to join by forming a non valid FieldElement
+        try {
+            FieldElement.joinAt(fe1, 20, fe2, 20);
+            assertTrue(false); // Mustn't be able to reach this point
+        } catch (IllegalArgumentException ex) {
+            assertTrue(
+                ex.getMessage().contains(
+                    "Invalid values for index1 + index2: the resulting array would overflow FIELD_ELEMENT_LENGTH"
+                )
+            );
+        }
+
+        // Try to join not passing the zero check
+        try {
+            FieldElement.joinAt(fe1, 1, fe2, 1, true);
+            assertTrue(false); // Mustn't be able to reach this point
+        } catch (IllegalArgumentException ex) {
+            // Zero check failed on bytes of fe1
+            assertTrue(
+                ex.getMessage().contains(
+                    "Zero check failed on bytes of fe1"
+                )
+            );
+        }
+
+        FieldElement zero = FieldElement.createFromLong(0L);
+        try {
+            FieldElement.joinAt(zero, 1, fe2, 1, true);
+            assertTrue(false); // Mustn't be able to reach this point
+        } catch (IllegalArgumentException ex) {
+            // Zero check failed on bytes of fe2
+            assertTrue(
+                ex.getMessage().contains(
+                    "Zero check failed on bytes of fe2"
+                )
+            );
+            zero.close();
+        }
+
+        // Free data
+        fe1.close();
+        fe2.close();
     }
 }

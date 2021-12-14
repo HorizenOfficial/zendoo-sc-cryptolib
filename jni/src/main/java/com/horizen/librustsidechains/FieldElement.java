@@ -102,11 +102,12 @@ public class FieldElement implements AutoCloseable {
      * @param fe1 - the first FieldElement to join
      * @param index1 - the number of bytes to consider from the first FieldElement
      * @param fe2 - the second FieldElement to join
-     * @param index2 - the number of bytes to consider from the second FieldElement 
+     * @param index2 - the number of bytes to consider from the second FieldElement
+     * @param checkZeroAfterIdx - if enabled, check that fe1.bytes[index1..] and fe2.bytes[index2..] are all 0s.
      * @return the FieldElement obtained from combining fe1.bytes[0..index1) with fe2.bytes[0..index2)
      * @throws IllegalArgumentException if the combine operation would produce a byte array bigger than FIELD_ELEMENT_LENGTH
      */
-    public static FieldElement joinAt(FieldElement fe1, int index1, FieldElement fe2, int index2) throws IllegalArgumentException {
+    public static FieldElement joinAt(FieldElement fe1, int index1, FieldElement fe2, int index2, boolean checkZeroAfterIdx) throws IllegalArgumentException {
         // Check that the resulting array dimension wouldn't be bigger than FIELD_ELEMENT_LENGTH
         if (index1 + index2 > Constants.FIELD_ELEMENT_LENGTH()) {
             throw new IllegalArgumentException("Invalid values for index1 + index2: the resulting array would overflow FIELD_ELEMENT_LENGTH");
@@ -119,12 +120,40 @@ public class FieldElement implements AutoCloseable {
         byte[] fe1Bytes = fe1.serializeFieldElement();
         byte[] fe2Bytes = fe2.serializeFieldElement();
 
+        if (checkZeroAfterIdx) {
+            // Perform check on fe1 bytes
+            for(int i = index1; i < fe1Bytes.length; i++) {
+                if (fe1Bytes[i] != (byte)0)
+                    throw new IllegalArgumentException("Zero check failed on bytes of fe1");
+            }
+
+            // Perform check on fe2 bytes
+            for(int i = index2; i < fe2Bytes.length; i++) {
+                if (fe2Bytes[i] != (byte)0)
+                    throw new IllegalArgumentException("Zero check failed on bytes of fe2");
+            }
+        }
+
         // Perform the join
         System.arraycopy(fe1Bytes, 0, newFeBytes, 0, index1);
         System.arraycopy(fe2Bytes, 0, newFeBytes, index1, index2);
 
         // Deserialize and return the new FieldElement
         return FieldElement.deserialize(newFeBytes);
+    }
+
+    /**
+     * The inverse of the splitAt() method: join fe1.bytes[0..index1) and fe2.bytes[0..index2) in a single byte array and deserialize
+     * a FieldElement out of it.
+     * @param fe1 - the first FieldElement to join
+     * @param index1 - the number of bytes to consider from the first FieldElement
+     * @param fe2 - the second FieldElement to join
+     * @param index2 - the number of bytes to consider from the second FieldElement 
+     * @return the FieldElement obtained from combining fe1.bytes[0..index1) with fe2.bytes[0..index2)
+     * @throws IllegalArgumentException if the combine operation would produce a byte array bigger than FIELD_ELEMENT_LENGTH
+     */
+    public static FieldElement joinAt(FieldElement fe1, int index1, FieldElement fe2, int index2) throws IllegalArgumentException {
+        return FieldElement.joinAt(fe1, index1, fe2, index2, false);
     }
 
     // Declared protected for testing purposes
