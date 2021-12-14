@@ -87,7 +87,7 @@ impl CeasedSidechainWithdrawalCircuit {
         }
     }
 
-    pub fn get_instance_for_setup(_range_size: u32, _num_custom_fields: u32) -> Self {
+    pub fn get_instance_for_setup(_range_size: u32, _num_custom_fields: u32, _is_constant_present: bool) -> Self {
         unimplemented!();
     }
 

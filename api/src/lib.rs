@@ -4618,6 +4618,7 @@ ffi_export!(
         _proving_system: JObject,
         _range_size: jint,
         _num_custom_fields: jint,
+        _is_constant_present: jboolean,
         _proving_key_path: JString,
         _verification_key_path: JString,
         _zk: jboolean,
@@ -4640,6 +4641,7 @@ ffi_export!(
         let circ = CeasedSidechainWithdrawalCircuit::get_instance_for_setup(
             _range_size as u32,
             _num_custom_fields as u32,
+            _is_constant_present == JNI_TRUE,
         );
 
         // Read zk value

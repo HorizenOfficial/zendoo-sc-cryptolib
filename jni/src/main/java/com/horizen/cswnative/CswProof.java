@@ -12,6 +12,7 @@ public class CswProof {
         ProvingSystemType psType,
         int rangeSize,
         int numCustomFields,
+        boolean isConstantPresent,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -25,6 +26,7 @@ public class CswProof {
      * @param psType - proving system to be used
      * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
      * @param numCustomFields - exact number of custom fields the circuit must support
+     * @param isConstantPresent - whether the circuit must support the presence of a constant
      * @param provingKeyPath - file path to which saving the proving key
      * @param verificationKeyPath - file path to which saving the verification key
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk
@@ -36,6 +38,7 @@ public class CswProof {
         ProvingSystemType psType,
         int rangeSize,
         int numCustomFields,
+        boolean isConstantPresent,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -45,8 +48,8 @@ public class CswProof {
     )
     {
         return nativeSetup(
-            psType, rangeSize, numCustomFields, provingKeyPath, verificationKeyPath,
-            zk, maxProofPlusVkSize, compressPk, compressVk
+            psType, rangeSize, numCustomFields, isConstantPresent, provingKeyPath,
+            verificationKeyPath, zk, maxProofPlusVkSize, compressPk, compressVk
         );
     }
 
@@ -54,6 +57,7 @@ public class CswProof {
      * Generate (provingKey, verificationKey) pair for this circuit.
      * @param psType - proving system to be used
      * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
+     * @param isConstantPresent - whether the circuit must support the presence of a constant
      * @param numCustomFields - exact number of custom fields the circuit must support
      * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
@@ -65,6 +69,7 @@ public class CswProof {
         ProvingSystemType psType,
         int rangeSize,
         int numCustomFields,
+        boolean isConstantPresent,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -72,8 +77,8 @@ public class CswProof {
     )
     {
         return nativeSetup(
-            psType, rangeSize, numCustomFields, provingKeyPath,
-            verificationKeyPath, zk, maxProofPlusVkSize, true, true
+            psType, rangeSize, numCustomFields, isConstantPresent,
+            provingKeyPath, verificationKeyPath, zk, maxProofPlusVkSize, true, true
         );
     }
 
@@ -82,6 +87,7 @@ public class CswProof {
      * @param psType - proving system to be used
      * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
      * @param numCustomFields - exact number of custom fields the circuit must support
+     * @param isConstantPresent - whether the circuit must support the presence of a constant
      * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk, estimated assuming not to use zk property
@@ -91,13 +97,14 @@ public class CswProof {
         ProvingSystemType psType,
         int rangeSize,
         int numCustomFields,
+        boolean isConstantPresent,
         String provingKeyPath,
         String verificationKeyPath,
         int maxProofPlusVkSize
     )
     {
         return nativeSetup(
-            psType, rangeSize, numCustomFields, provingKeyPath,
+            psType, rangeSize, numCustomFields, isConstantPresent, provingKeyPath,
             verificationKeyPath, false, maxProofPlusVkSize, true, true
         );
     }

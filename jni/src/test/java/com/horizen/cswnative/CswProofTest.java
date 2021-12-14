@@ -50,8 +50,8 @@ public class CswProofTest {
     public static void initKeys() {
         // Generate keys
         assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
-        assertTrue(CswProof.setup(psType, rangeSize, 2, snarkPkPath, snarkVkPath, zk, maxProofPlusVkSize));
-        assertFalse(CswProof.setup(psType, rangeSize, 0, snarkPkPath, snarkVkPath, zk, 1));
+        assertTrue(CswProof.setup(psType, rangeSize, 2, false, snarkPkPath, snarkVkPath, zk, maxProofPlusVkSize));
+        assertFalse(CswProof.setup(psType, rangeSize, 0, false, snarkPkPath, snarkVkPath, zk, 1));
         assertEquals(
             psType,
             ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
