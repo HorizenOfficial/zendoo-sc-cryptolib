@@ -136,7 +136,6 @@ pub struct CswFtOutputData {
 
 #[derive(Clone)]
 pub struct CswSysData {
-    pub genesis_constant: Option<FieldElement>, // Passed directly by the MC. It is a constant declared during SC creation that commits to various SC params. In the current SNARK design it isn't used (but might be usefull for other sidechains), so just ignored in the circuit. Note that it is the same constant as for WCert proof.
     pub mcb_sc_txs_com_end: FieldElement, // Passed directly by MC. The cumulative SCTxsCommitment hash taken from the MC block where the SC was ceased (needed to recover FTs in reverted epochs).
     pub sc_last_wcert_hash: FieldElement, // hash of the last confirmed WCert (excluding reverted) for this sidechain (calculated directly by MC). Note that it should be a hash of WithdrawalCertificateData
     pub amount: u64,                      // taken from CSW and passed directly by the MC
@@ -146,7 +145,6 @@ pub struct CswSysData {
 
 impl CswSysData {
     pub fn new(
-        genesis_constant: Option<FieldElement>,
         mcb_sc_txs_com_end: Option<FieldElement>,
         sc_last_wcert_hash: Option<FieldElement>,
         amount: u64,
@@ -154,7 +152,6 @@ impl CswSysData {
         receiver: [u8; MC_PK_SIZE],
     ) -> Self {
         Self {
-            genesis_constant,
             mcb_sc_txs_com_end: mcb_sc_txs_com_end.unwrap_or_default(),
             sc_last_wcert_hash: sc_last_wcert_hash.unwrap_or_default(),
             amount,

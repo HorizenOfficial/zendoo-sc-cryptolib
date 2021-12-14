@@ -4665,21 +4665,21 @@ ffi_export!(
     }
 );
 
-fn parse_sys_data(_env: JNIEnv, _sys_data: JObject) -> CswSysData {
-    CswSysData::new(
-        cast_joption_to_rust_option(
-            &_env,
-            _sys_data,
-            "constant",
-            "com/horizen/librustsidechains/FieldElement",
-        )
-        .map(|field_object| {
-            let f = _env
-                .get_field(field_object, "fieldElementPointer", "J")
-                .expect("Should be able to get field fieldElementPointer");
+fn parse_sys_data(_env: JNIEnv, _sys_data: JObject) -> (Option<FieldElement>, CswSysData) {
+    let constant = cast_joption_to_rust_option(
+        &_env,
+        _sys_data,
+        "constant",
+        "com/horizen/librustsidechains/FieldElement",
+    )
+    .map(|field_object| {
+        let f = _env
+            .get_field(field_object, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
 
-            *read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-        }),
+        *read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+    });
+    let sys_data = CswSysData::new(
         // Map a JObject which is a Java's Optional<FieldElement> into Option<JObject>.
         // If Option is present, converts it into an Option<FieldElement>, otherwise converts it to None.
         cast_joption_to_rust_option(
@@ -4711,7 +4711,8 @@ fn parse_sys_data(_env: JNIEnv, _sys_data: JObject) -> CswSysData {
         parse_long_from_jobject(&_env, _sys_data, "amount"),
         *parse_field_element_from_jobject(&_env, _sys_data, "nullifier"),
         parse_fixed_size_byte_array_from_jobject::<MC_PK_SIZE>(&_env, _sys_data, "receiver"),
-    )
+    );
+    (constant, sys_data)
 }
 
 fn parse_utxo_prover_data(_env: JNIEnv, _utxo_data: JObject) -> CswUtxoProverData {
@@ -4863,7 +4864,7 @@ ffi_export!(
         };
 
         // Parse sys_data
-        let sys_data = parse_sys_data(_env, _sys_data);
+        let (constant, sys_data) = parse_sys_data(_env, _sys_data);
 
         // Parse csw utxo prover data
         let csw_utxo_prover_data = if _utxo_data.into_inner().is_null() {
@@ -4896,6 +4897,7 @@ ffi_export!(
         //create proof
         match create_csw_proof(
             *sc_id,
+            constant,
             sys_data,
             cert,
             csw_utxo_prover_data,
@@ -4934,7 +4936,7 @@ ffi_export!(
         _compressed_vk: jboolean,
     ) -> jboolean {
         // Parse sys_data
-        let sys_data = parse_sys_data(_env, _sys_data);
+        let (constant, sys_data) = parse_sys_data(_env, _sys_data);
 
         // Parse sc_id
         let sc_id = {
@@ -4958,6 +4960,7 @@ ffi_export!(
         //Verify proof
         match verify_csw_proof(
             sc_id,
+            constant,
             sys_data,
             proof_bytes,
             _check_proof == JNI_TRUE,

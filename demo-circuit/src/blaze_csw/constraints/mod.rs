@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use algebra::{AffineCurve, FromBits};
 use cctp_primitives::{
     type_mapping::FieldElement,
@@ -41,6 +39,7 @@ pub struct CeasedSidechainWithdrawalCircuit {
 impl CeasedSidechainWithdrawalCircuit {
     pub fn new(
         _sidechain_id: FieldElement,
+        _constant: Option<FieldElement>,
         _sys_data: CswSysData,
         _last_wcert: Option<WithdrawalCertificateData>,
         _utxo_data: Option<CswUtxoProverData>,
@@ -54,6 +53,7 @@ impl CeasedSidechainWithdrawalCircuit {
     // For testing, if useful
     pub fn from_prover_data(
         sidechain_id: FieldElement,
+        constant: Option<FieldElement>,
         csw_data: CswProverData,
         range_size: u32,
         num_custom_fields: u32,
@@ -82,7 +82,7 @@ impl CeasedSidechainWithdrawalCircuit {
             csw_data: csw_data.clone(),
             range_size,
             num_custom_fields,
-            constant: csw_data.sys_data.genesis_constant,
+            constant,
             csw_sys_data_hash: sys_data_hash,
         }
     }
@@ -91,16 +91,13 @@ impl CeasedSidechainWithdrawalCircuit {
         unimplemented!();
     }
 
-    /// Enforce 'secret_key_bits_g' are indeed the ones behind 'public_key_bits_g'.
-    /// Public and secret key bits are assumed to be in big endian bit order.
-    fn enforce_pk_ownership<CS: ConstraintSystemAbstract<FieldElement>>(
+    /// Extract the sign of the x coordinate and the y coordinate itself from
+    /// 'public_key_bits_g', assuming to be passed in BE form.
+    fn get_x_sign_and_y_coord_from_pk_bits<CS: ConstraintSystemAbstract<FieldElement>>(
         mut cs: CS,
-        mut secret_key_bits_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
-        public_key_bits_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
-    ) -> Result<(), SynthesisError> {
-        
-        secret_key_bits_g.reverse();
-
+        public_key_bits_g: &[Boolean; SIMULATED_FIELD_BYTE_SIZE * 8]
+    ) -> Result<(Boolean, NonNativeFieldGadget<SimulatedFieldElement, FieldElement>), SynthesisError> 
+    {
         // Get the Boolean corresponding to the sign of the x coordinate
         let pk_x_sign_bit_g = public_key_bits_g[0];
 
@@ -110,6 +107,63 @@ impl CeasedSidechainWithdrawalCircuit {
                 cs.ns(|| "alloc pk y coordinate"),
                 &public_key_bits_g[1..],
             )?;
+
+        Ok((pk_x_sign_bit_g, pk_y_coordinate_g))
+    }
+
+    /// Enforce ownership of the public key in the Sc Utxo/FT by enforcing its derivation from the secret key.
+    fn enforce_pk_ownership<CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        csw_data_g: &CswProverDataGadget,
+        should_enforce_utxo_withdrawal_g: &Boolean,
+    ) -> Result<(), SynthesisError> 
+    {   
+        // Get public_key_y_coord and x sign from both sc utxo and ft and select the correct one
+        let (pk_x_sign_bit_g, pk_y_coordinate_g) = {
+
+            let (utxo_pk_x_sign_bit_g, utxo_pk_y_coordinate_g) = Self::get_x_sign_and_y_coord_from_pk_bits(
+                cs.ns(|| "unpack utxo pk bits"),
+                &csw_data_g.utxo_data_g.input_g.output_g.spending_pub_key_g
+            )?;
+
+            let (ft_pk_x_sign_bit_g, ft_pk_y_coordinate_g) = Self::get_x_sign_and_y_coord_from_pk_bits(
+                cs.ns(|| "unpack ft pk bits"),
+                &csw_data_g.ft_data_g.ft_output_g.receiver_pub_key_g
+            )?;
+
+            let selected_pk_x_sign_bit_g = Boolean::conditionally_select(
+                cs.ns(|| "select x sign bit"),
+                &should_enforce_utxo_withdrawal_g,
+                &utxo_pk_x_sign_bit_g,
+                &ft_pk_x_sign_bit_g
+            )?;
+
+            let selected_pk_y_coordinate_g = NonNativeFieldGadget::conditionally_select(
+                cs.ns(|| "select pk_y_coordinate_g"),
+                &should_enforce_utxo_withdrawal_g,
+                &utxo_pk_y_coordinate_g,
+                &ft_pk_y_coordinate_g
+            )?;
+
+            (selected_pk_x_sign_bit_g, selected_pk_y_coordinate_g)
+        };
+
+        let mut secret_key_bits_g =
+            Vec::<Boolean>::with_capacity(SIMULATED_SCALAR_FIELD_MODULUS_BITS);
+
+        // Conditionally select the secret key
+        for i in 0..SIMULATED_SCALAR_FIELD_MODULUS_BITS {
+            let secret_key_bit_g = Boolean::conditionally_select(
+                cs.ns(|| format!("read secret key bit {}", i)),
+                &should_enforce_utxo_withdrawal_g,
+                &csw_data_g.utxo_data_g.input_g.secret_key_g[i],
+                &csw_data_g.ft_data_g.ft_input_secret_key_g[i],
+            )?;
+            secret_key_bits_g.push(secret_key_bit_g);
+        }
+
+        // We assume secret key bits to be in Big Endian form
+        secret_key_bits_g.reverse();
 
         // Compute public key from secret key
         let current_public_key_g = ECPointSimulationGadget::mul_bits_fixed_base(
@@ -164,22 +218,6 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             .is_phantom(cs.ns(|| "should_enforce_ft_withdrawal"))?
             .not();
 
-        //TODO: Are these needed ?
-        {
-            // enforce that the CSW if for either UTXO or FT
-            // and that exactly one of the two is not NULL
-            let utxo_xor_ft_withdrawal_g = Boolean::xor(
-                cs.ns(|| "(input != NULL) XOR (ft_input != NULL)"),
-                &should_enforce_utxo_withdrawal_g,
-                &should_enforce_ft_withdrawal_g,
-            )?;
-
-            utxo_xor_ft_withdrawal_g.enforce_equal(
-                cs.ns(|| "enforce that the CSW if for either UTXO or FT"),
-                &Boolean::Constant(true),
-            )?;
-        }
-
         let should_enforce_wcert_hash = csw_data_g
             .last_wcert_g
             .is_phantom(
@@ -219,7 +257,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             //         .custom_fields_g[0]
             //         .to_bits_with_length_restriction(
             //             cs.ns(|| "first custom field half to bits"),
-            //             8 * (FIELD_SIZE - FIELD_SIZE/2)
+            //             8 * (FIELD_SIZE/2)
             //         )?;
 
             //     let mut second_half = (&csw_data_g)
@@ -227,7 +265,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             //         .custom_fields_g[1]
             //         .to_bits_with_length_restriction(
             //             cs.ns(|| "first custom field half to bits"),
-            //             8 * (FIELD_SIZE - FIELD_SIZE/2)
+            //             8 * (FIELD_SIZE/2)
             //         )?;
 
             //     first_half.append(&mut second_half);
@@ -272,69 +310,23 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         // NOTE: We could've done the same for nullifier and amount checks, but we didn't in order
         //       to have cleaner code (we lose only 2 constraints anyway)
 
-        // Check secret key ownership
-
-        let mut public_key_bits_g = Vec::<Boolean>::with_capacity(SIMULATED_FIELD_BYTE_SIZE * 8);
-
-        // Conditionally select the public key
-        // TODO: to save some constraints it would be possible to optmize the conditionally select
-        // by reading the public key from FieldElements.
-        for i in 0..SIMULATED_FIELD_BYTE_SIZE * 8 {
-            let public_key_bit_g = Boolean::conditionally_select(
-                cs.ns(|| format!("read public key bit {}", i)),
-                &should_enforce_utxo_withdrawal_g,
-                &csw_data_g.utxo_data_g.input_g.output_g.spending_pub_key_g[i],
-                &csw_data_g.ft_data_g.ft_output_g.receiver_pub_key_g[i],
-            )?;
-            public_key_bits_g.push(public_key_bit_g);
-        }
-
-        let mut secret_key_bits_g =
-            Vec::<Boolean>::with_capacity(SIMULATED_SCALAR_FIELD_MODULUS_BITS);
-
-        // Conditionally select the secret key
-        for i in 0..SIMULATED_SCALAR_FIELD_MODULUS_BITS {
-            let secret_key_bit_g = Boolean::conditionally_select(
-                cs.ns(|| format!("read secret key bit {}", i)),
-                &should_enforce_utxo_withdrawal_g,
-                &csw_data_g.utxo_data_g.input_g.secret_key_g[i],
-                &csw_data_g.ft_data_g.ft_input_secret_key_g[i],
-            )?;
-            secret_key_bits_g.push(secret_key_bit_g);
-        }
-
-        // Enforce pk ownership
         Self::enforce_pk_ownership(
             cs.ns(|| "enforce pk ownership"),
-            secret_key_bits_g.as_slice().try_into().unwrap(),
-            public_key_bits_g.as_slice().try_into().unwrap(),
+            &csw_data_g,
+            &should_enforce_utxo_withdrawal_g
         )?;
 
         // Let's build up the public inputs
 
-        // Allocate constant as public input if needed and simply check equality with the one in the sys data
-        // QUESTION: Design document seems a bit misleading here:
-        //       Shouldn't we have the constant in the WithdrawalCertificateData (if present) ? Why is in the CSWSysData ?
-        //       And shouldn't we enforce that is the same as the one passed as public input rather than not using it ?
-        //
+        // Allocate constant as public input if needed and don't use it
         if self.constant.is_some() {
-            let expected_constant =
-                FieldElementGadget::alloc_input(cs.ns(|| "alloc constant as input"), || {
-                    Ok(self.constant.unwrap())
-                })?;
-
-            // NOTE: Assuming that the previous QUESTION is not relevant, maybe this is not needed.
-            expected_constant.enforce_equal(
-                cs.ns(|| "expected constant == actual constant"),
-                &csw_data_g.sys_data_g.genesis_constant_g.unwrap(), // Must be present
+            let _ = FieldElementGadget::alloc_input(
+                cs.ns(|| "alloc constant as input"),
+                || Ok(self.constant.unwrap())
             )?;
         }
 
         // Deserialize a FieldElement out of amount_g and receiver_g
-        // QUESTION: About receiver usage design document suggests to pass it as public input and not using it.
-        //       But in the CSWVerifier interface we defined in cctp-lib, receiver is used to build a hash passed
-        //       as public input. Is it correct ?
-        //
         let amount_and_receiver_fe_g = {
             let mut amount_and_receiver_bits_g = csw_data_g
                 .sys_data_g
@@ -598,7 +590,6 @@ mod test {
         };
 
         let sys_data = CswSysData {
-            genesis_constant: Some(FieldElement::from(14u8)),
             mcb_sc_txs_com_end: FieldElement::from(15u8),
             sc_last_wcert_hash: last_wcert_hash,
             amount: utxo_input_data.output.amount,
@@ -730,7 +721,6 @@ mod test {
             });
 
         let sys_data = CswSysData {
-            genesis_constant: Some(FieldElement::from(14u8)),
             mcb_sc_txs_com_end: mcb_sc_txs_com_end,
             sc_last_wcert_hash: PHANTOM_FIELD_ELEMENT,
             amount: ft_data.ft_output.amount,
@@ -783,8 +773,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
         );
+        let constant = Some(FieldElement::from(14u8));
         let circuit = CeasedSidechainWithdrawalCircuit::from_prover_data(
             sidechain_id,
+            constant,
             csw_prover_data.clone(),
             num_commitment_hashes,
             num_custom_fields,
@@ -809,8 +801,8 @@ mod test {
 
         let mut public_inputs = Vec::new();
 
-        if csw_prover_data.sys_data.genesis_constant.is_some() {
-            public_inputs.push(csw_prover_data.sys_data.genesis_constant.unwrap());
+        if constant.is_some() {
+            public_inputs.push(constant.unwrap());
         }
 
         let mut fes = DataAccumulator::init()

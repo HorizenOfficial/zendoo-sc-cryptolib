@@ -1276,7 +1276,6 @@ impl AllocGadget<CswFtProverData, FieldElement> for CswFtProverDataGadget {
 }
 
 pub struct CswSysDataGadget {
-    pub genesis_constant_g: Option<FieldElementGadget>,
     pub mcb_sc_txs_com_end_g: FieldElementGadget,
     pub sc_last_wcert_hash_g: FieldElementGadget,
     pub amount_g: FieldElementGadget,
@@ -1293,12 +1292,11 @@ impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
         F: FnOnce() -> Result<T, SynthesisError>,
         T: Borrow<CswSysData>,
     {
-        let (genesis_constant, mcb_sc_txs_com_end, sc_last_wcert_hash, amount, nullifier, receiver) =
+        let (mcb_sc_txs_com_end, sc_last_wcert_hash, amount, nullifier, receiver) =
             match f() {
                 Ok(csw_sys_data) => {
                     let csw_sys_data = csw_sys_data.borrow().clone();
                     (
-                        Ok(csw_sys_data.genesis_constant),
                         Ok(csw_sys_data.mcb_sc_txs_com_end),
                         Ok(csw_sys_data.sc_last_wcert_hash),
                         Ok(csw_sys_data.amount),
@@ -1312,18 +1310,8 @@ impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
                     Err(SynthesisError::AssignmentMissing),
                     Err(SynthesisError::AssignmentMissing),
                     Err(SynthesisError::AssignmentMissing),
-                    Err(SynthesisError::AssignmentMissing),
                 ),
             };
-
-        let mut genesis_constant_g = None;
-        let genesis_constant = genesis_constant?;
-        if genesis_constant.is_some() {
-            genesis_constant_g = Some(FieldElementGadget::alloc(
-                cs.ns(|| "alloc genesis constant"),
-                || Ok(genesis_constant.unwrap()),
-            )?);
-        }
 
         let mcb_sc_txs_com_end_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com end"), || mcb_sc_txs_com_end)?;
@@ -1348,7 +1336,6 @@ impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
                 })?;
 
         Ok(Self {
-            genesis_constant_g,
             mcb_sc_txs_com_end_g,
             sc_last_wcert_hash_g,
             amount_g,

@@ -329,6 +329,7 @@ pub fn verify_naive_threshold_sig_proof(
 // ******************************* CSW Proof ***************************
 pub fn create_csw_proof(
     sidechain_id: FieldElement,
+    constant: Option<FieldElement>,
     sys_data: CswSysData,
     last_wcert: Option<WithdrawalCertificateData>,
     utxo_data: Option<CswUtxoProverData>,
@@ -343,6 +344,7 @@ pub fn create_csw_proof(
 ) -> Result<Vec<u8>, Error> {
     let c = CeasedSidechainWithdrawalCircuit::new(
         sidechain_id,
+        constant,
         sys_data,
         last_wcert,
         utxo_data,
@@ -382,6 +384,7 @@ pub fn create_csw_proof(
 
 pub fn verify_csw_proof(
     sc_id: &FieldElement,
+    constant: Option<FieldElement>,
     sys_data: CswSysData,
     proof: Vec<u8>,
     check_proof: bool,
@@ -392,7 +395,7 @@ pub fn verify_csw_proof(
 ) -> Result<bool, Error> {
     let ins = CSWProofUserInputs {
         amount: sys_data.amount,
-        constant: sys_data.genesis_constant.as_ref(),
+        constant: constant.as_ref(),
         sc_id,
         nullifier: &sys_data.nullifier,
         pub_key_hash: &sys_data.receiver,
