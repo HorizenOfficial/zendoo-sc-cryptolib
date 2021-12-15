@@ -286,6 +286,7 @@ dependencies = [
  "cctp_primitives",
  "derivative",
  "digest 0.8.1",
+ "hex",
  "lazy_static",
  "primitives",
  "r1cs-core",

@@ -450,7 +450,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 #[cfg(test)]
 mod test {
     use algebra::{
-        fields::ed25519::fr::Fr as ed25519Fr, Field, Group, ProjectiveCurve, UniformRand,
+        fields::ed25519::fr::Fr as ed25519Fr, Field, Group, ProjectiveCurve, UniformRand, CanonicalDeserialize,
     };
     use cctp_primitives::{
         proving_system::{
@@ -750,8 +750,19 @@ mod test {
         sidechain_id: FieldElement,
         num_custom_fields: u32,
         num_commitment_hashes: u32,
+        secret_key_bytes: Option<Vec<u8>>,
+        public_key_bytes: Option<Vec<u8>>,
     ) -> CswProverData {
-        let (secret_key, public_key) = generate_key_pair();
+        let (secret_key, public_key) = {
+            if secret_key_bytes.is_none() || public_key_bytes.is_none() {
+                generate_key_pair()
+            } else {
+                (
+                    secret_key_bytes.unwrap(),
+                    public_key_bytes.unwrap(),
+                )
+            }
+        };
 
         match csw_type {
             CswType::UTXO => generate_test_utxo_csw_data(
@@ -770,17 +781,8 @@ mod test {
         }
     }
 
-    fn test_csw_circuit(csw_type: CswType) {
-        let sidechain_id = FieldElement::from(77u8);
-        let num_custom_fields = 2;
-        let num_commitment_hashes = 10;
-        let csw_prover_data = generate_test_csw_prover_data(
-            csw_type,
-            sidechain_id,
-            num_custom_fields,
-            num_commitment_hashes,
-        );
-        let constant = Some(FieldElement::from(14u8));
+    fn test_csw_circuit(debug_only: bool, sidechain_id : FieldElement, num_custom_fields: u32, num_commitment_hashes: u32, constant: Option<FieldElement>, csw_prover_data: CswProverData) {
+
         let circuit = CeasedSidechainWithdrawalCircuit::from_prover_data(
             sidechain_id,
             constant,
@@ -793,59 +795,180 @@ mod test {
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint.is_none());
 
-        load_g1_committer_key(1 << 17, 1 << 15).unwrap();
-        let ck_g1 = get_g1_committer_key().unwrap();
-        let params = CoboundaryMarlin::index(ck_g1.as_ref().unwrap(), circuit.clone()).unwrap();
+        if !debug_only {
+            load_g1_committer_key(1 << 17, 1 << 15).unwrap();
+            let ck_g1 = get_g1_committer_key().unwrap();
+            let params = CoboundaryMarlin::index(ck_g1.as_ref().unwrap(), circuit.clone()).unwrap();
 
-        let proof = CoboundaryMarlin::prove(
-            &params.0.clone(),
-            ck_g1.as_ref().unwrap(),
-            circuit,
-            false,
-            None,
-        )
-        .unwrap();
+            let proof = CoboundaryMarlin::prove(
+                &params.0.clone(),
+                ck_g1.as_ref().unwrap(),
+                circuit,
+                false,
+                None,
+            )
+            .unwrap();
 
-        let mut public_inputs = Vec::new();
+            let mut public_inputs = Vec::new();
 
-        if constant.is_some() {
-            public_inputs.push(constant.unwrap());
+            if constant.is_some() {
+                public_inputs.push(constant.unwrap());
+            }
+
+            let csw_sys_data_hash = CeasedSidechainWithdrawalCircuit::compute_csw_sys_data_hash(
+                &csw_prover_data.sys_data,
+                sidechain_id
+            ).unwrap();
+
+            public_inputs.push(csw_sys_data_hash);
+
+            // Check that the proof gets correctly verified
+            assert!(CoboundaryMarlin::verify(
+                &params.1.clone(),
+                ck_g1.as_ref().unwrap(),
+                public_inputs.as_slice(),
+                &proof
+            )
+            .unwrap());
+
+            // Change one public input and check that the proof fails
+            public_inputs[0].add_assign(&FieldElement::from(1u8));
+            assert!(!CoboundaryMarlin::verify(
+                &params.1.clone(),
+                ck_g1.as_ref().unwrap(),
+                public_inputs.as_slice(),
+                &proof
+            )
+            .unwrap());
         }
-
-        let csw_sys_data_hash = CeasedSidechainWithdrawalCircuit::compute_csw_sys_data_hash(
-            &csw_prover_data.sys_data,
-            sidechain_id
-        ).unwrap();
-
-        public_inputs.push(csw_sys_data_hash);
-
-        // Check that the proof gets correctly verified
-        assert!(CoboundaryMarlin::verify(
-            &params.1.clone(),
-            ck_g1.as_ref().unwrap(),
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
-
-        // Change one public input and check that the proof fails
-        public_inputs[0].add_assign(&FieldElement::from(1u8));
-        assert!(!CoboundaryMarlin::verify(
-            &params.1.clone(),
-            ck_g1.as_ref().unwrap(),
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
     }
 
     #[test]
     fn test_csw_circuit_utxo() {
-        test_csw_circuit(CswType::UTXO);
+        let sidechain_id = FieldElement::from(77u8);
+        let num_custom_fields = 1;
+        let num_commitment_hashes = 10;
+        let constant = Some(FieldElement::from(14u8));
+        let debug_only = true;
+
+        let csw_prover_data = generate_test_csw_prover_data(
+            CswType::UTXO,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            None,
+            None
+        );
+
+        test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
     }
 
     #[test]
     fn test_csw_circuit_ft() {
-        test_csw_circuit(CswType::FT);
+        let sidechain_id = FieldElement::from(77u8);
+        let num_custom_fields = 1;
+        let num_commitment_hashes = 10;
+        let constant = Some(FieldElement::from(14u8));
+        let debug_only = true;
+
+        let csw_prover_data = generate_test_csw_prover_data(
+            CswType::FT,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            None,
+            None
+        );
+
+        test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
+    }
+use algebra::FromBits;
+    #[test]
+    fn test_csw_circuit_with_custom_keys() {
+        let sidechain_id = FieldElement::from(77u8);
+        let num_custom_fields = 1;
+        let num_commitment_hashes = 10;
+        let constant = Some(FieldElement::from(14u8));
+        let debug_only = true;
+
+        let test_sc_secret_key = "50d5e4c0b15402013941a3c525c6af85e7ab8a2da39a59707211ddd53def965e";
+        let test_sc_public_key = "f165e1e5f7c290e52f2edef3fbab60cbae74bfd3274f8e5ee1de3345c954a166";
+
+        // hex string to byte array
+        let mut secret_key = hex::decode(test_sc_secret_key).unwrap();
+        //let secret_key_bits = bytes_to_bits(&secret_key);
+        // println!("Secret key bits: {:?}", bool_slice_to_string(&secret_key_bits));
+        secret_key.reverse();
+        for i in 0..secret_key.len() {
+            secret_key[i] = secret_key[i].reverse_bits();
+        }
+
+        // Generate the secret key
+        let secret = <SimulatedScalarFieldElement as CanonicalDeserialize>::deserialize(&secret_key[..]).unwrap();
+        //let secret = SimulatedScalarFieldElement::read_bits(secret_key_bits).unwrap();
+
+        // let mut tmp_bytes = serialize_to_buffer(&secret, None).unwrap();
+        // println!("Secret key: {:?}", hex::encode(tmp_bytes.clone()));
+        // tmp_bytes.reverse();
+        // for i in 0..tmp_bytes.len() {
+        //     tmp_bytes[i] = tmp_bytes[i].reverse_bits();
+        // }
+        // println!("Secret key: {:?}", hex::encode(tmp_bytes));
+
+        // Compute GENERATOR^SECRET_KEY
+        let public_key = SimulatedGroup::prime_subgroup_generator()
+            .into_projective()
+            .mul(&secret)
+            .into_affine();
+
+        // Store the sign (last bit) of the X coordinate
+        // The value is left-shifted to be used later in an OR operation
+        let x_sign = if public_key.x.is_odd() { 1 << 7 } else { 0u8 };
+
+        // Extract the public key bytes as Y coordinate
+        let y_coordinate = public_key.y;
+        let mut pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
+
+        println!("Public key: {}", hex::encode(pk_bytes.clone()));
+
+        // Use the last (null) bit of the public key to store the sign of the X coordinate
+        // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus
+        let len = pk_bytes.len();
+        pk_bytes[len - 1] |= x_sign;
+
+        // Convert byte array to hex string
+        println!("Public key: {}", hex::encode(pk_bytes.clone()));
+        pk_bytes.reverse();
+        println!("Public key: {}", hex::encode(pk_bytes.clone()));
+        // Reverse each pk byte
+        for i in 0..pk_bytes.len() {
+            pk_bytes[i] = pk_bytes[i].reverse_bits();
+        }
+        println!("Public key: {}", hex::encode(pk_bytes));
+
+
+        // let public_key = hex::decode(test_sc_public_key).unwrap();
+
+        // //secret_key.reverse();
+        // // public_key.reverse();
+
+        // for i in 0..secret_key.len() {
+        //     secret_key[i] = secret_key[i].reverse_bits();
+        // }
+
+        // // for i in 0..public_key.len() {
+        // //     public_key[i] = public_key[i].reverse_bits();
+        // // }
+
+        // let csw_prover_data = generate_test_csw_prover_data(
+        //     CswType::FT,
+        //     sidechain_id,
+        //     num_custom_fields,
+        //     num_commitment_hashes,
+        //     Some(secret_key),
+        //     Some(public_key),
+        // );
+
+        // test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
     }
 }
