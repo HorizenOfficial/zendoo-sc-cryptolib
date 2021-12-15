@@ -321,10 +321,10 @@ impl EqGadget<FieldElement> for WithdrawalCertificateDataGadget {
 
 #[derive(PartialEq, Eq)]
 pub struct CswUtxoOutputDataGadget {
-    pub spending_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8], // Assumed to be big endian
+    pub spending_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8], // Assumed to be big endian. TODO: Check this
     pub amount_g: UInt64,
     pub nonce_g: UInt64,
-    pub custom_hash_g: [Boolean; FIELD_SIZE * 8], // Assumed to be big endian
+    pub custom_hash_g: [Boolean; FIELD_SIZE * 8], // Assumed to be big endian. TODO: Check this
 }
 
 impl CswUtxoOutputDataGadget {
@@ -530,7 +530,7 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
 #[derive(PartialEq, Eq)]
 pub struct CswUtxoInputDataGadget {
     pub output_g: CswUtxoOutputDataGadget,
-    pub secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // Assumed to be big endian
+    pub secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // Assumed to be big endian. TODO: Check this
 }
 
 impl CswUtxoInputDataGadget {
@@ -789,9 +789,9 @@ impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
 #[derive(PartialEq, Eq)]
 pub struct CswFtOutputDataGadget {
     pub amount_g: UInt64,
-    pub receiver_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8], // Assumed to be big endian
-    pub payback_addr_data_hash_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8], // Assumed to be big endian
-    pub tx_hash_g: [Boolean; FIELD_SIZE * 8], // Assumed to be big endian
+    pub receiver_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
+    pub payback_addr_data_hash_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
+    pub tx_hash_g: [Boolean; FIELD_SIZE * 8],
     pub out_idx_g: UInt32,
 }
 
@@ -991,7 +991,11 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
         payback_addr_data_hash_bits.reverse();
 
         bits.extend_from_slice(&payback_addr_data_hash_bits);
-        bits.extend_from_slice(&self.tx_hash_g);
+
+        let mut tx_hash_bits = self.tx_hash_g.clone();
+        tx_hash_bits.reverse();
+
+        bits.extend_from_slice(&tx_hash_bits);
 
         let mut out_idx_big_endian_g = self.out_idx_g.to_bits_le();
         out_idx_big_endian_g.reverse();
@@ -1013,7 +1017,7 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
 
 pub struct CswFtProverDataGadget {
     pub ft_output_g: CswFtOutputDataGadget,
-    pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // Assumed to be big endian
+    pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // Assumed to be big endian. TODO: Check this
     pub mcb_sc_txs_com_start_g: FieldElementGadget,
     pub merkle_path_to_sc_hash_g: GingerMHTBinaryGadget,
     pub ft_tree_path_g: GingerMHTBinaryGadget,
@@ -1290,7 +1294,7 @@ pub struct CswSysDataGadget {
     pub sc_last_wcert_hash_g: FieldElementGadget,
     pub amount_g: FieldElementGadget,
     pub nullifier_g: FieldElementGadget,
-    pub receiver_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8], // Assumed to be big endian
+    pub receiver_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
 }
 
 impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
