@@ -324,37 +324,36 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
                 csw_data_g.last_wcert_g.custom_fields_g.len(),
                 self.num_custom_fields as usize
             );
+            assert!(self.num_custom_fields >= 2);
 
-            // TODO: this is a temporary hack to make the test working
-            let scb_new_mst_root = csw_data_g.last_wcert_g.custom_fields_g[0].clone();
-            // // Reconstruct scb_new_mst_root from custom fields
-            // let scb_new_mst_root = {
-            //     use algebra::Field;
-            //     use r1cs_std::fields::FieldGadget;
+            // Reconstruct scb_new_mst_root from firt 2 custom fields
+            let scb_new_mst_root = {
+                use algebra::Field;
+                use r1cs_std::fields::FieldGadget;
             
-            //     // Compute 2^128 in the field
-            //     let pow = FieldElement::one().double().pow(&[128u64]);
+                // Compute 2^128 in the field
+                let pow = FieldElement::one().double().pow(&[128u64]);
 
-            //     // Combine the two custom fields as custom_fields[0] + (2^128) * custom_fields[1]
-            //     // We assume here that the 2 FieldElements were originally truncated at the 128th bit .
-            //     // Note that the prover is able to find multiple custom_fields[0], custom_fields[1]
-            //     // leading to the same result but this will change the certificate hash, binded to 
-            //     // the sys_data_hash public input, for which he would need to find a collision,
-            //     // and this is unfeasible.
-            //     let first_half = &csw_data_g.last_wcert_g.custom_fields_g[0];
-            //     let second_half = csw_data_g
-            //         .last_wcert_g
-            //         .custom_fields_g[1]
-            //         .mul_by_constant(
-            //             cs.ns(|| "2^128 * custom_fields[1]"),
-            //             &pow
-            //         )?;
+                // Combine the two custom fields as custom_fields[0] + (2^128) * custom_fields[1]
+                // We assume here that the 2 FieldElements were originally truncated at the 128th bit .
+                // Note that the prover is able to find multiple custom_fields[0], custom_fields[1]
+                // leading to the same result but this will change the certificate hash, binded to 
+                // the sys_data_hash public input, for which he would need to find a collision,
+                // and this is unfeasible.
+                let first_half = &csw_data_g.last_wcert_g.custom_fields_g[0];
+                let second_half = csw_data_g
+                    .last_wcert_g
+                    .custom_fields_g[1]
+                    .mul_by_constant(
+                        cs.ns(|| "2^128 * custom_fields[1]"),
+                        &pow
+                    )?;
                 
-            //     first_half.add(
-            //         cs.ns(|| "custom_fields[0] + (2^128) * custom_fields[1]"),
-            //         &second_half
-            //     )
-            // }?;
+                first_half.add(
+                    cs.ns(|| "custom_fields[0] + (2^128) * custom_fields[1]"),
+                    &second_half
+                )
+            }?;
 
             csw_data_g
                 .utxo_data_g
@@ -471,7 +470,7 @@ mod test {
     use crate::{
         CswFtOutputData, CswProverData, CswUtxoInputData,
         CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
-        MST_MERKLE_TREE_HEIGHT, PHANTOM_FIELD_ELEMENT, SC_TX_HASH_LENGTH,
+        MST_MERKLE_TREE_HEIGHT, PHANTOM_FIELD_ELEMENT, SC_TX_HASH_LENGTH, utils::split_field_element_at_index,
     };
 
     use super::*;
@@ -594,11 +593,17 @@ mod test {
 
         let (mst_root, mst_leaf_hash, mst_path) = compute_mst_tree_data(utxo_input_data.output.clone());
 
-        // To generate valid test data we need at least one custom field to store the MST root
-        debug_assert!(num_custom_fields > 0);
-        let mut custom_fields = vec![mst_root];
+        // To generate valid test data we need at least 2 custom field to store the MST root
+        debug_assert!(num_custom_fields >= 2);
 
-        for _ in 0..num_custom_fields - 1 {
+        // Split mst_root in 2
+
+        let mut custom_fields = {
+            let (mst_root_1, mst_root_2) = split_field_element_at_index(&mst_root, FIELD_SIZE/2).unwrap();
+            vec![mst_root_1, mst_root_2]
+        };
+
+        for _ in 0..num_custom_fields - 2 {
             custom_fields.push(PHANTOM_FIELD_ELEMENT);
         }
 
@@ -609,12 +614,13 @@ mod test {
             mst_path_to_output: mst_path,
         };
 
+        let rng = &mut thread_rng();
         let sys_data = CswSysData {
             mcb_sc_txs_com_end: FieldElement::from(15u8),
             sc_last_wcert_hash: last_wcert_hash,
             amount: utxo_input_data.output.amount,
             nullifier: mst_leaf_hash,
-            receiver: [0; MC_PK_SIZE],
+            receiver: (0..MC_PK_SIZE).map(|_| rng.gen()).collect::<Vec<u8>>().try_into().unwrap(),
         };
 
         let csw_prover_data = CswProverData {
@@ -766,7 +772,7 @@ mod test {
 
     fn test_csw_circuit(csw_type: CswType) {
         let sidechain_id = FieldElement::from(77u8);
-        let num_custom_fields = 1;
+        let num_custom_fields = 2;
         let num_commitment_hashes = 10;
         let csw_prover_data = generate_test_csw_prover_data(
             csw_type,

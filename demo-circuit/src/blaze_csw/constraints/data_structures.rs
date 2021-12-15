@@ -169,9 +169,9 @@ impl ConstantGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCerti
         let btr_min_fee_g = UInt64::constant(value.btr_min_fee);
         let mut custom_fields_g = Vec::with_capacity(value.custom_fields.len());
 
-        for custom_field in value.custom_fields.iter() {
+        for (i, custom_field) in value.custom_fields.iter().enumerate() {
             let custom_field_g = FieldElementGadget::from_value(
-                cs.ns(|| "alloc constant custom_fields"),
+                cs.ns(|| format!("alloc constant custom field {}", i)),
                 &custom_field,
             );
             custom_fields_g.push(custom_field_g);

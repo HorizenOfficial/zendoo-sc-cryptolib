@@ -28,7 +28,7 @@
 // public class CswProofTest {
 //     static long seed = 1234567890L;
     
-//     static int rangeSize = 100;
+//     static int rangeSize = 10;
 //     static int maxProofPlusVkSize = 9 * 1024;
 //     static boolean zk = true;
 
@@ -51,7 +51,7 @@
 //         // Generate keys
 //         assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
 //         assertTrue(CswProof.setup(psType, rangeSize, 2, false, snarkPkPath, snarkVkPath, zk, maxProofPlusVkSize));
-//         assertFalse(CswProof.setup(psType, rangeSize, 0, false, snarkPkPath, snarkVkPath, zk, 1));
+//         assertFalse(CswProof.setup(psType, rangeSize, 2, false, snarkPkPath, snarkVkPath, zk, 1));
 //         assertEquals(
 //             psType,
 //             ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
@@ -109,12 +109,9 @@
 //         byte[] receiver = new byte[Constants.MC_PK_HASH_SIZE()];
 //         r.nextBytes(receiver);
 
-//         // Generate random constant
-//         FieldElement constant = FieldElement.createRandom(r);
-
 //         // Generate CswSysData
 //         CswSysData sysData = new CswSysData(
-//             Optional.of(constant),
+//             Optional.empty(),
 //             Optional.of(scLastWcertHash),
 //             Optional.empty(),
 //             scUtxoOutput.getAmount(),
@@ -145,9 +142,6 @@
 //         Random r = new Random(seed);
 //         byte[] receiver = new byte[Constants.MC_PK_HASH_SIZE()];
 //         r.nextBytes(receiver);
-
-//         // Generate random constant
-//         FieldElement constant = FieldElement.createRandom(r);
 
 //         // Compute ftOutput nullifier
 //         FieldElement nullifier = ftOutput.getNullifier();
@@ -222,7 +216,7 @@
 
 //         // Generate CswSysData
 //         CswSysData sysData = new CswSysData(
-//             Optional.of(constant),
+//             Optional.empty(),
 //             Optional.empty(),
 //             Optional.of(mcbScTxsComEnd),
 //             ftOutput.getAmount(),
@@ -253,7 +247,7 @@
 //     public static void free() throws Exception {
 //         wCert.close();
 //         // Delete proving keys and verification keys
-//         // new File(snarkPkPath).delete();
-//         // new File(snarkVkPath).delete();
+//         new File(snarkPkPath).delete();
+//         new File(snarkVkPath).delete();
 //     }
 // }

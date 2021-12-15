@@ -57,8 +57,8 @@ public class CswProof {
      * Generate (provingKey, verificationKey) pair for this circuit.
      * @param psType - proving system to be used
      * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
-     * @param isConstantPresent - whether the circuit must support the presence of a constant
      * @param numCustomFields - exact number of custom fields the circuit must support
+     * @param isConstantPresent - whether the circuit must support the presence of a constant
      * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
      * @param zk - used to estimate the proof and vk size, tells if the proof will be created using zk or not
@@ -125,6 +125,39 @@ public class CswProof {
     );
 
     /**
+     * Checks consistency, in terms of data that must or must not be present, of the inputs supplied to the
+     * proof creation methods, as described below.
+     * @param sysData - certificate sys data.
+     * @param lastWcert - the last confirmed wcert in the MC. Can be empty if SC has ceased before we have at least
+     *                    certs for 2 epochs (in this case we can only withdraw FT)
+     * @param utxoData - data required to prove withdraw of a SC utxo. Must be empty if the prover wants to prove
+     *                   withdraw of a FT instead. If this field is present, then lastWCert and sysData.scLastWCertHash
+     *                   must be present too.
+     * @param ftData - data required to prove withdraw of a FT. Must be empty if the prover wants to prove
+     *                 withdraw of a SC utxo instead. If present, then sysData.mcbScTxsComEnd must be present too.
+     * @throws IllegalArgumentException - if inputs are not consistent
+     */
+    private static void checkCreateProofInputsConsistency(
+        CswSysData sysData,
+        Optional<WithdrawalCertificate> lastWcert,
+        Optional<CswUtxoProverData> utxoData,
+        Optional<CswFtProverData> ftData
+    ) throws IllegalArgumentException
+    {
+        if (utxoData.isPresent() && !lastWcert.isPresent())
+            throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");
+
+        if (utxoData.isPresent() && !sysData.getScLastWcertHash().isPresent())
+            throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate hash is not specified in sysData!");
+
+        if (utxoData.isPresent() && ftData.isPresent())
+            throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo and of a FT at the same time !");
+
+        if (ftData.isPresent() && !sysData.getMcbScTxsComEnd().isPresent())
+            throw new IllegalArgumentException("Cannot prove withdraw of a FT if mcbScTxsComEnd is not specified in sysData !");
+    }
+
+    /**
      * Compute proof for given parameters
      * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
      * @param numCustomFields - exact number of custom fields the circuit must support
@@ -132,10 +165,11 @@ public class CswProof {
      * @param scId - the id of the corresponding sidechain
      * @param lastWcert - the last confirmed wcert in the MC. Can be empty if SC has ceased before we have at least
      *                    certs for 2 epochs (in this case we can only withdraw FT)
-     * @param utxoData - data required to prove withdraw of a SC utxo. It's empty if the prover wants to prove
-     *                   withdraw of a FT instead. If this field is present, then lastWCert must be present too.
-     * @param ftData - data required to prove withdraw of a FT. It's empty if the prover wants to prove
-     *                 withdraw of a SC utxo instead.
+     * @param utxoData - data required to prove withdraw of a SC utxo. Must be empty if the prover wants to prove
+     *                   withdraw of a FT instead. If this field is present, then lastWCert and sysData.scLastWCertHash
+     *                   must be present too.
+     * @param ftData - data required to prove withdraw of a FT. Must be empty if the prover wants to prove
+     *                 withdraw of a SC utxo instead. If present, then sysData.mcbScTxsComEnd must be present too.
      * @param provingKeyPath - file path from which reading the proving key
      * @param checkProvingKey - enable semantic checks on the proving key (WARNING: very expensive)
      * @param zk - if proof must be created using zk property or not
@@ -159,11 +193,7 @@ public class CswProof {
         boolean compress_proof
     ) throws IllegalArgumentException 
     {
-        if (utxoData.isPresent() && !lastWcert.isPresent())
-            throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");
-
-        if (utxoData.isPresent() && ftData.isPresent())
-            throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo and of a FT at the same time !");
+        checkCreateProofInputsConsistency(sysData, lastWcert, utxoData, ftData);
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
@@ -180,10 +210,11 @@ public class CswProof {
      * @param scId - the id of the corresponding sidechain
      * @param lastWcert - the last confirmed wcert in the MC. Can be empty if SC has ceased before we have at least
      *                    certs for 2 epochs (in this case we can only withdraw FT)
-     * @param utxoData - data required to prove withdraw of a SC utxo. It's empty if the prover wants to prove
-     *                   withdraw of a FT instead. If this field is present, then lastWCert must be present too.
-     * @param ftData - data required to prove withdraw of a FT. It's empty if the prover wants to prove
-     *                 withdraw of a SC utxo instead.
+     * @param utxoData - data required to prove withdraw of a SC utxo. Must be empty if the prover wants to prove
+     *                   withdraw of a FT instead. If this field is present, then lastWCert and sysData.scLastWCertHash
+     *                   must be present too.
+     * @param ftData - data required to prove withdraw of a FT. Must be empty if the prover wants to prove
+     *                 withdraw of a SC utxo instead. If present, then sysData.mcbScTxsComEnd must be present too.
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
      * @param checkProvingKey - enable semantic checks on the proving key (WARNING: very expensive)
      * @param zk - if proof must be created using zk property or not
@@ -203,11 +234,7 @@ public class CswProof {
         boolean zk
     ) throws IllegalArgumentException 
     {
-        if (utxoData.isPresent() && !lastWcert.isPresent())
-            throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");
-
-        if (utxoData.isPresent() && ftData.isPresent())
-            throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo and of a FT at the same time !");
+        checkCreateProofInputsConsistency(sysData, lastWcert, utxoData, ftData);
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
@@ -220,14 +247,15 @@ public class CswProof {
      * Compute proof for given parameters
      * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
      * @param numCustomFields - exact number of custom fields the circuit must support
-     * @param sysData - certificate sys data.
      * @param scId - the id of the corresponding sidechain
+     * @param sysData - certificate sys data.
      * @param lastWcert - the last confirmed wcert in the MC. Can be empty if SC has ceased before we have at least
      *                    certs for 2 epochs (in this case we can only withdraw FT)
-     * @param utxoData - data required to prove withdraw of a SC utxo. It's empty if the prover wants to prove
-     *                   withdraw of a FT instead. If this field is present, then lastWCert must be present too.
-     * @param ftData - data required to prove withdraw of a FT. It's empty if the prover wants to prove
-     *                 withdraw of a SC utxo instead.
+     * @param utxoData - data required to prove withdraw of a SC utxo. Must be empty if the prover wants to prove
+     *                   withdraw of a FT instead. If this field is present, then lastWCert and sysData.scLastWCertHash
+     *                   must be present too.
+     * @param ftData - data required to prove withdraw of a FT. Must be empty if the prover wants to prove
+     *                 withdraw of a SC utxo instead. If present, then sysData.mcbScTxsComEnd must be present too.
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
      * @param zk - if proof must be created using zk property or not
      * @return the proof bytes
@@ -245,11 +273,7 @@ public class CswProof {
         boolean zk
     ) throws IllegalArgumentException 
     {
-        if (utxoData.isPresent() && !lastWcert.isPresent())
-            throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");
-
-        if (utxoData.isPresent() && ftData.isPresent())
-            throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo and of a FT at the same time !");
+        checkCreateProofInputsConsistency(sysData, lastWcert, utxoData, ftData);
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
@@ -266,10 +290,11 @@ public class CswProof {
      * @param scId - the id of the corresponding sidechain
      * @param lastWcert - the last confirmed wcert in the MC. Can be empty if SC has ceased before we have at least
      *                    certs for 2 epochs (in this case we can only withdraw FT)
-     * @param utxoData - data required to prove withdraw of a SC utxo. It's empty if the prover wants to prove
-     *                   withdraw of a FT instead. If this field is present, then lastWCert must be present too.
-     * @param ftData - data required to prove withdraw of a FT. It's empty if the prover wants to prove
-     *                 withdraw of a SC utxo instead.
+     * @param utxoData - data required to prove withdraw of a SC utxo. Must be empty if the prover wants to prove
+     *                   withdraw of a FT instead. If this field is present, then lastWCert and sysData.scLastWCertHash
+     *                   must be present too.
+     * @param ftData - data required to prove withdraw of a FT. Must be empty if the prover wants to prove
+     *                 withdraw of a SC utxo instead. If present, then sysData.mcbScTxsComEnd must be present too.
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
      * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
@@ -285,11 +310,7 @@ public class CswProof {
         String provingKeyPath
     ) throws IllegalArgumentException 
     {
-        if (utxoData.isPresent() && !lastWcert.isPresent())
-            throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo if the last WithdrawalCertificate is not specified !");
-
-        if (utxoData.isPresent() && ftData.isPresent())
-            throw new IllegalArgumentException("Cannot prove withdraw of a SC Utxo and of a FT at the same time !");
+        checkCreateProofInputsConsistency(sysData, lastWcert, utxoData, ftData);
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(

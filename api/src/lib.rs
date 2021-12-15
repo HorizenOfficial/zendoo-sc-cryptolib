@@ -4928,8 +4928,8 @@ ffi_export!(
     fn Java_com_horizen_cswnative_CswProof_nativeVerifyProof(
         _env: JNIEnv,
         _class: JClass,
-        _sc_id: JObject,
         _sys_data: JObject,
+        _sc_id: JObject,
         _sc_proof_bytes: jbyteArray,
         _check_proof: jboolean,
         _compressed_proof: jboolean,
