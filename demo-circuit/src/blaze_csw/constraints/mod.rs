@@ -783,7 +783,7 @@ mod test {
         }
     }
 
-    fn test_csw_circuit(debug_only: bool, sidechain_id : FieldElement, num_custom_fields: u32, num_commitment_hashes: u32, constant: Option<FieldElement>, csw_prover_data: CswProverData) {
+    fn test_csw_circuit(debug_only: bool, sidechain_id : FieldElement, num_custom_fields: u32, num_commitment_hashes: u32, constant: Option<FieldElement>, csw_prover_data: CswProverData) -> Option<String> {
 
         let circuit = CeasedSidechainWithdrawalCircuit::from_prover_data(
             sidechain_id,
@@ -794,8 +794,6 @@ mod test {
         ).unwrap();
 
         let failing_constraint = debug_circuit(circuit.clone()).unwrap();
-        println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint.is_none());
 
         if !debug_only {
             load_g1_committer_key(1 << 17, 1 << 15).unwrap();
@@ -843,16 +841,24 @@ mod test {
             )
             .unwrap());
         }
+
+        failing_constraint
     }
 
-    #[test]
-    fn test_csw_circuit_utxo() {
+    fn generate_circuit_test_data() -> (FieldElement, u32, u32, Option<FieldElement>, bool) {
         let rng = &mut thread_rng();
         let sidechain_id = FieldElement::rand(rng);
         let num_custom_fields = 2;
         let num_commitment_hashes = 10;
         let constant = Some(FieldElement::rand(rng));
         let debug_only = true;
+
+        (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only)
+    }
+
+    #[test]
+    fn test_csw_circuit_utxo() {
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) = generate_circuit_test_data();
 
         let csw_prover_data = generate_test_csw_prover_data(
             CswType::UTXO,
@@ -863,17 +869,14 @@ mod test {
             None
         );
 
-        test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
+        let failing_constraint = test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint.is_none());
     }
 
     #[test]
     fn test_csw_circuit_ft() {
-        let rng = &mut thread_rng();
-        let sidechain_id = FieldElement::rand(rng);
-        let num_custom_fields = 2;
-        let num_commitment_hashes = 10;
-        let constant = Some(FieldElement::rand(rng));
-        let debug_only = true;
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) = generate_circuit_test_data();
 
         let csw_prover_data = generate_test_csw_prover_data(
             CswType::FT,
@@ -884,7 +887,29 @@ mod test {
             None
         );
 
-        test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
+        let failing_constraint = test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint.is_none());
+    }
+
+    #[test]
+    fn test_csw_circuit_utxo_wrong_cert_hash() {
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) = generate_circuit_test_data();
+
+        let mut csw_prover_data = generate_test_csw_prover_data(
+            CswType::UTXO,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            None,
+            None
+        );
+
+        csw_prover_data.sys_data.sc_last_wcert_hash.double_in_place();
+
+        let failing_constraint = test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint.unwrap().contains("enforce sc_last_wcert_hash == last_wcert_hash"));
     }
 
     #[test]

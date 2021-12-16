@@ -12,7 +12,7 @@ use crate::{
     PHANTOM_PUBLIC_KEY_BITS, PHANTOM_SECRET_KEY_BITS, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, MST_MERKLE_TREE_HEIGHT,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WithdrawalCertificateData {
     pub ledger_id: FieldElement,
     pub epoch_id: u32,
@@ -63,6 +63,19 @@ impl WithdrawalCertificateData {
             btr_min_fee: 0,
             custom_fields: vec![PHANTOM_FIELD_ELEMENT; num_custom_fields as usize],
         }
+    }
+}
+
+impl PartialEq for WithdrawalCertificateData {
+    fn eq(&self, other: &Self) -> bool {
+        self.ledger_id == other.ledger_id
+            && self.epoch_id == other.epoch_id
+            && self.bt_root == other.bt_root
+            && self.quality == other.quality
+            && self.mcb_sc_txs_com == other.mcb_sc_txs_com
+            && self.ft_min_amount == other.ft_min_amount
+            && self.btr_min_fee == other.btr_min_fee
+            && self.custom_fields == other.custom_fields
     }
 }
 
