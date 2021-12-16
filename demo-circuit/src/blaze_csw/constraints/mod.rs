@@ -546,14 +546,15 @@ mod test {
     fn compute_cert_data(
         custom_fields: Vec<FieldElement>,
     ) -> (WithdrawalCertificateData, FieldElement) {
+        let rng = &mut thread_rng();
         let cert_data = WithdrawalCertificateData {
-            ledger_id: FieldElement::from(1u8),
-            epoch_id: 2u32,
+            ledger_id: FieldElement::rand(rng),
+            epoch_id: rng.gen(),
             bt_root: get_bt_merkle_root(None).unwrap(),
-            quality: 4u64,
-            mcb_sc_txs_com: FieldElement::from(5u8),
-            ft_min_amount: 6u64,
-            btr_min_fee: 7u64,
+            quality: rng.gen(),
+            mcb_sc_txs_com: FieldElement::rand(rng),
+            ft_min_amount: rng.gen(),
+            btr_min_fee: rng.gen(),
             custom_fields: custom_fields,
         };
 
@@ -579,12 +580,13 @@ mod test {
         secret_key_bytes: Vec<u8>,
         public_key_bytes: Vec<u8>,
     ) -> CswProverData {
+        let rng = &mut thread_rng();
         let utxo_input_data = CswUtxoInputData {
             output: CswUtxoOutputData {
                 spending_pub_key: bytes_to_bits(&public_key_bytes).try_into().unwrap(),
-                amount: 10,
-                nonce: 11,
-                custom_hash: bytes_to_bits(&[12; FIELD_SIZE]).try_into().unwrap(),
+                amount: rng.gen(),
+                nonce: rng.gen(),
+                custom_hash: bytes_to_bits(&rng.gen::<[u8; FIELD_SIZE]>()).try_into().unwrap(),
             },
             secret_key: bytes_to_bits(&secret_key_bytes)[SIMULATED_SCALAR_FIELD_REPR_SHAVE_BITS..]
                 .try_into()
@@ -616,7 +618,7 @@ mod test {
 
         let rng = &mut thread_rng();
         let sys_data = CswSysData {
-            mcb_sc_txs_com_end: FieldElement::from(15u8),
+            mcb_sc_txs_com_end: FieldElement::rand(rng),
             sc_last_wcert_hash: last_wcert_hash,
             amount: utxo_input_data.output.amount,
             nullifier: mst_leaf_hash,
@@ -668,15 +670,15 @@ mod test {
             amount: rng.gen(),
             receiver_pub_key: public_key_bytes.try_into().unwrap(),
             payback_addr_data_hash: (0..MC_RETURN_ADDRESS_BYTES).map(|_| rng.gen()).collect::<Vec<u8>>().try_into().unwrap(),
-            tx_hash: (0..SC_TX_HASH_LENGTH).map(|_| rng.gen()).collect::<Vec<u8>>().try_into().unwrap(),
+            tx_hash: rng.gen::<[u8; SC_TX_HASH_LENGTH]>(),
             out_idx: rng.gen(),
         };
 
         let (ft_output_hash, ft_tree_path, ft_tree_root) =
             generate_ft_tree_data(ft_output_data.clone());
 
-        let scb_btr_tree_root = FieldElement::from(22u8);
-        let wcert_tree_root = FieldElement::from(23u8);
+        let scb_btr_tree_root = FieldElement::rand(rng);
+        let wcert_tree_root = FieldElement::rand(rng);
 
         let sc_hash = get_poseidon_hash_constant_length(4, None)
             .update(ft_tree_root)
@@ -732,7 +734,7 @@ mod test {
             sc_last_wcert_hash: PHANTOM_FIELD_ELEMENT,
             amount: ft_data.ft_output.amount,
             nullifier: ft_output_hash,
-            receiver: (0..MC_PK_SIZE).map(|_| rng.gen()).collect::<Vec<u8>>().try_into().unwrap(),
+            receiver: rng.gen::<[u8; MC_PK_SIZE]>(),
         };
 
         let csw_prover_data = CswProverData {
@@ -845,10 +847,11 @@ mod test {
 
     #[test]
     fn test_csw_circuit_utxo() {
-        let sidechain_id = FieldElement::from(77u8);
-        let num_custom_fields = 1;
+        let rng = &mut thread_rng();
+        let sidechain_id = FieldElement::rand(rng);
+        let num_custom_fields = 2;
         let num_commitment_hashes = 10;
-        let constant = Some(FieldElement::from(14u8));
+        let constant = Some(FieldElement::rand(rng));
         let debug_only = true;
 
         let csw_prover_data = generate_test_csw_prover_data(
@@ -865,10 +868,11 @@ mod test {
 
     #[test]
     fn test_csw_circuit_ft() {
-        let sidechain_id = FieldElement::from(77u8);
-        let num_custom_fields = 1;
+        let rng = &mut thread_rng();
+        let sidechain_id = FieldElement::rand(rng);
+        let num_custom_fields = 2;
         let num_commitment_hashes = 10;
-        let constant = Some(FieldElement::from(14u8));
+        let constant = Some(FieldElement::rand(rng));
         let debug_only = true;
 
         let csw_prover_data = generate_test_csw_prover_data(
@@ -882,7 +886,7 @@ mod test {
 
         test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
     }
-use algebra::FromBits;
+
     #[test]
     fn test_csw_circuit_with_custom_keys() {
         let sidechain_id = FieldElement::from(77u8);
