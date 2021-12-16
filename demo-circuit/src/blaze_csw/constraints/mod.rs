@@ -38,9 +38,8 @@ pub struct CeasedSidechainWithdrawalCircuit {
 impl CeasedSidechainWithdrawalCircuit {
     fn compute_csw_sys_data_hash(
         sys_data: &CswSysData,
-        sidechain_id: FieldElement
-    ) -> Result<FieldElement, Error> 
-    {
+        sidechain_id: FieldElement,
+    ) -> Result<FieldElement, Error> {
         let mut sys_data_hash_inputs = DataAccumulator::init()
             .update(sys_data.amount)?
             .update(&sys_data.receiver[..])?
@@ -67,64 +66,53 @@ impl CeasedSidechainWithdrawalCircuit {
         ft_data: Option<CswFtProverData>,
         range_size: u32,
         num_custom_fields: u32,
-    ) -> Result<Self, Error> 
-    {
+    ) -> Result<Self, Error> {
         // Compute csw sys_data hash
         let csw_sys_data_hash = Self::compute_csw_sys_data_hash(&sys_data, sidechain_id)?;
 
         // Handle all cases
         let csw_data = match (last_wcert, utxo_data, ft_data) {
             // SC Utxo withdraw
-            (Some(last_wcert), Some(utxo_data), None) => {
-                Ok(
-                    CswProverData {
-                        sys_data,
-                        last_wcert,
-                        utxo_data,
-                        ft_data: CswFtProverData::get_phantom(range_size),
-                    }
-                )
-            },
+            (Some(last_wcert), Some(utxo_data), None) => Ok(CswProverData {
+                sys_data,
+                last_wcert,
+                utxo_data,
+                ft_data: CswFtProverData::get_phantom(range_size),
+            }),
             // FT withdraw, with last_wcert present
-            (Some(last_wcert), None, Some(ft_data)) => {
-                Ok(
-                    CswProverData {
-                        sys_data,
-                        last_wcert,
-                        utxo_data: CswUtxoProverData::default(),
-                        ft_data,
-                    }
-                )
-            },
+            (Some(last_wcert), None, Some(ft_data)) => Ok(CswProverData {
+                sys_data,
+                last_wcert,
+                utxo_data: CswUtxoProverData::default(),
+                ft_data,
+            }),
             // FT withdraw, with last_wcert not present
-            (None, None, Some(ft_data)) => {
-                Ok(
-                    CswProverData {
-                        sys_data,
-                        last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
-                        utxo_data: CswUtxoProverData::default(),
-                        ft_data,
-                    }
-                )
-            },
+            (None, None, Some(ft_data)) => Ok(CswProverData {
+                sys_data,
+                last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
+                utxo_data: CswUtxoProverData::default(),
+                ft_data,
+            }),
             // Attempt to withdraw a sc utxo without having specified a last_wcert
-            (None, Some(_), _) => Err(Error::from("Attempt to withdraw SC Utxo without specifying last WCert")),
+            (None, Some(_), _) => Err(Error::from(
+                "Attempt to withdraw SC Utxo without specifying last WCert",
+            )),
             // Attempt to withdraw both a sc utxo and a ft
-            (_, Some(_), Some(_)) => Err(Error::from("Cannot create a CSW proof for retrieving both a SC UTXO and a FT")),
+            (_, Some(_), Some(_)) => Err(Error::from(
+                "Cannot create a CSW proof for retrieving both a SC UTXO and a FT",
+            )),
             // Any other combination is not admissable
-            _ => Err(Error::from("Unexpected inputs combination"))
+            _ => Err(Error::from("Unexpected inputs combination")),
         }?;
 
-        Ok(
-            Self {
-                range_size,
-                num_custom_fields,
-                sidechain_id,
-                csw_data,
-                constant,
-                csw_sys_data_hash,
-            }
-        )
+        Ok(Self {
+            range_size,
+            num_custom_fields,
+            sidechain_id,
+            csw_data,
+            constant,
+            csw_sys_data_hash,
+        })
     }
 
     // For testing, if useful
@@ -134,8 +122,7 @@ impl CeasedSidechainWithdrawalCircuit {
         csw_data: CswProverData,
         range_size: u32,
         num_custom_fields: u32,
-    ) -> Result<Self, Error> 
-    {
+    ) -> Result<Self, Error> {
         let csw_sys_data_hash = Self::compute_csw_sys_data_hash(&csw_data.sys_data, sidechain_id)?;
 
         Ok(CeasedSidechainWithdrawalCircuit {
@@ -152,14 +139,17 @@ impl CeasedSidechainWithdrawalCircuit {
         range_size: u32,
         num_custom_fields: u32,
         is_constant_present: bool,
-    ) -> Self 
-    {
+    ) -> Self {
         Self {
             range_size,
             num_custom_fields,
             sidechain_id: PHANTOM_FIELD_ELEMENT,
             csw_data: CswProverData::get_phantom(range_size, num_custom_fields),
-            constant: if is_constant_present { Some(PHANTOM_FIELD_ELEMENT) } else { None },
+            constant: if is_constant_present {
+                Some(PHANTOM_FIELD_ELEMENT)
+            } else {
+                None
+            },
             csw_sys_data_hash: PHANTOM_FIELD_ELEMENT,
         }
     }
@@ -330,28 +320,23 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             let scb_new_mst_root = {
                 use algebra::Field;
                 use r1cs_std::fields::FieldGadget;
-            
+
                 // Compute 2^128 in the field
                 let pow = FieldElement::one().double().pow(&[128u64]);
 
                 // Combine the two custom fields as custom_fields[0] + (2^128) * custom_fields[1]
                 // We assume here that the 2 FieldElements were originally truncated at the 128th bit .
                 // Note that the prover is able to find multiple custom_fields[0], custom_fields[1]
-                // leading to the same result but this will change the certificate hash, binded to 
+                // leading to the same result but this will change the certificate hash, binded to
                 // the sys_data_hash public input, for which he would need to find a collision,
                 // and this is unfeasible.
                 let first_half = &csw_data_g.last_wcert_g.custom_fields_g[0];
-                let second_half = csw_data_g
-                    .last_wcert_g
-                    .custom_fields_g[1]
-                    .mul_by_constant(
-                        cs.ns(|| "2^128 * custom_fields[1]"),
-                        &pow
-                    )?;
-                
+                let second_half = csw_data_g.last_wcert_g.custom_fields_g[1]
+                    .mul_by_constant(cs.ns(|| "2^128 * custom_fields[1]"), &pow)?;
+
                 first_half.add(
                     cs.ns(|| "custom_fields[0] + (2^128) * custom_fields[1]"),
-                    &second_half
+                    &second_half,
                 )
             }?;
 
@@ -450,17 +435,21 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 #[cfg(test)]
 mod test {
     use algebra::{
-        fields::ed25519::fr::Fr as ed25519Fr, Field, Group, ProjectiveCurve, UniformRand, CanonicalDeserialize,
+        fields::ed25519::fr::Fr as ed25519Fr, CanonicalDeserialize, Field, Group, ProjectiveCurve,
+        UniformRand,
     };
     use cctp_primitives::{
-        proving_system::{
-            init::{get_g1_committer_key, load_g1_committer_key},
+        commitment_tree::{
+            hashers::{hash_cert, hash_fwt},
+            sidechain_tree_alive::FWT_MT_HEIGHT,
+            CMT_MT_HEIGHT,
         },
+        proving_system::init::{get_g1_committer_key, load_g1_committer_key},
         type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
         utils::{
-            poseidon_hash::get_poseidon_hash_constant_length,
-            serialization::serialize_to_buffer, get_bt_merkle_root,
-        }, commitment_tree::{hashers::{hash_fwt, hash_cert}, sidechain_tree_alive::FWT_MT_HEIGHT, CMT_MT_HEIGHT},
+            get_bt_merkle_root, poseidon_hash::get_poseidon_hash_constant_length,
+            serialization::serialize_to_buffer,
+        },
     };
     use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree, FieldHasher};
     use r1cs_core::debug_circuit;
@@ -468,9 +457,9 @@ mod test {
     use std::{convert::TryInto, ops::AddAssign};
 
     use crate::{
-        CswFtOutputData, CswProverData, CswUtxoInputData,
+        utils::split_field_element_at_index, CswFtOutputData, CswProverData, CswUtxoInputData,
         CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
-        MST_MERKLE_TREE_HEIGHT, PHANTOM_FIELD_ELEMENT, SC_TX_HASH_LENGTH, utils::split_field_element_at_index,
+        MST_MERKLE_TREE_HEIGHT, PHANTOM_FIELD_ELEMENT, SC_TX_HASH_LENGTH,
     };
 
     use super::*;
@@ -558,7 +547,10 @@ mod test {
             custom_fields: custom_fields,
         };
 
-        let custom_fields_ref = cert_data.custom_fields.iter().collect::<Vec<&FieldElement>>();
+        let custom_fields_ref = cert_data
+            .custom_fields
+            .iter()
+            .collect::<Vec<&FieldElement>>();
 
         let computed_last_wcert_hash = hash_cert(
             &cert_data.ledger_id,
@@ -568,8 +560,9 @@ mod test {
             Some(custom_fields_ref),
             &cert_data.mcb_sc_txs_com,
             cert_data.btr_min_fee,
-            cert_data.ft_min_amount
-        ).unwrap();
+            cert_data.ft_min_amount,
+        )
+        .unwrap();
 
         (cert_data, computed_last_wcert_hash)
     }
@@ -586,14 +579,17 @@ mod test {
                 spending_pub_key: bytes_to_bits(&public_key_bytes).try_into().unwrap(),
                 amount: rng.gen(),
                 nonce: rng.gen(),
-                custom_hash: bytes_to_bits(&rng.gen::<[u8; FIELD_SIZE]>()).try_into().unwrap(),
+                custom_hash: bytes_to_bits(&rng.gen::<[u8; FIELD_SIZE]>())
+                    .try_into()
+                    .unwrap(),
             },
             secret_key: bytes_to_bits(&secret_key_bytes)[SIMULATED_SCALAR_FIELD_REPR_SHAVE_BITS..]
                 .try_into()
                 .unwrap(),
         };
 
-        let (mst_root, mst_leaf_hash, mst_path) = compute_mst_tree_data(utxo_input_data.output.clone());
+        let (mst_root, mst_leaf_hash, mst_path) =
+            compute_mst_tree_data(utxo_input_data.output.clone());
 
         // To generate valid test data we need at least 2 custom field to store the MST root
         debug_assert!(num_custom_fields >= 2);
@@ -601,7 +597,8 @@ mod test {
         // Split mst_root in 2
 
         let mut custom_fields = {
-            let (mst_root_1, mst_root_2) = split_field_element_at_index(&mst_root, FIELD_SIZE/2).unwrap();
+            let (mst_root_1, mst_root_2) =
+                split_field_element_at_index(&mst_root, FIELD_SIZE / 2).unwrap();
             vec![mst_root_1, mst_root_2]
         };
 
@@ -622,7 +619,11 @@ mod test {
             sc_last_wcert_hash: last_wcert_hash,
             amount: utxo_input_data.output.amount,
             nullifier: mst_leaf_hash,
-            receiver: (0..MC_PK_SIZE).map(|_| rng.gen()).collect::<Vec<u8>>().try_into().unwrap(),
+            receiver: (0..MC_PK_SIZE)
+                .map(|_| rng.gen())
+                .collect::<Vec<u8>>()
+                .try_into()
+                .unwrap(),
         };
 
         let csw_prover_data = CswProverData {
@@ -643,11 +644,11 @@ mod test {
             &ft_output_data.receiver_pub_key,
             &ft_output_data.payback_addr_data_hash,
             &ft_output_data.tx_hash,
-            ft_output_data.out_idx
-        ).unwrap();
+            ft_output_data.out_idx,
+        )
+        .unwrap();
 
-        let mut ft_tree =
-            GingerMHT::init(FWT_MT_HEIGHT, 1 << FWT_MT_HEIGHT).unwrap();
+        let mut ft_tree = GingerMHT::init(FWT_MT_HEIGHT, 1 << FWT_MT_HEIGHT).unwrap();
         ft_tree.append(ft_input_hash).unwrap();
         ft_tree.finalize_in_place().unwrap();
 
@@ -665,11 +666,15 @@ mod test {
         public_key_bytes: Vec<u8>,
     ) -> CswProverData {
         let rng = &mut thread_rng();
-        
+
         let ft_output_data = CswFtOutputData {
             amount: rng.gen(),
             receiver_pub_key: public_key_bytes.try_into().unwrap(),
-            payback_addr_data_hash: (0..MC_RETURN_ADDRESS_BYTES).map(|_| rng.gen()).collect::<Vec<u8>>().try_into().unwrap(),
+            payback_addr_data_hash: (0..MC_RETURN_ADDRESS_BYTES)
+                .map(|_| rng.gen())
+                .collect::<Vec<u8>>()
+                .try_into()
+                .unwrap(),
             tx_hash: rng.gen::<[u8; SC_TX_HASH_LENGTH]>(),
             out_idx: rng.gen(),
         };
@@ -688,8 +693,7 @@ mod test {
             .finalize()
             .unwrap();
 
-        let mut sc_tree =
-            GingerMHT::init(CMT_MT_HEIGHT, 1 << CMT_MT_HEIGHT).unwrap();
+        let mut sc_tree = GingerMHT::init(CMT_MT_HEIGHT, 1 << CMT_MT_HEIGHT).unwrap();
         sc_tree.append(sc_hash).unwrap();
         sc_tree.finalize_in_place().unwrap();
 
@@ -759,10 +763,7 @@ mod test {
             if secret_key_bytes.is_none() || public_key_bytes.is_none() {
                 generate_key_pair()
             } else {
-                (
-                    secret_key_bytes.unwrap(),
-                    public_key_bytes.unwrap(),
-                )
+                (secret_key_bytes.unwrap(), public_key_bytes.unwrap())
             }
         };
 
@@ -783,15 +784,22 @@ mod test {
         }
     }
 
-    fn test_csw_circuit(debug_only: bool, sidechain_id : FieldElement, num_custom_fields: u32, num_commitment_hashes: u32, constant: Option<FieldElement>, csw_prover_data: CswProverData) -> Option<String> {
-
+    fn test_csw_circuit(
+        debug_only: bool,
+        sidechain_id: FieldElement,
+        num_custom_fields: u32,
+        num_commitment_hashes: u32,
+        constant: Option<FieldElement>,
+        csw_prover_data: CswProverData,
+    ) -> Option<String> {
         let circuit = CeasedSidechainWithdrawalCircuit::from_prover_data(
             sidechain_id,
             constant,
             csw_prover_data.clone(),
             num_commitment_hashes,
             num_custom_fields,
-        ).unwrap();
+        )
+        .unwrap();
 
         let failing_constraint = debug_circuit(circuit.clone()).unwrap();
 
@@ -817,8 +825,9 @@ mod test {
 
             let csw_sys_data_hash = CeasedSidechainWithdrawalCircuit::compute_csw_sys_data_hash(
                 &csw_prover_data.sys_data,
-                sidechain_id
-            ).unwrap();
+                sidechain_id,
+            )
+            .unwrap();
 
             public_inputs.push(csw_sys_data_hash);
 
@@ -853,12 +862,19 @@ mod test {
         let constant = Some(FieldElement::rand(rng));
         let debug_only = true;
 
-        (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only)
+        (
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            debug_only,
+        )
     }
 
     #[test]
     fn test_csw_circuit_utxo() {
-        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) = generate_circuit_test_data();
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
 
         let csw_prover_data = generate_test_csw_prover_data(
             CswType::UTXO,
@@ -866,17 +882,25 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             None,
-            None
+            None,
         );
 
-        let failing_constraint = test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data,
+        );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint.is_none());
     }
 
     #[test]
     fn test_csw_circuit_ft() {
-        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) = generate_circuit_test_data();
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
 
         let csw_prover_data = generate_test_csw_prover_data(
             CswType::FT,
@@ -884,17 +908,25 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             None,
-            None
+            None,
         );
 
-        let failing_constraint = test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data,
+        );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint.is_none());
     }
 
     #[test]
     fn test_csw_circuit_utxo_wrong_cert_hash() {
-        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) = generate_circuit_test_data();
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
 
         let mut csw_prover_data = generate_test_csw_prover_data(
             CswType::UTXO,
@@ -902,19 +934,32 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             None,
-            None
+            None,
         );
 
-        csw_prover_data.sys_data.sc_last_wcert_hash.double_in_place();
+        csw_prover_data
+            .sys_data
+            .sc_last_wcert_hash
+            .double_in_place();
 
-        let failing_constraint = test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data,
+        );
         println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint.unwrap().contains("enforce sc_last_wcert_hash == last_wcert_hash"));
+        assert!(failing_constraint
+            .unwrap()
+            .contains("enforce sc_last_wcert_hash == last_wcert_hash"));
     }
 
     #[test]
     fn test_csw_circuit_utxo_without_certificate() {
-        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) = generate_circuit_test_data();
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
 
         let mut csw_prover_data = generate_test_csw_prover_data(
             CswType::UTXO,
@@ -922,12 +967,16 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             None,
-            None
+            None,
         );
 
         csw_prover_data.last_wcert = WithdrawalCertificateData::get_phantom(num_custom_fields);
 
-        let custom_fields_ref = csw_prover_data.last_wcert.custom_fields.iter().collect::<Vec<&FieldElement>>();
+        let custom_fields_ref = csw_prover_data
+            .last_wcert
+            .custom_fields
+            .iter()
+            .collect::<Vec<&FieldElement>>();
 
         let computed_last_wcert_hash = hash_cert(
             &csw_prover_data.last_wcert.ledger_id,
@@ -937,14 +986,24 @@ mod test {
             Some(custom_fields_ref),
             &csw_prover_data.last_wcert.mcb_sc_txs_com,
             csw_prover_data.last_wcert.btr_min_fee,
-            csw_prover_data.last_wcert.ft_min_amount
-        ).unwrap();
+            csw_prover_data.last_wcert.ft_min_amount,
+        )
+        .unwrap();
 
         csw_prover_data.sys_data.sc_last_wcert_hash = computed_last_wcert_hash;
 
-        let failing_constraint = test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data,
+        );
         println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint.unwrap().contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
+        assert!(failing_constraint
+            .unwrap()
+            .contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
     }
 
     #[test]
@@ -968,7 +1027,9 @@ mod test {
         }
 
         // Generate the secret key
-        let secret = <SimulatedScalarFieldElement as CanonicalDeserialize>::deserialize(&secret_key[..]).unwrap();
+        let secret =
+            <SimulatedScalarFieldElement as CanonicalDeserialize>::deserialize(&secret_key[..])
+                .unwrap();
         //let secret = SimulatedScalarFieldElement::read_bits(secret_key_bits).unwrap();
 
         // let mut tmp_bytes = serialize_to_buffer(&secret, None).unwrap();
@@ -1009,7 +1070,6 @@ mod test {
             pk_bytes[i] = pk_bytes[i].reverse_bits();
         }
         println!("Public key: {}", hex::encode(pk_bytes));
-
 
         // let public_key = hex::decode(test_sc_public_key).unwrap();
 

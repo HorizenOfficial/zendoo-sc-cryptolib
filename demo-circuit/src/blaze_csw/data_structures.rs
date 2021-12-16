@@ -1,15 +1,18 @@
 use algebra::ToConstraintField;
 use cctp_primitives::{
+    commitment_tree::{sidechain_tree_alive::FWT_MT_HEIGHT, CMT_MT_HEIGHT},
+    proving_system::verifier::ceased_sidechain_withdrawal::PHANTOM_CERT_DATA_HASH,
     type_mapping::FieldElement,
     utils::{
         commitment_tree::DataAccumulator, data_structures::BackwardTransfer, get_bt_merkle_root,
-    }, proving_system::verifier::ceased_sidechain_withdrawal::PHANTOM_CERT_DATA_HASH, commitment_tree::{CMT_MT_HEIGHT, sidechain_tree_alive::FWT_MT_HEIGHT},
+    },
 };
-use primitives::{FieldBasedHash, FieldHasher, FieldBasedMerkleTreePath};
+use primitives::{FieldBasedHash, FieldBasedMerkleTreePath, FieldHasher};
 
 use crate::{
-    constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, PHANTOM_FIELD_ELEMENT,
-    PHANTOM_PUBLIC_KEY_BITS, PHANTOM_SECRET_KEY_BITS, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, MST_MERKLE_TREE_HEIGHT,
+    constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, MST_MERKLE_TREE_HEIGHT,
+    PHANTOM_FIELD_ELEMENT, PHANTOM_PUBLIC_KEY_BITS, PHANTOM_SECRET_KEY_BITS, SC_PUBLIC_KEY_LENGTH,
+    SC_TX_HASH_LENGTH,
 };
 
 #[derive(Clone, Debug)]
@@ -140,8 +143,8 @@ impl Default for CswUtxoInputData {
 pub struct CswFtOutputData {
     pub amount: u64,
     pub receiver_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
-    pub payback_addr_data_hash: [u8; MC_PK_SIZE],    
-    pub tx_hash: [u8; SC_TX_HASH_LENGTH],            
+    pub payback_addr_data_hash: [u8; MC_PK_SIZE],
+    pub tx_hash: [u8; SC_TX_HASH_LENGTH],
     pub out_idx: u32,
 }
 
@@ -151,8 +154,8 @@ pub struct CswSysData {
     pub sc_last_wcert_hash: FieldElement, // hash of the last confirmed WCert (excluding reverted) for this sidechain (calculated directly by MC). Note that it should be a hash of WithdrawalCertificateData
     pub amount: u64,                      // taken from CSW and passed directly by the MC
     pub nullifier: FieldElement,          // taken from CSW and passed directly by the MC
-    pub receiver: [u8; MC_PK_SIZE],       // the receiver is fixed by the proof, otherwise someone will be able to front-run the tx and steel the proof.
-                                          // Note that we actually don't need to do anything with the receiver in the circuit, it's enough just to have it as a public input
+    pub receiver: [u8; MC_PK_SIZE], // the receiver is fixed by the proof, otherwise someone will be able to front-run the tx and steel the proof.
+                                    // Note that we actually don't need to do anything with the receiver in the circuit, it's enough just to have it as a public input
 }
 
 impl CswSysData {
@@ -183,7 +186,10 @@ impl Default for CswUtxoProverData {
     fn default() -> Self {
         Self {
             input: CswUtxoInputData::default(),
-            mst_path_to_output: GingerMHTBinaryPath::new(vec![(PHANTOM_FIELD_ELEMENT, false); MST_MERKLE_TREE_HEIGHT]),
+            mst_path_to_output: GingerMHTBinaryPath::new(vec![
+                (PHANTOM_FIELD_ELEMENT, false);
+                MST_MERKLE_TREE_HEIGHT
+            ]),
         }
     }
 }
@@ -210,8 +216,14 @@ impl CswFtProverData {
             ft_output: CswFtOutputData::default(),
             ft_input_secret_key: [false; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
             mcb_sc_txs_com_start: PHANTOM_FIELD_ELEMENT,
-            merkle_path_to_sc_hash: GingerMHTBinaryPath::new(vec![(PHANTOM_FIELD_ELEMENT, false); CMT_MT_HEIGHT]),
-            ft_tree_path: GingerMHTBinaryPath::new(vec![(PHANTOM_FIELD_ELEMENT, false); FWT_MT_HEIGHT]),
+            merkle_path_to_sc_hash: GingerMHTBinaryPath::new(vec![
+                (PHANTOM_FIELD_ELEMENT, false);
+                CMT_MT_HEIGHT
+            ]),
+            ft_tree_path: GingerMHTBinaryPath::new(vec![
+                (PHANTOM_FIELD_ELEMENT, false);
+                FWT_MT_HEIGHT
+            ]),
             sc_creation_commitment: PHANTOM_FIELD_ELEMENT,
             scb_btr_tree_root: PHANTOM_FIELD_ELEMENT,
             wcert_tree_root: PHANTOM_FIELD_ELEMENT,
@@ -229,11 +241,7 @@ pub struct CswProverData {
 }
 
 impl CswProverData {
-    pub(crate) fn get_phantom(
-        range_size: u32,
-        num_custom_fields: u32
-    ) -> Self 
-    {
+    pub(crate) fn get_phantom(range_size: u32, num_custom_fields: u32) -> Self {
         Self {
             sys_data: CswSysData::default(),
             last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
