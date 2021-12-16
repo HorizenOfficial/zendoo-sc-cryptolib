@@ -913,6 +913,41 @@ mod test {
     }
 
     #[test]
+    fn test_csw_circuit_utxo_without_certificate() {
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) = generate_circuit_test_data();
+
+        let mut csw_prover_data = generate_test_csw_prover_data(
+            CswType::UTXO,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            None,
+            None
+        );
+
+        csw_prover_data.last_wcert = WithdrawalCertificateData::get_phantom(num_custom_fields);
+
+        let custom_fields_ref = csw_prover_data.last_wcert.custom_fields.iter().collect::<Vec<&FieldElement>>();
+
+        let computed_last_wcert_hash = hash_cert(
+            &csw_prover_data.last_wcert.ledger_id,
+            csw_prover_data.last_wcert.epoch_id,
+            csw_prover_data.last_wcert.quality,
+            None,
+            Some(custom_fields_ref),
+            &csw_prover_data.last_wcert.mcb_sc_txs_com,
+            csw_prover_data.last_wcert.btr_min_fee,
+            csw_prover_data.last_wcert.ft_min_amount
+        ).unwrap();
+
+        csw_prover_data.sys_data.sc_last_wcert_hash = computed_last_wcert_hash;
+
+        let failing_constraint = test_csw_circuit(debug_only, sidechain_id, num_custom_fields, num_commitment_hashes, constant, csw_prover_data);
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint.unwrap().contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
+    }
+
+    #[test]
     fn test_csw_circuit_with_custom_keys() {
         let sidechain_id = FieldElement::from(77u8);
         let num_custom_fields = 1;
