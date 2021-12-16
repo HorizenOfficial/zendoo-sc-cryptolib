@@ -252,7 +252,7 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget>
         )?;
 
         // Alloc custom_fields and enforce their hash, if they are present
-        let last_wcert_custom_fields_hash_g = if self.custom_fields_g.len() > 0 {
+        let last_wcert_custom_fields_hash_g = if !self.custom_fields_g.is_empty() {
             let custom_fields_hash_g = FieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| "H(custom_fields)"),
                 self.custom_fields_g.as_slice(),
@@ -982,17 +982,17 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
         let mut bits = self.amount_g.to_bits_le();
         bits.reverse();
 
-        let mut receiver_pub_key_bits = self.receiver_pub_key_g.clone();
+        let mut receiver_pub_key_bits = self.receiver_pub_key_g;
         receiver_pub_key_bits.reverse();
 
         bits.extend_from_slice(&receiver_pub_key_bits);
 
-        let mut payback_addr_data_hash_bits = self.payback_addr_data_hash_g.clone();
+        let mut payback_addr_data_hash_bits = self.payback_addr_data_hash_g;
         payback_addr_data_hash_bits.reverse();
 
         bits.extend_from_slice(&payback_addr_data_hash_bits);
 
-        let mut tx_hash_bits = self.tx_hash_g.clone();
+        let mut tx_hash_bits = self.tx_hash_g;
         tx_hash_bits.reverse();
 
         bits.extend_from_slice(&tx_hash_bits);
@@ -1068,7 +1068,7 @@ impl CswFtProverDataGadget {
         let sc_hash_g = FieldHashGadget::enforce_hash_constant_length(
             cs.ns(|| "H(scb_ft_tree_root | scb_btr_tree_root | wcert_tree_root | ledgerId)"),
             &[
-                scb_ft_tree_root_g.clone(),
+                scb_ft_tree_root_g,
                 self.scb_btr_tree_root_g.clone(),
                 self.wcert_tree_root_g.clone(),
                 sidechain_id_g.clone(),

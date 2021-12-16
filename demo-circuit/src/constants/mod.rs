@@ -139,9 +139,9 @@ impl VRFParams {
         generators: Vec<G2Projective>,
     ) -> Vec<Vec<G2Projective>> {
         let mut gen_table = Vec::new();
-        for i in 0..VRFWindow::NUM_WINDOWS {
+        for generator in generators.iter().take(VRFWindow::NUM_WINDOWS) {
             let mut generators_for_segment = Vec::new();
-            let mut base = generators[i];
+            let mut base = *generator;
             for _ in 0..VRFWindow::WINDOW_SIZE {
                 generators_for_segment.push(base);
                 for _ in 0..4 {

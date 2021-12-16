@@ -8,17 +8,13 @@ use crate::read_field_element_from_buffer_with_padding;
 
 pub fn boolean_slice_to_string(vec: &[Boolean]) -> String {
     let mut result = String::new();
-    for i in 0..vec.len() {
-        if vec[i].get_value().is_none() {
+    for item in vec {
+        if item.get_value().is_none() {
             return String::from("");
         }
         result.push_str(&format!(
             "{}",
-            if vec[i].get_value().unwrap() {
-                '1'
-            } else {
-                '0'
-            }
+            if item.get_value().unwrap() { '1' } else { '0' }
         ));
     }
     result
@@ -26,8 +22,8 @@ pub fn boolean_slice_to_string(vec: &[Boolean]) -> String {
 
 pub fn bool_slice_to_string(vec: &[bool]) -> String {
     let mut result = String::new();
-    for i in 0..vec.len() {
-        result.push_str(&format!("{}", if vec[i] { '1' } else { '0' }));
+    for item in vec {
+        result.push_str(&format!("{}", if *item { '1' } else { '0' }));
     }
     result
 }

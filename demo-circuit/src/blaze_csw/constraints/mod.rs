@@ -393,7 +393,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
                     FieldElement::size_in_bits() - 64,
                 )?;
 
-            let mut receiver_g_bits = csw_data_g.sys_data_g.receiver_g.clone();
+            let mut receiver_g_bits = csw_data_g.sys_data_g.receiver_g;
             receiver_g_bits.reverse();
 
             amount_and_receiver_bits_g.extend_from_slice(&receiver_g_bits[..]);
@@ -544,7 +544,7 @@ mod test {
             mcb_sc_txs_com: FieldElement::rand(rng),
             ft_min_amount: rng.gen(),
             btr_min_fee: rng.gen(),
-            custom_fields: custom_fields,
+            custom_fields,
         };
 
         let custom_fields_ref = cert_data
@@ -709,10 +709,10 @@ mod test {
                 .unwrap(),
             mcb_sc_txs_com_start: PHANTOM_FIELD_ELEMENT,
             merkle_path_to_sc_hash: sc_tree_path,
-            ft_tree_path: ft_tree_path,
+            ft_tree_path,
             sc_creation_commitment: PHANTOM_FIELD_ELEMENT,
-            scb_btr_tree_root: scb_btr_tree_root,
-            wcert_tree_root: wcert_tree_root,
+            scb_btr_tree_root,
+            wcert_tree_root,
             sc_txs_com_hashes: vec![PHANTOM_FIELD_ELEMENT; num_commitment_hashes as usize],
         };
 
@@ -734,7 +734,7 @@ mod test {
             });
 
         let sys_data = CswSysData {
-            mcb_sc_txs_com_end: mcb_sc_txs_com_end,
+            mcb_sc_txs_com_end,
             sc_last_wcert_hash: PHANTOM_FIELD_ELEMENT,
             amount: ft_data.ft_output.amount,
             nullifier: ft_output_hash,

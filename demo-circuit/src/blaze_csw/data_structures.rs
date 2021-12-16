@@ -167,8 +167,8 @@ impl CswSysData {
         receiver: [u8; MC_PK_SIZE],
     ) -> Self {
         Self {
-            mcb_sc_txs_com_end: mcb_sc_txs_com_end.unwrap_or_else(|| PHANTOM_FIELD_ELEMENT),
-            sc_last_wcert_hash: sc_last_wcert_hash.unwrap_or_else(|| PHANTOM_CERT_DATA_HASH),
+            mcb_sc_txs_com_end: mcb_sc_txs_com_end.unwrap_or(PHANTOM_FIELD_ELEMENT),
+            sc_last_wcert_hash: sc_last_wcert_hash.unwrap_or(PHANTOM_CERT_DATA_HASH),
             amount,
             nullifier,
             receiver,
