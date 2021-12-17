@@ -1444,7 +1444,72 @@ mod test {
         );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint.is_none());
+    }
 
+    #[test]
+    fn test_csw_circuit_ft_wrong_ft_path() {
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
+
+        let mut csw_prover_data = generate_test_csw_prover_data(
+            CswType::FT,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            None,
+            None,
+        );
+
+        // Try to pass a path to the right leaf moved from position 0 to position 1
+        let moved_ft_path = {
+            let mut ft_tree = GingerMHT::init(FWT_MT_HEIGHT, 1 << FWT_MT_HEIGHT).unwrap();
+            ft_tree.append(PHANTOM_FIELD_ELEMENT).unwrap();
+            ft_tree.append(csw_prover_data.sys_data.nullifier).unwrap();
+            ft_tree.finalize_in_place().unwrap();
+
+            ft_tree.get_merkle_path(1).unwrap().try_into().unwrap()
+        };
+
+        csw_prover_data.ft_data.ft_tree_path = moved_ft_path;
+
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data.clone(),
+            None,
+        );
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint
+            .unwrap()
+            .contains("require(cnt == 1)"));
+
+        // Try to pass a path to the wrong leaf
+        let wrong_ft_path = {
+            let mut ft_tree = GingerMHT::init(FWT_MT_HEIGHT, 1 << FWT_MT_HEIGHT).unwrap();
+            ft_tree.append(csw_prover_data.sys_data.nullifier).unwrap();
+            ft_tree.finalize_in_place().unwrap();
+
+            ft_tree.get_merkle_path(1).unwrap().try_into().unwrap()
+        };
+
+        csw_prover_data.ft_data.ft_tree_path = wrong_ft_path;
+
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data,
+            None,
+        );
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint
+            .unwrap()
+            .contains("require(cnt == 1)"));
     }
 
     #[test]
