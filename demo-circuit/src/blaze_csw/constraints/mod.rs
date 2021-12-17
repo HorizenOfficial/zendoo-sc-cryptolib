@@ -435,7 +435,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 #[cfg(test)]
 mod test {
     use algebra::{
-        fields::ed25519::fr::Fr as ed25519Fr, CanonicalDeserialize, Field, Group, ProjectiveCurve,
+        fields::ed25519::fr::Fr as ed25519Fr, Field, Group, ProjectiveCurve,
         UniformRand,
     };
     use cctp_primitives::{
@@ -551,10 +551,12 @@ mod test {
             if cert_data.custom_fields.is_empty() {
                 None
             } else {
-                Some(cert_data
-                    .custom_fields
-                    .iter()
-                    .collect::<Vec<&FieldElement>>())
+                Some(
+                    cert_data
+                        .custom_fields
+                        .iter()
+                        .collect::<Vec<&FieldElement>>(),
+                )
             }
         };
 
@@ -840,11 +842,12 @@ mod test {
                         tmp_public_inputs.push(constant.unwrap());
                     }
 
-                    let csw_sys_data_hash = CeasedSidechainWithdrawalCircuit::compute_csw_sys_data_hash(
-                        &csw_prover_data.sys_data,
-                        sidechain_id,
-                    )
-                    .unwrap();
+                    let csw_sys_data_hash =
+                        CeasedSidechainWithdrawalCircuit::compute_csw_sys_data_hash(
+                            &csw_prover_data.sys_data,
+                            sidechain_id,
+                        )
+                        .unwrap();
 
                     tmp_public_inputs.push(csw_sys_data_hash);
                     tmp_public_inputs
@@ -1056,7 +1059,8 @@ mod test {
 
         // Try to pass a path to the right leaf moved from position 0 to position 1
         let moved_mst_path = {
-            let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
+            let mut mst =
+                GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
             let mst_leaf_hash = csw_prover_data.utxo_data.input.output.hash(None).unwrap();
             mst.append(FieldElement::zero()).unwrap();
             mst.append(mst_leaf_hash).unwrap();
@@ -1082,7 +1086,8 @@ mod test {
 
         // Try to pass a path to the wrong leaf
         let wrong_mst_path = {
-            let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
+            let mut mst =
+                GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
             let mst_leaf_hash = csw_prover_data.utxo_data.input.output.hash(None).unwrap();
             mst.append(mst_leaf_hash).unwrap();
             mst.finalize_in_place().unwrap();
@@ -1411,7 +1416,8 @@ mod test {
         );
 
         let rng = &mut thread_rng();
-        let (cert_data, last_wcert_hash) = compute_cert_data(vec![FieldElement::rand(rng), FieldElement::rand(rng)]);
+        let (cert_data, last_wcert_hash) =
+            compute_cert_data(vec![FieldElement::rand(rng), FieldElement::rand(rng)]);
 
         csw_prover_data.last_wcert = cert_data;
 
@@ -1482,9 +1488,7 @@ mod test {
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint
-            .unwrap()
-            .contains("require(cnt == 1)"));
+        assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
 
         // Try to pass a path to the wrong leaf
         let wrong_ft_path = {
@@ -1507,9 +1511,7 @@ mod test {
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint
-            .unwrap()
-            .contains("require(cnt == 1)"));
+        assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
     }
 
     #[test]
@@ -1563,9 +1565,7 @@ mod test {
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint
-            .unwrap()
-            .contains("require(cnt == 1)"));
+        assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
 
         // Try to pass a path to the wrong leaf
         let wrong_sc_path = {
@@ -1596,9 +1596,7 @@ mod test {
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint
-            .unwrap()
-            .contains("require(cnt == 1)"));
+        assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
     }
 
     #[test]
@@ -1628,8 +1626,6 @@ mod test {
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint
-            .unwrap()
-            .contains("require(cnt == 1)"));
+        assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
     }
 }
