@@ -454,7 +454,7 @@ mod test {
     use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree, FieldHasher};
     use r1cs_core::debug_circuit;
     use rand::{rngs::OsRng, thread_rng, Rng};
-    use std::{convert::TryInto, ops::AddAssign};
+    use std::convert::TryInto;
 
     use crate::{
         utils::split_field_element_at_index, CswFtOutputData, CswProverData, CswUtxoInputData,
@@ -791,6 +791,7 @@ mod test {
         num_commitment_hashes: u32,
         constant: Option<FieldElement>,
         csw_prover_data: CswProverData,
+        public_inputs: Option<Vec<FieldElement>>,
     ) -> Option<String> {
         let circuit = CeasedSidechainWithdrawalCircuit::from_prover_data(
             sidechain_id,
@@ -817,39 +818,49 @@ mod test {
             )
             .unwrap();
 
-            let mut public_inputs = Vec::new();
+            let current_public_inputs = {
+                if public_inputs.is_none() {
+                    let mut tmp_public_inputs = Vec::new();
 
-            if constant.is_some() {
-                public_inputs.push(constant.unwrap());
-            }
+                    if constant.is_some() {
+                        tmp_public_inputs.push(constant.unwrap());
+                    }
 
-            let csw_sys_data_hash = CeasedSidechainWithdrawalCircuit::compute_csw_sys_data_hash(
-                &csw_prover_data.sys_data,
-                sidechain_id,
-            )
-            .unwrap();
+                    let csw_sys_data_hash = CeasedSidechainWithdrawalCircuit::compute_csw_sys_data_hash(
+                        &csw_prover_data.sys_data,
+                        sidechain_id,
+                    )
+                    .unwrap();
 
-            public_inputs.push(csw_sys_data_hash);
+                    tmp_public_inputs.push(csw_sys_data_hash);
+                    tmp_public_inputs
+                } else {
+                    public_inputs.unwrap()
+                }
+            };
 
             // Check that the proof gets correctly verified
             assert!(CoboundaryMarlin::verify(
                 &params.1.clone(),
                 ck_g1.as_ref().unwrap(),
-                public_inputs.as_slice(),
+                current_public_inputs.as_slice(),
                 &proof
             )
             .unwrap());
 
-            // Change one public input and check that the proof fails
-            let inputs_len = public_inputs.len();
-            public_inputs[thread_rng().gen_range(0..inputs_len)].add_assign(&FieldElement::from(1u8));
-            assert!(!CoboundaryMarlin::verify(
-                &params.1.clone(),
-                ck_g1.as_ref().unwrap(),
-                public_inputs.as_slice(),
-                &proof
-            )
-            .unwrap());
+            // Change one public input each time and check that the proof fails
+            for i in 0..current_public_inputs.len() {
+                let mut wrong_public_inputs = current_public_inputs.clone();
+                wrong_public_inputs[i].double_in_place();
+
+                assert!(!CoboundaryMarlin::verify(
+                    &params.1.clone(),
+                    ck_g1.as_ref().unwrap(),
+                    wrong_public_inputs.as_slice(),
+                    &proof
+                )
+                .unwrap());
+            }
         }
 
         failing_constraint
@@ -895,6 +906,7 @@ mod test {
             num_commitment_hashes,
             constant,
             csw_prover_data,
+            None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint.is_none());
@@ -923,6 +935,7 @@ mod test {
             num_commitment_hashes,
             constant,
             csw_prover_data,
+            None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint.is_none());
@@ -954,6 +967,7 @@ mod test {
             num_commitment_hashes,
             constant,
             csw_prover_data,
+            None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint
@@ -1004,6 +1018,7 @@ mod test {
             num_commitment_hashes,
             constant,
             csw_prover_data,
+            None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint
@@ -1044,6 +1059,7 @@ mod test {
             num_commitment_hashes,
             constant,
             csw_prover_data.clone(),
+            None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint
@@ -1068,6 +1084,7 @@ mod test {
             num_commitment_hashes,
             constant,
             csw_prover_data,
+            None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint
@@ -1099,6 +1116,7 @@ mod test {
             num_commitment_hashes,
             constant,
             csw_prover_data,
+            None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint
@@ -1130,6 +1148,7 @@ mod test {
             num_commitment_hashes,
             constant,
             csw_prover_data,
+            None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint
@@ -1162,6 +1181,7 @@ mod test {
             num_commitment_hashes,
             constant,
             csw_prover_data,
+            None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint
@@ -1199,6 +1219,7 @@ mod test {
             num_commitment_hashes,
             constant,
             csw_prover_data,
+            None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint
