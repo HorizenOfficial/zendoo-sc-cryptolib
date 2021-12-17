@@ -1365,6 +1365,38 @@ mod test {
     }
 
     #[test]
+    fn test_csw_circuit_ft_wrong_nullifier() {
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
+
+        let mut csw_prover_data = generate_test_csw_prover_data(
+            CswType::FT,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            None,
+            None,
+        );
+
+        // Change the value of the nullifier
+        csw_prover_data.sys_data.nullifier.double_in_place();
+
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data,
+            None,
+        );
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint
+            .unwrap()
+            .contains("require(nullifier == outputHash)"));
+    }
+
+    #[test]
     fn test_csw_circuit_with_custom_keys() {
         let sidechain_id = FieldElement::from(77u8);
         let num_custom_fields = 1;
