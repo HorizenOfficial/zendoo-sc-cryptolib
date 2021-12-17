@@ -1301,6 +1301,38 @@ mod test {
     }
 
     #[test]
+    fn test_csw_circuit_utxo_with_wrong_custom_fields() {
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
+
+        let mut csw_prover_data = generate_test_csw_prover_data(
+            CswType::UTXO,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            None,
+            None,
+        );
+
+        assert!(!csw_prover_data.last_wcert.custom_fields.is_empty());
+        csw_prover_data.last_wcert.custom_fields[0].double_in_place();
+
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data,
+            None,
+        );
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint
+            .unwrap()
+            .contains("enforce sc_last_wcert_hash == last_wcert_hash"));
+    }
+
+    #[test]
     fn test_csw_circuit_with_custom_keys() {
         let sidechain_id = FieldElement::from(77u8);
         let num_custom_fields = 1;
