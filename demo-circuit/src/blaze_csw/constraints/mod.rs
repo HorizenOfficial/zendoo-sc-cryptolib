@@ -547,17 +547,23 @@ mod test {
             custom_fields,
         };
 
-        let custom_fields_ref = cert_data
-            .custom_fields
-            .iter()
-            .collect::<Vec<&FieldElement>>();
+        let custom_fields_ref = {
+            if cert_data.custom_fields.is_empty() {
+                None
+            } else {
+                Some(cert_data
+                    .custom_fields
+                    .iter()
+                    .collect::<Vec<&FieldElement>>())
+            }
+        };
 
         let computed_last_wcert_hash = hash_cert(
             &cert_data.ledger_id,
             cert_data.epoch_id,
             cert_data.quality,
             None,
-            Some(custom_fields_ref),
+            custom_fields_ref,
             &cert_data.mcb_sc_txs_com,
             cert_data.btr_min_fee,
             cert_data.ft_min_amount,
@@ -591,20 +597,28 @@ mod test {
         let (mst_root, mst_leaf_hash, mst_path) =
             compute_mst_tree_data(utxo_input_data.output.clone());
 
-        // To generate valid test data we need at least 2 custom field to store the MST root
-        debug_assert!(num_custom_fields >= 2);
+        let custom_fields = {
+            if num_custom_fields == 0 {
+                vec![]
+            } else {
+                // To generate valid test data we need at least 2 custom field to store the MST root
+                debug_assert!(num_custom_fields >= 2);
 
-        // Split mst_root in 2
+                // Split mst_root in 2
 
-        let mut custom_fields = {
-            let (mst_root_1, mst_root_2) =
-                split_field_element_at_index(&mst_root, FIELD_SIZE / 2).unwrap();
-            vec![mst_root_1, mst_root_2]
+                let mut custom_fields = {
+                    let (mst_root_1, mst_root_2) =
+                        split_field_element_at_index(&mst_root, FIELD_SIZE / 2).unwrap();
+                    vec![mst_root_1, mst_root_2]
+                };
+
+                for _ in 0..num_custom_fields - 2 {
+                    custom_fields.push(PHANTOM_FIELD_ELEMENT);
+                }
+
+                custom_fields
+            }
         };
-
-        for _ in 0..num_custom_fields - 2 {
-            custom_fields.push(PHANTOM_FIELD_ELEMENT);
-        }
 
         let (cert_data, last_wcert_hash) = compute_cert_data(custom_fields);
 
@@ -1234,6 +1248,35 @@ mod test {
 
         let debug_only = false;
         let constant = None;
+
+        let csw_prover_data = generate_test_csw_prover_data(
+            CswType::UTXO,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            None,
+            None,
+        );
+
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data,
+            None,
+        );
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint.is_none());
+    }
+
+    #[test]
+    fn test_csw_circuit_utxo_without_custom_fields() {
+        let (sidechain_id, _, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
+
+        let num_custom_fields = 0;
 
         let csw_prover_data = generate_test_csw_prover_data(
             CswType::UTXO,
