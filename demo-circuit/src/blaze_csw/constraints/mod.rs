@@ -841,7 +841,8 @@ mod test {
             .unwrap());
 
             // Change one public input and check that the proof fails
-            public_inputs[0].add_assign(&FieldElement::from(1u8));
+            let inputs_len = public_inputs.len();
+            public_inputs[thread_rng().gen_range(0..inputs_len)].add_assign(&FieldElement::from(1u8));
             assert!(!CoboundaryMarlin::verify(
                 &params.1.clone(),
                 ck_g1.as_ref().unwrap(),
@@ -873,8 +874,10 @@ mod test {
 
     #[test]
     fn test_csw_circuit_utxo() {
-        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, _) =
             generate_circuit_test_data();
+
+        let debug_only = false;
 
         let csw_prover_data = generate_test_csw_prover_data(
             CswType::UTXO,
@@ -899,8 +902,10 @@ mod test {
 
     #[test]
     fn test_csw_circuit_ft() {
-        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, _) =
             generate_circuit_test_data();
+
+        let debug_only = false;
 
         let csw_prover_data = generate_test_csw_prover_data(
             CswType::FT,
