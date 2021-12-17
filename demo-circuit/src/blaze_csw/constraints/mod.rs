@@ -1007,6 +1007,70 @@ mod test {
     }
 
     #[test]
+    fn test_csw_circuit_utxo_wrong_mst_path() {
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
+
+        let mut csw_prover_data = generate_test_csw_prover_data(
+            CswType::UTXO,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            None,
+            None,
+        );
+
+        // Try to pass a path to the right leaf moved from position 0 to position 1
+        let moved_mst_path = {
+            let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
+            let mst_leaf_hash = csw_prover_data.utxo_data.input.output.hash(None).unwrap();
+            mst.append(FieldElement::zero()).unwrap();
+            mst.append(mst_leaf_hash).unwrap();
+            mst.finalize_in_place().unwrap();
+            mst.get_merkle_path(1).unwrap().try_into().unwrap()
+        };
+
+        csw_prover_data.utxo_data.mst_path_to_output = moved_mst_path;
+
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data.clone(),
+        );
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint
+            .unwrap()
+            .contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
+
+        // Try to pass a path to the wrong leaf
+        let moved_mst_path = {
+            let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
+            let mst_leaf_hash = csw_prover_data.utxo_data.input.output.hash(None).unwrap();
+            mst.append(mst_leaf_hash).unwrap();
+            mst.finalize_in_place().unwrap();
+            mst.get_merkle_path(1).unwrap().try_into().unwrap()
+        };
+
+        csw_prover_data.utxo_data.mst_path_to_output = moved_mst_path;
+
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data,
+        );
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint
+            .unwrap()
+            .contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
+    }
+
+    #[test]
     fn test_csw_circuit_with_custom_keys() {
         let sidechain_id = FieldElement::from(77u8);
         let num_custom_fields = 1;
