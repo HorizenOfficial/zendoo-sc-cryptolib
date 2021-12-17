@@ -1046,7 +1046,7 @@ mod test {
             .contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
 
         // Try to pass a path to the wrong leaf
-        let moved_mst_path = {
+        let wrong_mst_path = {
             let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
             let mst_leaf_hash = csw_prover_data.utxo_data.input.output.hash(None).unwrap();
             mst.append(mst_leaf_hash).unwrap();
@@ -1054,7 +1054,7 @@ mod test {
             mst.get_merkle_path(1).unwrap().try_into().unwrap()
         };
 
-        csw_prover_data.utxo_data.mst_path_to_output = moved_mst_path;
+        csw_prover_data.utxo_data.mst_path_to_output = wrong_mst_path;
 
         let failing_constraint = test_csw_circuit(
             debug_only,
@@ -1130,6 +1130,75 @@ mod test {
         assert!(failing_constraint
             .unwrap()
             .contains("input.amount == sys_data.amount"));
+    }
+
+    #[test]
+    fn test_csw_circuit_utxo_wrong_public_key_x_sign() {
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
+
+        // Change the first bit, the check over the X sign should fail
+        let (secret_key, mut public_key) = generate_key_pair();
+        public_key[0] ^= 1;
+
+        let csw_prover_data = generate_test_csw_prover_data(
+            CswType::UTXO,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            Some(secret_key),
+            Some(public_key),
+        );
+
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data,
+        );
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint
+            .unwrap()
+            .contains("Enforce x_sign == pk_x_sign_bit_g"));
+    }
+
+    #[test]
+    fn test_csw_circuit_utxo_wrong_public_key_y_coordinate() {
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
+
+        // Change any random bit of the public key (not the first one)
+        let (random_byte, random_bit) = {
+            let random_number = thread_rng().gen_range(1..SIMULATED_FIELD_BYTE_SIZE * 8);
+            (random_number / 8, random_number % 8)
+        };
+
+        let (secret_key, mut public_key) = generate_key_pair();
+        public_key[random_byte] ^= 1 << random_bit;
+
+        let csw_prover_data = generate_test_csw_prover_data(
+            CswType::UTXO,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            Some(secret_key),
+            Some(public_key),
+        );
+
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data,
+        );
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint
+            .unwrap()
+            .contains("Enforce y coordinate is equal"));
     }
 
     #[test]
