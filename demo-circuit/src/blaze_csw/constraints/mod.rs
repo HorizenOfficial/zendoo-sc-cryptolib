@@ -1397,6 +1397,57 @@ mod test {
     }
 
     #[test]
+    fn test_csw_circuit_ft_with_certificate() {
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
+
+        let mut csw_prover_data = generate_test_csw_prover_data(
+            CswType::FT,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            None,
+            None,
+        );
+
+        let rng = &mut thread_rng();
+        let (cert_data, last_wcert_hash) = compute_cert_data(vec![FieldElement::rand(rng), FieldElement::rand(rng)]);
+
+        csw_prover_data.last_wcert = cert_data;
+
+        // The test should fail since we didn't update the last wcert
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data.clone(),
+            None,
+        );
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint
+            .unwrap()
+            .contains("enforce sc_last_wcert_hash == last_wcert_hash/conditional_equals"));
+
+        csw_prover_data.sys_data.sc_last_wcert_hash = last_wcert_hash;
+
+        // The test should now pass
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data.clone(),
+            None,
+        );
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint.is_none());
+
+    }
+
+    #[test]
     fn test_csw_circuit_with_custom_keys() {
         let sidechain_id = FieldElement::from(77u8);
         let num_custom_fields = 1;
