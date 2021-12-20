@@ -623,7 +623,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_prove_verify_naive_threshold_circuit() {
         let n = 6;
         let zk = false;
@@ -669,7 +669,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_naive_threshold_circuit_is_satisfied() {
         let mut rng = OsRng::default();
         let n = 6;

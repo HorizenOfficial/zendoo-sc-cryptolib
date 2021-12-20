@@ -301,7 +301,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_pk_null_gen() {
         let tag = b"Strontium Sr 90";
         let personalization = constants::NULL_PK_PERSONALIZATION;
@@ -314,7 +314,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_vrf_group_hash_gen() {
         let personalization = constants::VRF_GROUP_HASH_GENERATORS_PERSONALIZATION;
 
@@ -338,7 +338,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_phantom_field_element() {
         let tag = b"Krypton 36";
         let field_element = read_field_element_from_buffer_with_padding(tag).unwrap();

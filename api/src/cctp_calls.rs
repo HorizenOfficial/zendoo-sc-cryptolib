@@ -523,7 +523,6 @@ mod test {
 
     use serial_test::*;
 
-
     fn create_sample_naive_threshold_sig_circuit(
         bt_num: usize,
         custom_fields_len: usize,
@@ -704,7 +703,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn sample_calls_naive_threshold_sig_circuit() {
         let tmp_dir = std::env::temp_dir();
         let ps_type = ProvingSystem::CoboundaryMarlin;
@@ -756,7 +755,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn sample_calls_schnorr_sig_prove_verify() {
         let mut rng = OsRng;
         let msg = FieldElement::rand(&mut rng);
@@ -801,7 +800,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn sample_calls_vrf_prove_verify() {
         let mut rng = OsRng;
         let msg = FieldElement::rand(&mut rng);
@@ -855,7 +854,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn sample_calls_merkle_path() {
         let height = 6;
         let leaves_num = 2usize.pow(height as u32);
@@ -918,7 +917,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn sample_calls_poseidon_hash() {
         let mut rng = OsRng;
         let hash_input = vec![FieldElement::rand(&mut rng); 2];

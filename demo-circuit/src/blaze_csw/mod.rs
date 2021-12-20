@@ -5,20 +5,33 @@ pub use self::data_structures::*;
 
 use std::convert::TryInto;
 
-use algebra::{Field, SquareRootField, TEModelParameters, AffineCurve, MontgomeryModelParameters};
-use cctp_primitives::{type_mapping::{FieldElement, FIELD_SIZE, Error}, utils::serialization::{serialize_to_buffer, deserialize_from_buffer}};
-use crate::{read_field_element_from_buffer_with_padding, SC_PUBLIC_KEY_LENGTH, SimulatedFieldElement, SimulatedCurveParameters, SimulatedTEGroup, SimulatedSWGroup, SimulatedScalarFieldElement, SIMULATED_SCALAR_FIELD_BYTE_SIZE};
-
+use crate::{
+    read_field_element_from_buffer_with_padding, SimulatedCurveParameters, SimulatedFieldElement,
+    SimulatedSWGroup, SimulatedScalarFieldElement, SimulatedTEGroup, SC_PUBLIC_KEY_LENGTH,
+    SIMULATED_SCALAR_FIELD_BYTE_SIZE,
+};
+use algebra::{AffineCurve, Field, MontgomeryModelParameters, SquareRootField, TEModelParameters};
+use cctp_primitives::{
+    type_mapping::{Error, FieldElement, FIELD_SIZE},
+    utils::serialization::{deserialize_from_buffer, serialize_to_buffer},
+};
 
 /// Split this FieldElement into two FieldElements.
 /// Split will happen at the specified index: one FieldElement will be read from
 /// the original bytes [0..index) and the other ones from the original bytes [index..FIELD_ELEMENT_LENGTH)
-pub fn split_field_element_at_index(fe: &FieldElement, idx: usize) -> Result<(FieldElement, FieldElement), Error> {
+pub fn split_field_element_at_index(
+    fe: &FieldElement,
+    idx: usize,
+) -> Result<(FieldElement, FieldElement), Error> {
     // Check idx
     if idx >= FIELD_SIZE || idx == 0 {
-        return Err(Error::from(format!("Invalid split idx. Min: 1, Max: {}, Found: {}", FIELD_SIZE - 1, idx)));
+        return Err(Error::from(format!(
+            "Invalid split idx. Min: 1, Max: {}, Found: {}",
+            FIELD_SIZE - 1,
+            idx
+        )));
     }
-    
+
     // Serialize FieldElement
     let fe_bytes = serialize_to_buffer(fe, None)?;
 
@@ -40,11 +53,12 @@ pub fn combine_field_elements_at_index(
     fe_2: &FieldElement,
     idx_2: usize,
     check_zero_after_idx: bool,
-) -> Result<FieldElement, Error> 
-{   
+) -> Result<FieldElement, Error> {
     // Check that the resulting array dimension wouldn't be bigger than FIELD_ELEMENT_LENGTH
     if idx_1 + idx_2 > FIELD_SIZE {
-        return Err(Error::from("Invalid values for index1 + index2: the resulting array would overflow FIELD_SIZE"));
+        return Err(Error::from(
+            "Invalid values for index1 + index2: the resulting array would overflow FIELD_SIZE",
+        ));
     }
 
     // Get bytes of each FieldElement
@@ -52,9 +66,9 @@ pub fn combine_field_elements_at_index(
     let fe_2_bytes = serialize_to_buffer(fe_2, None)?;
 
     // Perform zero check
-    if check_zero_after_idx &&
-        (&fe_1_bytes[idx_1..]).iter().any(|b| b != &0u8) &&
-        (&fe_2_bytes[idx_2..]).iter().any(|b| b != &0u8) 
+    if check_zero_after_idx
+        && (&fe_1_bytes[idx_1..]).iter().any(|b| b != &0u8)
+        && (&fe_2_bytes[idx_2..]).iter().any(|b| b != &0u8)
     {
         return Err(Error::from("check zero after idx failed"));
     }
@@ -87,21 +101,22 @@ fn convert_te_point_to_sw_point(te_point: SimulatedTEGroup) -> SimulatedSWGroup 
     let b_inv = <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B
         .inverse()
         .expect("B inverse must exist");
-    
-    let a_over_three = <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_A *
-        &(SimulatedFieldElement::from(3u8)
-        .inverse()
-        .expect("Must be able to compute 3.inverse() in SimulatedField"));
-    
+
+    let a_over_three = <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_A
+        * &(SimulatedFieldElement::from(3u8)
+            .inverse()
+            .expect("Must be able to compute 3.inverse() in SimulatedField"));
+
     let one_plus_te_y_coord = one + &te_point.y;
     let one_minus_te_y_coord = one - &te_point.y;
-    let te_x_coord_inv = te_point.x
+    let te_x_coord_inv = te_point
+        .x
         .inverse()
         .expect("Should be able to compute 1/te_x");
-    let one_plus_te_y_coord_over_one_minus_te_y_coord = one_plus_te_y_coord *
-        one_minus_te_y_coord
-        .inverse()
-        .expect("Should be able to compute inverse of (1 - y_te) ");
+    let one_plus_te_y_coord_over_one_minus_te_y_coord = one_plus_te_y_coord
+        * one_minus_te_y_coord
+            .inverse()
+            .expect("Should be able to compute inverse of (1 - y_te) ");
 
     let sw_x_coord = (one_plus_te_y_coord_over_one_minus_te_y_coord + &a_over_three) * &b_inv;
     let sw_y_coord = b_inv * &one_plus_te_y_coord_over_one_minus_te_y_coord * &te_x_coord_inv;
@@ -114,33 +129,39 @@ fn convert_te_point_to_sw_point(te_point: SimulatedTEGroup) -> SimulatedSWGroup 
 }
 
 /// Convert a sc pk, expressed in TE form, to SW, to be able to use it inside the blaze csw circuit.
-pub fn convert_te_pk_to_sw_pk(mut te_pk_bytes: [u8; SC_PUBLIC_KEY_LENGTH]) -> Result<[u8; SC_PUBLIC_KEY_LENGTH], Error> {
+pub fn convert_te_pk_to_sw_pk(
+    mut te_pk_bytes: [u8; SC_PUBLIC_KEY_LENGTH],
+) -> Result<[u8; SC_PUBLIC_KEY_LENGTH], Error> {
     // First, let's reconstruct the TE point corresponding to te_pk_bytes
 
     // Fetch the sign of the x coordinate
-    let te_pk_x_sign = if (te_pk_bytes[SC_PUBLIC_KEY_LENGTH - 1] & (1 << 7)) == 0u8 { false } else { true };
+    let te_pk_x_sign = if (te_pk_bytes[SC_PUBLIC_KEY_LENGTH - 1] & (1 << 7)) == 0u8 {
+        false
+    } else {
+        true
+    };
 
     // Mask away the sign byte
     te_pk_bytes[SC_PUBLIC_KEY_LENGTH - 1] &= 0x7F;
 
     // Deserialize the y coordinate
-    let te_pk_y = deserialize_from_buffer::<SimulatedFieldElement>(
-        &te_pk_bytes,
-        None,
-        None
-    )?;
+    let te_pk_y = deserialize_from_buffer::<SimulatedFieldElement>(&te_pk_bytes, None, None)?;
 
     // Reconstruct the x coordinate from the y coordinate and the sign
     let te_pk_x = {
         let numerator = te_pk_y.square() - &SimulatedFieldElement::one();
-        let denominator = (te_pk_y.square() * &SimulatedCurveParameters::COEFF_D) - &<SimulatedCurveParameters as TEModelParameters>::COEFF_A;
+        let denominator = (te_pk_y.square() * &SimulatedCurveParameters::COEFF_D)
+            - &<SimulatedCurveParameters as TEModelParameters>::COEFF_A;
         let x2 = denominator.inverse().map(|denom| denom * &numerator);
         x2.and_then(|x2| x2.sqrt()).map(|x| {
             let negx = -x;
             let x = if x.is_odd() ^ te_pk_x_sign { negx } else { x };
             x
         })
-    }.ok_or(Error::from("Invalid pk. Unable to reconstruct x coordinate."))?;
+    }
+    .ok_or(Error::from(
+        "Invalid pk. Unable to reconstruct x coordinate.",
+    ))?;
 
     // Reconstruct the TE point and check that it's on curve
     let te_pk = SimulatedTEGroup::new(te_pk_x, te_pk_y);
@@ -176,41 +197,36 @@ mod test {
     use serial_test::*;
 
     #[serial]
-#[test]
+    #[test]
     fn split_combine_test() {
         use algebra::{Field, UniformRand};
         use rand::thread_rng;
-    
+
         let rng = &mut thread_rng();
         // Positive case
         for i in 1..FIELD_SIZE {
             let fe = FieldElement::rand(rng);
             let (fe_1, fe_2) = split_field_element_at_index(&fe, i).unwrap();
-    
+
             // Restore by combining bits
-            let restored_fe = combine_field_elements_at_index(
-                &fe_1,
-                i,
-                &fe_2,
-                FIELD_SIZE - i,
-                true
-            ).unwrap();
+            let restored_fe =
+                combine_field_elements_at_index(&fe_1, i, &fe_2, FIELD_SIZE - i, true).unwrap();
             assert_eq!(fe, restored_fe);
-    
+
             // Also this way of restoring (used inside CSW circuit) should work
             let pow = FieldElement::one().double().pow(&[(i * 8) as u64]);
             let restored_fe = fe_1 + &(pow * &fe_2);
             assert_eq!(fe, restored_fe);
         }
     }
-    
+
     #[serial]
-#[test]
+    #[test]
     fn test_key_generation_conversion_rust() {
-        use algebra::{Field, AffineCurve, ProjectiveCurve};
         use crate::SimulatedTEGroup;
+        use algebra::{AffineCurve, Field, ProjectiveCurve};
         use std::ops::Mul;
-    
+
         let test_sc_secrets = vec![
             "50d5e4c0b15402013941a3c525c6af85e7ab8a2da39a59707211ddd53def965e",
             "70057ef1805240ab9bf2772c0e25a3b57c5911e7dca4120f8e265d750ed77346",
@@ -225,7 +241,7 @@ mod test {
             "001d2489d7b8caab450822ee6393d0b9324da8af67fda2b2cba19b46f64de852",
             "3811067e9f19d35b2f7487eeb08076a9c4a459dec10791095ebae03bb613f375",
         ];
-    
+
         let test_sc_te_public_keys = vec![
             "f165e1e5f7c290e52f2edef3fbab60cbae74bfd3274f8e5ee1de3345c954a166",
             "8f80338eef733ec67c601349c4a8251393b28deb722cfd0a91907744a26d3dab",
@@ -240,35 +256,41 @@ mod test {
             "f5206f3569998819efc57e83e8521110e9414c8dca8c5e96c173366e9acd958f",
             "f1785d4d2f6017ad7a25f795db5beb48d38d6f8cd44dcc3b7f321b8e2a5352fd",
         ];
-    
-        for (test_sc_secret, test_sc_public_key) in test_sc_secrets.into_iter().zip(test_sc_te_public_keys) {
+
+        for (test_sc_secret, test_sc_public_key) in
+            test_sc_secrets.into_iter().zip(test_sc_te_public_keys)
+        {
             // hex string to byte array
             let secret_bytes = hex::decode(test_sc_secret).unwrap();
-    
+
             // deserialize fe without caring about overflowing the modulus
             let secret = deserialize_fe_unchecked(secret_bytes);
-    
+
             // Compute GENERATOR_TE^SECRET
             let te_public_key = SimulatedTEGroup::prime_subgroup_generator()
                 .into_projective()
                 .mul(&secret)
                 .into_affine();
-    
+
             assert!(te_public_key.group_membership_test());
-    
+
             // Store the sign (last bit) of the X coordinate
             // The value is left-shifted to be used later in an OR operation
-            let x_sign = if te_public_key.x.is_odd() { 1 << 7 } else { 0u8 };
-    
+            let x_sign = if te_public_key.x.is_odd() {
+                1 << 7
+            } else {
+                0u8
+            };
+
             // Extract the public key bytes as Y coordinate
             let y_coordinate = te_public_key.y;
             let mut te_pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
-    
+
             // Use the last (null) bit of the public key to store the sign of the X coordinate
             // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus
             let len = te_pk_bytes.len();
             te_pk_bytes[len - 1] |= x_sign;
-    
+
             // Convert byte array to hex string
             assert_eq!(hex::encode(te_pk_bytes.clone()), test_sc_public_key);
 
@@ -285,13 +307,18 @@ mod test {
             // with the computed SW point
             let sw_pk_bytes = convert_te_pk_to_sw_pk(te_pk_bytes.try_into().unwrap()).unwrap();
 
-            let x_sign = if sw_public_key.x.is_odd() { 1 << 7 } else { 0u8 };    
+            let x_sign = if sw_public_key.x.is_odd() {
+                1 << 7
+            } else {
+                0u8
+            };
             let y_coordinate = sw_public_key.y;
-            let mut expected_sw_pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();    
+            let mut expected_sw_pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
             let len = expected_sw_pk_bytes.len();
             expected_sw_pk_bytes[len - 1] |= x_sign;
-            
-            let expected_sw_pk_bytes: [u8; SC_PUBLIC_KEY_LENGTH] = expected_sw_pk_bytes.try_into().unwrap();
+
+            let expected_sw_pk_bytes: [u8; SC_PUBLIC_KEY_LENGTH] =
+                expected_sw_pk_bytes.try_into().unwrap();
             assert_eq!(sw_pk_bytes, expected_sw_pk_bytes);
         }
     }

@@ -1,16 +1,11 @@
-use algebra::{PrimeField, Field};
+use algebra::{Field, PrimeField};
 use cctp_primitives::{
     type_mapping::FieldElement,
     utils::commitment_tree::{hash_vec, DataAccumulator},
 };
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 use r1cs_crypto::{FieldBasedHashGadget, FieldHasherGadget};
-use r1cs_std::{
-    alloc::AllocGadget,
-    fields::FieldGadget,
-    eq::EqGadget,
-    FromBitsGadget,
-};
+use r1cs_std::{alloc::AllocGadget, eq::EqGadget, fields::FieldGadget, FromBitsGadget};
 
 use crate::{
     type_mapping::*, CswFtProverData, CswProverData, CswSysData, CswUtxoProverData,
@@ -214,7 +209,6 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 
             // Reconstruct scb_new_mst_root from firt 2 custom fields
             let scb_new_mst_root = {
-            
                 // Compute 2^128 in the field
                 let pow = FieldElement::one().double().pow(&[128u64]);
 
@@ -328,9 +322,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 
 #[cfg(test)]
 mod test {
-    use algebra::{
-        Field, UniformRand, ToBits,
-    };
+    use algebra::{Field, ToBits, UniformRand};
     use cctp_primitives::{
         commitment_tree::{
             hashers::{hash_cert, hash_fwt},
@@ -340,7 +332,8 @@ mod test {
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
         type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
         utils::{
-            get_bt_merkle_root, poseidon_hash::get_poseidon_hash_constant_length, serialization::serialize_to_buffer,
+            get_bt_merkle_root, poseidon_hash::get_poseidon_hash_constant_length,
+            serialization::serialize_to_buffer,
         },
     };
     use primitives::{FieldBasedHash, FieldBasedMerkleTree, FieldHasher};
@@ -349,9 +342,10 @@ mod test {
     use std::convert::TryInto;
 
     use crate::{
-        CswFtOutputData, CswProverData, CswUtxoInputData,
-        CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
-        MST_MERKLE_TREE_HEIGHT, PHANTOM_FIELD_ELEMENT, SC_TX_HASH_LENGTH, split_field_element_at_index, SC_PUBLIC_KEY_LENGTH, deserialize_fe_unchecked,
+        deserialize_fe_unchecked, split_field_element_at_index, CswFtOutputData, CswProverData,
+        CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
+        MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT, PHANTOM_FIELD_ELEMENT,
+        SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
     };
 
     use super::*;
@@ -363,7 +357,10 @@ mod test {
         FT,
     }
 
-    fn get_test_key_pair() -> ([u8; SC_PUBLIC_KEY_LENGTH], [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS]) {
+    fn get_test_key_pair() -> (
+        [u8; SC_PUBLIC_KEY_LENGTH],
+        [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+    ) {
         let test_sc_secrets = vec![
             "50d5e4c0b15402013941a3c525c6af85e7ab8a2da39a59707211ddd53def965e",
             "70057ef1805240ab9bf2772c0e25a3b57c5911e7dca4120f8e265d750ed77346",
@@ -378,7 +375,7 @@ mod test {
             "001d2489d7b8caab450822ee6393d0b9324da8af67fda2b2cba19b46f64de852",
             "3811067e9f19d35b2f7487eeb08076a9c4a459dec10791095ebae03bb613f375",
         ];
-    
+
         let test_sc_te_public_keys = vec![
             "f165e1e5f7c290e52f2edef3fbab60cbae74bfd3274f8e5ee1de3345c954a166",
             "8f80338eef733ec67c601349c4a8251393b28deb722cfd0a91907744a26d3dab",
@@ -397,8 +394,11 @@ mod test {
         let rng = &mut thread_rng();
         let random_idx = rng.gen_range(0..test_sc_secrets.len());
 
-        let (test_sc_secret, test_sc_public_key) = (test_sc_secrets[random_idx], test_sc_te_public_keys[random_idx]);
-        
+        let (test_sc_secret, test_sc_public_key) = (
+            test_sc_secrets[random_idx],
+            test_sc_te_public_keys[random_idx],
+        );
+
         // Parse pk LE bits
         let pk_bytes = hex::decode(test_sc_public_key).unwrap();
 
@@ -487,7 +487,7 @@ mod test {
                 nonce: rng.gen(),
                 custom_hash: rng.gen::<[u8; FIELD_SIZE]>(),
             },
-            secret_key
+            secret_key,
         };
 
         let (mst_root, mst_leaf_hash, mst_path) =
@@ -792,7 +792,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_utxo() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, _) =
             generate_circuit_test_data();
@@ -822,7 +822,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_ft() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, _) =
             generate_circuit_test_data();
@@ -852,7 +852,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_utxo_wrong_cert_hash() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -887,7 +887,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_utxo_without_certificate() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -939,7 +939,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_utxo_wrong_mst_path() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1008,7 +1008,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_utxo_wrong_nullifier() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1041,7 +1041,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_utxo_wrong_amount() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1074,7 +1074,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_utxo_wrong_public_key_x_sign() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1110,7 +1110,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_utxo_wrong_public_key_y_coordinate() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1148,7 +1148,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_utxo_without_constant() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, _, _) =
             generate_circuit_test_data();
@@ -1179,7 +1179,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_utxo_without_custom_fields() {
         let (sidechain_id, _, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1209,7 +1209,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_utxo_with_wrong_custom_fields() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1242,7 +1242,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_ft_wrong_amount() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1275,7 +1275,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_ft_wrong_nullifier() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1308,7 +1308,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_ft_with_certificate() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1360,7 +1360,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_ft_wrong_ft_path() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1423,7 +1423,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_ft_wrong_sc_hash_path() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1509,7 +1509,7 @@ mod test {
     }
 
     #[serial]
-#[test]
+    #[test]
     fn test_csw_circuit_ft_missing_com_tx() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();

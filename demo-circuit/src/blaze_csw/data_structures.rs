@@ -10,8 +10,9 @@ use cctp_primitives::{
 use primitives::{FieldBasedHash, FieldBasedMerkleTreePath, FieldHasher};
 
 use crate::{
-    constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, PHANTOM_FIELD_ELEMENT,
-    PHANTOM_SECRET_KEY_BITS, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, MST_MERKLE_TREE_HEIGHT, SC_CUSTOM_HASH_LENGTH,
+    constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, MST_MERKLE_TREE_HEIGHT,
+    PHANTOM_FIELD_ELEMENT, PHANTOM_SECRET_KEY_BITS, SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH,
+    SC_TX_HASH_LENGTH,
 };
 
 #[derive(Clone, Debug)]
