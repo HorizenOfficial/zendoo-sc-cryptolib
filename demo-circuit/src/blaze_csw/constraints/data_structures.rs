@@ -1057,6 +1057,7 @@ impl CswFtProverDataGadget {
                 scb_ft_tree_root_g,
                 self.scb_btr_tree_root_g.clone(),
                 self.wcert_tree_root_g.clone(),
+                self.sc_creation_commitment_g.clone(),
                 sidechain_id_g.clone(),
             ],
         )?;

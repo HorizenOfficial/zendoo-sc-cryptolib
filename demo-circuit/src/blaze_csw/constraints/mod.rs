@@ -606,11 +606,13 @@ mod test {
 
         let scb_btr_tree_root = FieldElement::rand(rng);
         let wcert_tree_root = FieldElement::rand(rng);
+        let sc_creation_commitment = FieldElement::rand(rng);
 
-        let sc_hash = get_poseidon_hash_constant_length(4, None)
+        let sc_hash = get_poseidon_hash_constant_length(5, None)
             .update(ft_tree_root)
             .update(scb_btr_tree_root)
             .update(wcert_tree_root)
+            .update(sc_creation_commitment)
             .update(sidechain_id)
             .finalize()
             .unwrap();
@@ -629,7 +631,7 @@ mod test {
             mcb_sc_txs_com_start: PHANTOM_FIELD_ELEMENT,
             merkle_path_to_sc_hash: sc_tree_path,
             ft_tree_path,
-            sc_creation_commitment: PHANTOM_FIELD_ELEMENT,
+            sc_creation_commitment,
             scb_btr_tree_root,
             wcert_tree_root,
             sc_txs_com_hashes: vec![PHANTOM_FIELD_ELEMENT; num_commitment_hashes as usize],
@@ -1458,10 +1460,11 @@ mod test {
         };
 
         let sc_moved_tree_path: GingerMHTBinaryPath = {
-            let sc_hash = get_poseidon_hash_constant_length(4, None)
+            let sc_hash = get_poseidon_hash_constant_length(5, None)
                 .update(ft_tree_root)
                 .update(csw_prover_data.ft_data.scb_btr_tree_root)
                 .update(csw_prover_data.ft_data.wcert_tree_root)
+                .update(csw_prover_data.ft_data.sc_creation_commitment)
                 .update(sidechain_id)
                 .finalize()
                 .unwrap();
@@ -1490,10 +1493,11 @@ mod test {
 
         // Try to pass a path to the wrong leaf
         let wrong_sc_path = {
-            let sc_hash = get_poseidon_hash_constant_length(4, None)
+            let sc_hash = get_poseidon_hash_constant_length(5, None)
                 .update(ft_tree_root)
                 .update(csw_prover_data.ft_data.scb_btr_tree_root)
                 .update(csw_prover_data.ft_data.wcert_tree_root)
+                .update(csw_prover_data.ft_data.sc_creation_commitment)
                 .update(sidechain_id)
                 .finalize()
                 .unwrap();
