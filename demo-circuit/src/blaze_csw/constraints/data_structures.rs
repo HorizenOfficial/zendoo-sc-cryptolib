@@ -1751,13 +1751,11 @@ mod test {
     fn test_sc_public_key_gadget() {
         let test_sc_secrets = vec![
             "50d5e4c0b15402013941a3c525c6af85e7ab8a2da39a59707211ddd53def965e",
-            "70057ef1805240ab9bf2772c0e25a3b57c5911e7dca4120f8e265d750ed77346",
             "1089ba2f1bee0bbc8f2270541bb22595026fe7d828033845d5ed82f31386b65d",
         ];
 
         let test_sc_te_public_keys = vec![
             "f165e1e5f7c290e52f2edef3fbab60cbae74bfd3274f8e5ee1de3345c954a166",
-            "8f80338eef733ec67c601349c4a8251393b28deb722cfd0a91907744a26d3dab",
             "cc1983469486418cd66dcdc8664677c263487b736840cfd1532e144386fa7610",
         ];
 
@@ -1777,7 +1775,7 @@ mod test {
 
             // Convert it to bits and reverse them (circuit expects them in LE but write_bits outputs in BE)
             let mut sk_bits = sk.write_bits();
-            sk_bits.reverse();
+            sk_bits.reverse(); // LE
             let sk_bits_g =
                 Vec::<Boolean>::alloc(cs.ns(|| "alloc sk bits"), || Ok(sk_bits.as_slice()))
                     .unwrap();
@@ -1813,7 +1811,7 @@ mod test {
         for (test_sc_secret, test_sc_public_key) in test_sc_secrets
             .into_iter()
             .rev()
-            .zip(test_sc_te_public_keys)
+            .zip(test_sc_te_public_keys.into_iter())
         {
             let mut cs = ConstraintSystem::<FieldElement>::new(SynthesisMode::Debug);
             test_case(test_sc_secret, test_sc_public_key, &mut cs);
