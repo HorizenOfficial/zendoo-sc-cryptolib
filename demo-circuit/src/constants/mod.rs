@@ -195,7 +195,7 @@ pub const PHANTOM_SECRET_KEY_BITS: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS] =
     true, false, false, false, false, false, true, true, true, true, false, false, true, false,
     true, true, true, false, false, true, false, false, true, false, false, true, false,
 ];
-pub const PHANTOM_PUBLIC_KEY_BITS: [bool; SIMULATED_FIELD_BYTE_SIZE * 8] = [
+pub const PHANTOM_PUBLIC_KEY_BITS: [bool; SC_PUBLIC_KEY_LENGTH * 8] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false,
     false, false, false, false, false, false, false, false, false, false, false, false, false,
     false, false, false, false, false, false, false, false, false, false, false, false, false,

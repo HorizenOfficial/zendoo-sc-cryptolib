@@ -82,9 +82,10 @@ impl PartialEq for WithdrawalCertificateData {
     }
 }
 
+//TODO: Is it ok to define phantom spending_pub_key as an array of all 0s ?
 #[derive(Clone, Default)]
 pub struct CswUtxoOutputData {
-    pub spending_pub_key: [u8; SIMULATED_FIELD_BYTE_SIZE],
+    pub spending_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
     pub amount: u64,
     pub nonce: u64,
     pub custom_hash: [u8; SC_CUSTOM_HASH_LENGTH],
@@ -128,6 +129,7 @@ impl Default for CswUtxoInputData {
     }
 }
 
+//TODO: Is it ok to define phantom receiver_pub_key as an array of all 0s ?
 #[derive(Clone, Default)]
 pub struct CswFtOutputData {
     pub amount: u64,

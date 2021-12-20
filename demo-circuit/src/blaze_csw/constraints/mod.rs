@@ -76,19 +76,31 @@ impl CeasedSidechainWithdrawalCircuit {
                 ft_data: CswFtProverData::get_phantom(range_size),
             }),
             // FT withdraw, with last_wcert present
-            (Some(last_wcert), None, Some(ft_data)) => Ok(CswProverData {
-                sys_data,
-                last_wcert,
-                utxo_data: CswUtxoProverData::default(),
-                ft_data,
-            }),
+            (Some(last_wcert), None, Some(mut ft_data)) => {
+                // Pad if smaller than range size
+                if ft_data.sc_txs_com_hashes.len() < range_size as usize {
+                    ft_data.sc_txs_com_hashes.append(&mut vec![PHANTOM_FIELD_ELEMENT; range_size as usize - ft_data.sc_txs_com_hashes.len()])
+                }
+                Ok(CswProverData {
+                    sys_data,
+                    last_wcert,
+                    utxo_data: CswUtxoProverData::default(),
+                    ft_data,
+                })
+            } ,
             // FT withdraw, with last_wcert not present
-            (None, None, Some(ft_data)) => Ok(CswProverData {
-                sys_data,
-                last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
-                utxo_data: CswUtxoProverData::default(),
-                ft_data,
-            }),
+            (None, None, Some(mut ft_data)) => {
+                // Pad if smaller than range size
+                if ft_data.sc_txs_com_hashes.len() < range_size as usize {
+                    ft_data.sc_txs_com_hashes.append(&mut vec![PHANTOM_FIELD_ELEMENT; range_size as usize - ft_data.sc_txs_com_hashes.len()])
+                }
+                Ok(CswProverData {
+                    sys_data,
+                    last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
+                    utxo_data: CswUtxoProverData::default(),
+                    ft_data,
+                })
+            },
             // Attempt to withdraw a sc utxo without having specified a last_wcert
             (None, Some(_), _) => Err(Error::from(
                 "Attempt to withdraw SC Utxo without specifying last WCert",

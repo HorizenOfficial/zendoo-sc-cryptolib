@@ -4743,7 +4743,7 @@ fn parse_utxo_prover_data(_env: JNIEnv, _utxo_data: JObject) -> CswUtxoProverDat
         {
             // Parse sk bytes
             let sk_bytes = parse_fixed_size_byte_array_from_jobject::<
-                SIMULATED_SCALAR_FIELD_BYTE_SIZE,
+                SC_SECRET_KEY_LENGTH,
             >(&_env, _utxo_data, "utxoInputSecretKey");
 
             // Interpret bytes as a LE integer and read a SimulatedScalarFieldElement out of it
@@ -4841,7 +4841,7 @@ fn parse_ft_prover_data(_env: JNIEnv, _ft_data: JObject) -> CswFtProverData {
         {
             // Parse sk bytes
             let sk_bytes = parse_fixed_size_byte_array_from_jobject::<
-                SIMULATED_SCALAR_FIELD_BYTE_SIZE,
+                SC_SECRET_KEY_LENGTH,
             >(&_env, _ft_data, "ftInputSecretKey");
 
             // Interpret bytes as a LE integer and read a SimulatedScalarFieldElement out of it

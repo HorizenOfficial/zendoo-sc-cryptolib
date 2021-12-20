@@ -23,7 +23,7 @@ use crate::{
     FieldElementGadget, FieldHashGadget, GingerMHTBinaryGadget, SimulatedCurveParameters,
     SimulatedFieldElement, SimulatedSWGroup, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
     PHANTOM_FIELD_ELEMENT, PHANTOM_SECRET_KEY_BITS, SC_CUSTOM_HASH_LENGTH,
-    SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS,
+    SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
 };
 
 #[derive(Clone, PartialEq, Eq)]
@@ -323,10 +323,10 @@ impl EqGadget<FieldElement> for WithdrawalCertificateDataGadget {
 
 #[derive(PartialEq, Eq)]
 pub struct CswUtxoOutputDataGadget {
-    pub spending_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
+    pub spending_pub_key_g: [Boolean; SC_PUBLIC_KEY_LENGTH * 8],
     pub amount_g: UInt64,
     pub nonce_g: UInt64,
-    pub custom_hash_g: [Boolean; FIELD_SIZE * 8],
+    pub custom_hash_g: [Boolean; SC_TX_HASH_LENGTH * 8],
 }
 
 impl CswUtxoOutputDataGadget {
@@ -334,7 +334,6 @@ impl CswUtxoOutputDataGadget {
         &self,
         mut cs: CS,
     ) -> Result<Boolean, SynthesisError> {
-        // TODO: properly create and store the phantom gadget
         let phantom_utxo_output_g = CswUtxoOutputDataGadget::from_value(
             cs.ns(|| "alloc constant UTXO input phantom gadget"),
             &CswUtxoOutputData::default(),
@@ -776,7 +775,7 @@ impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
 #[derive(PartialEq, Eq)]
 pub struct CswFtOutputDataGadget {
     pub amount_g: UInt64,
-    pub receiver_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
+    pub receiver_pub_key_g: [Boolean; SC_PUBLIC_KEY_LENGTH * 8],
     pub payback_addr_data_hash_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
     pub tx_hash_g: [Boolean; FIELD_SIZE * 8],
     pub out_idx_g: UInt32,
@@ -1272,7 +1271,7 @@ impl AllocGadget<CswFtProverData, FieldElement> for CswFtProverDataGadget {
         F: FnOnce() -> Result<T, SynthesisError>,
         T: Borrow<CswFtProverData>,
     {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -1352,7 +1351,7 @@ impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
         F: FnOnce() -> Result<T, SynthesisError>,
         T: Borrow<CswSysData>,
     {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -1627,7 +1626,7 @@ impl ScPublicKeyGadget {
         CS: ConstraintSystemAbstract<FieldElement>,
     >(
         mut cs: CS,
-        public_key_bits_g: &[Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
+        public_key_bits_g: &[Boolean; SC_PUBLIC_KEY_LENGTH * 8],
     ) -> Result<
         (
             Boolean,
