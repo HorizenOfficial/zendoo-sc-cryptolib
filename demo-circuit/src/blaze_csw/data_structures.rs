@@ -10,9 +10,8 @@ use cctp_primitives::{
 use primitives::{FieldBasedHash, FieldBasedMerkleTreePath, FieldHasher};
 
 use crate::{
-    constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, MST_MERKLE_TREE_HEIGHT,
-    PHANTOM_FIELD_ELEMENT, PHANTOM_PUBLIC_KEY_BITS, PHANTOM_SECRET_KEY_BITS, SC_PUBLIC_KEY_LENGTH,
-    SC_TX_HASH_LENGTH,
+    constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, PHANTOM_FIELD_ELEMENT,
+    PHANTOM_SECRET_KEY_BITS, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, MST_MERKLE_TREE_HEIGHT, SC_CUSTOM_HASH_LENGTH,
 };
 
 #[derive(Clone, Debug)]
@@ -82,32 +81,21 @@ impl PartialEq for WithdrawalCertificateData {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct CswUtxoOutputData {
-    pub spending_pub_key: [bool; SIMULATED_FIELD_BYTE_SIZE * 8], // Assumed to be big endian. TODO: Check this
+    pub spending_pub_key: [u8; SIMULATED_FIELD_BYTE_SIZE],
     pub amount: u64,
     pub nonce: u64,
-    pub custom_hash: [bool; FIELD_SIZE * 8], // Assumed to be big endian. TODO: Check this
-}
-
-impl Default for CswUtxoOutputData {
-    fn default() -> Self {
-        Self {
-            spending_pub_key: PHANTOM_PUBLIC_KEY_BITS,
-            amount: 0,
-            nonce: 0,
-            custom_hash: [false; FIELD_SIZE * 8],
-        }
-    }
+    pub custom_hash: [u8; SC_CUSTOM_HASH_LENGTH],
 }
 
 impl ToConstraintField<FieldElement> for CswUtxoOutputData {
     fn to_field_elements(&self) -> Result<Vec<FieldElement>, Error> {
         DataAccumulator::init()
-            .update_with_bits(self.spending_pub_key.to_vec())?
+            .update(&self.spending_pub_key[..])?
             .update(self.amount)?
             .update(self.nonce)?
-            .update_with_bits(self.custom_hash.to_vec())?
+            .update(&self.custom_hash[..])?
             .get_field_elements()
     }
 }
@@ -127,7 +115,7 @@ impl FieldHasher<FieldElement, FieldHash> for CswUtxoOutputData {
 #[derive(Clone)]
 pub struct CswUtxoInputData {
     pub output: CswUtxoOutputData,
-    pub secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // Assumed to be big endian. TODO: Check this
+    pub secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
 }
 
 impl Default for CswUtxoInputData {
@@ -197,7 +185,7 @@ impl Default for CswUtxoProverData {
 #[derive(Clone)]
 pub struct CswFtProverData {
     pub ft_output: CswFtOutputData, // FT output in the MC block
-    pub ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // secret key that authorizes ft_input spending, assumed to be big endian. TODO: Check endianness
+    pub ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // secret key that authorizes ft_input spending.
     pub mcb_sc_txs_com_start: FieldElement, // Cumulative ScTxsCommittment taken from the last MC block of the last confirmed (not reverted) epoch
     pub merkle_path_to_sc_hash: GingerMHTBinaryPath, // Merkle path to a particular sidechain in the ScTxsComm tree
     pub ft_tree_path: GingerMHTBinaryPath, // path to the ft_input_hash in the FT Merkle tree included in ScTxsComm tree

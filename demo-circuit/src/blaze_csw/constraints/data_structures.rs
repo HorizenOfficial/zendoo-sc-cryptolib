@@ -1,19 +1,20 @@
 use std::{borrow::Borrow, convert::TryInto};
 
-use algebra::Field;
+use algebra::{Field, SquareRootField, AffineCurve, TEModelParameters, MontgomeryModelParameters};
 use cctp_primitives::type_mapping::{FieldElement, FieldHash, FIELD_CAPACITY, FIELD_SIZE};
 use primitives::bytes_to_bits;
 use r1cs_core::{ConstraintSystemAbstract, SynthesisError};
 use r1cs_crypto::{FieldBasedHashGadget, FieldBasedMerkleTreePathGadget, FieldHasherGadget};
 use r1cs_std::{
     boolean::Boolean,
-    fields::FieldGadget,
+    fields::{FieldGadget, nonnative::nonnative_field_gadget::NonNativeFieldGadget},
+    groups::GroupGadget,
     prelude::{AllocGadget, ConstantGadget, EqGadget},
     select::CondSelectGadget,
     to_field_gadget_vec::ToConstraintFieldGadget,
     uint32::UInt32,
     uint64::UInt64,
-    FromBitsGadget, ToBitsGadget,
+    FromBitsGadget, Assignment,
 };
 
 use crate::{
@@ -21,7 +22,7 @@ use crate::{
     CswUtxoInputData, CswUtxoOutputData, CswUtxoProverData, FieldElementGadget, FieldHashGadget,
     GingerMHTBinaryGadget, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
     PHANTOM_FIELD_ELEMENT, PHANTOM_SECRET_KEY_BITS, SIMULATED_FIELD_BYTE_SIZE,
-    SIMULATED_SCALAR_FIELD_MODULUS_BITS,
+    SIMULATED_SCALAR_FIELD_MODULUS_BITS, SC_CUSTOM_HASH_LENGTH, SimulatedFieldElement, SimulatedCurveParameters, ECPointSimulationGadget, SimulatedSWGroup,
 };
 
 #[derive(Clone, PartialEq, Eq)]
@@ -321,10 +322,10 @@ impl EqGadget<FieldElement> for WithdrawalCertificateDataGadget {
 
 #[derive(PartialEq, Eq)]
 pub struct CswUtxoOutputDataGadget {
-    pub spending_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8], // Assumed to be big endian. TODO: Check this
+    pub spending_pub_key_g: [Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
     pub amount_g: UInt64,
     pub nonce_g: UInt64,
-    pub custom_hash_g: [Boolean; FIELD_SIZE * 8], // Assumed to be big endian. TODO: Check this
+    pub custom_hash_g: [Boolean; FIELD_SIZE * 8],
 }
 
 impl CswUtxoOutputDataGadget {
@@ -370,7 +371,7 @@ impl AllocGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
         };
 
         let spending_pub_key_g =
-            Vec::<Boolean>::alloc(cs.ns(|| "alloc spending pub key"), || spending_pub_key)?
+            Vec::<Boolean>::alloc(cs.ns(|| "alloc spending pub key"), || Ok(bytes_to_bits(&spending_pub_key?)))?
                 .try_into()
                 .map_err(|_| {
                     SynthesisError::Other(format!(
@@ -383,12 +384,12 @@ impl AllocGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
 
         let nonce_g = UInt64::alloc(cs.ns(|| "alloc nonce"), nonce.ok())?;
 
-        let custom_hash_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc custom hash"), || custom_hash)?
+        let custom_hash_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc custom hash"), || Ok(bytes_to_bits(&custom_hash?)))?
             .try_into()
             .map_err(|_| {
                 SynthesisError::Other(format!(
                     "invalid size for custom_hash, expected {} bits",
-                    FIELD_SIZE * 8
+                    SC_CUSTOM_HASH_LENGTH * 8
                 ))
             })?;
 
@@ -419,10 +420,9 @@ impl ConstantGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget
         _cs: CS,
         value: &CswUtxoOutputData,
     ) -> Self {
-        let spending_pub_key_g = value
-            .spending_pub_key
-            .iter()
-            .map(|&bit| Boolean::Constant(bit))
+        let spending_pub_key_g = bytes_to_bits(&value.spending_pub_key)
+            .into_iter()
+            .map(|bit| Boolean::Constant(bit))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -431,10 +431,9 @@ impl ConstantGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget
 
         let nonce_g = UInt64::constant(value.nonce);
 
-        let custom_hash_g = value
-            .custom_hash
-            .iter()
-            .map(|&bit| Boolean::Constant(bit))
+        let custom_hash_g = bytes_to_bits(&value.custom_hash)
+            .into_iter()
+            .map(|bit| Boolean::Constant(bit))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -448,24 +447,7 @@ impl ConstantGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget
     }
 
     fn get_constant(&self) -> CswUtxoOutputData {
-        CswUtxoOutputData {
-            spending_pub_key: self
-                .spending_pub_key_g
-                .iter()
-                .map(|bit| bit.get_value().unwrap())
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
-            amount: self.amount_g.get_value().unwrap(),
-            nonce: self.nonce_g.get_value().unwrap(),
-            custom_hash: self
-                .custom_hash_g
-                .iter()
-                .map(|bit| bit.get_value().unwrap())
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
-        }
+        unimplemented!()
     }
 }
 
@@ -500,10 +482,8 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
         &self,
         mut cs: CS,
     ) -> Result<Vec<FieldElementGadget>, SynthesisError> {
-        let mut bits = self
-            .spending_pub_key_g
-            .to_bits(cs.ns(|| "spending_pub_key_g to bits"))
-            .unwrap();
+        let mut bits = self.spending_pub_key_g.to_vec();
+        bits.reverse();
 
         let mut amount_big_endian_g = self.amount_g.to_bits_le();
         amount_big_endian_g.reverse();
@@ -513,7 +493,10 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
         nonce_big_endian_g.reverse();
         bits.extend_from_slice(&nonce_big_endian_g);
 
-        bits.extend_from_slice(&self.custom_hash_g);
+        let mut custom_hash_bits_g = self.custom_hash_g.clone();
+        custom_hash_bits_g.reverse();
+
+        bits.extend_from_slice(&custom_hash_bits_g);
 
         let elements = bits
             .chunks(FIELD_CAPACITY)
@@ -530,7 +513,7 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
 #[derive(PartialEq, Eq)]
 pub struct CswUtxoInputDataGadget {
     pub output_g: CswUtxoOutputDataGadget,
-    pub secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // Assumed to be big endian. TODO: Check this
+    pub secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
 }
 
 impl CswUtxoInputDataGadget {
@@ -1017,7 +1000,7 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
 
 pub struct CswFtProverDataGadget {
     pub ft_output_g: CswFtOutputDataGadget,
-    pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // Assumed to be big endian. TODO: Check this
+    pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
     pub mcb_sc_txs_com_start_g: FieldElementGadget,
     pub merkle_path_to_sc_hash_g: GingerMHTBinaryGadget,
     pub ft_tree_path_g: GingerMHTBinaryGadget,
@@ -1427,5 +1410,382 @@ impl AllocGadget<CswProverData, FieldElement> for CswProverDataGadget {
         T: Borrow<CswProverData>,
     {
         unimplemented!();
+    }
+}
+
+// TODO: Define it as [Boolean; SC_PUBLIC_KEY_LENGTH * 8] and replace in all other data structures
+pub struct ScPublicKeyGadget {}
+
+impl ScPublicKeyGadget {
+    /// Enforce reconstruction of the x coordinate from the y and the sign, and return the whole TE point.
+    /// x^2 = (y^2 - 1)/(d * y^2 - a)
+    fn get_te_pk_x_from_x_sign_and_y<CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        pk_x_sign_bit_g: Boolean,
+        pk_y_coordinate_g: &NonNativeFieldGadget<SimulatedFieldElement, FieldElement>
+    ) -> Result<NonNativeFieldGadget<SimulatedFieldElement, FieldElement>, SynthesisError>
+    {
+        // Reconstruct the x coordinate from the y and the sign, and return the whole TE point.
+        // x^2 = (y^2 - 1)/(d * y^2 - a)
+        let pk_x_coordinate_g = NonNativeFieldGadget::<SimulatedFieldElement, FieldElement>::alloc(
+            cs.ns(|| "alloc pk_x"),
+            || {
+                let te_pk_y = pk_y_coordinate_g.get_value().get()?;
+                let numerator = te_pk_y.square() - &SimulatedFieldElement::one();
+                let denominator = (te_pk_y.square() * &SimulatedCurveParameters::COEFF_D) - &<SimulatedCurveParameters as TEModelParameters>::COEFF_A;
+                let x2 = denominator
+                    .inverse()
+                    .map(|denom| denom * &numerator)
+                    .ok_or(SynthesisError::Other("Must be able to compute denominator".to_string()))?;
+                
+                let x = x2.sqrt().ok_or(SynthesisError::Other("x^2 square root must exist in the field".to_string()))?;
+                let negx = -x;
+                let x = if x.is_odd() ^ pk_x_sign_bit_g.get_value().get()? { negx } else { x };
+                Ok(x)
+            }
+        )?;
+        let pk_x_squared = pk_x_coordinate_g.square(cs.ns(|| "pk_x^2"))?;
+        let pk_y_squared = pk_y_coordinate_g.square(cs.ns(|| "pk_y ^ 2"))?;
+        let pk_y_squared_minus_one = pk_y_squared
+            .sub_constant(
+                cs.ns(|| "pk_y ^ 2 - 1"),
+                &SimulatedFieldElement::one()
+        )?;
+        let d_times_pk_y_squared_minus_a = pk_y_squared
+            .mul_by_constant(cs.ns(|| "d * pk_y^2"), &SimulatedCurveParameters::COEFF_D)?
+            .sub_constant(cs.ns(|| "d * pk_y^2 - a"), &<SimulatedCurveParameters as TEModelParameters>::COEFF_A)?;
+        
+        // Check pk_x
+        pk_x_squared.mul_equals(
+            cs.ns(|| "Check te_pk_x"),
+            &d_times_pk_y_squared_minus_a,
+            &pk_y_squared_minus_one
+        )?;
+
+        // Check sign of pk_x
+        pk_x_coordinate_g
+            .is_odd(cs.ns(|| "is te_pk_x odd"))?
+            .enforce_equal(cs.ns(|| "check te_pk_x sign"), &pk_x_sign_bit_g)?;
+
+        Ok(pk_x_coordinate_g)
+    }
+
+    fn convert_te_to_sw_point<CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        te_pk_x_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement>,
+        te_pk_y_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement>,
+    ) -> Result<ECPointSimulationGadget, SynthesisError>
+    {
+        let one_minus_y_ed = te_pk_y_coordinate_g
+            .negate(cs.ns(|| "-y_ed"))?
+            .add_constant(cs.ns(|| "1 - y_ed"), &SimulatedFieldElement::one())?;
+
+        let one_plus_y_ed = te_pk_y_coordinate_g
+            .add_constant(cs.ns(|| "1 + y_ed"), &SimulatedFieldElement::one())?;
+
+        // Alloc x coordinate in SW representation
+        let sw_pk_x_coordinate_g =  NonNativeFieldGadget::<SimulatedFieldElement, FieldElement>::alloc(
+            cs.ns(|| "alloc x coord in SW"),
+            || {
+                let a_over_three = <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_A *
+                    &(SimulatedFieldElement::from(3u8)
+                    .inverse()
+                    .expect("Must be able to compute 3.inverse() in SimulatedField"));
+
+                let b_inv = <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B
+                    .inverse()
+                    .expect("B inverse must exist");
+                
+                let one_plus_te_y_coord = one_plus_y_ed.get_value().get()?;
+                let one_minus_te_y_coord = one_minus_y_ed.get_value().get()?;
+
+                let one_plus_te_y_coord_over_one_minus_te_y_coord = one_plus_te_y_coord *
+                    one_minus_te_y_coord
+                    .inverse()
+                    .ok_or(SynthesisError::Other("Should be able to compute inverse of (1 - y_te)".to_string()))?;
+                
+                Ok((one_plus_te_y_coord_over_one_minus_te_y_coord + &a_over_three) * &b_inv)
+            }
+        )?;
+
+        // Check SW x coordinate
+        // x_sw * 3B(1 - y_ed) = 3(1 + y_ed) + A(1 - y_ed)
+        {
+            let three_times_one_plus_y_ed = one_plus_y_ed.mul_by_constant(
+                cs.ns(|| "3 * (1 + y_ed"),
+                &SimulatedFieldElement::from(3u8)
+            )?;
+
+            let a_times_one_minus_y_ed = one_minus_y_ed.mul_by_constant(
+                cs.ns(|| "A * (1 - y_ed)"),
+                &<SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_A
+            )?;
+
+            let rhs = three_times_one_plus_y_ed.add(
+                cs.ns(|| "3(1 + y_ed) + A(1 - y_ed)"),
+                &a_times_one_minus_y_ed
+            )?;
+
+            let three_b_times_one_minus_y_ed = one_minus_y_ed.mul_by_constant(
+                cs.ns(|| "3B * (1 - y_ed)"),
+                &(<SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B * & SimulatedFieldElement::from(3u8))
+            )?;
+
+            sw_pk_x_coordinate_g.mul_equals(
+                cs.ns(|| "check x_sw"),
+                &three_b_times_one_minus_y_ed,
+                &rhs
+            )?;
+        }
+
+        // Alloc y coordinate in sw representation
+        let sw_pk_y_coordinate_g =  NonNativeFieldGadget::<SimulatedFieldElement, FieldElement>::alloc(
+            cs.ns(|| "alloc y coord in SW"),
+            || {
+                let b_inv = <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B
+                    .inverse()
+                    .expect("B inverse must exist");
+                
+                let one_plus_te_y_coord = one_plus_y_ed.get_value().get()?;
+                let one_minus_te_y_coord = one_minus_y_ed.get_value().get()?;
+
+                let one_plus_te_y_coord_over_one_minus_te_y_coord = one_plus_te_y_coord *
+                    one_minus_te_y_coord
+                    .inverse()
+                    .ok_or(SynthesisError::Other("Should be able to compute inverse of (1 - y_te)".to_string()))?;
+
+                let te_x_coord_inv = te_pk_x_coordinate_g.get_value().get()?
+                    .inverse()
+                    .ok_or(SynthesisError::Other("Should be able to compute inverse of x_te".to_string()))?;
+                
+                Ok(b_inv * &one_plus_te_y_coord_over_one_minus_te_y_coord * &te_x_coord_inv)
+            }
+        )?;
+
+        // Check SW y coordinate
+        // y_sw * (x_ed(1 - y_ed)B) = (1 + y_ed)
+        {
+            let b_x_ed_times_one_minus_y_ed = one_minus_y_ed
+                .mul(cs.ns(|| "x_ed(1 - y_ed)"), &te_pk_x_coordinate_g)?
+                .mul_by_constant(cs.ns(|| "x_ed(1 - y_ed)B"), &<SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B)?;
+            
+            sw_pk_y_coordinate_g.mul_equals(
+                cs.ns(|| "check y sw"),
+                &b_x_ed_times_one_minus_y_ed,
+                &one_plus_y_ed
+            )?;
+        }
+
+        Ok(ECPointSimulationGadget::new(sw_pk_x_coordinate_g, sw_pk_y_coordinate_g, Boolean::Constant(false)))
+    }
+
+    /// Extract TE point from y coordinate and x sign, then convert it to SW and output it.
+    fn get_sw_pk_from_te_pk<CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        te_pk_x_sign_bit_g: Boolean,
+        te_pk_y_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement>,
+    ) -> Result<ECPointSimulationGadget, SynthesisError>
+    {
+        // Reconstruct TE x coordinate
+        let te_pk_x_coordinate_g = Self::get_te_pk_x_from_x_sign_and_y(
+            cs.ns(|| "Reconstruct te x coordinate"),
+            te_pk_x_sign_bit_g,
+            &te_pk_y_coordinate_g
+        )?;
+
+        // Convert TE point to a SW one
+        Self::convert_te_to_sw_point(
+            cs.ns(|| "convert TE pk to SW"),
+            te_pk_x_coordinate_g,
+            te_pk_y_coordinate_g
+        )
+    }
+
+    /// Extract pk x coordinate sign and pk y coordinate from pk bits, assumed to be in LE
+    pub(crate) fn get_x_sign_and_y_coord_from_pk_bits<CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        public_key_bits_g: &[Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
+    ) -> Result<(Boolean, NonNativeFieldGadget<SimulatedFieldElement, FieldElement>), SynthesisError>
+    {
+        let mut pk_bits_g = public_key_bits_g.clone();
+        pk_bits_g.reverse(); // BE
+
+        // Get the Boolean corresponding to the sign of the x coordinate
+        let pk_x_sign_bit_g = pk_bits_g[0];
+
+        // Read the y coordinate of the public key in TE form
+        let pk_y_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement> =
+            NonNativeFieldGadget::from_bits(
+                cs.ns(|| "alloc pk y coordinate"),
+                &pk_bits_g[1..],
+            )?;
+        
+        Ok((pk_x_sign_bit_g, pk_y_coordinate_g))
+    }
+
+    pub(crate) fn _enforce_pk_ownership<CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        te_pk_x_sign_bit_g: Boolean,
+        te_pk_y_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement>,
+        secret_key_bits_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+    ) -> Result<(), SynthesisError> 
+    {
+        // Convert the TE pk to a SW one
+        let expected_public_key_g = Self::get_sw_pk_from_te_pk(
+            cs.ns(|| "Convert TE pk to SW pk"),
+            te_pk_x_sign_bit_g,
+            te_pk_y_coordinate_g
+        )?;
+
+        // Compute public key from secret key
+        let current_public_key_g = ECPointSimulationGadget::mul_bits_fixed_base(
+            &SimulatedSWGroup::prime_subgroup_generator().into_projective(),
+            cs.ns(|| "G^sk"),
+            &secret_key_bits_g,
+        )?;
+
+        // Enforce equality with the one computed from pk bits
+        current_public_key_g.enforce_equal(
+            cs.ns(|| "expected_pk == actual_pk"),
+            &expected_public_key_g
+        )?;
+
+        Ok(())
+    }
+
+    /// Enforce ownership of the public key in the Sc Utxo/FT by enforcing its derivation from the secret key.
+    /// secret key and public key bits are assumed to be in little endian bit order.
+    pub fn enforce_pk_ownership<CS: ConstraintSystemAbstract<FieldElement>>(
+        mut cs: CS,
+        csw_data_g: &CswProverDataGadget,
+        should_enforce_utxo_withdrawal_g: &Boolean,
+    ) -> Result<(), SynthesisError> {
+        // Get public_key_y_coord and x sign from both sc utxo and ft and select the correct one
+        let (pk_x_sign_bit_g, pk_y_coordinate_g) = {
+            let (utxo_pk_x_sign_bit_g, utxo_pk_y_coordinate_g) =
+                Self::get_x_sign_and_y_coord_from_pk_bits(
+                    cs.ns(|| "unpack utxo pk bits"),
+                    &csw_data_g.utxo_data_g.input_g.output_g.spending_pub_key_g,
+                )?;
+
+            let (ft_pk_x_sign_bit_g, ft_pk_y_coordinate_g) =
+                Self::get_x_sign_and_y_coord_from_pk_bits(
+                    cs.ns(|| "unpack ft pk bits"),
+                    &csw_data_g.ft_data_g.ft_output_g.receiver_pub_key_g,
+                )?;
+
+            let selected_pk_x_sign_bit_g = Boolean::conditionally_select(
+                cs.ns(|| "select x sign bit"),
+                &should_enforce_utxo_withdrawal_g,
+                &utxo_pk_x_sign_bit_g,
+                &ft_pk_x_sign_bit_g,
+            )?;
+
+            let selected_pk_y_coordinate_g = NonNativeFieldGadget::conditionally_select(
+                cs.ns(|| "select pk_y_coordinate_g"),
+                &should_enforce_utxo_withdrawal_g,
+                &utxo_pk_y_coordinate_g,
+                &ft_pk_y_coordinate_g,
+            )?;
+
+            (selected_pk_x_sign_bit_g, selected_pk_y_coordinate_g)
+        };
+
+        // Conditionally select the secret key
+        let mut secret_key_bits_g = Vec::<Boolean>::with_capacity(SIMULATED_SCALAR_FIELD_MODULUS_BITS);
+    
+        for i in 0..SIMULATED_SCALAR_FIELD_MODULUS_BITS {
+            let secret_key_bit_g = Boolean::conditionally_select(
+                cs.ns(|| format!("read secret key bit {}", i)),
+                &should_enforce_utxo_withdrawal_g,
+                &csw_data_g.utxo_data_g.input_g.secret_key_g[i],
+                &csw_data_g.ft_data_g.ft_input_secret_key_g[i],
+            )?;
+            secret_key_bits_g.push(secret_key_bit_g);
+        }
+
+        Self::_enforce_pk_ownership(
+            cs.ns(|| "enforce ownership inner"),
+            pk_x_sign_bit_g,
+            pk_y_coordinate_g,
+            secret_key_bits_g.try_into().unwrap()
+        )
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::deserialize_fe_unchecked;
+
+    use super::*;
+    use algebra::ToBits;
+    use r1cs_core::{ConstraintSystem, SynthesisMode, ConstraintSystemDebugger};
+
+    use serial_test::*;
+
+    #[serial]
+#[test]
+    fn test_sc_public_key_gadget() {
+        let test_sc_secrets = vec![
+            "50d5e4c0b15402013941a3c525c6af85e7ab8a2da39a59707211ddd53def965e",
+            "70057ef1805240ab9bf2772c0e25a3b57c5911e7dca4120f8e265d750ed77346",
+            "1089ba2f1bee0bbc8f2270541bb22595026fe7d828033845d5ed82f31386b65d",
+        ];
+    
+        let test_sc_te_public_keys = vec![
+            "f165e1e5f7c290e52f2edef3fbab60cbae74bfd3274f8e5ee1de3345c954a166",
+            "8f80338eef733ec67c601349c4a8251393b28deb722cfd0a91907744a26d3dab",
+            "cc1983469486418cd66dcdc8664677c263487b736840cfd1532e144386fa7610",
+        ];
+
+        let test_case = |test_sc_secret: &str, test_sc_public_key: &str, cs: &mut ConstraintSystem<FieldElement>| {
+            // Parse pk LE bits and alloc them
+            let pk_bytes = hex::decode(test_sc_public_key).unwrap();
+            let pk_bits = bytes_to_bits(pk_bytes.as_slice());
+            let pk_bits_g = Vec::<Boolean>::alloc(
+                cs.ns(|| "alloc pk bits"),
+                || Ok(pk_bits.as_slice())
+            ).unwrap();
+
+            // Parse sk LE bits and alloc them
+            let sk_bytes = hex::decode(test_sc_secret).unwrap();
+            let sk = deserialize_fe_unchecked(sk_bytes.to_vec());
+
+            // Convert it to bits and reverse them (circuit expects them in LE but write_bits outputs in BE)
+            let mut sk_bits = sk.write_bits();
+            sk_bits.reverse();
+            let sk_bits_g = Vec::<Boolean>::alloc(
+                cs.ns(|| "alloc sk bits"),
+                || Ok(sk_bits.as_slice())
+            ).unwrap();
+
+            // Get sign and y coord from pk bits
+            let(te_pk_x_sign_g, te_pk_y_coord_g) = ScPublicKeyGadget::get_x_sign_and_y_coord_from_pk_bits(
+                cs.ns(|| "get te pk x sign and y coordinate"),
+                &(pk_bits_g.try_into().unwrap())
+            ).unwrap();
+
+            // Enforce pk ownership
+            ScPublicKeyGadget::_enforce_pk_ownership(
+                cs.ns(|| "enforce pk ownership"),
+                te_pk_x_sign_g,
+                te_pk_y_coord_g,
+                sk_bits_g.try_into().unwrap()
+            ).unwrap();
+        };
+
+        // Positive test cases
+        for (test_sc_secret, test_sc_public_key) in test_sc_secrets.iter().zip(test_sc_te_public_keys.iter()) {
+            let mut cs = ConstraintSystem::<FieldElement>::new(SynthesisMode::Debug);
+            test_case(test_sc_secret, test_sc_public_key, &mut cs);
+            assert!(cs.is_satisfied());
+        }
+
+        // Negative test cases
+        for (test_sc_secret, test_sc_public_key) in test_sc_secrets.into_iter().rev().zip(test_sc_te_public_keys) {
+            let mut cs = ConstraintSystem::<FieldElement>::new(SynthesisMode::Debug);
+            test_case(test_sc_secret, test_sc_public_key, &mut cs);
+            assert!(!cs.is_satisfied());
+        }
     }
 }

@@ -53,13 +53,16 @@ pub const SIMULATED_SCALAR_FIELD_MODULUS_BITS: usize =
 pub const SIMULATED_SCALAR_FIELD_REPR_SHAVE_BITS: usize =
     <SimulatedScalarFieldElement as PrimeField>::Params::REPR_SHAVE_BITS as usize;
 
+pub const SIMULATED_SCALAR_FIELD_BYTE_SIZE: usize = (SIMULATED_SCALAR_FIELD_MODULUS_BITS + SIMULATED_SCALAR_FIELD_REPR_SHAVE_BITS)/8;
+
 pub type SimulatedFieldElement = ed25519Fq;
 pub const SIMULATED_FIELD_BYTE_SIZE: usize =
     ((<SimulatedFieldElement as PrimeField>::Params::MODULUS_BITS
         + <SimulatedFieldElement as PrimeField>::Params::REPR_SHAVE_BITS)
         / 8) as usize;
 
-pub type SimulatedGroup = algebra::curves::ed25519::SWEd25519Affine;
+pub type SimulatedSWGroup = algebra::curves::ed25519::SWEd25519Affine;
+pub type SimulatedTEGroup = algebra::curves::ed25519::TEEd25519Affine;
 pub type SimulatedCurveParameters = algebra::curves::ed25519::Ed25519Parameters;
 pub type ECPointSimulationGadget =
     GroupAffineNonNativeGadget<SimulatedCurveParameters, FieldElement, SimulatedFieldElement>;

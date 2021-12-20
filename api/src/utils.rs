@@ -153,6 +153,7 @@ pub(crate) fn parse_fixed_size_byte_array_from_jobject<const N: usize>(
         .unwrap()
 }
 
+#[allow(unused)]
 pub(crate) fn parse_fixed_size_bits_from_jbytearray_in_jobject<const N: usize>(
     _env: &JNIEnv,
     obj: JObject,

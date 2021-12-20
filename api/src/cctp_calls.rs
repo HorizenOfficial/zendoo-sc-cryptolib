@@ -521,6 +521,9 @@ mod test {
     use demo_circuit::generate_circuit_keypair;
     use rand::Rng;
 
+    use serial_test::*;
+
+
     fn create_sample_naive_threshold_sig_circuit(
         bt_num: usize,
         custom_fields_len: usize,
@@ -700,7 +703,8 @@ mod test {
         .unwrap());
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn sample_calls_naive_threshold_sig_circuit() {
         let tmp_dir = std::env::temp_dir();
         let ps_type = ProvingSystem::CoboundaryMarlin;
@@ -751,7 +755,8 @@ mod test {
         }
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn sample_calls_schnorr_sig_prove_verify() {
         let mut rng = OsRng;
         let msg = FieldElement::rand(&mut rng);
@@ -795,7 +800,8 @@ mod test {
         assert!(!schnorr_verify_signature(&wrong_msg, &pk, &sig).unwrap());
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn sample_calls_vrf_prove_verify() {
         let mut rng = OsRng;
         let msg = FieldElement::rand(&mut rng);
@@ -848,7 +854,8 @@ mod test {
         assert!(vrf_proof_to_hash(&wrong_msg, &pk, &vrf_proof).is_err());
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn sample_calls_merkle_path() {
         let height = 6;
         let leaves_num = 2usize.pow(height as u32);
@@ -910,7 +917,8 @@ mod test {
         }
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn sample_calls_poseidon_hash() {
         let mut rng = OsRng;
         let hash_input = vec![FieldElement::rand(&mut rng); 2];

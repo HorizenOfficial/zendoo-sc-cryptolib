@@ -227,6 +227,8 @@ mod test {
     use bit_vec::BitVec;
     use blake2s_simd::{Hash, Params};
 
+    use serial_test::*;
+
     fn hash_to_curve<F: PrimeField, G: AffineCurve + FromCompressedBits>(
         tag: &[u8],
         personalization: &[u8],
@@ -298,7 +300,8 @@ mod test {
         g
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_pk_null_gen() {
         let tag = b"Strontium Sr 90";
         let personalization = constants::NULL_PK_PERSONALIZATION;
@@ -310,7 +313,8 @@ mod test {
         assert_eq!(htc_out, null_pk);
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_vrf_group_hash_gen() {
         let personalization = constants::VRF_GROUP_HASH_GENERATORS_PERSONALIZATION;
 
@@ -333,7 +337,8 @@ mod test {
         assert_eq!(gh_generators, VRFParams::new().group_hash_generators);
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_phantom_field_element() {
         let tag = b"Krypton 36";
         let field_element = read_field_element_from_buffer_with_padding(tag).unwrap();

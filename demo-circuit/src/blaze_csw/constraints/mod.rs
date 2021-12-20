@@ -1,4 +1,4 @@
-use algebra::{AffineCurve, PrimeField};
+use algebra::{PrimeField, Field};
 use cctp_primitives::{
     type_mapping::FieldElement,
     utils::commitment_tree::{hash_vec, DataAccumulator},
@@ -6,9 +6,10 @@ use cctp_primitives::{
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 use r1cs_crypto::{FieldBasedHashGadget, FieldHasherGadget};
 use r1cs_std::{
-    alloc::AllocGadget, boolean::Boolean,
-    fields::nonnative::nonnative_field_gadget::NonNativeFieldGadget, groups::GroupGadget,
-    prelude::EqGadget, select::CondSelectGadget, FromBitsGadget,
+    alloc::AllocGadget,
+    fields::FieldGadget,
+    eq::EqGadget,
+    FromBitsGadget,
 };
 
 use crate::{
@@ -16,7 +17,7 @@ use crate::{
     FieldElementGadget, WithdrawalCertificateData, PHANTOM_FIELD_ELEMENT,
 };
 
-use self::data_structures::CswProverDataGadget;
+use self::data_structures::{CswProverDataGadget, ScPublicKeyGadget};
 
 pub mod data_structures;
 
@@ -153,111 +154,6 @@ impl CeasedSidechainWithdrawalCircuit {
             csw_sys_data_hash: PHANTOM_FIELD_ELEMENT,
         }
     }
-
-    /// Extract the sign of the x coordinate and the y coordinate itself from
-    /// 'public_key_bits_g', assuming to be passed in BE form.
-    fn get_x_sign_and_y_coord_from_pk_bits<CS: ConstraintSystemAbstract<FieldElement>>(
-        mut cs: CS,
-        public_key_bits_g: &[Boolean; SIMULATED_FIELD_BYTE_SIZE * 8],
-    ) -> Result<
-        (
-            Boolean,
-            NonNativeFieldGadget<SimulatedFieldElement, FieldElement>,
-        ),
-        SynthesisError,
-    > {
-        // Get the Boolean corresponding to the sign of the x coordinate
-        let pk_x_sign_bit_g = public_key_bits_g[0];
-
-        // Read a NonNativeFieldGadget(ed25519Fq) from the other Booleans
-        let pk_y_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement> =
-            NonNativeFieldGadget::from_bits(
-                cs.ns(|| "alloc pk y coordinate"),
-                &public_key_bits_g[1..],
-            )?;
-
-        Ok((pk_x_sign_bit_g, pk_y_coordinate_g))
-    }
-
-    /// Enforce ownership of the public key in the Sc Utxo/FT by enforcing its derivation from the secret key.
-    fn enforce_pk_ownership<CS: ConstraintSystemAbstract<FieldElement>>(
-        mut cs: CS,
-        csw_data_g: &CswProverDataGadget,
-        should_enforce_utxo_withdrawal_g: &Boolean,
-    ) -> Result<(), SynthesisError> {
-        // Get public_key_y_coord and x sign from both sc utxo and ft and select the correct one
-        let (pk_x_sign_bit_g, pk_y_coordinate_g) = {
-            let (utxo_pk_x_sign_bit_g, utxo_pk_y_coordinate_g) =
-                Self::get_x_sign_and_y_coord_from_pk_bits(
-                    cs.ns(|| "unpack utxo pk bits"),
-                    &csw_data_g.utxo_data_g.input_g.output_g.spending_pub_key_g,
-                )?;
-
-            let (ft_pk_x_sign_bit_g, ft_pk_y_coordinate_g) =
-                Self::get_x_sign_and_y_coord_from_pk_bits(
-                    cs.ns(|| "unpack ft pk bits"),
-                    &csw_data_g.ft_data_g.ft_output_g.receiver_pub_key_g,
-                )?;
-
-            let selected_pk_x_sign_bit_g = Boolean::conditionally_select(
-                cs.ns(|| "select x sign bit"),
-                &should_enforce_utxo_withdrawal_g,
-                &utxo_pk_x_sign_bit_g,
-                &ft_pk_x_sign_bit_g,
-            )?;
-
-            let selected_pk_y_coordinate_g = NonNativeFieldGadget::conditionally_select(
-                cs.ns(|| "select pk_y_coordinate_g"),
-                &should_enforce_utxo_withdrawal_g,
-                &utxo_pk_y_coordinate_g,
-                &ft_pk_y_coordinate_g,
-            )?;
-
-            (selected_pk_x_sign_bit_g, selected_pk_y_coordinate_g)
-        };
-
-        let mut secret_key_bits_g =
-            Vec::<Boolean>::with_capacity(SIMULATED_SCALAR_FIELD_MODULUS_BITS);
-
-        // Conditionally select the secret key
-        for i in 0..SIMULATED_SCALAR_FIELD_MODULUS_BITS {
-            let secret_key_bit_g = Boolean::conditionally_select(
-                cs.ns(|| format!("read secret key bit {}", i)),
-                &should_enforce_utxo_withdrawal_g,
-                &csw_data_g.utxo_data_g.input_g.secret_key_g[i],
-                &csw_data_g.ft_data_g.ft_input_secret_key_g[i],
-            )?;
-            secret_key_bits_g.push(secret_key_bit_g);
-        }
-
-        // We assume secret key bits to be in Big Endian form. TODO: Check endianness
-        secret_key_bits_g.reverse();
-
-        // Compute public key from secret key
-        let current_public_key_g = ECPointSimulationGadget::mul_bits_fixed_base(
-            &SimulatedGroup::prime_subgroup_generator().into_projective(),
-            cs.ns(|| "G^sk"),
-            &secret_key_bits_g,
-        )?;
-
-        let x_sign = current_public_key_g
-            .x
-            .is_odd(cs.ns(|| "public key x coordinate is odd"))?;
-
-        // Enforce x_sign is the same
-        x_sign.enforce_equal(
-            cs.ns(|| "Enforce x_sign == pk_x_sign_bit_g"),
-            &pk_x_sign_bit_g,
-        )?;
-
-        // Enforce y_coordinate is the same
-        current_public_key_g.y.enforce_equal(
-            cs.ns(|| "Enforce y coordinate is equal"),
-            &pk_y_coordinate_g,
-        )?;
-
-        Ok(())
-    }
 }
 
 impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
@@ -318,9 +214,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 
             // Reconstruct scb_new_mst_root from firt 2 custom fields
             let scb_new_mst_root = {
-                use algebra::Field;
-                use r1cs_std::fields::FieldGadget;
-
+            
                 // Compute 2^128 in the field
                 let pow = FieldElement::one().double().pow(&[128u64]);
 
@@ -368,7 +262,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         // NOTE: We could've done the same for nullifier and amount checks, but we didn't in order
         //       to have cleaner code (we lose only 2 constraints anyway)
 
-        Self::enforce_pk_ownership(
+        ScPublicKeyGadget::enforce_pk_ownership(
             cs.ns(|| "enforce pk ownership"),
             &csw_data_g,
             &should_enforce_utxo_withdrawal_g,
@@ -435,8 +329,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 #[cfg(test)]
 mod test {
     use algebra::{
-        fields::ed25519::fr::Fr as ed25519Fr, Field, Group, ProjectiveCurve,
-        UniformRand,
+        Field, UniformRand, ToBits,
     };
     use cctp_primitives::{
         commitment_tree::{
@@ -447,72 +340,77 @@ mod test {
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
         type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
         utils::{
-            get_bt_merkle_root, poseidon_hash::get_poseidon_hash_constant_length,
-            serialization::serialize_to_buffer,
+            get_bt_merkle_root, poseidon_hash::get_poseidon_hash_constant_length, serialization::serialize_to_buffer,
         },
     };
-    use primitives::{bytes_to_bits, FieldBasedHash, FieldBasedMerkleTree, FieldHasher};
+    use primitives::{FieldBasedHash, FieldBasedMerkleTree, FieldHasher};
     use r1cs_core::debug_circuit;
-    use rand::{rngs::OsRng, thread_rng, Rng};
+    use rand::{thread_rng, Rng};
     use std::convert::TryInto;
 
     use crate::{
-        utils::split_field_element_at_index, CswFtOutputData, CswProverData, CswUtxoInputData,
+        CswFtOutputData, CswProverData, CswUtxoInputData,
         CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
-        MST_MERKLE_TREE_HEIGHT, PHANTOM_FIELD_ELEMENT, SC_TX_HASH_LENGTH,
+        MST_MERKLE_TREE_HEIGHT, PHANTOM_FIELD_ELEMENT, SC_TX_HASH_LENGTH, split_field_element_at_index, SC_PUBLIC_KEY_LENGTH, deserialize_fe_unchecked,
     };
 
     use super::*;
 
-    type SimulatedScalarFieldElement = ed25519Fr;
+    use serial_test::*;
 
     enum CswType {
         UTXO,
         FT,
     }
 
-    fn generate_key_pair() -> (Vec<u8>, Vec<u8>) {
-        let rng = &mut OsRng::default();
+    fn get_test_key_pair() -> ([u8; SC_PUBLIC_KEY_LENGTH], [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS]) {
+        let test_sc_secrets = vec![
+            "50d5e4c0b15402013941a3c525c6af85e7ab8a2da39a59707211ddd53def965e",
+            "70057ef1805240ab9bf2772c0e25a3b57c5911e7dca4120f8e265d750ed77346",
+            "1089ba2f1bee0bbc8f2270541bb22595026fe7d828033845d5ed82f31386b65d",
+            "305510ff60436930d09ccb8e2321211967aadfe904f30ccb13f600786f9e297a",
+            "c80155e642065ca1cc575f69fa658f837b880df76771a335f40ce27240735443",
+            "50e8a8b680918c1840bedfa1650e53f94c8823e81f6efd24d9e37fedfab9344f",
+            "98b4a1c05a44708014a895d27923c7c20f3260e1bc9f2d5edcd6996e4d017944",
+            "b840b87072d095849d433ec11ddd49b138f1823dae16268dcbe46d8035635e74",
+            "b07b2199ad9258449889686423a3c9382cf428355ac348bce40c9d639edf6759",
+            "302fcad55ae4b8f54ab3ab01eaf171873d38676075dff601e4b12a377c7c217d",
+            "001d2489d7b8caab450822ee6393d0b9324da8af67fda2b2cba19b46f64de852",
+            "3811067e9f19d35b2f7487eeb08076a9c4a459dec10791095ebae03bb613f375",
+        ];
+    
+        let test_sc_te_public_keys = vec![
+            "f165e1e5f7c290e52f2edef3fbab60cbae74bfd3274f8e5ee1de3345c954a166",
+            "8f80338eef733ec67c601349c4a8251393b28deb722cfd0a91907744a26d3dab",
+            "cc1983469486418cd66dcdc8664677c263487b736840cfd1532e144386fa7610",
+            "88166617f91bc145b243c2ae6e1088f1208bf17311cca74dbf032fee25b219e0",
+            "6f97404947a00311785785217b1759b002cbae16da26e0801f0dcbe4e00d5f45",
+            "fb7a8589cbe59427b2e9c91a5091bf43cf2080f1d4f1947af0d214ca825076f0",
+            "30da57cda802def8dfd764812f2e3c82eb2871b2a14e3bb634f2195ef733796d",
+            "622c8cb09b558fecfc60ce1ec4b1e3014fe04f4628e06cad58ce9ded4d192a2d",
+            "3733056f59780d2f17adf073582634940c6ae57d530345d28e9b6b7cf1d3dcfb",
+            "423cb2cdd87b3e612517cf77e68d918914b0705d8937ef7e25b24a53620bc9d1",
+            "f5206f3569998819efc57e83e8521110e9414c8dca8c5e96c173366e9acd958f",
+            "f1785d4d2f6017ad7a25f795db5beb48d38d6f8cd44dcc3b7f321b8e2a5352fd",
+        ];
 
-        // Generate the secret key
-        let secret = SimulatedScalarFieldElement::rand(rng);
+        let rng = &mut thread_rng();
+        let random_idx = rng.gen_range(0..test_sc_secrets.len());
 
-        // Compute GENERATOR^SECRET_KEY
-        let public_key = SimulatedGroup::prime_subgroup_generator()
-            .into_projective()
-            .mul(&secret)
-            .into_affine();
+        let (test_sc_secret, test_sc_public_key) = (test_sc_secrets[random_idx], test_sc_te_public_keys[random_idx]);
+        
+        // Parse pk LE bits
+        let pk_bytes = hex::decode(test_sc_public_key).unwrap();
 
-        // Store the sign (last bit) of the X coordinate
-        // The value is left-shifted to be used later in an OR operation
-        let x_sign = if public_key.x.is_odd() { 1 << 7 } else { 0u8 };
+        // Parse sk LE bits
+        let sk_bytes = hex::decode(test_sc_secret).unwrap();
+        let sk = deserialize_fe_unchecked(sk_bytes.to_vec());
 
-        // Extract the public key bytes as Y coordinate
-        let y_coordinate = public_key.y;
-        let mut pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
+        // Convert it to bits and reverse them (circuit expects them in LE but write_bits outputs in BE)
+        let mut sk_bits = sk.write_bits();
+        sk_bits.reverse();
 
-        // Use the last (null) bit of the public key to store the sign of the X coordinate
-        // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus
-        let len = pk_bytes.len();
-        pk_bytes[len - 1] |= x_sign;
-
-        // Reverse each pk byte
-        for i in 0..pk_bytes.len() {
-            pk_bytes[i] = pk_bytes[i].reverse_bits();
-        }
-
-        pk_bytes.reverse();
-
-        let mut secret_bytes = serialize_to_buffer(&secret, None).unwrap();
-
-        // Reverse each sk byte
-        for i in 0..secret_bytes.len() {
-            secret_bytes[i] = secret_bytes[i].reverse_bits();
-        }
-
-        secret_bytes.reverse();
-
-        (secret_bytes, pk_bytes)
+        (pk_bytes.try_into().unwrap(), sk_bits.try_into().unwrap())
     }
 
     fn compute_mst_tree_data(
@@ -578,22 +476,18 @@ mod test {
     fn generate_test_utxo_csw_data(
         num_custom_fields: u32,
         num_commitment_hashes: u32,
-        secret_key_bytes: Vec<u8>,
-        public_key_bytes: Vec<u8>,
+        secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+        spending_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
     ) -> CswProverData {
         let rng = &mut thread_rng();
         let utxo_input_data = CswUtxoInputData {
             output: CswUtxoOutputData {
-                spending_pub_key: bytes_to_bits(&public_key_bytes).try_into().unwrap(),
+                spending_pub_key,
                 amount: rng.gen(),
                 nonce: rng.gen(),
-                custom_hash: bytes_to_bits(&rng.gen::<[u8; FIELD_SIZE]>())
-                    .try_into()
-                    .unwrap(),
+                custom_hash: rng.gen::<[u8; FIELD_SIZE]>(),
             },
-            secret_key: bytes_to_bits(&secret_key_bytes)[SIMULATED_SCALAR_FIELD_REPR_SHAVE_BITS..]
-                .try_into()
-                .unwrap(),
+            secret_key
         };
 
         let (mst_root, mst_leaf_hash, mst_path) =
@@ -678,14 +572,14 @@ mod test {
         sidechain_id: FieldElement,
         num_custom_fields: u32,
         num_commitment_hashes: u32,
-        secret_key_bytes: Vec<u8>,
-        public_key_bytes: Vec<u8>,
+        ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+        receiver_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
     ) -> CswProverData {
         let rng = &mut thread_rng();
 
         let ft_output_data = CswFtOutputData {
             amount: rng.gen(),
-            receiver_pub_key: public_key_bytes.try_into().unwrap(),
+            receiver_pub_key,
             payback_addr_data_hash: (0..MC_RETURN_ADDRESS_BYTES)
                 .map(|_| rng.gen())
                 .collect::<Vec<u8>>()
@@ -719,10 +613,7 @@ mod test {
 
         let mut ft_data = CswFtProverData {
             ft_output: ft_output_data,
-            ft_input_secret_key: bytes_to_bits(&secret_key_bytes)
-                [SIMULATED_SCALAR_FIELD_REPR_SHAVE_BITS..]
-                .try_into()
-                .unwrap(),
+            ft_input_secret_key,
             mcb_sc_txs_com_start: PHANTOM_FIELD_ELEMENT,
             merkle_path_to_sc_hash: sc_tree_path,
             ft_tree_path,
@@ -772,14 +663,14 @@ mod test {
         sidechain_id: FieldElement,
         num_custom_fields: u32,
         num_commitment_hashes: u32,
-        secret_key_bytes: Option<Vec<u8>>,
-        public_key_bytes: Option<Vec<u8>>,
+        secret_key: Option<[bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS]>,
+        public_key: Option<[u8; SC_PUBLIC_KEY_LENGTH]>,
     ) -> CswProverData {
-        let (secret_key, public_key) = {
-            if secret_key_bytes.is_none() || public_key_bytes.is_none() {
-                generate_key_pair()
+        let (public_key, secret_key) = {
+            if secret_key.is_none() || public_key.is_none() {
+                get_test_key_pair()
             } else {
-                (secret_key_bytes.unwrap(), public_key_bytes.unwrap())
+                (public_key.unwrap(), secret_key.unwrap())
             }
         };
 
@@ -900,7 +791,8 @@ mod test {
         )
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_utxo() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, _) =
             generate_circuit_test_data();
@@ -929,7 +821,8 @@ mod test {
         assert!(failing_constraint.is_none());
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_ft() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, _) =
             generate_circuit_test_data();
@@ -958,7 +851,8 @@ mod test {
         assert!(failing_constraint.is_none());
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_utxo_wrong_cert_hash() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -992,7 +886,8 @@ mod test {
             .contains("enforce sc_last_wcert_hash == last_wcert_hash"));
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_utxo_without_certificate() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1043,7 +938,8 @@ mod test {
             .contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_utxo_wrong_mst_path() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1111,7 +1007,8 @@ mod test {
             .contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_utxo_wrong_nullifier() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1143,7 +1040,8 @@ mod test {
             .contains("require(nullifier == outputHash)"));
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_utxo_wrong_amount() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1175,13 +1073,14 @@ mod test {
             .contains("input.amount == sys_data.amount"));
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_utxo_wrong_public_key_x_sign() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        // Change the first bit, the check over the X sign should fail
-        let (secret_key, mut public_key) = generate_key_pair();
+        // Change the first bit
+        let (mut public_key, secret_key) = get_test_key_pair();
         public_key[0] ^= 1;
 
         let csw_prover_data = generate_test_csw_prover_data(
@@ -1203,24 +1102,26 @@ mod test {
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint
-            .unwrap()
-            .contains("Enforce x_sign == pk_x_sign_bit_g"));
+        assert!(
+            failing_constraint
+                .unwrap()
+                .contains("enforce pk ownership/enforce ownership inner") // Might fail for multiple reasons, so let's be a bit more general here.
+        );
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_utxo_wrong_public_key_y_coordinate() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        // Change any random bit of the public key (not the first one)
-        let (random_byte, random_bit) = {
-            let random_number = thread_rng().gen_range(1..SIMULATED_FIELD_BYTE_SIZE * 8);
-            (random_number / 8, random_number % 8)
+        // Generate random (but valid) point and take its y coordinate
+        let random_bytes = {
+            let random_y = SimulatedTEGroup::rand(&mut thread_rng()).y;
+            serialize_to_buffer(&random_y, None).unwrap()
         };
 
-        let (secret_key, mut public_key) = generate_key_pair();
-        public_key[random_byte] ^= 1 << random_bit;
+        let (_, secret_key) = get_test_key_pair();
 
         let csw_prover_data = generate_test_csw_prover_data(
             CswType::UTXO,
@@ -1228,7 +1129,7 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             Some(secret_key),
-            Some(public_key),
+            Some(random_bytes.try_into().unwrap()),
         );
 
         let failing_constraint = test_csw_circuit(
@@ -1243,10 +1144,11 @@ mod test {
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint
             .unwrap()
-            .contains("Enforce y coordinate is equal"));
+            .contains("enforce pk ownership/enforce ownership inner/expected_pk == actual_pk/enforce condition/conditional_equals"));
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_utxo_without_constant() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, _, _) =
             generate_circuit_test_data();
@@ -1276,7 +1178,8 @@ mod test {
         assert!(failing_constraint.is_none());
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_utxo_without_custom_fields() {
         let (sidechain_id, _, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1305,7 +1208,8 @@ mod test {
         assert!(failing_constraint.is_none());
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_utxo_with_wrong_custom_fields() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1337,7 +1241,8 @@ mod test {
             .contains("enforce sc_last_wcert_hash == last_wcert_hash"));
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_ft_wrong_amount() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1369,7 +1274,8 @@ mod test {
             .contains("input.amount == sys_data.amount"));
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_ft_wrong_nullifier() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1401,7 +1307,8 @@ mod test {
             .contains("require(nullifier == outputHash)"));
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_ft_with_certificate() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1452,7 +1359,8 @@ mod test {
         assert!(failing_constraint.is_none());
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_ft_wrong_ft_path() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1514,7 +1422,8 @@ mod test {
         assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_ft_wrong_sc_hash_path() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1599,7 +1508,8 @@ mod test {
         assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_csw_circuit_ft_missing_com_tx() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();

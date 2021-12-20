@@ -445,6 +445,8 @@ mod test {
     use r1cs_core::debug_circuit;
     use rand::{rngs::OsRng, Rng};
 
+    use serial_test::*;
+
     type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, G2Projective, FieldHash>;
 
     fn get_test_circuit_instance(
@@ -620,7 +622,8 @@ mod test {
         }
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_prove_verify_naive_threshold_circuit() {
         let n = 6;
         let zk = false;
@@ -665,7 +668,8 @@ mod test {
         .unwrap());
     }
 
-    #[test]
+    #[serial]
+#[test]
     fn test_naive_threshold_circuit_is_satisfied() {
         let mut rng = OsRng::default();
         let n = 6;
