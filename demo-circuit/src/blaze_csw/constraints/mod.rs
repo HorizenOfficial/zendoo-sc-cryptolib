@@ -714,14 +714,33 @@ mod test {
         csw_prover_data: CswProverData,
         public_inputs: Option<Vec<FieldElement>>,
     ) -> Option<String> {
-        let circuit = CeasedSidechainWithdrawalCircuit::from_prover_data(
+
+        let utxo_data = {
+            if csw_prover_data.utxo_data == CswUtxoProverData::default() {
+                None
+            } else {
+                Some(csw_prover_data.utxo_data)
+            }
+        };
+
+        let ft_data = {
+            if csw_prover_data.ft_data == CswFtProverData::get_phantom(num_commitment_hashes) {
+                None
+            } else {
+                Some(csw_prover_data.ft_data)
+            }
+        };
+
+        let circuit = CeasedSidechainWithdrawalCircuit::new(
             sidechain_id,
             constant,
-            csw_prover_data.clone(),
+            csw_prover_data.sys_data.clone(),
+            Some(csw_prover_data.last_wcert),
+            utxo_data,
+            ft_data,
             num_commitment_hashes,
             num_custom_fields,
-        )
-        .unwrap();
+        ).unwrap();
 
         let failing_constraint = debug_circuit(circuit.clone()).unwrap();
 

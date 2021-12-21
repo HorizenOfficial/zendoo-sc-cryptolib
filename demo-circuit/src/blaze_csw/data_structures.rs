@@ -91,6 +91,15 @@ pub struct CswUtxoOutputData {
     pub custom_hash: [u8; SC_CUSTOM_HASH_LENGTH],
 }
 
+impl PartialEq for CswUtxoOutputData {
+    fn eq(&self, other: &Self) -> bool {
+        self.spending_pub_key == other.spending_pub_key
+            && self.amount == other.amount
+            && self.nonce == other.nonce
+            && self.custom_hash == other.custom_hash
+    }
+}
+
 impl ToConstraintField<FieldElement> for CswUtxoOutputData {
     fn to_field_elements(&self) -> Result<Vec<FieldElement>, Error> {
         DataAccumulator::init()
@@ -129,6 +138,12 @@ impl Default for CswUtxoInputData {
     }
 }
 
+impl PartialEq for CswUtxoInputData {
+    fn eq(&self, other: &Self) -> bool {
+        self.output == other.output && self.secret_key == other.secret_key
+    }
+}
+
 //TODO: Is it ok to define phantom receiver_pub_key as an array of all 0s ?
 #[derive(Clone, Default)]
 pub struct CswFtOutputData {
@@ -137,6 +152,16 @@ pub struct CswFtOutputData {
     pub payback_addr_data_hash: [u8; MC_PK_SIZE],
     pub tx_hash: [u8; SC_TX_HASH_LENGTH],
     pub out_idx: u32,
+}
+
+impl PartialEq for CswFtOutputData {
+    fn eq(&self, other: &Self) -> bool {
+        self.amount == other.amount
+            && self.receiver_pub_key == other.receiver_pub_key
+            && self.payback_addr_data_hash == other.payback_addr_data_hash
+            && self.tx_hash == other.tx_hash
+            && self.out_idx == other.out_idx
+    }
 }
 
 #[derive(Clone, Default)]
@@ -185,6 +210,12 @@ impl Default for CswUtxoProverData {
     }
 }
 
+impl PartialEq for CswUtxoProverData {
+    fn eq(&self, other: &Self) -> bool {
+        self.input == other.input && self.mst_path_to_output == other.mst_path_to_output
+    }
+}
+
 #[derive(Clone)]
 pub struct CswFtProverData {
     pub ft_output: CswFtOutputData, // FT output in the MC block
@@ -220,6 +251,20 @@ impl CswFtProverData {
             wcert_tree_root: PHANTOM_FIELD_ELEMENT,
             sc_txs_com_hashes: vec![PHANTOM_FIELD_ELEMENT; commitment_hashes_number as usize],
         }
+    }
+}
+
+impl PartialEq for CswFtProverData {
+    fn eq(&self, other: &Self) -> bool {
+        self.ft_output == other.ft_output
+            && self.ft_input_secret_key == other.ft_input_secret_key
+            && self.mcb_sc_txs_com_start == other.mcb_sc_txs_com_start
+            && self.merkle_path_to_sc_hash == other.merkle_path_to_sc_hash
+            && self.ft_tree_path == other.ft_tree_path
+            && self.sc_creation_commitment == other.sc_creation_commitment
+            && self.scb_btr_tree_root == other.scb_btr_tree_root
+            && self.wcert_tree_root == other.wcert_tree_root
+            && self.sc_txs_com_hashes == other.sc_txs_com_hashes
     }
 }
 
