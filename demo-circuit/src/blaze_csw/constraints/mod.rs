@@ -1554,4 +1554,42 @@ mod test {
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
     }
+
+    #[test] #[ignore]
+    fn print_circuit_info() {
+        use cctp_primitives::proving_system::{ProvingSystem, compute_proof_vk_size};
+
+        let max_proof_plus_vk_size = 9 * 1024;
+        let range_sizes = (19..=20).map(|num| num * 100);
+    
+        for range_size in range_sizes {
+            println!("**********************************************************");
+            println!("Num hashes: {} (Num epochs: {})", range_size, range_size/2);
+
+            let circ = CeasedSidechainWithdrawalCircuit::get_instance_for_setup(range_size, 2, false);
+            let index = CoboundaryMarlin::get_index_info(circ).unwrap();
+            println!(
+                "Padded num_constraints-num_variables: {}, |H| = {}",
+                std::cmp::max(index.index_info.num_constraints, index.index_info.num_witness + index.index_info.num_inputs),
+                std::cmp::max(index.index_info.num_constraints, index.index_info.num_witness + index.index_info.num_inputs).next_power_of_two()
+            );
+            println!(
+                "Num non zero = {}, |K| = {}",
+                index.index_info.num_non_zero,
+                index.index_info.num_non_zero.next_power_of_two()
+            );
+            let (proof_size, vk_size) = compute_proof_vk_size(
+                1 << 18,
+                index.index_info,
+                true,
+                ProvingSystem::CoboundaryMarlin,
+            );
+            println!("Proof size: {}", proof_size);
+            println!("Vk size: {}", vk_size);
+            println!("Proof + vk size: {}", proof_size + vk_size);
+            if proof_size + vk_size > max_proof_plus_vk_size {
+                println!("Circuit is too complex. Max proof + vk size exceeded");
+            }
+        }
+    }
 }
