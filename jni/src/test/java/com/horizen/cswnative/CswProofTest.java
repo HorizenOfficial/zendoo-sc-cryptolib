@@ -28,7 +28,7 @@ import static org.junit.Assert.assertEquals;
 public class CswProofTest {
     static long seed = 1234567890L;
     
-    static int rangeSize = 1500;
+    static int rangeSize = 10;
     static int maxProofPlusVkSize = 9 * 1024;
     static boolean zk = true;
 
