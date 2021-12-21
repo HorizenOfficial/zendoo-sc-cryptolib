@@ -1574,6 +1574,38 @@ mod test {
         assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
     }
 
+    #[serial]
+    #[test]
+    fn test_csw_circuit_ft_few_tx_com_hashes() {
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+            generate_circuit_test_data();
+
+        let mut csw_prover_data = generate_test_csw_prover_data(
+            CswType::FT,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            None,
+            None,
+        );
+
+        // Remove half of the commitment hashes to check if the circuit still works (it should automatically add phantom hashes to fill the gap)
+        csw_prover_data.ft_data.sc_txs_com_hashes.truncate(num_commitment_hashes as usize / 2);
+        assert!(csw_prover_data.ft_data.sc_txs_com_hashes.len() < num_commitment_hashes as usize);
+
+        let failing_constraint = test_csw_circuit(
+            debug_only,
+            sidechain_id,
+            num_custom_fields,
+            num_commitment_hashes,
+            constant,
+            csw_prover_data,
+            None,
+        );
+        println!("Failing constraint: {:?}", failing_constraint);
+        assert!(failing_constraint.is_none());
+    }
+
     #[test] #[ignore]
     fn print_circuit_info() {
         use cctp_primitives::proving_system::{ProvingSystem, compute_proof_vk_size};
