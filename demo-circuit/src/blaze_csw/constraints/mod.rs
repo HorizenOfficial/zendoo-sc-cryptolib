@@ -747,14 +747,17 @@ mod test {
         if !debug_only {
             load_g1_committer_key(1 << 17, 1 << 15).unwrap();
             let ck_g1 = get_g1_committer_key().unwrap();
-            let params = CoboundaryMarlin::index(ck_g1.as_ref().unwrap(), circuit.clone()).unwrap();
+
+            let setup_circuit = CeasedSidechainWithdrawalCircuit::get_instance_for_setup(num_commitment_hashes, num_custom_fields, constant.is_some());
+            let params = CoboundaryMarlin::index(ck_g1.as_ref().unwrap(), setup_circuit.clone()).unwrap();
+            let rng = &mut thread_rng();
 
             let proof = CoboundaryMarlin::prove(
                 &params.0.clone(),
                 ck_g1.as_ref().unwrap(),
                 circuit,
-                false,
-                None,
+                true,
+                Some(rng),
             )
             .unwrap();
 
