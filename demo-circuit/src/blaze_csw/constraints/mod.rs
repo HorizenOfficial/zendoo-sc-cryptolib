@@ -561,9 +561,12 @@ mod test {
     fn generate_ft_tree_data(
         ft_output_data: CswFtOutputData,
     ) -> (FieldElement, GingerMHTBinaryPath, FieldElement) {
+        let mut receiver_pub_key = ft_output_data.receiver_pub_key.clone();
+        receiver_pub_key.reverse();
+
         let ft_input_hash = hash_fwt(
             ft_output_data.amount,
-            &ft_output_data.receiver_pub_key,
+            &receiver_pub_key,
             &ft_output_data.payback_addr_data_hash,
             &ft_output_data.tx_hash,
             ft_output_data.out_idx,

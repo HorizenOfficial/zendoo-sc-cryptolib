@@ -9,7 +9,7 @@ use r1cs_std::{
     boolean::Boolean,
     fields::{nonnative::nonnative_field_gadget::NonNativeFieldGadget, FieldGadget},
     groups::GroupGadget,
-    prelude::{AllocGadget, ConstantGadget, EqGadget},
+    prelude::{AllocGadget, ConstantGadget, EqGadget, UInt8},
     select::CondSelectGadget,
     to_field_gadget_vec::ToConstraintFieldGadget,
     uint32::UInt32,
@@ -775,7 +775,7 @@ impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
 #[derive(PartialEq, Eq)]
 pub struct CswFtOutputDataGadget {
     pub amount_g: UInt64,
-    pub receiver_pub_key_g: [Boolean; SC_PUBLIC_KEY_LENGTH * 8],
+    pub receiver_pub_key_g: [UInt8; SC_PUBLIC_KEY_LENGTH],
     pub payback_addr_data_hash_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
     pub tx_hash_g: [Boolean; FIELD_SIZE * 8],
     pub out_idx_g: UInt32,
@@ -826,14 +826,12 @@ impl AllocGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
 
         let amount_g = UInt64::alloc(cs.ns(|| "alloc amount"), amount.ok())?;
 
-        let receiver_pub_key_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc receiver pub key"), || {
-            Ok(bytes_to_bits(&receiver_pub_key?))
-        })?
+        let receiver_pub_key_g = Vec::<UInt8>::alloc(cs.ns(|| "alloc receiver pub key"), || receiver_pub_key)?
         .try_into()
         .map_err(|_| {
             SynthesisError::Other(format!(
-                "invalid size for public key, expected {} bits",
-                SIMULATED_FIELD_BYTE_SIZE * 8
+                "invalid size for public key, expected {} bytes",
+                SC_PUBLIC_KEY_LENGTH
             ))
         })?;
 
@@ -890,9 +888,9 @@ impl ConstantGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
         value: &CswFtOutputData,
     ) -> Self {
         let amount_g = UInt64::constant(value.amount);
-        let receiver_pub_key_g = bytes_to_bits(&value.receiver_pub_key)
+        let receiver_pub_key_g = value.receiver_pub_key
             .iter()
-            .map(|&bit| Boolean::constant(bit))
+            .map(|&byte| UInt8::constant(byte))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -968,7 +966,11 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
         let mut bits = self.amount_g.to_bits_le();
         bits.reverse();
 
-        let mut receiver_pub_key_bits = self.receiver_pub_key_g;
+        let mut receiver_pub_key_bits = self.receiver_pub_key_g
+            .iter()
+            .rev() // Reverse the bytes due to a MC <-> SC endianness incompatibility
+            .flat_map(|byte| byte.into_bits_le())
+            .collect::<Vec<Boolean>>();
         receiver_pub_key_bits.reverse();
 
         bits.extend_from_slice(&receiver_pub_key_bits);
@@ -1690,10 +1692,20 @@ impl ScPublicKeyGadget {
                     &csw_data_g.utxo_data_g.input_g.output_g.spending_pub_key_g,
                 )?;
 
+            let ft_pk_bits_g: [Boolean; SC_PUBLIC_KEY_LENGTH * 8] = csw_data_g
+                .ft_data_g
+                .ft_output_g
+                .receiver_pub_key_g
+                .iter()
+                .flat_map(|b| b.into_bits_le())
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+            
             let (ft_pk_x_sign_bit_g, ft_pk_y_coordinate_g) =
                 Self::get_x_sign_and_y_coord_from_pk_bits(
                     cs.ns(|| "unpack ft pk bits"),
-                    &csw_data_g.ft_data_g.ft_output_g.receiver_pub_key_g,
+                    &ft_pk_bits_g,
                 )?;
 
             let selected_pk_x_sign_bit_g = Boolean::conditionally_select(

@@ -11,7 +11,7 @@ import org.junit.Test;
 public class ForwardTransferOutputTest {
 
     static long seed = 1234567890L;
-    static String expectedFwtOutputNullifierHex = "09cca1c4317c32a5fa97f0bc699b3ed7b46b993fbbeea8bb0f6a008d60e38714";
+    static String expectedFwtOutputNullifierHex = "04198752f7382281ca6b90f7900fcae807ba56e6de2bd7e2e398a1eb8f9c7139";
 
     @Test
     public void testFwtOutputNullifier() {

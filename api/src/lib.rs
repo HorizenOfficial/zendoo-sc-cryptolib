@@ -4454,9 +4454,12 @@ ffi_export!(
         // Parse sc_ft_output
         let sc_ft_output = parse_sc_ft_output(&_env, _ft_out);
 
+        let mut receiver_pub_key = sc_ft_output.receiver_pub_key.clone();
+        receiver_pub_key.reverse();
+
         match hash_fwt(
             sc_ft_output.amount,
-            &sc_ft_output.receiver_pub_key,
+            &receiver_pub_key,
             &sc_ft_output.payback_addr_data_hash,
             &sc_ft_output.tx_hash,
             sc_ft_output.out_idx,
