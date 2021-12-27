@@ -151,14 +151,14 @@ impl CeasedSidechainWithdrawalCircuit {
         Self {
             range_size,
             num_custom_fields,
-            sidechain_id: PHANTOM_FIELD_ELEMENT,
-            csw_data: CswProverData::get_phantom(range_size, num_custom_fields),
+            sidechain_id: FieldElement::default(),
+            csw_data: CswProverData::get_default(range_size, num_custom_fields),
             constant: if is_constant_present {
-                Some(PHANTOM_FIELD_ELEMENT)
+                Some(FieldElement::default())
             } else {
                 None
             },
-            csw_sys_data_hash: PHANTOM_FIELD_ELEMENT,
+            csw_sys_data_hash: FieldElement::default(),
         }
     }
 }
