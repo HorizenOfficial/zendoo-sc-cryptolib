@@ -22,7 +22,7 @@ use crate::{
     CswUtxoInputData, CswUtxoOutputData, CswUtxoProverData, ECPointSimulationGadget,
     FieldElementGadget, FieldHashGadget, GingerMHTBinaryGadget, SimulatedCurveParameters,
     SimulatedFieldElement, SimulatedSWGroup, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
-    PHANTOM_FIELD_ELEMENT, PHANTOM_SECRET_KEY_BITS, SC_CUSTOM_HASH_LENGTH,
+    PHANTOM_FIELD_ELEMENT, SC_CUSTOM_HASH_LENGTH,
     SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
 };
 
@@ -525,7 +525,7 @@ impl CswUtxoInputDataGadget {
         mut cs: CS,
     ) -> Result<Boolean, SynthesisError> {
         let phantom_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS] =
-            PHANTOM_SECRET_KEY_BITS
+            CswUtxoInputData::get_phantom().secret_key
                 .iter()
                 .map(|&bit| Boolean::constant(bit))
                 .collect::<Vec<_>>()

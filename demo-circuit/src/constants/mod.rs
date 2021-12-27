@@ -174,50 +174,6 @@ pub const PHANTOM_FIELD_ELEMENT: FieldElement = field_new!(
     ])
 );
 
-pub const PHANTOM_SECRET_KEY_BITS: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS] = [
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, true, true, false, true, true, false,
-    false, false, true, true, false, false, true, true, false, false, true, false, false, false,
-    false, false, false, true, true, false, true, true, true, false, false, true, true, false,
-    true, true, true, true, false, true, true, true, false, true, false, false, false, true, true,
-    true, false, false, false, false, false, true, true, true, true, false, false, true, false,
-    true, true, true, false, false, true, false, false, true, false, false, true, false,
-];
-pub const PHANTOM_PUBLIC_KEY_BITS: [bool; SC_PUBLIC_KEY_LENGTH * 8] = [
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, true, true, false, true, true, false,
-    false, false, true, true, false, false, true, true, false, false, true, false, false, false,
-    false, false, false, true, true, false, true, true, true, false, false, true, true, false,
-    true, true, true, true, false, true, true, true, false, true, false, false, false, true, true,
-    true, false, false, false, false, false, true, true, true, true, false, false, true, false,
-    true, true, true, false, false, true, false, false, true, false, false, true, false, true,
-    false, false,
-];
-
 pub const CSW_PHANTOM_PUB_KEY_BYTES: [u8; 32] = [217, 127, 224, 199, 8, 45, 179, 51, 115, 161, 177, 30, 203, 183, 46, 176, 168, 185, 222, 243, 130, 216, 130, 102, 88, 154, 253, 135, 199, 233, 73, 48];
 
 #[cfg(test)]

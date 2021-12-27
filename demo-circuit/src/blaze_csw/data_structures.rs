@@ -11,7 +11,7 @@ use primitives::{FieldBasedHash, FieldBasedMerkleTreePath, FieldHasher};
 
 use crate::{
     constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, MST_MERKLE_TREE_HEIGHT,
-    PHANTOM_FIELD_ELEMENT, PHANTOM_SECRET_KEY_BITS, SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH,
+    PHANTOM_FIELD_ELEMENT, SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH,
     SC_TX_HASH_LENGTH, CSW_PHANTOM_PUB_KEY_BYTES,
 };
 
@@ -157,7 +157,7 @@ impl CswUtxoInputData {
     pub fn get_phantom() -> Self {
         Self {
             output: CswUtxoOutputData::get_phantom(),
-            secret_key: PHANTOM_SECRET_KEY_BITS,
+            secret_key: [true; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
         }
     }
 }
@@ -166,7 +166,7 @@ impl Default for CswUtxoInputData {
     fn default() -> Self {
         Self {
             output: CswUtxoOutputData::default(),
-            secret_key: PHANTOM_SECRET_KEY_BITS,
+            secret_key: [false; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
         }
     }
 }
