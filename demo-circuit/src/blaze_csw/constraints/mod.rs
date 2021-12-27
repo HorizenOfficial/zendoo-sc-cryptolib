@@ -84,7 +84,7 @@ impl CeasedSidechainWithdrawalCircuit {
                 Ok(CswProverData {
                     sys_data,
                     last_wcert,
-                    utxo_data: CswUtxoProverData::default(),
+                    utxo_data: CswUtxoProverData::get_phantom(),
                     ft_data,
                 })
             } ,
@@ -97,7 +97,7 @@ impl CeasedSidechainWithdrawalCircuit {
                 Ok(CswProverData {
                     sys_data,
                     last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
-                    utxo_data: CswUtxoProverData::default(),
+                    utxo_data: CswUtxoProverData::get_phantom(),
                     ft_data,
                 })
             },
@@ -668,7 +668,7 @@ mod test {
         let csw_prover_data = CswProverData {
             sys_data,
             last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
-            utxo_data: CswUtxoProverData::default(),
+            utxo_data: CswUtxoProverData::get_phantom(),
             ft_data,
         };
 
@@ -719,7 +719,7 @@ mod test {
     ) -> Option<String> {
 
         let utxo_data = {
-            if csw_prover_data.utxo_data == CswUtxoProverData::default() {
+            if csw_prover_data.utxo_data == CswUtxoProverData::get_phantom() {
                 None
             } else {
                 Some(csw_prover_data.utxo_data)

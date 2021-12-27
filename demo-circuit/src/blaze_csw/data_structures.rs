@@ -12,7 +12,7 @@ use primitives::{FieldBasedHash, FieldBasedMerkleTreePath, FieldHasher};
 use crate::{
     constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, MST_MERKLE_TREE_HEIGHT,
     PHANTOM_FIELD_ELEMENT, PHANTOM_SECRET_KEY_BITS, SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH,
-    SC_TX_HASH_LENGTH,
+    SC_TX_HASH_LENGTH, CSW_PHANTOM_PUB_KEY_BYTES,
 };
 
 #[derive(Clone, Debug)]
@@ -104,6 +104,17 @@ pub struct CswUtxoOutputData {
     pub custom_hash: [u8; SC_CUSTOM_HASH_LENGTH],
 }
 
+impl CswUtxoOutputData {
+    pub fn get_phantom() -> Self {
+        Self {
+            spending_pub_key: CSW_PHANTOM_PUB_KEY_BYTES,
+            amount: 0,
+            nonce: 0,
+            custom_hash: [0; SC_CUSTOM_HASH_LENGTH],
+        }
+    }
+}
+
 impl PartialEq for CswUtxoOutputData {
     fn eq(&self, other: &Self) -> bool {
         self.spending_pub_key == other.spending_pub_key
@@ -140,6 +151,15 @@ impl FieldHasher<FieldElement, FieldHash> for CswUtxoOutputData {
 pub struct CswUtxoInputData {
     pub output: CswUtxoOutputData,
     pub secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+}
+
+impl CswUtxoInputData {
+    pub fn get_phantom() -> Self {
+        Self {
+            output: CswUtxoOutputData::get_phantom(),
+            secret_key: PHANTOM_SECRET_KEY_BITS,
+        }
+    }
 }
 
 impl Default for CswUtxoInputData {
@@ -209,6 +229,18 @@ impl CswSysData {
 pub struct CswUtxoProverData {
     pub input: CswUtxoInputData, // unspent output we are trying to withdraw
     pub mst_path_to_output: GingerMHTBinaryPath, // path to output in the MST of the known state
+}
+
+impl CswUtxoProverData {
+    pub fn get_phantom() -> Self {
+        Self {
+            input: CswUtxoInputData::get_phantom(),
+            mst_path_to_output: GingerMHTBinaryPath::new(vec![
+                (PHANTOM_FIELD_ELEMENT, false);
+                MST_MERKLE_TREE_HEIGHT
+            ]),
+        }
+    }
 }
 
 impl Default for CswUtxoProverData {
@@ -325,7 +357,7 @@ impl CswProverData {
         Self {
             sys_data: CswSysData::default(),
             last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
-            utxo_data: CswUtxoProverData::default(),
+            utxo_data: CswUtxoProverData::get_phantom(),
             ft_data: CswFtProverData::get_phantom(range_size),
         }
     }

@@ -336,7 +336,7 @@ impl CswUtxoOutputDataGadget {
     ) -> Result<Boolean, SynthesisError> {
         let phantom_utxo_output_g = CswUtxoOutputDataGadget::from_value(
             cs.ns(|| "alloc constant UTXO input phantom gadget"),
-            &CswUtxoOutputData::default(),
+            &CswUtxoOutputData::get_phantom(),
         );
 
         self.is_eq(cs.ns(|| "is UTXO output phantom"), &phantom_utxo_output_g)
