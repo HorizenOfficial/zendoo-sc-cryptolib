@@ -524,20 +524,8 @@ impl CswUtxoInputDataGadget {
         &self,
         mut cs: CS,
     ) -> Result<Boolean, SynthesisError> {
-        let phantom_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS] =
-            CswUtxoInputData::get_phantom().secret_key
-                .iter()
-                .map(|&bit| Boolean::constant(bit))
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap();
 
-        let b1 = self.output_g.is_phantom(cs.ns(|| "is output_g phantom"))?;
-        let b2 = self
-            .secret_key_g
-            .is_eq(cs.ns(|| "is secret_key_g phantom"), &phantom_secret_key_g)?;
-
-        Boolean::and(cs.ns(|| "is_phantom CswUtxoInputDataGadget"), &b1, &b2)
+        self.output_g.is_phantom(cs.ns(|| "is output_g phantom"))
     }
 }
 
