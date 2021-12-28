@@ -779,7 +779,7 @@ impl CswFtOutputDataGadget {
             &CswFtOutputData::get_phantom(),
         );
 
-        self.is_eq(cs.ns(|| "is FT output phantom"), &phantom_ft_input_g)
+        self.payback_addr_data_hash_g.is_eq(cs.ns(|| "is FT output phantom"), &phantom_ft_input_g.payback_addr_data_hash_g)
     }
 }
 
