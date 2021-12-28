@@ -246,7 +246,7 @@ impl CswUtxoProverData {
         Self {
             input: CswUtxoInputData::get_phantom(),
             mst_path_to_output: GingerMHTBinaryPath::new(vec![
-                (PHANTOM_FIELD_ELEMENT, false);
+                (FieldElement::default(), false);
                 MST_MERKLE_TREE_HEIGHT
             ]),
         }
@@ -258,7 +258,7 @@ impl Default for CswUtxoProverData {
         Self {
             input: CswUtxoInputData::default(),
             mst_path_to_output: GingerMHTBinaryPath::new(vec![
-                (PHANTOM_FIELD_ELEMENT, false);
+                (FieldElement::default(), false);
                 MST_MERKLE_TREE_HEIGHT
             ]),
         }
