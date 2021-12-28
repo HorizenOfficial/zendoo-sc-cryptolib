@@ -120,9 +120,10 @@ public class CswProofTest {
         );
 
         // Create proof
+        boolean debug = true;
         byte[] proof = CswProof.createProof(
             rangeSize, 2, sysData, wCert.getScId(),
-            Optional.of(wCert), Optional.of(utxoData), Optional.empty(), snarkPkPath
+            Optional.of(wCert), Optional.of(utxoData), Optional.empty(), snarkPkPath, false, true, true, true, debug
         );
 
         // Proof verification must be successfull
@@ -225,9 +226,10 @@ public class CswProofTest {
         );
 
         // Create proof
+        boolean debug = true;
         byte[] proof = CswProof.createProof(
             rangeSize, 2, sysData, wCert.getScId(), Optional.empty(),
-            Optional.empty(), Optional.of(ftData), snarkPkPath
+            Optional.empty(), Optional.of(ftData), snarkPkPath, false, true, true, true, debug
         );
         
         // Proof verification must be successfull

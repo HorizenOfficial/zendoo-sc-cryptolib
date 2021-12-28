@@ -121,7 +121,8 @@ public class CswProof {
         boolean checkProvingKey,
         boolean zk,
         boolean compressed_pk,
-        boolean compress_proof
+        boolean compress_proof,
+        boolean debug_first
     );
 
     /**
@@ -175,6 +176,7 @@ public class CswProof {
      * @param zk - if proof must be created using zk property or not
      * @param compressed_pk - if the pk read from provingKeyPath is in compressed form or not
      * @param compress_proof - whether to return the proof bytes in compressed form or not
+     * @param debug_first - debug the circuit first and print the result.
      * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
@@ -190,7 +192,8 @@ public class CswProof {
         boolean checkProvingKey,
         boolean zk,
         boolean compressed_pk,
-        boolean compress_proof
+        boolean compress_proof,
+        boolean debug_first
     ) throws IllegalArgumentException 
     {
         checkCreateProofInputsConsistency(sysData, lastWcert, utxoData, ftData);
@@ -198,7 +201,7 @@ public class CswProof {
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
             rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
-            provingKeyPath, checkProvingKey, zk, compressed_pk, compress_proof
+            provingKeyPath, checkProvingKey, zk, compressed_pk, compress_proof, debug_first
         );
     }
 
@@ -239,7 +242,7 @@ public class CswProof {
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
             rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
-            provingKeyPath, checkProvingKey, zk, true, true
+            provingKeyPath, checkProvingKey, zk, true, true, false
         );
     }
 
@@ -278,7 +281,7 @@ public class CswProof {
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
             rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
-            provingKeyPath, false, zk, true, true
+            provingKeyPath, false, zk, true, true, false
         );
     }
 
@@ -315,7 +318,7 @@ public class CswProof {
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
             rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
-            provingKeyPath, false, true, true, true
+            provingKeyPath, false, true, true, true, false
         );
     }
 

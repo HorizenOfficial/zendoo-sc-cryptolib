@@ -4894,6 +4894,7 @@ ffi_export!(
         _zk: jboolean,
         _compressed_pk: jboolean,
         _compress_proof: jboolean,
+        _debug_first: jboolean,
     ) -> jbyteArray {
         // Parse cert if present
         let cert = if _last_wcert.into_inner().is_null() {
@@ -4948,6 +4949,7 @@ ffi_export!(
             _zk == JNI_TRUE,
             _compressed_pk == JNI_TRUE,
             _compress_proof == JNI_TRUE,
+            _debug_first == JNI_TRUE
         ) {
             Ok(proof) => _env
                 .byte_array_from_slice(proof.as_slice())

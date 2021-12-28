@@ -4,7 +4,7 @@ use primitives::{
     signature::{schnorr::field_based_schnorr::FieldBasedSchnorrPk, FieldBasedSignatureScheme},
     vrf::{ecvrf::FieldBasedEcVrfPk, FieldBasedVrf},
 };
-
+use r1cs_core::debug_circuit;
 use demo_circuit::{
     constants::VRFParams, constraints::CeasedSidechainWithdrawalCircuit, naive_threshold_sig::*,
     type_mapping::*, CswFtProverData, CswSysData, CswUtxoProverData, WithdrawalCertificateData,
@@ -341,6 +341,7 @@ pub fn create_csw_proof(
     zk: bool,
     compressed_pk: bool,
     compress_proof: bool,
+    debug_first: bool,
 ) -> Result<Vec<u8>, Error> {
     let c = CeasedSidechainWithdrawalCircuit::new(
         sidechain_id,
@@ -352,6 +353,13 @@ pub fn create_csw_proof(
         range_size,
         num_custom_fields,
     )?;
+
+    if debug_first {
+        match debug_circuit(c.clone()).unwrap() {
+            Some(failing_constraint) => println!("CSW proof debug failed. Constraint = {:?}", failing_constraint),
+            None => println!("CSW proof debug succeeded."),
+        }
+    }
 
     let pk: ZendooProverKey = read_from_file(
         proving_key_path,
