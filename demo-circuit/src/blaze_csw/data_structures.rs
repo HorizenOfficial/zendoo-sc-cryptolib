@@ -95,7 +95,6 @@ impl PartialEq for WithdrawalCertificateData {
     }
 }
 
-//TODO: Is it ok to define phantom spending_pub_key as an array of all 0s ?
 #[derive(Clone, Default)]
 pub struct CswUtxoOutputData {
     pub spending_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
@@ -177,7 +176,6 @@ impl PartialEq for CswUtxoInputData {
     }
 }
 
-//TODO: Is it ok to define phantom receiver_pub_key as an array of all 0s ?
 #[derive(Clone, Default)]
 pub struct CswFtOutputData {
     pub amount: u64,
@@ -185,6 +183,18 @@ pub struct CswFtOutputData {
     pub payback_addr_data_hash: [u8; MC_PK_SIZE],
     pub tx_hash: [u8; SC_TX_HASH_LENGTH],
     pub out_idx: u32,
+}
+
+impl CswFtOutputData {
+    pub fn get_phantom() -> Self {
+        Self {
+            amount: 0,
+            receiver_pub_key: CSW_PHANTOM_PUB_KEY_BYTES,
+            payback_addr_data_hash: [0; MC_PK_SIZE],
+            tx_hash: [0; SC_TX_HASH_LENGTH],
+            out_idx: 0,
+        }
+    }
 }
 
 impl PartialEq for CswFtOutputData {
@@ -301,7 +311,7 @@ impl CswFtProverData {
 
     pub(crate) fn get_phantom(commitment_hashes_number: u32) -> Self {
         Self {
-            ft_output: CswFtOutputData::default(),
+            ft_output: CswFtOutputData::get_phantom(),
             ft_input_secret_key: [false; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
             mcb_sc_txs_com_start: PHANTOM_FIELD_ELEMENT,
             merkle_path_to_sc_hash: GingerMHTBinaryPath::new(vec![

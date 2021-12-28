@@ -788,7 +788,7 @@ impl CswFtOutputDataGadget {
     ) -> Result<Boolean, SynthesisError> {
         let phantom_ft_input_g = CswFtOutputDataGadget::from_value(
             cs.ns(|| "alloc constant FT input phantom gadget"),
-            &CswFtOutputData::default(),
+            &CswFtOutputData::get_phantom(),
         );
 
         self.is_eq(cs.ns(|| "is FT output phantom"), &phantom_ft_input_g)
