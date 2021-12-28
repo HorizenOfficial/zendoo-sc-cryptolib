@@ -313,19 +313,19 @@ impl CswFtProverData {
         Self {
             ft_output: CswFtOutputData::get_phantom(),
             ft_input_secret_key: [false; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
-            mcb_sc_txs_com_start: PHANTOM_FIELD_ELEMENT,
+            mcb_sc_txs_com_start: FieldElement::default(),
             merkle_path_to_sc_hash: GingerMHTBinaryPath::new(vec![
-                (PHANTOM_FIELD_ELEMENT, false);
+                (FieldElement::default(), false);
                 CMT_MT_HEIGHT
             ]),
             ft_tree_path: GingerMHTBinaryPath::new(vec![
-                (PHANTOM_FIELD_ELEMENT, false);
+                (FieldElement::default(), false);
                 FWT_MT_HEIGHT
             ]),
-            sc_creation_commitment: PHANTOM_FIELD_ELEMENT,
-            scb_btr_tree_root: PHANTOM_FIELD_ELEMENT,
-            wcert_tree_root: PHANTOM_FIELD_ELEMENT,
-            sc_txs_com_hashes: vec![PHANTOM_FIELD_ELEMENT; commitment_hashes_number as usize],
+            sc_creation_commitment: FieldElement::default(),
+            scb_btr_tree_root: FieldElement::default(),
+            wcert_tree_root: FieldElement::default(),
+            sc_txs_com_hashes: vec![FieldElement::default(); commitment_hashes_number as usize],
         }
     }
 }
