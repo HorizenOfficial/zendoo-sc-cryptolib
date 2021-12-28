@@ -49,7 +49,7 @@ impl WithdrawalCertificateDataGadget {
             &WithdrawalCertificateData::get_phantom(num_custom_fields),
         );
 
-        self.is_eq(cs.ns(|| "is wcert phantom"), &phantom_wcert_g)
+        self.ledger_id_g.is_eq(cs.ns(|| "is wcert phantom"), &phantom_wcert_g.ledger_id_g)
     }
 }
 
