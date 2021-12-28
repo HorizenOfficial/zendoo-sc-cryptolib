@@ -339,7 +339,7 @@ impl CswUtxoOutputDataGadget {
             &CswUtxoOutputData::get_phantom(),
         );
 
-        self.is_eq(cs.ns(|| "is UTXO output phantom"), &phantom_utxo_output_g)
+        self.spending_pub_key_g.is_eq(cs.ns(|| "is UTXO output phantom"), &phantom_utxo_output_g.spending_pub_key_g)
     }
 }
 
