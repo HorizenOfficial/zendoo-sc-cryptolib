@@ -42,16 +42,14 @@ public class CswProofTest {
     
     static String snarkPkPath = "./test_csw_snark_pk";
     static String snarkVkPath = "./test_csw_snark_vk";
-    static int maxSegmentSize = 1 << 20;
-    static int supportedSegmentSize = 1 << 18;
     static ProvingSystemType psType = ProvingSystemType.COBOUNDARY_MARLIN;
     
     @BeforeClass
     public static void initKeys() {
         // Generate keys
-        assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
-        assertTrue(CswProof.setup(psType, rangeSize, 2, false, snarkPkPath, snarkVkPath, zk, maxProofPlusVkSize));
-        assertFalse(CswProof.setup(psType, rangeSize, 2, false, snarkPkPath, snarkVkPath, zk, 1));
+        ProvingSystem.generateDLogKeys(psType, TestUtils.DLOG_KEYS_SIZE);
+        assertTrue(CswProof.setup(psType, rangeSize, 2, false, Optional.of(TestUtils.CSW_SEGMENT_SIZE), snarkPkPath, snarkVkPath, zk, maxProofPlusVkSize));
+        assertFalse(CswProof.setup(psType, rangeSize, 2, false, Optional.of(TestUtils.CSW_SEGMENT_SIZE), snarkPkPath, snarkVkPath, zk, 1));
         assertEquals(
             psType,
             ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPath)
@@ -121,8 +119,8 @@ public class CswProofTest {
 
         // Create proof
         byte[] proof = CswProof.createProof(
-            rangeSize, 2, sysData, wCert.getScId(),
-            Optional.of(wCert), Optional.of(utxoData), Optional.empty(), snarkPkPath
+            rangeSize, 2, sysData, wCert.getScId(), Optional.of(wCert), Optional.of(utxoData),
+            Optional.empty(), Optional.of(TestUtils.CSW_SEGMENT_SIZE), snarkPkPath
         );
 
         // Proof verification must be successfull
@@ -228,8 +226,8 @@ public class CswProofTest {
 
         // Create proof
         byte[] proof = CswProof.createProof(
-            rangeSize, 2, sysData, wCert.getScId(), Optional.empty(),
-            Optional.empty(), Optional.of(ftData), snarkPkPath
+            rangeSize, 2, sysData, wCert.getScId(), Optional.empty(), Optional.empty(),
+            Optional.of(ftData), Optional.of(TestUtils.CSW_SEGMENT_SIZE), snarkPkPath
         );
         
         // Proof verification must be successfull

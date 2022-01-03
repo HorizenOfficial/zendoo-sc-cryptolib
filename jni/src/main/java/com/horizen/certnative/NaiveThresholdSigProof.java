@@ -7,6 +7,7 @@ import com.horizen.schnorrnative.SchnorrSignature;
 import com.horizen.provingsystemnative.ProvingSystemType;
 
 import java.util.List;
+import java.util.Optional;
 
 public class NaiveThresholdSigProof {
 
@@ -73,6 +74,7 @@ public class NaiveThresholdSigProof {
         ProvingSystemType psType,
         long maxPks,
         int numCustomFields,
+        Optional<Integer> segmentSize,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -85,7 +87,11 @@ public class NaiveThresholdSigProof {
      * Generate (provingKey, verificationKey) pair for this circuit.
      * @param psType - proving system to be used
      * @param maxPks - maximum number of public keys (and so signatures) the circuit must support
-     * @param numCustomFields - exact number of custom fields the circuit must support 
+     * @param numCustomFields - exact number of custom fields the circuit must support
+     * @param segmentSize - the segment size to be used to generate (pk, vk). Must be smaller equal than
+     *                      the segment size passed to the ProvingSystem.generateDLogKeys() method.
+     *                      If not specified, it will default to the same size as the one passed to
+     *                      ProvingSystem.generateDLogKeys() method.
      * @param provingKeyPath - file path to which saving the proving key
      * @param verificationKeyPath - file path to which saving the verification key
      * @param zk - used to estimate the proof and vk size, tells if the proof will be created using zk or not
@@ -98,6 +104,7 @@ public class NaiveThresholdSigProof {
         ProvingSystemType psType,
         long maxPks,
         int numCustomFields,
+        Optional<Integer> segmentSize,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -107,8 +114,8 @@ public class NaiveThresholdSigProof {
     )
     {
         return nativeSetup(
-            psType, maxPks, numCustomFields, provingKeyPath, verificationKeyPath,
-            zk, maxProofPlusVkSize, compressPk, compressVk
+            psType, maxPks, numCustomFields, segmentSize, provingKeyPath,
+            verificationKeyPath, zk, maxProofPlusVkSize, compressPk, compressVk
         );
     }
 
@@ -117,6 +124,10 @@ public class NaiveThresholdSigProof {
      * @param psType - proving system to be used
      * @param maxPks - maximum number of public keys (and so signatures) the circuit must support
      * @param numCustomFields - exact number of custom fields the circuit must support 
+     * @param segmentSize - the segment size to be used to generate (pk, vk). Must be smaller equal than
+     *                      the segment size passed to the ProvingSystem.generateDLogKeys() method.
+     *                      If not specified, it will default to the same size as the one passed to
+     *                      ProvingSystem.generateDLogKeys() method.
      * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
      * @param zk - used to estimate the proof and vk size, tells if the proof will be created using zk or not
@@ -127,6 +138,7 @@ public class NaiveThresholdSigProof {
         ProvingSystemType psType,
         long maxPks,
         int numCustomFields,
+        Optional<Integer> segmentSize,
         String provingKeyPath,
         String verificationKeyPath,
         boolean zk,
@@ -134,8 +146,38 @@ public class NaiveThresholdSigProof {
     )
     {
         return nativeSetup(
-            psType, maxPks, numCustomFields, provingKeyPath, verificationKeyPath,
-            zk, maxProofPlusVkSize, true, true
+            psType, maxPks, numCustomFields, segmentSize,provingKeyPath,
+            verificationKeyPath, zk, maxProofPlusVkSize, true, true
+        );
+    }
+
+    /**
+     * Generate (provingKey, verificationKey) pair for this circuit.
+     * @param psType - proving system to be used
+     * @param maxPks - maximum number of public keys (and so signatures) the circuit must support
+     * @param numCustomFields - exact number of custom fields the circuit must support
+     * @param segmentSize - the segment size to be used to generate (pk, vk). Must be smaller equal than
+     *                      the segment size passed to the ProvingSystem.generateDLogKeys() method.
+     *                      If not specified, it will default to the same size as the one passed to
+     *                      ProvingSystem.generateDLogKeys() method.
+     * @param provingKeyPath - file path to which saving the proving key. Proving key will be saved in compressed form.
+     * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
+     * @param maxProofPlusVkSize - maximum allowed size for proof + vk, estimated assuming not to use zk property
+     * @return true if (pk, vk) generation and saving to file was successfull, false otherwise.
+     */
+    public static boolean setup(
+        ProvingSystemType psType,
+        long maxPks,
+        int numCustomFields,
+        Optional<Integer> segmentSize,
+        String provingKeyPath,
+        String verificationKeyPath,
+        int maxProofPlusVkSize
+    )
+    {
+        return nativeSetup(
+            psType, maxPks, numCustomFields, segmentSize, provingKeyPath,
+            verificationKeyPath, false, maxProofPlusVkSize, true, true
         );
     }
 
@@ -159,8 +201,8 @@ public class NaiveThresholdSigProof {
     )
     {
         return nativeSetup(
-            psType, maxPks, numCustomFields, provingKeyPath, verificationKeyPath,
-            false, maxProofPlusVkSize, true, true
+            psType, maxPks, numCustomFields, Optional.empty(), provingKeyPath,
+            verificationKeyPath, false, maxProofPlusVkSize, true, true
         );
     }
 
@@ -175,6 +217,7 @@ public class NaiveThresholdSigProof {
             SchnorrPublicKey[] schnorrPublicKeys,
             long threshold,
             FieldElement[] customFields,
+            Optional<Integer> segmentSize,
             String provingKeyPath,
             boolean checkProvingKey,
             boolean zk,
@@ -194,6 +237,10 @@ public class NaiveThresholdSigProof {
      * @param schnorrPublicKeyList - list of Schnorr public keys corresponding to schnorrSignaturesList
      * @param threshold - Minimum number of signatures that must be verified for the certificate to be accepted
      * @param customFields - additional parameters. Can be empty.
+     * @param segmentSize - the segment size to be used to create the proof.
+     *                      Must be equal to the one passed to the setup() method.
+     *                      If not specified, it will default to the same size as the one passed to
+     *                      ProvingSystem.generateDLogKeys() method.
      * @param provingKeyPath - file path from which reading the proving key
      * @param checkProvingKey - enable semantic checks on the proving key (WARNING: very expensive)
      * @param zk - if proof must be created using zk property or not
@@ -213,6 +260,7 @@ public class NaiveThresholdSigProof {
             List<SchnorrPublicKey> schnorrPublicKeyList,
             long threshold,
             List<FieldElement> customFields,
+            Optional<Integer> segmentSize,
             String provingKeyPath,
             boolean checkProvingKey,
             boolean zk,
@@ -226,7 +274,8 @@ public class NaiveThresholdSigProof {
             schnorrSignatureList.toArray(new SchnorrSignature[0]),
             schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
             threshold, customFields.toArray(new FieldElement[0]),
-            provingKeyPath, checkProvingKey, zk, compressed_pk, compress_proof
+            segmentSize, provingKeyPath, checkProvingKey, zk,
+            compressed_pk, compress_proof
         );
     }
 
@@ -242,6 +291,10 @@ public class NaiveThresholdSigProof {
      * @param schnorrPublicKeyList - list of Schnorr public keys corresponding to schnorrSignaturesList
      * @param threshold - Minimum number of signatures that must be verified for the certificate to be accepted
      * @param customFields - additional parameters. Can be empty.
+     * @param segmentSize - the segment size to be used to create the proof.
+     *                      Must be equal to the one passed to the setup() method.
+     *                      If not specified, it will default to the same size as the one passed to
+     *                      ProvingSystem.generateDLogKeys() method.
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
      * @param checkProvingKey - enable semantic checks on the proving key (WARNING: very expensive)
      * @param zk - if proof must be created using zk property or not
@@ -260,6 +313,7 @@ public class NaiveThresholdSigProof {
             List<SchnorrPublicKey> schnorrPublicKeyList,
             long threshold,
             List<FieldElement> customFields,
+            Optional<Integer> segmentSize,
             String provingKeyPath,
             boolean checkProvingKey,
             boolean zk
@@ -271,7 +325,7 @@ public class NaiveThresholdSigProof {
                 schnorrSignatureList.toArray(new SchnorrSignature[0]),
                 schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
                 threshold, customFields.toArray(new FieldElement[0]),
-                provingKeyPath, checkProvingKey, zk, true, true
+                segmentSize, provingKeyPath, checkProvingKey, zk, true, true
         );
     }
 
@@ -287,6 +341,58 @@ public class NaiveThresholdSigProof {
      * @param schnorrPublicKeyList - list of Schnorr public keys corresponding to schnorrSignaturesList
      * @param threshold - Minimum number of signatures that must be verified for the certificate to be accepted
      * @param customFields - additional optional parameters. Can be empty
+     * @param segmentSize - the segment size to be used to create the proof.
+     *                      Must be equal to the one passed to the setup() method.
+     *                      If not specified, it will default to the same size as the one passed to
+     *                      ProvingSystem.generateDLogKeys() method.
+     * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
+     * @param zk - if proof must be created using zk property or not
+     * @return a CreateProofResult instance, i.e. the computed proof bytes (in compressed form),
+     *         and the quality of the certificate (i.e. in this case, number of valid signatures);
+     *         OR null pointer if some errors occured during proof creation.
+     */
+    public static CreateProofResult createProof(
+            List<BackwardTransfer> btList,
+            FieldElement scId,
+            int epochNumber,
+            FieldElement endCumulativeScTxCommTreeRoot,
+            long btrFee,
+            long ftMinAmount,
+            List<SchnorrSignature> schnorrSignatureList,
+            List<SchnorrPublicKey> schnorrPublicKeyList,
+            long threshold,
+            List<FieldElement> customFields,
+            Optional<Integer> segmentSize,
+            String provingKeyPath,
+            boolean zk
+    )
+    {
+        return nativeCreateProof(
+                btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
+                endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
+                schnorrSignatureList.toArray(new SchnorrSignature[0]),
+                schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
+                threshold, customFields.toArray(new FieldElement[0]),
+                segmentSize, provingKeyPath, false, zk, true, true
+        );
+    }
+
+    /**
+     * Compute proof for given parameters
+     * @param btList - the list of backward transfer for a given certificate
+     * @param scId - the id of the corresponding sidechain
+     * @param epochNumber - the epoch number for the certificate
+     * @param endCumulativeScTxCommTreeRoot - the value of the cumulative sidechain transaction commitment tree at epoch end
+     * @param btrFee - fee for BackwardTransfer
+     * @param ftMinAmount - minimum amount for Forward Transfer
+     * @param schnorrSignatureList - list of Schnorr signatures to be verified using the corresponding public keys passed in SchnorrPublicKeyList
+     * @param schnorrPublicKeyList - list of Schnorr public keys corresponding to schnorrSignaturesList
+     * @param threshold - Minimum number of signatures that must be verified for the certificate to be accepted
+     * @param customFields - additional optional parameters. Can be empty
+     * @param segmentSize - the segment size to be used to create the proof.
+     *                      Must be equal to the one passed to the setup() method.
+     *                      If not specified, it will default to the same size as the one passed to
+     *                      ProvingSystem.generateDLogKeys() method.
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
      * @param zk - if proof must be created using zk property or not
      * @return a CreateProofResult instance, i.e. the computed proof bytes (in compressed form),
@@ -314,7 +420,7 @@ public class NaiveThresholdSigProof {
                 schnorrSignatureList.toArray(new SchnorrSignature[0]),
                 schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
                 threshold, customFields.toArray(new FieldElement[0]),
-                provingKeyPath, false, zk, true, true
+                Optional.empty(), provingKeyPath, false, zk, true, true
         );
     }
 

@@ -172,6 +172,7 @@ pub fn create_naive_threshold_sig_proof(
     bt_list: Vec<BackwardTransfer>,
     threshold: u64,
     custom_fields: Option<Vec<FieldElement>>,
+    supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
     proving_key_path: &Path,
     enforce_membership: bool,
     zk: bool,
@@ -241,7 +242,7 @@ pub fn create_naive_threshold_sig_proof(
         Some(compressed_pk),
     )?;
 
-    let g1_ck = get_g1_committer_key()?;
+    let g1_ck = get_g1_committer_key(supported_degree)?;
 
     let proof = match pk {
         ZendooProverKey::Darlin(_) => unimplemented!(),
@@ -250,7 +251,7 @@ pub fn create_naive_threshold_sig_proof(
             let rng = &mut OsRng;
             let proof = CoboundaryMarlin::prove(
                 &pk,
-                g1_ck.as_ref().unwrap(),
+                &g1_ck,
                 c,
                 zk,
                 if zk { Some(rng) } else { None },
@@ -336,6 +337,7 @@ pub fn create_csw_proof(
     ft_data: Option<CswFtProverData>,
     range_size: u32,
     num_custom_fields: u32,
+    supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
     proving_key_path: &Path,
     enforce_membership: bool,
     zk: bool,
@@ -359,7 +361,7 @@ pub fn create_csw_proof(
         Some(compressed_pk),
     )?;
 
-    let g1_ck = get_g1_committer_key()?;
+    let g1_ck = get_g1_committer_key(supported_degree)?;
 
     let proof = match pk {
         ZendooProverKey::Darlin(_) => unimplemented!(),
@@ -368,7 +370,7 @@ pub fn create_csw_proof(
             let rng = &mut OsRng;
             let proof = CoboundaryMarlin::prove(
                 &pk,
-                g1_ck.as_ref().unwrap(),
+                &g1_ck,
                 c,
                 zk,
                 if zk { Some(rng) } else { None },
@@ -516,243 +518,8 @@ pub(crate) fn into_i8(v: Vec<u8>) -> Vec<i8> {
 mod test {
     use super::*;
     use algebra::Field;
-    use cctp_primitives::proving_system::init_dlog_keys;
     use cctp_primitives::utils::{mht::*, poseidon_hash::*};
-    use demo_circuit::generate_circuit_keypair;
-    use rand::Rng;
-
     use serial_test::*;
-
-    fn create_sample_naive_threshold_sig_circuit(
-        bt_num: usize,
-        custom_fields_len: usize,
-        pk_path: &Path,
-        vk_path: &Path,
-        proof_path: &Path,
-    ) {
-        //assume to have 3 pks, threshold = 2
-        let mut rng = OsRng;
-
-        // Generate random data
-        let mut bt_list = vec![];
-        for _ in 0..bt_num {
-            bt_list.push(BackwardTransfer::default());
-        }
-
-        let end_cumulative_sc_tx_comm_tree_root = FieldElement::rand(&mut rng);
-        let sc_id = FieldElement::rand(&mut rng);
-        let epoch_number: u32 = rng.gen();
-        let btr_fee: u64 = rng.gen();
-        let ft_min_amount: u64 = rng.gen();
-        let custom_fields = if custom_fields_len > 0 {
-            let random_fields = (0..custom_fields_len)
-                .map(|_| rng.gen())
-                .collect::<Vec<_>>();
-            Some(random_fields)
-        } else {
-            None
-        };
-
-        println!("Custom fields len: {}", custom_fields_len);
-        println!("Custom fields: {:?}", custom_fields);
-
-        //Compute msg to sign
-        let (_, msg) = compute_msg_to_sign(
-            &sc_id,
-            epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root,
-            btr_fee,
-            ft_min_amount,
-            bt_list.clone(),
-            custom_fields.clone(),
-        )
-        .unwrap();
-        println!("compute_msg_to_sign finished");
-
-        //Generate params and write them to file
-        let circ = NaiveTresholdSignature::get_instance_for_setup(3, custom_fields_len);
-        generate_circuit_keypair(
-            circ,
-            ProvingSystem::CoboundaryMarlin,
-            pk_path,
-            vk_path,
-            9000,
-            false,
-            Some(true),
-            Some(true),
-        )
-        .unwrap();
-        println!("generate_parameters finished");
-
-        //Generate sample pks and sigs vec
-        let threshold: u64 = 2;
-        let mut pks = vec![];
-        let mut sks = vec![];
-        for _ in 0..3 {
-            let keypair = schnorr_generate_key();
-            pks.push(keypair.0);
-            sks.push(keypair.1);
-            println!(
-                "sk: {:?}",
-                into_i8(serialize_to_buffer(&keypair.1, None).unwrap())
-            );
-        }
-        println!("pks / sks finished");
-
-        let mut sigs = vec![];
-        sigs.push(Some(schnorr_sign(&msg, &sks[0], &pks[0]).unwrap()));
-        sigs.push(None);
-        sigs.push(Some(schnorr_sign(&msg, &sks[2], &pks[2]).unwrap()));
-
-        println!(
-            "sk: {:?}",
-            into_i8(serialize_to_buffer(&sks[0], None).unwrap())
-        );
-        println!(
-            "sk: {:?}",
-            into_i8(serialize_to_buffer(&sks[2], None).unwrap())
-        );
-        println!(
-            "sk: {:?}",
-            into_i8(serialize_to_buffer(&sks[1], None).unwrap())
-        );
-
-        println!(
-            "sig: {:?}",
-            into_i8(serialize_to_buffer(&sigs[0], None).unwrap())
-        );
-        println!(
-            "sig: {:?}",
-            into_i8(serialize_to_buffer(&sigs[2], None).unwrap())
-        );
-
-        let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
-        println!(
-            "Constant u8: {:?}",
-            serialize_to_buffer(&constant, None).unwrap()
-        );
-
-        //Create and serialize proof
-        let (proof, quality) = create_naive_threshold_sig_proof(
-            pks.as_slice(),
-            sigs,
-            &sc_id,
-            epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root,
-            btr_fee,
-            ft_min_amount,
-            bt_list.clone(),
-            threshold,
-            custom_fields.clone(),
-            pk_path,
-            false,
-            false,
-            true,
-            true,
-        )
-        .unwrap();
-        write_to_file(&proof, proof_path, Some(true)).unwrap();
-
-        //Verify proof
-        assert!(verify_naive_threshold_sig_proof(
-            &constant,
-            &sc_id,
-            epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root,
-            btr_fee,
-            ft_min_amount,
-            bt_list.clone(),
-            quality,
-            if custom_fields.is_some() {
-                custom_fields.clone().unwrap()
-            } else {
-                vec![]
-            },
-            proof.clone(),
-            true,
-            true,
-            vk_path,
-            true,
-            true,
-        )
-        .unwrap());
-
-        //Generate wrong public inputs by changing quality and assert proof verification doesn't pass
-        assert!(!verify_naive_threshold_sig_proof(
-            &constant,
-            &sc_id,
-            epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root,
-            btr_fee,
-            ft_min_amount,
-            bt_list,
-            quality - 1,
-            if custom_fields.is_some() {
-                custom_fields.unwrap()
-            } else {
-                vec![]
-            },
-            proof,
-            true,
-            true,
-            vk_path,
-            true,
-            true,
-        )
-        .unwrap());
-    }
-
-    #[serial]
-    #[test]
-    fn sample_calls_naive_threshold_sig_circuit() {
-        let tmp_dir = std::env::temp_dir();
-        let ps_type = ProvingSystem::CoboundaryMarlin;
-        let custom_fields = 10;
-
-        init_dlog_keys(ps_type, 1 << 17, 1 << 14).unwrap();
-
-        for i in vec![0, custom_fields as usize] {
-            println!("****************With BWT**********************");
-
-            let mut pk_path = tmp_dir.clone();
-            pk_path.push("sample_pk");
-
-            let mut vk_path = tmp_dir.clone();
-            vk_path.push("sample_vk");
-
-            let mut proof_path = tmp_dir.clone();
-            proof_path.push("sample_proof");
-
-            create_sample_naive_threshold_sig_circuit(10, i, &pk_path, &vk_path, &proof_path);
-
-            println!("****************Without BWT*******************");
-
-            let mut pk_path_no_bwt = tmp_dir.clone();
-            pk_path_no_bwt.push("sample_pk_no_bwt");
-
-            let mut vk_path_no_bwt = tmp_dir.clone();
-            vk_path_no_bwt.push("sample_vk_no_bwt");
-
-            let mut proof_path_no_bwt = tmp_dir.clone();
-            proof_path_no_bwt.push("sample_proof_no_bwt");
-
-            create_sample_naive_threshold_sig_circuit(
-                0,
-                i,
-                &pk_path_no_bwt,
-                &vk_path_no_bwt,
-                &proof_path_no_bwt,
-            );
-
-            println!("*************** Clean up **********************");
-            std::fs::remove_file(pk_path).unwrap();
-            std::fs::remove_file(vk_path).unwrap();
-            std::fs::remove_file(proof_path).unwrap();
-            std::fs::remove_file(pk_path_no_bwt).unwrap();
-            std::fs::remove_file(vk_path_no_bwt).unwrap();
-            std::fs::remove_file(proof_path_no_bwt).unwrap();
-        }
-    }
 
     #[serial]
     #[test]

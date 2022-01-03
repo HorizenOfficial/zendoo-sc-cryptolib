@@ -357,7 +357,7 @@ mod test {
         deserialize_fe_unchecked, split_field_element_at_index, CswFtOutputData, CswProverData,
         CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
         MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT, PHANTOM_FIELD_ELEMENT,
-        SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
+        SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE,
     };
 
     use super::*;
@@ -748,16 +748,16 @@ mod test {
         let failing_constraint = debug_circuit(circuit.clone()).unwrap();
 
         if !debug_only {
-            load_g1_committer_key(1 << 17, 1 << 15).unwrap();
-            let ck_g1 = get_g1_committer_key().unwrap();
+            let _ = load_g1_committer_key(MAX_SEGMENT_SIZE - 1);
+            let ck_g1 = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
 
             let setup_circuit = CeasedSidechainWithdrawalCircuit::get_instance_for_setup(num_commitment_hashes, num_custom_fields, constant.is_some());
-            let params = CoboundaryMarlin::index(ck_g1.as_ref().unwrap(), setup_circuit.clone()).unwrap();
+            let params = CoboundaryMarlin::index(&ck_g1, setup_circuit.clone()).unwrap();
             let rng = &mut thread_rng();
 
             let proof = CoboundaryMarlin::prove(
                 &params.0.clone(),
-                ck_g1.as_ref().unwrap(),
+                &ck_g1,
                 circuit,
                 true,
                 Some(rng),
@@ -789,7 +789,7 @@ mod test {
             // Check that the proof gets correctly verified
             assert!(CoboundaryMarlin::verify(
                 &params.1.clone(),
-                ck_g1.as_ref().unwrap(),
+                &ck_g1,
                 current_public_inputs.as_slice(),
                 &proof
             )
@@ -802,7 +802,7 @@ mod test {
 
                 assert!(!CoboundaryMarlin::verify(
                     &params.1.clone(),
-                    ck_g1.as_ref().unwrap(),
+                    &ck_g1,
                     wrong_public_inputs.as_slice(),
                     &proof
                 )

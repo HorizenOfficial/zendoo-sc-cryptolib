@@ -215,11 +215,10 @@ pub(crate) fn parse_merkle_path_from_jobject<'a>(
     read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
 }
 
-pub(crate) fn cast_joption_to_rust_option<'a>(
+pub(crate) fn parse_joption_from_jobject<'a>(
     _env: &'a JNIEnv,
     obj: JObject<'a>,
     opt_name: &str,
-    _wrapped_obj_class_path: &str,
 ) -> Option<JObject<'a>> {
     // Parse Optional object
     let opt_object = _env
@@ -227,6 +226,15 @@ pub(crate) fn cast_joption_to_rust_option<'a>(
         .expect(format!("Should be able to get {} Optional", opt_name).as_str())
         .l()
         .unwrap();
+
+    // Cast it to Rust option
+    cast_joption_to_rust_option(_env, opt_object)
+}
+
+pub(crate) fn cast_joption_to_rust_option<'a>(
+    _env: &'a JNIEnv,
+    opt_object: JObject<'a>,
+) -> Option<JObject<'a>> {
 
     if !_env
         .call_method(opt_object, "isPresent", "()Z", &[])
@@ -240,7 +248,6 @@ pub(crate) fn cast_joption_to_rust_option<'a>(
             _env.call_method(
                 opt_object,
                 "get",
-                //format!("()L{};", wrapped_obj_class_path).as_str(),
                 "()Ljava/lang/Object;",
                 &[],
             )

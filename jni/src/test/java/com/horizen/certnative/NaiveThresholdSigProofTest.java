@@ -1,5 +1,6 @@
 package com.horizen.certnative;
 
+import com.horizen.TestUtils;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.schnorrnative.SchnorrKeyPair;
 import com.horizen.schnorrnative.SchnorrPublicKey;
@@ -14,6 +15,7 @@ import org.junit.Test;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 
 import static org.junit.Assert.assertNotNull;
@@ -47,16 +49,14 @@ public class NaiveThresholdSigProofTest {
     static String snarkVkPathNoCustomFields = "./test_snark_vk";
     static String snarkPkPathCustomFields = "./test_snark_pk_with_custom_fields";
     static String snarkVkPathCustomFields = "./test_snark_vk_with_custom_fields";
-    static int maxSegmentSize = 1 << 17;
-    static int supportedSegmentSize = 1 << 15;
     static ProvingSystemType psType = ProvingSystemType.COBOUNDARY_MARLIN;
     
     @BeforeClass
     public static void initKeys() {
-        assertTrue(ProvingSystem.generateDLogKeys(psType, maxSegmentSize, supportedSegmentSize));
-        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, maxProofPlusVkSize));
-        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, customFieldsNum, snarkPkPathCustomFields, snarkVkPathCustomFields, zk, maxProofPlusVkSize));
-        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, 0, snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, 1));
+        ProvingSystem.generateDLogKeys(psType, TestUtils.DLOG_KEYS_SIZE);
+        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, 0, Optional.of(TestUtils.CERT_SEGMENT_SIZE), snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, maxProofPlusVkSize));
+        assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, customFieldsNum, Optional.of(TestUtils.CERT_SEGMENT_SIZE), snarkPkPathCustomFields, snarkVkPathCustomFields, zk, maxProofPlusVkSize));
+        assertFalse(NaiveThresholdSigProof.setup(psType, keyCount, 0, Optional.of(TestUtils.CERT_SEGMENT_SIZE), snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, 1));
         assertEquals(
                 psType,
                 ProvingSystem.getVerifierKeyProvingSystemType(snarkVkPathNoCustomFields)
@@ -134,7 +134,7 @@ public class NaiveThresholdSigProofTest {
         CreateProofResult proofResult = NaiveThresholdSigProof.createProof(
             btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
             btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
-            customFields, snarkPkPath, false, zk
+            customFields, Optional.of(TestUtils.CERT_SEGMENT_SIZE), snarkPkPath, false, zk
         );
 
         assertNotNull("Proof creation must be successful", proofResult);

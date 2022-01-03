@@ -430,6 +430,8 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
 
 #[cfg(test)]
 mod test {
+    use crate::{SUPPORTED_SEGMENT_SIZE, MAX_SEGMENT_SIZE};
+
     use super::*;
     use cctp_primitives::{
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
@@ -595,10 +597,10 @@ mod test {
 
         //Return proof and public inputs if success
         let rng = &mut OsRng;
-        let ck_g1 = get_g1_committer_key().unwrap();
+        let ck_g1 = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
         match CoboundaryMarlin::prove(
             &index_pk,
-            ck_g1.as_ref().unwrap(),
+            &ck_g1,
             c.clone(),
             zk,
             if zk { Some(rng) } else { None },
@@ -628,18 +630,18 @@ mod test {
         let n = 6;
         let zk = false;
 
-        load_g1_committer_key(1 << 17, 1 << 15).unwrap();
-        let ck = get_g1_committer_key().unwrap();
+        let _ = load_g1_committer_key(MAX_SEGMENT_SIZE - 1);
+        let ck = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
         let circ = NaiveTresholdSignature::get_instance_for_setup(n, 1);
 
-        let params = CoboundaryMarlin::index(ck.as_ref().unwrap(), circ).unwrap();
+        let params = CoboundaryMarlin::index(&ck, circ).unwrap();
 
         //Generate proof with correct witnesses and v > t
         let (proof, public_inputs) =
             generate_test_proof(n, 5, 4, 1, false, false, params.0.clone(), zk).unwrap();
         assert!(CoboundaryMarlin::verify(
             &params.1,
-            ck.as_ref().unwrap(),
+            &ck,
             public_inputs.as_slice(),
             &proof
         )
@@ -650,7 +652,7 @@ mod test {
             generate_test_proof(n, 5, 4, 1, true, false, params.0.clone(), zk).unwrap();
         assert!(!CoboundaryMarlin::verify(
             &params.1,
-            ck.as_ref().unwrap(),
+            &ck,
             public_inputs.as_slice(),
             &proof
         )
@@ -661,7 +663,7 @@ mod test {
             generate_test_proof(n, 5, 4, 1, false, true, params.0.clone(), zk).unwrap();
         assert!(!CoboundaryMarlin::verify(
             &params.1,
-            ck.as_ref().unwrap(),
+            &ck,
             public_inputs.as_slice(),
             &proof
         )

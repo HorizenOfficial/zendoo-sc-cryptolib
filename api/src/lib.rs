@@ -1741,17 +1741,16 @@ ffi_export!(
         _env: JNIEnv,
         _class: JClass,
         _proving_system: JObject,
-        _max_segment_size: jint,
-        _supported_segment_size: jint,
-    ) -> jboolean {
+        _segment_size: jint,
+    ) -> jboolean 
+    {
         // Get proving system type
         let proving_system = get_proving_system_type(&_env, _proving_system);
 
         // Generate DLOG keypair
         match init_dlog_keys(
             proving_system,
-            _max_segment_size as usize,
-            _supported_segment_size as usize,
+            _segment_size as usize,
         ) {
             Ok(_) => JNI_TRUE,
             Err(_) => JNI_FALSE,
@@ -1819,6 +1818,7 @@ ffi_export!(
         _proving_system: JObject,
         _max_pks: jlong,
         _num_custom_fields: jint,
+        _segment_size: JObject,
         _proving_key_path: JString,
         _verification_key_path: JString,
         _zk: jboolean,
@@ -1828,6 +1828,17 @@ ffi_export!(
     ) -> jboolean {
         // Get proving system type
         let proving_system = get_proving_system_type(&_env, _proving_system);
+
+        // Get supported degree
+        let supported_degree = cast_joption_to_rust_option(
+                &_env, _segment_size
+            ).map(|integer_object| {
+            _env
+                .call_method(integer_object, "intValue", "()I", &[])
+                .expect("Should be able to call intValue() on Optional<Integer>")
+                .i()
+                .unwrap() as usize - 1
+        });
 
         // Read paths
         let proving_key_path = _env
@@ -1850,6 +1861,7 @@ ffi_export!(
         match generate_circuit_keypair(
             circ,
             proving_system,
+            supported_degree,
             Path::new(proving_key_path.to_str().unwrap()),
             Path::new(verification_key_path.to_str().unwrap()),
             _max_proof_plus_vk_size as usize,
@@ -1936,6 +1948,7 @@ ffi_export!(
         _schnorr_pks_list: jobjectArray,
         _threshold: jlong,
         _custom_fields_list: jobjectArray,
+        _segment_size: JObject,
         _proving_key_path: JString,
         _check_proving_key: jboolean,
         _zk: jboolean,
@@ -2053,6 +2066,17 @@ ffi_export!(
             read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         };
 
+        // Get supported degree
+        let supported_degree = cast_joption_to_rust_option(
+            &_env, _segment_size
+        ).map(|integer_object| {
+            _env
+                .call_method(integer_object, "intValue", "()I", &[])
+                .expect("Should be able to call intValue() on Optional<Integer>")
+                .i()
+                .unwrap() as usize - 1
+        });
+
         //Extract params_path str
         let proving_key_path = _env
             .get_string(_proving_key_path)
@@ -2104,6 +2128,7 @@ ffi_export!(
             bt_list,
             _threshold as u64,
             custom_fields_list,
+            supported_degree,
             Path::new(proving_key_path.to_str().unwrap()),
             _check_proving_key == JNI_TRUE,
             _zk == JNI_TRUE,
@@ -4626,6 +4651,7 @@ ffi_export!(
         _range_size: jint,
         _num_custom_fields: jint,
         _is_constant_present: jboolean,
+        _segment_size: JObject,
         _proving_key_path: JString,
         _verification_key_path: JString,
         _zk: jboolean,
@@ -4635,6 +4661,17 @@ ffi_export!(
     ) -> jboolean {
         // Get proving system type
         let proving_system = get_proving_system_type(&_env, _proving_system);
+
+        // Get supported degree
+        let supported_degree = cast_joption_to_rust_option(
+            &_env, _segment_size
+        ).map(|integer_object| {
+            _env
+                .call_method(integer_object, "intValue", "()I", &[])
+                .expect("Should be able to call intValue() on Optional<Integer>")
+                .i()
+                .unwrap() as usize - 1
+        });
 
         // Read paths
         let proving_key_path = _env
@@ -4658,6 +4695,7 @@ ffi_export!(
         match generate_circuit_keypair(
             circ,
             proving_system,
+            supported_degree,
             Path::new(proving_key_path.to_str().unwrap()),
             Path::new(verification_key_path.to_str().unwrap()),
             _max_proof_plus_vk_size as usize,
@@ -4675,11 +4713,10 @@ ffi_export!(
 );
 
 fn parse_sys_data(_env: JNIEnv, _sys_data: JObject) -> (Option<FieldElement>, CswSysData) {
-    let constant = cast_joption_to_rust_option(
+    let constant = parse_joption_from_jobject(
         &_env,
         _sys_data,
         "constant",
-        "com/horizen/librustsidechains/FieldElement",
     )
     .map(|field_object| {
         let f = _env
@@ -4691,11 +4728,10 @@ fn parse_sys_data(_env: JNIEnv, _sys_data: JObject) -> (Option<FieldElement>, Cs
     let sys_data = CswSysData::new(
         // Map a JObject which is a Java's Optional<FieldElement> into Option<JObject>.
         // If Option is present, converts it into an Option<FieldElement>, otherwise converts it to None.
-        cast_joption_to_rust_option(
+        parse_joption_from_jobject(
             &_env,
             _sys_data,
             "mcbScTxsComEnd",
-            "com/horizen/librustsidechains/FieldElement",
         )
         .map(|field_object| {
             let f = _env
@@ -4704,11 +4740,10 @@ fn parse_sys_data(_env: JNIEnv, _sys_data: JObject) -> (Option<FieldElement>, Cs
 
             *read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         }),
-        cast_joption_to_rust_option(
+        parse_joption_from_jobject(
             &_env,
             _sys_data,
             "scLastWcertHash",
-            "com/horizen/librustsidechains/FieldElement",
         )
         .map(|field_object| {
             let f = _env
@@ -4889,6 +4924,7 @@ ffi_export!(
         _last_wcert: JObject,
         _utxo_data: JObject,
         _ft_data: JObject,
+        _segment_size: JObject,
         _proving_key_path: JString,
         _check_proving_key: jboolean,
         _zk: jboolean,
@@ -4928,6 +4964,17 @@ ffi_export!(
             read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         };
 
+        // Get supported degree
+        let supported_degree = cast_joption_to_rust_option(
+            &_env, _segment_size
+        ).map(|integer_object| {
+            _env
+                .call_method(integer_object, "intValue", "()I", &[])
+                .expect("Should be able to call intValue() on Optional<Integer>")
+                .i()
+                .unwrap() as usize - 1
+        });
+
         //Extract params_path str
         let proving_key_path = _env
             .get_string(_proving_key_path)
@@ -4943,6 +4990,7 @@ ffi_export!(
             csw_ft_prover_data,
             _range_size as u32,
             _num_custom_fields as u32,
+            supported_degree,
             Path::new(proving_key_path.to_str().unwrap()),
             _check_proving_key == JNI_TRUE,
             _zk == JNI_TRUE,

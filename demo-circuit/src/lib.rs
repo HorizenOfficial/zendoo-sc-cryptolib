@@ -68,6 +68,12 @@ use cctp_primitives::{
 use r1cs_core::ConstraintSynthesizer;
 use std::path::Path;
 
+#[cfg(test)]
+pub const MAX_SEGMENT_SIZE: usize = 1 << 18;
+
+#[cfg(test)]
+pub const SUPPORTED_SEGMENT_SIZE: usize = 1 << 15;
+
 //Will return error if buffer.len > FIELD_SIZE. If buffer.len < FIELD_SIZE, padding 0s will be added
 pub fn read_field_element_from_buffer_with_padding(
     buffer: &[u8],
@@ -91,6 +97,7 @@ pub fn read_field_element_from_buffer_with_padding(
 pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
     circ: C,
     proving_system: ProvingSystem,
+    supported_degree: Option<usize>,
     pk_path: &Path,
     vk_path: &Path,
     max_proof_plus_vk_size: usize,
@@ -98,13 +105,13 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
     compress_pk: Option<bool>,
     compress_vk: Option<bool>,
 ) -> Result<(), Error> {
-    let g1_ck = get_g1_committer_key()?;
+    let g1_ck = get_g1_committer_key(supported_degree)?;
     match proving_system {
         ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
         ProvingSystem::CoboundaryMarlin => {
             let index = CoboundaryMarlin::get_index_info(circ)?;
             let (proof_size, vk_size) = compute_proof_vk_size(
-                g1_ck.as_ref().unwrap().comm_key.len().next_power_of_two(),
+                g1_ck.comm_key.len().next_power_of_two(),
                 index.index_info,
                 zk,
                 proving_system,
@@ -116,7 +123,7 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
                 )))?;
             }
             let (pk, vk) =
-                CoboundaryMarlin::circuit_specific_setup(g1_ck.as_ref().unwrap(), index)?;
+                CoboundaryMarlin::circuit_specific_setup(&g1_ck, index)?;
             write_to_file(&ZendooProverKey::CoboundaryMarlin(pk), pk_path, compress_pk)?;
             write_to_file(
                 &ZendooVerifierKey::CoboundaryMarlin(vk),
