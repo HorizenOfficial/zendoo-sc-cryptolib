@@ -199,6 +199,8 @@ public class CswProofTest {
             acc = h1.finalizeHash();
             h1.reset();
         }
+        h1.close();
+
         FieldElement mcbScTxsComEnd = acc;
 
         // Generate FtCswProverData
