@@ -21,8 +21,7 @@ use crate::{
     constants::constants::BoxType, CswFtOutputData, CswFtProverData, CswProverData, CswSysData,
     CswUtxoInputData, CswUtxoOutputData, CswUtxoProverData, ECPointSimulationGadget,
     FieldElementGadget, FieldHashGadget, GingerMHTBinaryGadget, SimulatedCurveParameters,
-    SimulatedFieldElement, SimulatedSWGroup, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
-    PHANTOM_FIELD_ELEMENT, SC_CUSTOM_HASH_LENGTH,
+    SimulatedFieldElement, SimulatedSWGroup, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES, SC_CUSTOM_HASH_LENGTH,
     SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
 };
 
@@ -1070,7 +1069,7 @@ impl CswFtProverDataGadget {
         );
 
         // Alloc phantom field element
-        let phantom_g = FieldElementGadget::from_value(cs.ns(|| "Break"), &PHANTOM_FIELD_ELEMENT);
+        let phantom_g = FieldElementGadget::from_value(cs.ns(|| "Break"), &FieldElement::default());
 
         for i in 0..range_size as usize {
             // if (sc_txs_com_tree_root == sc_txs_com_hashes[i]) { cnt++ }

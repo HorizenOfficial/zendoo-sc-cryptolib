@@ -11,7 +11,7 @@ use primitives::{FieldBasedHash, FieldBasedMerkleTreePath, FieldHasher};
 
 use crate::{
     constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, MST_MERKLE_TREE_HEIGHT,
-    PHANTOM_FIELD_ELEMENT, SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH,
+    SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH,
     SC_TX_HASH_LENGTH, CSW_PHANTOM_PUB_KEY_BYTES,
 };
 
@@ -69,16 +69,7 @@ impl WithdrawalCertificateData {
     }
 
     pub(crate) fn get_phantom(num_custom_fields: u32) -> Self {
-        Self {
-            ledger_id: PHANTOM_FIELD_ELEMENT,
-            epoch_id: 0,
-            bt_root: get_bt_merkle_root(None).unwrap(),
-            quality: 0,
-            mcb_sc_txs_com: PHANTOM_FIELD_ELEMENT,
-            ft_min_amount: 0,
-            btr_min_fee: 0,
-            custom_fields: vec![PHANTOM_FIELD_ELEMENT; num_custom_fields as usize],
-        }
+        WithdrawalCertificateData::get_default(num_custom_fields)
     }
 }
 
@@ -226,7 +217,7 @@ impl CswSysData {
         receiver: [u8; MC_PK_SIZE],
     ) -> Self {
         Self {
-            mcb_sc_txs_com_end: mcb_sc_txs_com_end.unwrap_or(PHANTOM_FIELD_ELEMENT),
+            mcb_sc_txs_com_end: mcb_sc_txs_com_end.unwrap_or(FieldElement::default()),
             sc_last_wcert_hash: sc_last_wcert_hash.unwrap_or(PHANTOM_CERT_DATA_HASH),
             amount,
             nullifier,
@@ -312,7 +303,7 @@ impl CswFtProverData {
     pub(crate) fn get_phantom(commitment_hashes_number: u32) -> Self {
         Self {
             ft_output: CswFtOutputData::get_phantom(),
-            ft_input_secret_key: [false; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+            ft_input_secret_key: [true; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
             mcb_sc_txs_com_start: FieldElement::default(),
             merkle_path_to_sc_hash: GingerMHTBinaryPath::new(vec![
                 (FieldElement::default(), false);
@@ -360,15 +351,6 @@ impl CswProverData {
             last_wcert: WithdrawalCertificateData::get_default(num_custom_fields),
             utxo_data: CswUtxoProverData::default(),
             ft_data: CswFtProverData::get_default(range_size),
-        }
-    }
-
-    pub(crate) fn get_phantom(range_size: u32, num_custom_fields: u32) -> Self {
-        Self {
-            sys_data: CswSysData::default(),
-            last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
-            utxo_data: CswUtxoProverData::get_phantom(),
-            ft_data: CswFtProverData::get_phantom(range_size),
         }
     }
 }
