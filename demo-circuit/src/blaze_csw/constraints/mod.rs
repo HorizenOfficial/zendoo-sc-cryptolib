@@ -9,7 +9,7 @@ use r1cs_std::{alloc::AllocGadget, eq::EqGadget, fields::FieldGadget, FromBitsGa
 
 use crate::{
     type_mapping::*, CswFtProverData, CswProverData, CswSysData, CswUtxoProverData,
-    FieldElementGadget, WithdrawalCertificateData, PHANTOM_FIELD_ELEMENT,
+    FieldElementGadget, WithdrawalCertificateData,
 };
 
 use self::data_structures::{CswProverDataGadget, ScPublicKeyGadget};
@@ -79,7 +79,7 @@ impl CeasedSidechainWithdrawalCircuit {
             (Some(last_wcert), None, Some(mut ft_data)) => {
                 // Pad if smaller than range size
                 if ft_data.sc_txs_com_hashes.len() < range_size as usize {
-                    ft_data.sc_txs_com_hashes.append(&mut vec![PHANTOM_FIELD_ELEMENT; range_size as usize - ft_data.sc_txs_com_hashes.len()])
+                    ft_data.sc_txs_com_hashes.append(&mut vec![FieldElement::default(); range_size as usize - ft_data.sc_txs_com_hashes.len()])
                 }
                 Ok(CswProverData {
                     sys_data,
@@ -92,7 +92,7 @@ impl CeasedSidechainWithdrawalCircuit {
             (None, None, Some(mut ft_data)) => {
                 // Pad if smaller than range size
                 if ft_data.sc_txs_com_hashes.len() < range_size as usize {
-                    ft_data.sc_txs_com_hashes.append(&mut vec![PHANTOM_FIELD_ELEMENT; range_size as usize - ft_data.sc_txs_com_hashes.len()])
+                    ft_data.sc_txs_com_hashes.append(&mut vec![FieldElement::default(); range_size as usize - ft_data.sc_txs_com_hashes.len()])
                 }
                 Ok(CswProverData {
                     sys_data,
@@ -356,7 +356,7 @@ mod test {
     use crate::{
         deserialize_fe_unchecked, split_field_element_at_index, CswFtOutputData, CswProverData,
         CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
-        MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT, PHANTOM_FIELD_ELEMENT,
+        MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT,
         SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE,
     };
 
@@ -521,7 +521,7 @@ mod test {
                 };
 
                 for _ in 0..num_custom_fields - 2 {
-                    custom_fields.push(PHANTOM_FIELD_ELEMENT);
+                    custom_fields.push(FieldElement::default());
                 }
 
                 custom_fields
@@ -631,13 +631,13 @@ mod test {
         let mut ft_data = CswFtProverData {
             ft_output: ft_output_data,
             ft_input_secret_key,
-            mcb_sc_txs_com_start: PHANTOM_FIELD_ELEMENT,
+            mcb_sc_txs_com_start: FieldElement::default(),
             merkle_path_to_sc_hash: sc_tree_path,
             ft_tree_path,
             sc_creation_commitment,
             scb_btr_tree_root,
             wcert_tree_root,
-            sc_txs_com_hashes: vec![PHANTOM_FIELD_ELEMENT; num_commitment_hashes as usize],
+            sc_txs_com_hashes: vec![FieldElement::default(); num_commitment_hashes as usize],
         };
 
         ft_data.sc_txs_com_hashes[0] = sc_tree_root;
@@ -648,7 +648,7 @@ mod test {
             .sc_txs_com_hashes
             .iter()
             .for_each(|sc_txs_com_hash| {
-                if !sc_txs_com_hash.eq(&PHANTOM_FIELD_ELEMENT) {
+                if !sc_txs_com_hash.eq(&FieldElement::default()) {
                     mcb_sc_txs_com_end = get_poseidon_hash_constant_length(2, None)
                         .update(mcb_sc_txs_com_end)
                         .update(*sc_txs_com_hash)
@@ -659,7 +659,7 @@ mod test {
 
         let sys_data = CswSysData {
             mcb_sc_txs_com_end,
-            sc_last_wcert_hash: PHANTOM_FIELD_ELEMENT,
+            sc_last_wcert_hash: FieldElement::default(),
             amount: ft_data.ft_output.amount,
             nullifier: ft_output_hash,
             receiver: rng.gen::<[u8; MC_PK_SIZE]>(),
@@ -1565,7 +1565,7 @@ mod test {
         );
 
         // Remove the SC_TREE_ROOT as the first element of the commitment hashes
-        csw_prover_data.ft_data.sc_txs_com_hashes[0] = PHANTOM_FIELD_ELEMENT;
+        csw_prover_data.ft_data.sc_txs_com_hashes[0] = FieldElement::default();
 
         let failing_constraint = test_csw_circuit(
             debug_only,

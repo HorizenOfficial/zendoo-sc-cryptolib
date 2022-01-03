@@ -164,21 +164,10 @@ pub const FIELD_MODULUS: usize = FIELD_CAPACITY + 1;
 
 pub const MST_MERKLE_TREE_HEIGHT: usize = 22;
 
-pub const PHANTOM_FIELD_ELEMENT: FieldElement = field_new!(
-    FieldElement,
-    BigInteger256([
-        4113438167814256341,
-        6017662335620633663,
-        3729794390834568355,
-        4611686018427387136
-    ])
-);
-
 pub const CSW_PHANTOM_PUB_KEY_BYTES: [u8; 32] = [217, 127, 224, 199, 8, 45, 179, 51, 115, 161, 177, 30, 203, 183, 46, 176, 168, 185, 222, 243, 130, 216, 130, 102, 88, 154, 253, 135, 199, 233, 73, 48];
 
 #[cfg(test)]
 mod test {
-    use crate::read_field_element_from_buffer_with_padding;
     use algebra::{AffineCurve, FpParameters, FromCompressedBits, PrimeField};
     use cctp_primitives::utils::serialization::serialize_to_buffer;
 
@@ -294,15 +283,6 @@ mod test {
         println!("{:#?}", htc_g1_out);
         println!("{:#?}", htc_g2_out);
         assert_eq!(gh_generators, VRFParams::new().group_hash_generators);
-    }
-
-    #[serial]
-    #[test]
-    fn test_csw_phantom_field_element() {
-        let tag = b"Krypton 36";
-        let field_element = read_field_element_from_buffer_with_padding(tag).unwrap();
-        println!("Phantom field element: {:?}", field_element);
-        assert_eq!(field_element, PHANTOM_FIELD_ELEMENT);
     }
 
     #[serial]
