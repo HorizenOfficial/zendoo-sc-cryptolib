@@ -598,6 +598,8 @@ mod test {
         //Return proof and public inputs if success
         let rng = &mut OsRng;
         let ck_g1 = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
+        assert_eq!(ck_g1.comm_key.len(), SUPPORTED_SEGMENT_SIZE);
+
         match CoboundaryMarlin::prove(
             &index_pk,
             &ck_g1,
@@ -632,6 +634,8 @@ mod test {
 
         let _ = load_g1_committer_key(MAX_SEGMENT_SIZE - 1);
         let ck = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
+        assert_eq!(ck.comm_key.len(), SUPPORTED_SEGMENT_SIZE);
+
         let circ = NaiveTresholdSignature::get_instance_for_setup(n, 1);
 
         let params = CoboundaryMarlin::index(&ck, circ).unwrap();

@@ -750,6 +750,7 @@ mod test {
         if !debug_only {
             let _ = load_g1_committer_key(MAX_SEGMENT_SIZE - 1);
             let ck_g1 = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
+            assert_eq!(ck_g1.comm_key.len(), SUPPORTED_SEGMENT_SIZE);
 
             let setup_circuit = CeasedSidechainWithdrawalCircuit::get_instance_for_setup(num_commitment_hashes, num_custom_fields, constant.is_some());
             let params = CoboundaryMarlin::index(&ck_g1, setup_circuit.clone()).unwrap();
