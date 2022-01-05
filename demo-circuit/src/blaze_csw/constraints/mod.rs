@@ -351,7 +351,7 @@ mod test {
     use primitives::{FieldBasedHash, FieldBasedMerkleTree, FieldHasher};
     use r1cs_core::debug_circuit;
     use rand::{thread_rng, Rng};
-    use std::convert::TryInto;
+    use std::{convert::TryInto, ops::AddAssign};
 
     use crate::{
         deserialize_fe_unchecked, split_field_element_at_index, CswFtOutputData, CswProverData,
@@ -798,7 +798,7 @@ mod test {
             // Change one public input each time and check that the proof fails
             for i in 0..current_public_inputs.len() {
                 let mut wrong_public_inputs = current_public_inputs.clone();
-                wrong_public_inputs[i].double_in_place();
+                wrong_public_inputs[i].add_assign(FieldElement::one());
 
                 assert!(!CoboundaryMarlin::verify(
                     &params.1.clone(),
