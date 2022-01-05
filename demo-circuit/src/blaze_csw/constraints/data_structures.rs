@@ -429,7 +429,7 @@ impl ConstantGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget
     ) -> Self {
         let spending_pub_key_g = bytes_to_bits(&value.spending_pub_key)
             .into_iter()
-            .map(|bit| Boolean::Constant(bit))
+            .map(Boolean::Constant)
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -440,7 +440,7 @@ impl ConstantGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget
 
         let custom_hash_g = bytes_to_bits(&value.custom_hash)
             .into_iter()
-            .map(|bit| Boolean::Constant(bit))
+            .map(Boolean::Constant)
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -500,7 +500,7 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
         nonce_big_endian_g.reverse();
         bits.extend_from_slice(&nonce_big_endian_g);
 
-        let mut custom_hash_bits_g = self.custom_hash_g.clone();
+        let mut custom_hash_bits_g = self.custom_hash_g;
         custom_hash_bits_g.reverse();
 
         bits.extend_from_slice(&custom_hash_bits_g);
@@ -1433,19 +1433,19 @@ impl ScPublicKeyGadget {
             cs.ns(|| "alloc pk_x"),
             || {
                 let te_pk_y = pk_y_coordinate_g.get_value().get()?;
-                let numerator = te_pk_y.square() - &SimulatedFieldElement::one();
-                let denominator = (te_pk_y.square() * &SimulatedCurveParameters::COEFF_D)
-                    - &<SimulatedCurveParameters as TEModelParameters>::COEFF_A;
+                let numerator = te_pk_y.square() - SimulatedFieldElement::one();
+                let denominator = (te_pk_y.square() * SimulatedCurveParameters::COEFF_D)
+                    - <SimulatedCurveParameters as TEModelParameters>::COEFF_A;
                 let x2 = denominator
                     .inverse()
-                    .map(|denom| denom * &numerator)
-                    .ok_or(SynthesisError::Other(
-                        "Must be able to compute denominator".to_string(),
-                    ))?;
+                    .map(|denom| denom * numerator)
+                    .ok_or_else(|| {
+                        SynthesisError::Other("Must be able to compute denominator".to_string())
+                    })?;
 
-                let x = x2.sqrt().ok_or(SynthesisError::Other(
-                    "x^2 square root must exist in the field".to_string(),
-                ))?;
+                let x = x2.sqrt().ok_or_else(|| {
+                    SynthesisError::Other("x^2 square root must exist in the field".to_string())
+                })?;
                 let negx = -x;
                 let x = if x.is_odd() ^ pk_x_sign_bit_g.get_value().get()? {
                     negx
@@ -1500,7 +1500,7 @@ impl ScPublicKeyGadget {
                 || {
                     let a_over_three =
                         <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_A
-                            * &(SimulatedFieldElement::from(3u8)
+                            * (SimulatedFieldElement::from(3u8)
                                 .inverse()
                                 .expect("Must be able to compute 3.inverse() in SimulatedField"));
 
@@ -1512,11 +1512,13 @@ impl ScPublicKeyGadget {
                     let one_minus_te_y_coord = one_minus_y_ed.get_value().get()?;
 
                     let one_plus_te_y_coord_over_one_minus_te_y_coord = one_plus_te_y_coord
-                        * one_minus_te_y_coord.inverse().ok_or(SynthesisError::Other(
-                            "Should be able to compute inverse of (1 - y_te)".to_string(),
-                        ))?;
+                        * one_minus_te_y_coord.inverse().ok_or_else(|| {
+                            SynthesisError::Other(
+                                "Should be able to compute inverse of (1 - y_te)".to_string(),
+                            )
+                        })?;
 
-                    Ok((one_plus_te_y_coord_over_one_minus_te_y_coord + &a_over_three) * &b_inv)
+                    Ok((one_plus_te_y_coord_over_one_minus_te_y_coord + a_over_three) * b_inv)
                 },
             )?;
 
@@ -1539,7 +1541,7 @@ impl ScPublicKeyGadget {
             let three_b_times_one_minus_y_ed = one_minus_y_ed.mul_by_constant(
                 cs.ns(|| "3B * (1 - y_ed)"),
                 &(<SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B
-                    * &SimulatedFieldElement::from(3u8)),
+                    * SimulatedFieldElement::from(3u8)),
             )?;
 
             sw_pk_x_coordinate_g.mul_equals(
@@ -1562,17 +1564,23 @@ impl ScPublicKeyGadget {
                     let one_minus_te_y_coord = one_minus_y_ed.get_value().get()?;
 
                     let one_plus_te_y_coord_over_one_minus_te_y_coord = one_plus_te_y_coord
-                        * one_minus_te_y_coord.inverse().ok_or(SynthesisError::Other(
-                            "Should be able to compute inverse of (1 - y_te)".to_string(),
-                        ))?;
+                        * one_minus_te_y_coord.inverse().ok_or_else(|| {
+                            SynthesisError::Other(
+                                "Should be able to compute inverse of (1 - y_te)".to_string(),
+                            )
+                        })?;
 
-                    let te_x_coord_inv = te_pk_x_coordinate_g.get_value().get()?.inverse().ok_or(
-                        SynthesisError::Other(
-                            "Should be able to compute inverse of x_te".to_string(),
-                        ),
-                    )?;
+                    let te_x_coord_inv = te_pk_x_coordinate_g
+                        .get_value()
+                        .get()?
+                        .inverse()
+                        .ok_or_else(|| {
+                            SynthesisError::Other(
+                                "Should be able to compute inverse of x_te".to_string(),
+                            )
+                        })?;
 
-                    Ok(b_inv * &one_plus_te_y_coord_over_one_minus_te_y_coord * &te_x_coord_inv)
+                    Ok(b_inv * one_plus_te_y_coord_over_one_minus_te_y_coord * te_x_coord_inv)
                 },
             )?;
 
@@ -1634,7 +1642,7 @@ impl ScPublicKeyGadget {
         ),
         SynthesisError,
     > {
-        let mut pk_bits_g = public_key_bits_g.clone();
+        let mut pk_bits_g = *public_key_bits_g;
         pk_bits_g.reverse(); // BE
 
         // Get the Boolean corresponding to the sign of the x coordinate
