@@ -10,9 +10,8 @@ use cctp_primitives::{
 use primitives::{FieldBasedHash, FieldBasedMerkleTreePath, FieldHasher};
 
 use crate::{
-    constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, MST_MERKLE_TREE_HEIGHT,
-    SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH,
-    SC_TX_HASH_LENGTH, CSW_PHANTOM_PUB_KEY_BYTES,
+    constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, CSW_PHANTOM_PUB_KEY_BYTES,
+    MST_MERKLE_TREE_HEIGHT, SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
 };
 
 #[derive(Clone, Debug)]
@@ -279,7 +278,6 @@ pub struct CswFtProverData {
 }
 
 impl CswFtProverData {
-
     pub(crate) fn get_default(commitment_hashes_number: u32) -> Self {
         Self {
             ft_output: CswFtOutputData::default(),
@@ -344,7 +342,6 @@ pub struct CswProverData {
 }
 
 impl CswProverData {
-
     pub(crate) fn get_default(range_size: u32, num_custom_fields: u32) -> Self {
         Self {
             sys_data: CswSysData::default(),

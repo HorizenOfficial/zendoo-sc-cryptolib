@@ -79,7 +79,11 @@ impl CeasedSidechainWithdrawalCircuit {
             (Some(last_wcert), None, Some(mut ft_data)) => {
                 // Pad if smaller than range size
                 if ft_data.sc_txs_com_hashes.len() < range_size as usize {
-                    ft_data.sc_txs_com_hashes.append(&mut vec![FieldElement::default(); range_size as usize - ft_data.sc_txs_com_hashes.len()])
+                    ft_data.sc_txs_com_hashes.append(&mut vec![
+                        FieldElement::default();
+                        range_size as usize
+                            - ft_data.sc_txs_com_hashes.len()
+                    ])
                 }
                 Ok(CswProverData {
                     sys_data,
@@ -87,12 +91,16 @@ impl CeasedSidechainWithdrawalCircuit {
                     utxo_data: CswUtxoProverData::get_phantom(),
                     ft_data,
                 })
-            } ,
+            }
             // FT withdraw, with last_wcert not present
             (None, None, Some(mut ft_data)) => {
                 // Pad if smaller than range size
                 if ft_data.sc_txs_com_hashes.len() < range_size as usize {
-                    ft_data.sc_txs_com_hashes.append(&mut vec![FieldElement::default(); range_size as usize - ft_data.sc_txs_com_hashes.len()])
+                    ft_data.sc_txs_com_hashes.append(&mut vec![
+                        FieldElement::default();
+                        range_size as usize
+                            - ft_data.sc_txs_com_hashes.len()
+                    ])
                 }
                 Ok(CswProverData {
                     sys_data,
@@ -100,7 +108,7 @@ impl CeasedSidechainWithdrawalCircuit {
                     utxo_data: CswUtxoProverData::get_phantom(),
                     ft_data,
                 })
-            },
+            }
             // Attempt to withdraw a sc utxo without having specified a last_wcert
             (None, Some(_), _) => Err(Error::from(
                 "Attempt to withdraw SC Utxo without specifying last WCert",
@@ -356,8 +364,7 @@ mod test {
     use crate::{
         deserialize_fe_unchecked, split_field_element_at_index, CswFtOutputData, CswProverData,
         CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
-        MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT,
-        SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
+        MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
     };
 
     use super::*;
@@ -717,7 +724,6 @@ mod test {
         csw_prover_data: CswProverData,
         public_inputs: Option<Vec<FieldElement>>,
     ) -> Option<String> {
-
         let utxo_data = {
             if csw_prover_data.utxo_data == CswUtxoProverData::get_phantom() {
                 None
@@ -743,7 +749,8 @@ mod test {
             ft_data,
             num_commitment_hashes,
             num_custom_fields,
-        ).unwrap();
+        )
+        .unwrap();
 
         let failing_constraint = debug_circuit(circuit.clone()).unwrap();
 
@@ -751,8 +758,13 @@ mod test {
             load_g1_committer_key(1 << 17, 1 << 15).unwrap();
             let ck_g1 = get_g1_committer_key().unwrap();
 
-            let setup_circuit = CeasedSidechainWithdrawalCircuit::get_instance_for_setup(num_commitment_hashes, num_custom_fields, constant.is_some());
-            let params = CoboundaryMarlin::index(ck_g1.as_ref().unwrap(), setup_circuit.clone()).unwrap();
+            let setup_circuit = CeasedSidechainWithdrawalCircuit::get_instance_for_setup(
+                num_commitment_hashes,
+                num_custom_fields,
+                constant.is_some(),
+            );
+            let params =
+                CoboundaryMarlin::index(ck_g1.as_ref().unwrap(), setup_circuit.clone()).unwrap();
             let rng = &mut thread_rng();
 
             let proof = CoboundaryMarlin::prove(
@@ -1596,7 +1608,10 @@ mod test {
         );
 
         // Remove half of the commitment hashes to check if the circuit still works (it should automatically add phantom hashes to fill the gap)
-        csw_prover_data.ft_data.sc_txs_com_hashes.truncate(num_commitment_hashes as usize / 2);
+        csw_prover_data
+            .ft_data
+            .sc_txs_com_hashes
+            .truncate(num_commitment_hashes as usize / 2);
         assert!(csw_prover_data.ft_data.sc_txs_com_hashes.len() < num_commitment_hashes as usize);
 
         let failing_constraint = test_csw_circuit(
@@ -1612,23 +1627,36 @@ mod test {
         assert!(failing_constraint.is_none());
     }
 
-    #[test] #[ignore]
+    #[test]
+    #[ignore]
     fn print_circuit_info() {
-        use cctp_primitives::proving_system::{ProvingSystem, compute_proof_vk_size};
+        use cctp_primitives::proving_system::{compute_proof_vk_size, ProvingSystem};
 
         let max_proof_plus_vk_size = 9 * 1024;
         let range_sizes = (19..=20).map(|num| num * 100);
-    
+
         for range_size in range_sizes {
             println!("**********************************************************");
-            println!("Num hashes: {} (Num epochs: {})", range_size, range_size/2);
+            println!(
+                "Num hashes: {} (Num epochs: {})",
+                range_size,
+                range_size / 2
+            );
 
-            let circ = CeasedSidechainWithdrawalCircuit::get_instance_for_setup(range_size, 2, false);
+            let circ =
+                CeasedSidechainWithdrawalCircuit::get_instance_for_setup(range_size, 2, false);
             let index = CoboundaryMarlin::get_index_info(circ).unwrap();
             println!(
                 "Padded num_constraints-num_variables: {}, |H| = {}",
-                std::cmp::max(index.index_info.num_constraints, index.index_info.num_witness + index.index_info.num_inputs),
-                std::cmp::max(index.index_info.num_constraints, index.index_info.num_witness + index.index_info.num_inputs).next_power_of_two()
+                std::cmp::max(
+                    index.index_info.num_constraints,
+                    index.index_info.num_witness + index.index_info.num_inputs
+                ),
+                std::cmp::max(
+                    index.index_info.num_constraints,
+                    index.index_info.num_witness + index.index_info.num_inputs
+                )
+                .next_power_of_two()
             );
             println!(
                 "Num non zero = {}, |K| = {}",

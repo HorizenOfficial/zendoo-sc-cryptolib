@@ -21,8 +21,9 @@ use crate::{
     constants::constants::BoxType, CswFtOutputData, CswFtProverData, CswProverData, CswSysData,
     CswUtxoInputData, CswUtxoOutputData, CswUtxoProverData, ECPointSimulationGadget,
     FieldElementGadget, FieldHashGadget, GingerMHTBinaryGadget, SimulatedCurveParameters,
-    SimulatedFieldElement, SimulatedSWGroup, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES, SC_CUSTOM_HASH_LENGTH,
-    SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
+    SimulatedFieldElement, SimulatedSWGroup, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
+    SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, SIMULATED_FIELD_BYTE_SIZE,
+    SIMULATED_SCALAR_FIELD_MODULUS_BITS,
 };
 
 #[derive(Clone, PartialEq, Eq)]
@@ -48,7 +49,8 @@ impl WithdrawalCertificateDataGadget {
             &WithdrawalCertificateData::get_phantom(num_custom_fields),
         );
 
-        self.ledger_id_g.is_eq(cs.ns(|| "is wcert phantom"), &phantom_wcert_g.ledger_id_g)
+        self.ledger_id_g
+            .is_eq(cs.ns(|| "is wcert phantom"), &phantom_wcert_g.ledger_id_g)
     }
 }
 
@@ -338,7 +340,10 @@ impl CswUtxoOutputDataGadget {
             &CswUtxoOutputData::get_phantom(),
         );
 
-        self.spending_pub_key_g.is_eq(cs.ns(|| "is UTXO output phantom"), &phantom_utxo_output_g.spending_pub_key_g)
+        self.spending_pub_key_g.is_eq(
+            cs.ns(|| "is UTXO output phantom"),
+            &phantom_utxo_output_g.spending_pub_key_g,
+        )
     }
 }
 
@@ -523,7 +528,6 @@ impl CswUtxoInputDataGadget {
         &self,
         mut cs: CS,
     ) -> Result<Boolean, SynthesisError> {
-
         self.output_g.is_phantom(cs.ns(|| "is output_g phantom"))
     }
 }
@@ -778,7 +782,10 @@ impl CswFtOutputDataGadget {
             &CswFtOutputData::get_phantom(),
         );
 
-        self.payback_addr_data_hash_g.is_eq(cs.ns(|| "is FT output phantom"), &phantom_ft_input_g.payback_addr_data_hash_g)
+        self.payback_addr_data_hash_g.is_eq(
+            cs.ns(|| "is FT output phantom"),
+            &phantom_ft_input_g.payback_addr_data_hash_g,
+        )
     }
 }
 
@@ -813,14 +820,15 @@ impl AllocGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
 
         let amount_g = UInt64::alloc(cs.ns(|| "alloc amount"), amount.ok())?;
 
-        let receiver_pub_key_g = Vec::<UInt8>::alloc(cs.ns(|| "alloc receiver pub key"), || receiver_pub_key)?
-        .try_into()
-        .map_err(|_| {
-            SynthesisError::Other(format!(
-                "invalid size for public key, expected {} bytes",
-                SC_PUBLIC_KEY_LENGTH
-            ))
-        })?;
+        let receiver_pub_key_g =
+            Vec::<UInt8>::alloc(cs.ns(|| "alloc receiver pub key"), || receiver_pub_key)?
+                .try_into()
+                .map_err(|_| {
+                    SynthesisError::Other(format!(
+                        "invalid size for public key, expected {} bytes",
+                        SC_PUBLIC_KEY_LENGTH
+                    ))
+                })?;
 
         let payback_addr_data_hash_g =
             Vec::<Boolean>::alloc(cs.ns(|| "alloc payback addr data hash"), || {
@@ -875,7 +883,8 @@ impl ConstantGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
         value: &CswFtOutputData,
     ) -> Self {
         let amount_g = UInt64::constant(value.amount);
-        let receiver_pub_key_g = value.receiver_pub_key
+        let receiver_pub_key_g = value
+            .receiver_pub_key
             .iter()
             .map(|&byte| UInt8::constant(byte))
             .collect::<Vec<_>>()
@@ -953,7 +962,8 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
         let mut bits = self.amount_g.to_bits_le();
         bits.reverse();
 
-        let mut receiver_pub_key_bits = self.receiver_pub_key_g
+        let mut receiver_pub_key_bits = self
+            .receiver_pub_key_g
             .iter()
             .rev() // Reverse the bytes due to a MC <-> SC endianness incompatibility
             .flat_map(|byte| byte.into_bits_le())
@@ -1688,7 +1698,7 @@ impl ScPublicKeyGadget {
                 .collect::<Vec<_>>()
                 .try_into()
                 .unwrap();
-            
+
             let (ft_pk_x_sign_bit_g, ft_pk_y_coordinate_g) =
                 Self::get_x_sign_and_y_coord_from_pk_bits(
                     cs.ns(|| "unpack ft pk bits"),
