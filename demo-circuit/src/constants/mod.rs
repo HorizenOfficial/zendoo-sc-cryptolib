@@ -164,7 +164,10 @@ pub const FIELD_MODULUS: usize = FIELD_CAPACITY + 1;
 
 pub const MST_MERKLE_TREE_HEIGHT: usize = 22;
 
-pub const CSW_PHANTOM_PUB_KEY_BYTES: [u8; 32] = [217, 127, 224, 199, 8, 45, 179, 51, 115, 161, 177, 30, 203, 183, 46, 176, 168, 185, 222, 243, 130, 216, 130, 102, 88, 154, 253, 135, 199, 233, 73, 48];
+pub const CSW_PHANTOM_PUB_KEY_BYTES: [u8; 32] = [
+    217, 127, 224, 199, 8, 45, 179, 51, 115, 161, 177, 30, 203, 183, 46, 176, 168, 185, 222, 243,
+    130, 216, 130, 102, 88, 154, 253, 135, 199, 233, 73, 48,
+];
 
 #[cfg(test)]
 mod test {
@@ -288,14 +291,28 @@ mod test {
     #[serial]
     #[test]
     fn test_csw_phantom_public_key() {
-        let x = SimulatedFieldElement::from(BigInteger256([15877199453377760308, 458271239891050623, 5539075294202620951, 5404726604943382876]));
-        let y = SimulatedFieldElement::from(BigInteger256([3725370832501899225, 12695286482625208691, 7386704395789842856, 3479569230309726808]));
+        let x = SimulatedFieldElement::from(BigInteger256([
+            15877199453377760308,
+            458271239891050623,
+            5539075294202620951,
+            5404726604943382876,
+        ]));
+        let y = SimulatedFieldElement::from(BigInteger256([
+            3725370832501899225,
+            12695286482625208691,
+            7386704395789842856,
+            3479569230309726808,
+        ]));
         let simulated_te_point = SimulatedTEGroup::new(x, y);
         assert_eq!(simulated_te_point.group_membership_test(), false);
 
         // Store the sign (last bit) of the X coordinate
         // The value is left-shifted to be used later in an OR operation
-        let x_sign = if simulated_te_point.x.is_odd() { 1 << 7 } else { 0u8 };
+        let x_sign = if simulated_te_point.x.is_odd() {
+            1 << 7
+        } else {
+            0u8
+        };
 
         // Extract the public key bytes as Y coordinate
         let y_coordinate = simulated_te_point.y;

@@ -4777,22 +4777,23 @@ fn parse_utxo_prover_data(_env: JNIEnv, _utxo_data: JObject) -> CswUtxoProverDat
     // Parse input
 
     // Parse secret key
-    let secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS] =
-        {
-            // Parse sk bytes
-            let sk_bytes = parse_fixed_size_byte_array_from_jobject::<
-                SC_SECRET_KEY_LENGTH,
-            >(&_env, _utxo_data, "utxoInputSecretKey");
+    let secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS] = {
+        // Parse sk bytes
+        let sk_bytes = parse_fixed_size_byte_array_from_jobject::<SC_SECRET_KEY_LENGTH>(
+            &_env,
+            _utxo_data,
+            "utxoInputSecretKey",
+        );
 
-            // Interpret bytes as a LE integer and read a SimulatedScalarFieldElement out of it
-            // reducing it if required
-            let sk = deserialize_fe_unchecked(sk_bytes.to_vec());
+        // Interpret bytes as a LE integer and read a SimulatedScalarFieldElement out of it
+        // reducing it if required
+        let sk = deserialize_fe_unchecked(sk_bytes.to_vec());
 
-            // Convert it to bits and reverse them (circuit expects them in LE but write_bits outputs in BE)
-            let mut sk_bits = sk.write_bits();
-            sk_bits.reverse();
-            sk_bits.try_into().unwrap()
-        };
+        // Convert it to bits and reverse them (circuit expects them in LE but write_bits outputs in BE)
+        let mut sk_bits = sk.write_bits();
+        sk_bits.reverse();
+        sk_bits.try_into().unwrap()
+    };
 
     let input = CswUtxoInputData { output, secret_key };
 
@@ -4875,22 +4876,23 @@ fn parse_ft_prover_data(_env: JNIEnv, _ft_data: JObject) -> CswFtProverData {
     }
 
     // Parse secret key
-    let ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS] =
-        {
-            // Parse sk bytes
-            let sk_bytes = parse_fixed_size_byte_array_from_jobject::<
-                SC_SECRET_KEY_LENGTH,
-            >(&_env, _ft_data, "ftInputSecretKey");
+    let ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS] = {
+        // Parse sk bytes
+        let sk_bytes = parse_fixed_size_byte_array_from_jobject::<SC_SECRET_KEY_LENGTH>(
+            &_env,
+            _ft_data,
+            "ftInputSecretKey",
+        );
 
-            // Interpret bytes as a LE integer and read a SimulatedScalarFieldElement out of it
-            // reducing it if required
-            let sk = deserialize_fe_unchecked(sk_bytes.to_vec());
+        // Interpret bytes as a LE integer and read a SimulatedScalarFieldElement out of it
+        // reducing it if required
+        let sk = deserialize_fe_unchecked(sk_bytes.to_vec());
 
-            // Convert it to bits and reverse them (circuit expects them in LE but write_bits outputs in BE)
-            let mut sk_bits = sk.write_bits();
-            sk_bits.reverse();
-            sk_bits.try_into().unwrap()
-        };
+        // Convert it to bits and reverse them (circuit expects them in LE but write_bits outputs in BE)
+        let mut sk_bits = sk.write_bits();
+        sk_bits.reverse();
+        sk_bits.try_into().unwrap()
+    };
 
     CswFtProverData {
         ft_output,
