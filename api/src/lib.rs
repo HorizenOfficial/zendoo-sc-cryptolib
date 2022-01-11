@@ -42,6 +42,7 @@ use cctp_calls::*;
 mod exception;
 use exception::*;
 
+#[macro_use]
 mod utils;
 use utils::*;
 
@@ -124,7 +125,10 @@ ffi_export!(
 
         match read_field_element_from_buffer_with_padding(fe_bytes.as_slice()) {
             Ok(fe) => return_field_element(&_env, fe),
-            Err(_) => std::ptr::null::<jobject>() as jobject,
+            Err(e) => {
+                log!(format!("Unable to deserialize FieldElement: {:?}", e));
+                std::ptr::null::<jobject>() as jobject
+            }
         }
     }
 );
@@ -567,7 +571,10 @@ ffi_export!(
         //Sign message and return opaque pointer to sig
         let signature = match schnorr_sign(message, secret_key, public_key) {
             Ok(sig) => sig,
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!("Unable to sign message: {:?}", e));
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         };
 
         return_jobject(
@@ -660,7 +667,10 @@ ffi_export!(
                     JNI_FALSE
                 }
             }
-            Err(_) => JNI_FALSE, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!("Signature verification error: {:?}", e));
+                JNI_FALSE
+            } //CRYPTO_ERROR
         }
     }
 );
@@ -808,7 +818,10 @@ ffi_export!(
         //Get digest
         let fe = match finalize_poseidon_hash(digest) {
             Ok(fe) => fe,
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!("Unable to compute hash: {:?}", e));
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         };
 
         return_field_element(&_env, fe)
@@ -1132,7 +1145,13 @@ ffi_export!(
                 "com/horizen/merkletreenative/InMemoryAppendOnlyMerkleTree",
             )
             .into_inner(),
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!(
+                    "Unable to initialize InMemoryAppendOnlyMerkleTree: {:?}",
+                    e
+                ));
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         }
     }
 );
@@ -1161,7 +1180,13 @@ ffi_export!(
 
         match append_leaf_to_ginger_mht(tree, leaf) {
             Ok(_) => JNI_TRUE,
-            Err(_) => JNI_FALSE,
+            Err(e) => {
+                log!(format!(
+                    "Unable to append leaf to InMemoryAppendOnlyMerkleTree: {:?}",
+                    e
+                ));
+                JNI_FALSE
+            }
         }
     }
 );
@@ -1186,7 +1211,13 @@ ffi_export!(
                 "com/horizen/merkletreenative/InMemoryAppendOnlyMerkleTree",
             )
             .into_inner(),
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!(
+                    "Unable to finalize InMemoryAppendOnlyMerkleTree: {:?}",
+                    e
+                ));
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         }
     }
 );
@@ -1206,7 +1237,13 @@ ffi_export!(
 
         match finalize_ginger_mht_in_place(tree) {
             Ok(_) => JNI_TRUE,
-            Err(_) => JNI_FALSE,
+            Err(e) => {
+                log!(format!(
+                    "Unable to initialize InMemoryAppendOnlyMerkleTree in place: {:?}",
+                    e
+                ));
+                JNI_FALSE
+            }
         }
     }
 );
@@ -1226,7 +1263,10 @@ ffi_export!(
 
         match get_ginger_mht_root(tree) {
             Some(root) => return_field_element(&_env, root),
-            None => std::ptr::null::<jobject>() as jobject,
+            None => {
+                log!("Cannot return root. Have you finalized the tree ?");
+                std::ptr::null::<jobject>() as jobject
+            }
         }
     }
 );
@@ -1249,7 +1289,10 @@ ffi_export!(
             Some(path) => {
                 return_jobject(&_env, path, "com/horizen/merkletreenative/MerklePath").into_inner()
             }
-            None => std::ptr::null::<jobject>() as jobject,
+            None => {
+                log!("Cannot get path. Have you finalized the tree ?");
+                std::ptr::null::<jobject>() as jobject
+            }
         }
     }
 );
@@ -1439,7 +1482,10 @@ ffi_export!(
                 return_jobject(&_env, proof, "com/horizen/vrfnative/VRFProof"),
                 return_jobject(&_env, vrf_out, "com/horizen/librustsidechains/FieldElement"),
             ),
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!("Unable to create VRF Proof: {:?}", e));
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         };
 
         //Create and return VRFProveResult instance
@@ -1532,7 +1578,10 @@ ffi_export!(
         //Verify vrf proof and get vrf output
         let vrf_out = match vrf_proof_to_hash(message, public_key, proof) {
             Ok(result) => result,
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!("Unable to get VRF output from VRF proof: {:?}", e));
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         };
 
         //Return vrf output
@@ -1581,7 +1630,10 @@ ffi_export!(
         //Compute constant
         match compute_pks_threshold_hash(pks.as_slice(), threshold) {
             Ok(constant) => return_field_element(&_env, constant),
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(e);
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         }
     }
 );
@@ -1711,7 +1763,10 @@ ffi_export!(
             custom_fields_list,
         ) {
             Ok((_, msg)) => msg,
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(e);
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         };
 
         //Return msg
@@ -1749,7 +1804,10 @@ ffi_export!(
         // Generate DLOG keypair
         match init_dlog_keys(proving_system, _segment_size as usize) {
             Ok(_) => JNI_TRUE,
-            Err(_) => JNI_FALSE,
+            Err(e) => {
+                log!(format!("DLOG keys initialization failed: {:?}", e));
+                JNI_FALSE
+            }
         }
     }
 );
@@ -1771,17 +1829,18 @@ ffi_export!(
             .expect("Should be able to read jstring as Rust String");
 
         // Deserialize vk
-        let vk: ZendooVerifierKey = match read_from_file(
-            Path::new(vk_path.to_str().unwrap()),
-            Some(false),
-            Some(true),
-        ) {
-            Ok(vk) => vk,
-            Err(e) => {
-                println!("{:?}", e);
-                return JNI_FALSE;
-            }
-        };
+        let vk_path = vk_path.to_str().unwrap();
+        let vk: ZendooVerifierKey =
+            match read_from_file(Path::new(vk_path), Some(false), Some(true)) {
+                Ok(vk) => vk,
+                Err(e) => {
+                    log!(format!(
+                        "Unable to read vk at {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+                        vk_path, e, false, true
+                    ));
+                    return JNI_FALSE;
+                }
+            };
 
         // Read zk value
         let zk = _zk == JNI_TRUE;
@@ -1866,7 +1925,7 @@ ffi_export!(
         ) {
             Ok(_) => JNI_TRUE,
             Err(e) => {
-                println!("{:?}", e);
+                log!(format!("(Pk, Vk) generation failed: {:?}", e));
                 JNI_FALSE
             }
         }
@@ -1888,17 +1947,20 @@ ffi_export!(
         _proving_key_path: JString,
     ) -> jint {
         // Read paths
-        let proving_key_path = _env
+        let proving_key_path_j = _env
             .get_string(_proving_key_path)
             .expect("Should be able to read jstring as Rust String");
 
-        match read_from_file::<ProvingSystem>(
-            Path::new(proving_key_path.to_str().unwrap()),
-            None,
-            None,
-        ) {
+        let proving_key_path = proving_key_path_j.to_str().unwrap();
+        match read_from_file::<ProvingSystem>(Path::new(proving_key_path), None, None) {
             Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
-            Err(_) => -1i32 as jint,
+            Err(e) => {
+                log!(format!(
+                    "Unable to read proving system type from pk at {:?}: {:?}",
+                    proving_key_path, e
+                ));
+                -1i32 as jint
+            }
         }
     }
 );
@@ -1910,17 +1972,20 @@ ffi_export!(
         _verifier_key_path: JString,
     ) -> jint {
         // Read paths
-        let verifier_key_path = _env
+        let verifier_key_path_j = _env
             .get_string(_verifier_key_path)
             .expect("Should be able to read jstring as Rust String");
 
-        match read_from_file::<ProvingSystem>(
-            Path::new(verifier_key_path.to_str().unwrap()),
-            None,
-            None,
-        ) {
+        let verifier_key_path = verifier_key_path_j.to_str().unwrap();
+        match read_from_file::<ProvingSystem>(Path::new(verifier_key_path), None, None) {
             Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
-            Err(_) => -1i32 as jint,
+            Err(e) => {
+                log!(format!(
+                    "Unable to read proving system type from vk at {:?}: {:?}",
+                    verifier_key_path, e
+                ));
+                -1i32 as jint
+            }
         }
     }
 );
@@ -2154,7 +2219,10 @@ ffi_export!(
                 *result
             }
             Err(e) => {
-                eprintln!("Error creating proof {:?}", e);
+                log!(format!(
+                    "Error creating NaiveThresholdSignature proof {:?}",
+                    e
+                ));
                 JObject::null().into_inner()
             }
         }
@@ -2174,7 +2242,13 @@ ffi_export!(
 
         match deserialize_from_buffer::<ProvingSystem>(&proof_bytes[..1], None, None) {
             Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
-            Err(_) => -1i32 as jint,
+            Err(e) => {
+                log!(format!(
+                    "Unable to read proving system type from proof: {:?}",
+                    e
+                ));
+                -1i32 as jint
+            }
         }
     }
 );
@@ -2342,7 +2416,13 @@ ffi_export!(
                     JNI_FALSE
                 }
             }
-            Err(_) => JNI_FALSE, // CRYPTO_ERROR or IO_ERROR
+            Err(e) => {
+                log!(format!(
+                    "Unable to verify NaiveThresholdSignature proof: {:?}",
+                    e
+                ));
+                JNI_FALSE
+            } // CRYPTO_ERROR or IO_ERROR
         }
     }
 );
@@ -2403,7 +2483,10 @@ ffi_export!(
             let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
             match FieldElement::deserialize(sc_id_bytes.as_slice()) {
                 Ok(fe) => fe,
-                Err(_) => return JNI_FALSE,
+                Err(e) => {
+                    log!(format!("ScId deserialization failed: {:?}", e));
+                    return JNI_FALSE;
+                }
             }
         };
 
@@ -2517,7 +2600,10 @@ ffi_export!(
             let constant_bytes = parse_jbyte_array_to_vec(&_env, &_constant_nullable, FIELD_SIZE);
             match FieldElement::deserialize(constant_bytes.as_slice()) {
                 Ok(constant_fe) => Option::Some(constant_fe),
-                Err(_) => return JNI_FALSE,
+                Err(e) => {
+                    log!(format!("constant deserialization failed: {:?}", e));
+                    return JNI_FALSE;
+                }
             }
         };
 
@@ -3827,7 +3913,10 @@ ffi_export!(
 
                 *jep
             }
-            Err(_) => std::ptr::null::<jobject>() as jobject,
+            Err(e) => {
+                log!(format!("ScExistenceProof deserialization failed: {:?}", e));
+                std::ptr::null::<jobject>() as jobject
+            }
         }
     }
 );
@@ -3935,7 +4024,10 @@ ffi_export!(
 
                 *jep
             }
-            Err(_) => std::ptr::null::<jobject>() as jobject,
+            Err(e) => {
+                log!(format!("ScAbsenceProof deserialization failed: {:?}", e));
+                std::ptr::null::<jobject>() as jobject
+            }
         }
     }
 );
@@ -4108,11 +4200,11 @@ ffi_export!(
                 _env.byte_array_from_slice(merkle_root_bytes.as_slice())
                     .expect("Cannot write jobject.")
             }
-            Err(_) => {
+            Err(e) => {
                 throw!(
                     &_env,
                     "java/lang/Exception",
-                    "Cannot compute merkle root with size check.",
+                    format!("Cannot compute merkle root with size check: {:?}", e).as_str(),
                     JObject::null().into_inner()
                 );
             }
@@ -4424,7 +4516,7 @@ ffi_export!(
         match parse_sc_utxo_output(&_env, _utxo_out).hash(None) {
             Ok(digest) => return_field_element(&_env, digest),
             Err(e) => {
-                eprintln!("Error while computing Utxo Output hash: {:?}", e);
+                log!(format!("Error while computing Utxo Output hash: {:?}", e));
                 JObject::null().into_inner()
             }
         }
@@ -4485,7 +4577,7 @@ ffi_export!(
         ) {
             Ok(digest) => return_field_element(&_env, digest),
             Err(e) => {
-                eprintln!("Error while computing FT hash: {:?}", e);
+                log!(format!("Error while computing FT hash: {:?}", e));
                 JObject::null().into_inner()
             }
         }
@@ -4630,7 +4722,7 @@ ffi_export!(
         ) {
             Ok(digest) => return_field_element(&_env, digest),
             Err(e) => {
-                eprintln!("Error while computing FT hash: {:?}", e);
+                log!(format!("Error while computing cert hash: {:?}", e));
                 JObject::null().into_inner()
             }
         }
@@ -4698,7 +4790,7 @@ ffi_export!(
         ) {
             Ok(_) => JNI_TRUE,
             Err(e) => {
-                println!("{:?}", e);
+                log!(format!("(Pk, Vk) generation failed: {:?}", e));
                 JNI_FALSE
             }
         }
@@ -4981,7 +5073,7 @@ ffi_export!(
                 .expect("Should be able to convert Rust slice into jbytearray"),
 
             Err(e) => {
-                eprintln!("Error creating proof {:?}", e);
+                log!(format!("Error creating proof {:?}", e));
                 JObject::null().into_inner()
             }
         }
@@ -5042,7 +5134,10 @@ ffi_export!(
                     JNI_FALSE
                 }
             }
-            Err(_) => JNI_FALSE, // CRYPTO_ERROR or IO_ERROR
+            Err(e) => {
+                log!(format!("Unable to verify CSW proof: {:?}", e));
+                JNI_FALSE
+            } // CRYPTO_ERROR or IO_ERROR
         }
     }
 );

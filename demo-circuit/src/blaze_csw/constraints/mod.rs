@@ -37,9 +37,22 @@ impl CeasedSidechainWithdrawalCircuit {
         sidechain_id: FieldElement,
     ) -> Result<FieldElement, Error> {
         let mut sys_data_hash_inputs = DataAccumulator::init()
-            .update(sys_data.amount)?
-            .update(&sys_data.receiver[..])?
-            .get_field_elements()?;
+            .update(sys_data.amount)
+            .map_err(|e| {
+                format!(
+                    "Unable to update DataAccumulator with sys_data.amount: {:?}",
+                    e
+                )
+            })?
+            .update(&sys_data.receiver[..])
+            .map_err(|e| {
+                format!(
+                    "Unable to update DataAccumulator with sys_data.receiver: {:?}",
+                    e
+                )
+            })?
+            .get_field_elements()
+            .map_err(|e| format!("Unable to finalize DataAccumulator: {:?}", e))?;
 
         debug_assert!(sys_data_hash_inputs.len() == 1);
 
@@ -64,7 +77,8 @@ impl CeasedSidechainWithdrawalCircuit {
         num_custom_fields: u32,
     ) -> Result<Self, Error> {
         // Compute csw sys_data hash
-        let csw_sys_data_hash = Self::compute_csw_sys_data_hash(&sys_data, sidechain_id)?;
+        let csw_sys_data_hash = Self::compute_csw_sys_data_hash(&sys_data, sidechain_id)
+            .map_err(|e| format!("Unable to compute csw_sys_data_hash: {:?}", e))?;
 
         // Handle all cases
         let csw_data = match (last_wcert, utxo_data, ft_data) {

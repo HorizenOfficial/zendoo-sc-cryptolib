@@ -105,11 +105,17 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
     compress_pk: Option<bool>,
     compress_vk: Option<bool>,
 ) -> Result<(), Error> {
-    let g1_ck = get_g1_committer_key(supported_degree)?;
+    let g1_ck = get_g1_committer_key(supported_degree).map_err(|e| {
+        format!(
+            "Unable to get DLOG key of degree {:?}: {:?}",
+            supported_degree, e
+        )
+    })?;
     match proving_system {
         ProvingSystem::Undefined => return Err(ProvingSystemError::UndefinedProvingSystem)?,
         ProvingSystem::CoboundaryMarlin => {
-            let index = CoboundaryMarlin::get_index_info(circ)?;
+            let index = CoboundaryMarlin::get_index_info(circ)
+                .map_err(|e| format!("Unable to compute circuit info: {:?}", e))?;
             let (proof_size, vk_size) = compute_proof_vk_size(
                 g1_ck.comm_key.len().next_power_of_two(),
                 index.index_info,
@@ -122,13 +128,28 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
                     max_proof_plus_vk_size, proof_size + vk_size
                 )))?;
             }
-            let (pk, vk) = CoboundaryMarlin::circuit_specific_setup(&g1_ck, index)?;
-            write_to_file(&ZendooProverKey::CoboundaryMarlin(pk), pk_path, compress_pk)?;
+            let (pk, vk) = CoboundaryMarlin::circuit_specific_setup(&g1_ck, index)
+                .map_err(|e| format!("Circuit setup failed: {:?}", e))?;
+
+            write_to_file(&ZendooProverKey::CoboundaryMarlin(pk), pk_path, compress_pk).map_err(
+                |e| {
+                    format!(
+                        "Unable to write proving key to file {:?}: {:?}. Compressed: {:?}",
+                        pk_path, e, compress_pk
+                    )
+                },
+            )?;
             write_to_file(
                 &ZendooVerifierKey::CoboundaryMarlin(vk),
                 vk_path,
                 compress_vk,
-            )?;
+            )
+            .map_err(|e| {
+                format!(
+                    "Unable to write verification key to file {:?}: {:?}. Compressed: {:?}",
+                    vk_path, e, compress_vk
+                )
+            })?;
         }
         ProvingSystem::Darlin => unimplemented!(),
     }

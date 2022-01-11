@@ -93,12 +93,17 @@ pub fn compute_pks_threshold_hash(
     pks.iter().for_each(|pk| {
         h.update(pk.x);
     });
-    let pks_hash = h.finalize()?;
+    let pks_hash = h
+        .finalize()
+        .map_err(|e| format!("Unable to compute pks hash: {:?}", e))?;
 
-    FieldHash::init_constant_length(2, None)
+    let pks_threshold_hash = FieldHash::init_constant_length(2, None)
         .update(pks_hash)
         .update(threshold_field)
         .finalize()
+        .map_err(|e| format!("Unable to compute pks_treshold_hash: {:?}", e))?;
+
+    Ok(pks_threshold_hash)
 }
 
 //Compute and return (MR(bt_list), H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount, [H(custom_fields)]))
@@ -119,13 +124,22 @@ pub fn compute_msg_to_sign(
     } else {
         None
     };
-    let mr_bt = get_bt_merkle_root(bt_list_opt)?;
+    let mr_bt = get_bt_merkle_root(bt_list_opt)
+        .map_err(|e| format!("Backward transfer Merkle Root computation failed: {:?}", e))?;
 
     let fees_field_element = {
         let fes = DataAccumulator::init()
-            .update(btr_fee)?
-            .update(ft_min_amount)?
-            .get_field_elements()?;
+            .update(btr_fee)
+            .map_err(|e| format!("Unable to update DataAccumulator with btr_fee: {:?}", e))?
+            .update(ft_min_amount)
+            .map_err(|e| {
+                format!(
+                    "Unable to update DataAccumulator with ft_min_amount: {:?}",
+                    e
+                )
+            })?
+            .get_field_elements()
+            .map_err(|e| format!("Unable to finalize DataAccumulator {:?}", e))?;
         assert_eq!(fes.len(), 1);
         fes[0]
     };
@@ -137,7 +151,10 @@ pub fn compute_msg_to_sign(
         custom_fields.into_iter().for_each(|custom_field| {
             h.update(custom_field);
         });
-        Some(h.finalize().unwrap())
+        Some(
+            h.finalize()
+                .map_err(|e| format!("Unable to compute custom_fields_hash: {:?}", e))?,
+        )
     } else {
         None
     };
@@ -156,7 +173,9 @@ pub fn compute_msg_to_sign(
         h.update(custom_fields_hash.unwrap());
     }
 
-    let msg = h.finalize()?;
+    let msg = h
+        .finalize()
+        .map_err(|e| format!("Unable to compute final hash: {:?}", e))?;
 
     Ok((mr_bt, msg))
 }
@@ -192,14 +211,16 @@ pub fn create_naive_threshold_sig_proof(
         ft_min_amount,
         bt_list,
         custom_fields.clone(),
-    )?;
+    )
+    .map_err(|e| format!("Unable to compute msg_to_sign: {:?}", e))?;
 
     // Iterate over sigs, check and count number of valid signatures,
     // and replace with NULL_CONST.null_sig the None ones
     let mut valid_signatures = 0;
     for i in 0..max_pks {
         if sigs[i].is_some() {
-            let is_verified = schnorr_verify_signature(&msg, &pks[i], &sigs[i].unwrap())?;
+            let is_verified = schnorr_verify_signature(&msg, &pks[i], &sigs[i].unwrap())
+                .map_err(|e| format!("Unable to verify signature {}: {:?}", i, e))?;
             if is_verified {
                 valid_signatures += 1;
             }
@@ -240,9 +261,20 @@ pub fn create_naive_threshold_sig_proof(
         proving_key_path,
         Some(enforce_membership),
         Some(compressed_pk),
-    )?;
+    )
+    .map_err(|e| {
+        format!(
+            "Unable to read proving key from file {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+            proving_key_path, e, enforce_membership, compressed_pk
+        )
+    })?;
 
-    let g1_ck = get_g1_committer_key(supported_degree)?;
+    let g1_ck = get_g1_committer_key(supported_degree).map_err(|e| {
+        format!(
+            "Unable to get DLOG key of degree {:?}: {:?}",
+            supported_degree, e
+        )
+    })?;
 
     let proof = match pk {
         ZendooProverKey::Darlin(_) => unimplemented!(),
@@ -250,11 +282,18 @@ pub fn create_naive_threshold_sig_proof(
             // Call prover
             let rng = &mut OsRng;
             let proof =
-                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })?;
+                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })
+                    .map_err(|e| format!("Error during proof creation: {:?}", e))?;
             serialize_to_buffer(
                 &ZendooProof::CoboundaryMarlin(MarlinProof(proof)),
                 Some(compress_proof),
-            )?
+            )
+            .map_err(|e| {
+                format!(
+                    "Proof serialization (compressed: {}) failed: {:?}",
+                    compress_proof, e
+                )
+            })?
         }
     };
     Ok((proof, valid_signatures))
@@ -301,23 +340,42 @@ pub fn verify_naive_threshold_sig_proof(
 
     // Check that the proving system type of the vk and proof are the same, before
     // deserializing them all
-    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None)?;
+    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None).map_err(|e| {
+        format!(
+            "Unable to read proving system type from vk at {:?}: {:?}",
+            vk_path, e
+        )
+    })?;
 
-    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)?;
+    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)
+        .map_err(|e| format!("Unable to read proving system type from proof: {:?}", e))?;
 
     if vk_ps_type != proof_ps_type {
         Err(ProvingSystemError::ProvingSystemMismatch)?
     }
 
     // Deserialize proof and vk
-    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))?;
+    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))
+        .map_err(|e| {
+            format!(
+                "Unable to read vk at {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+                vk_path, e, check_vk, compressed_vk
+            )
+        })?;
 
     let proof: ZendooProof =
-        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))?;
+        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))
+            .map_err(|e| {
+                format!(
+                    "Unable to read proof: {:?}. Semantic checks: {}, Compressed: {}",
+                    e, check_proof, compressed_proof
+                )
+            })?;
 
     // Verify proof
     let rng = &mut OsRng;
-    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))?;
+    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))
+        .map_err(|e| format!("Proof verification error: {:?}", e))?;
 
     Ok(is_verified)
 }
@@ -348,15 +406,27 @@ pub fn create_csw_proof(
         ft_data,
         range_size,
         num_custom_fields,
-    )?;
+    )
+    .map_err(|e| format!("Unable to create concrete instance of CSW circuit: {:?}", e))?;
 
     let pk: ZendooProverKey = read_from_file(
         proving_key_path,
         Some(enforce_membership),
         Some(compressed_pk),
-    )?;
+    )
+    .map_err(|e| {
+        format!(
+            "Unable to read proving key from file {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+            proving_key_path, e, enforce_membership, compressed_pk
+        )
+    })?;
 
-    let g1_ck = get_g1_committer_key(supported_degree)?;
+    let g1_ck = get_g1_committer_key(supported_degree).map_err(|e| {
+        format!(
+            "Unable to get DLOG key of degree {:?}: {:?}",
+            supported_degree, e
+        )
+    })?;
 
     let proof = match pk {
         ZendooProverKey::Darlin(_) => unimplemented!(),
@@ -364,13 +434,21 @@ pub fn create_csw_proof(
             // Call prover
             let rng = &mut OsRng;
             let proof =
-                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })?;
+                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })
+                    .map_err(|e| format!("Error during proof creation: {:?}", e))?;
             serialize_to_buffer(
                 &ZendooProof::CoboundaryMarlin(MarlinProof(proof)),
                 Some(compress_proof),
-            )?
+            )
+            .map_err(|e| {
+                format!(
+                    "Proof serialization (compressed: {}) failed: {:?}",
+                    compress_proof, e
+                )
+            })?
         }
     };
+
     Ok(proof)
 }
 
@@ -397,23 +475,42 @@ pub fn verify_csw_proof(
 
     // Check that the proving system type of the vk and proof are the same, before
     // deserializing them all
-    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None)?;
+    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None).map_err(|e| {
+        format!(
+            "Unable to read proving system type from vk at {:?}: {:?}",
+            vk_path, e
+        )
+    })?;
 
-    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)?;
+    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)
+        .map_err(|e| format!("Unable to read proving system type from proof: {:?}", e))?;
 
     if vk_ps_type != proof_ps_type {
         Err(ProvingSystemError::ProvingSystemMismatch)?
     }
 
     // Deserialize proof and vk
-    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))?;
+    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))
+        .map_err(|e| {
+            format!(
+                "Unable to read vk at {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+                vk_path, e, check_vk, compressed_vk
+            )
+        })?;
 
     let proof: ZendooProof =
-        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))?;
+        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))
+            .map_err(|e| {
+                format!(
+                    "Unable to read proof: {:?}. Semantic checks: {}, Compressed: {}",
+                    e, check_proof, compressed_proof
+                )
+            })?;
 
     // Verify proof
     let rng = &mut OsRng;
-    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))?;
+    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))
+        .map_err(|e| format!("Proof verification error: {:?}", e))?;
 
     Ok(is_verified)
 }

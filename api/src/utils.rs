@@ -1,5 +1,11 @@
 use super::*;
 
+macro_rules! log {
+    ($msg: expr) => {{
+        eprintln!("[{}:{}.{}] {:?}", file!(), line!(), column!(), $msg)
+    }};
+}
+
 pub(crate) fn read_raw_pointer<'a, T>(env: &JNIEnv, input: *const T) -> &'a T {
     if input.is_null() {
         throw_and_exit!(
@@ -74,7 +80,13 @@ pub(crate) fn deserialize_to_jobject<T: CanonicalDeserialize + SemanticallyValid
 
     match obj {
         Ok(obj) => *return_jobject(&_env, obj, class_path),
-        Err(_) => std::ptr::null::<jobject>() as jobject,
+        Err(e) => {
+            log!(format!(
+                "Error while deserializing {:?}: {:?}",
+                class_path, e
+            ));
+            std::ptr::null::<jobject>() as jobject
+        }
     }
 }
 

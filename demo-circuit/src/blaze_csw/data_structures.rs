@@ -116,17 +116,31 @@ impl PartialEq for CswUtxoOutputData {
 impl ToConstraintField<FieldElement> for CswUtxoOutputData {
     fn to_field_elements(&self) -> Result<Vec<FieldElement>, Error> {
         DataAccumulator::init()
-            .update(&self.spending_pub_key[..])?
-            .update(self.amount)?
-            .update(self.nonce)?
-            .update(&self.custom_hash[..])?
+            .update(&self.spending_pub_key[..])
+            .map_err(|e| {
+                format!(
+                    "Unable to update DataAccumulator with speding_pub_key: {:?}",
+                    e
+                )
+            })?
+            .update(self.amount)
+            .map_err(|e| format!("Unable to update DataAccumulator with amount: {:?}", e))?
+            .update(self.nonce)
+            .map_err(|e| format!("Unable to update DataAccumulator with nonce: {:?}", e))?
+            .update(&self.custom_hash[..])
+            .map_err(|e| format!("Unable to update DataAccumulator with custom_hash: {:?}", e))?
             .get_field_elements()
     }
 }
 
 impl FieldHasher<FieldElement, FieldHash> for CswUtxoOutputData {
     fn hash(&self, personalization: Option<&[FieldElement]>) -> Result<FieldElement, Error> {
-        let self_fes = self.to_field_elements()?;
+        let self_fes = self.to_field_elements().map_err(|e| {
+            format!(
+                "Unable to convert CswUtxoOutputData into FieldElements: {:?}",
+                e
+            )
+        })?;
         let mut h = FieldHash::init_constant_length(self_fes.len() + 1, personalization);
         self_fes.into_iter().for_each(|fe| {
             h.update(fe);
