@@ -1742,16 +1742,12 @@ ffi_export!(
         _class: JClass,
         _proving_system: JObject,
         _segment_size: jint,
-    ) -> jboolean 
-    {
+    ) -> jboolean {
         // Get proving system type
         let proving_system = get_proving_system_type(&_env, _proving_system);
 
         // Generate DLOG keypair
-        match init_dlog_keys(
-            proving_system,
-            _segment_size as usize,
-        ) {
+        match init_dlog_keys(proving_system, _segment_size as usize) {
             Ok(_) => JNI_TRUE,
             Err(_) => JNI_FALSE,
         }
@@ -1830,15 +1826,14 @@ ffi_export!(
         let proving_system = get_proving_system_type(&_env, _proving_system);
 
         // Get supported degree
-        let supported_degree = cast_joption_to_rust_option(
-                &_env, _segment_size
-            ).map(|integer_object| {
-            _env
-                .call_method(integer_object, "intValue", "()I", &[])
-                .expect("Should be able to call intValue() on Optional<Integer>")
-                .i()
-                .unwrap() as usize - 1
-        });
+        let supported_degree =
+            cast_joption_to_rust_option(&_env, _segment_size).map(|integer_object| {
+                _env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
 
         // Read paths
         let proving_key_path = _env
@@ -2067,15 +2062,14 @@ ffi_export!(
         };
 
         // Get supported degree
-        let supported_degree = cast_joption_to_rust_option(
-            &_env, _segment_size
-        ).map(|integer_object| {
-            _env
-                .call_method(integer_object, "intValue", "()I", &[])
-                .expect("Should be able to call intValue() on Optional<Integer>")
-                .i()
-                .unwrap() as usize - 1
-        });
+        let supported_degree =
+            cast_joption_to_rust_option(&_env, _segment_size).map(|integer_object| {
+                _env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
 
         //Extract params_path str
         let proving_key_path = _env
@@ -4663,15 +4657,14 @@ ffi_export!(
         let proving_system = get_proving_system_type(&_env, _proving_system);
 
         // Get supported degree
-        let supported_degree = cast_joption_to_rust_option(
-            &_env, _segment_size
-        ).map(|integer_object| {
-            _env
-                .call_method(integer_object, "intValue", "()I", &[])
-                .expect("Should be able to call intValue() on Optional<Integer>")
-                .i()
-                .unwrap() as usize - 1
-        });
+        let supported_degree =
+            cast_joption_to_rust_option(&_env, _segment_size).map(|integer_object| {
+                _env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
 
         // Read paths
         let proving_key_path = _env
@@ -4713,12 +4706,7 @@ ffi_export!(
 );
 
 fn parse_sys_data(_env: JNIEnv, _sys_data: JObject) -> (Option<FieldElement>, CswSysData) {
-    let constant = parse_joption_from_jobject(
-        &_env,
-        _sys_data,
-        "constant",
-    )
-    .map(|field_object| {
+    let constant = parse_joption_from_jobject(&_env, _sys_data, "constant").map(|field_object| {
         let f = _env
             .get_field(field_object, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
@@ -4728,24 +4716,14 @@ fn parse_sys_data(_env: JNIEnv, _sys_data: JObject) -> (Option<FieldElement>, Cs
     let sys_data = CswSysData::new(
         // Map a JObject which is a Java's Optional<FieldElement> into Option<JObject>.
         // If Option is present, converts it into an Option<FieldElement>, otherwise converts it to None.
-        parse_joption_from_jobject(
-            &_env,
-            _sys_data,
-            "mcbScTxsComEnd",
-        )
-        .map(|field_object| {
+        parse_joption_from_jobject(&_env, _sys_data, "mcbScTxsComEnd").map(|field_object| {
             let f = _env
                 .get_field(field_object, "fieldElementPointer", "J")
                 .expect("Should be able to get field fieldElementPointer");
 
             *read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         }),
-        parse_joption_from_jobject(
-            &_env,
-            _sys_data,
-            "scLastWcertHash",
-        )
-        .map(|field_object| {
+        parse_joption_from_jobject(&_env, _sys_data, "scLastWcertHash").map(|field_object| {
             let f = _env
                 .get_field(field_object, "fieldElementPointer", "J")
                 .expect("Should be able to get field fieldElementPointer");
@@ -4967,15 +4945,14 @@ ffi_export!(
         };
 
         // Get supported degree
-        let supported_degree = cast_joption_to_rust_option(
-            &_env, _segment_size
-        ).map(|integer_object| {
-            _env
-                .call_method(integer_object, "intValue", "()I", &[])
-                .expect("Should be able to call intValue() on Optional<Integer>")
-                .i()
-                .unwrap() as usize - 1
-        });
+        let supported_degree =
+            cast_joption_to_rust_option(&_env, _segment_size).map(|integer_object| {
+                _env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
 
         //Extract params_path str
         let proving_key_path = _env

@@ -122,8 +122,7 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
                     max_proof_plus_vk_size, proof_size + vk_size
                 )))?;
             }
-            let (pk, vk) =
-                CoboundaryMarlin::circuit_specific_setup(&g1_ck, index)?;
+            let (pk, vk) = CoboundaryMarlin::circuit_specific_setup(&g1_ck, index)?;
             write_to_file(&ZendooProverKey::CoboundaryMarlin(pk), pk_path, compress_pk)?;
             write_to_file(
                 &ZendooVerifierKey::CoboundaryMarlin(vk),

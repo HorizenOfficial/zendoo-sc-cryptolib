@@ -235,7 +235,6 @@ pub(crate) fn cast_joption_to_rust_option<'a>(
     _env: &'a JNIEnv,
     opt_object: JObject<'a>,
 ) -> Option<JObject<'a>> {
-
     if !_env
         .call_method(opt_object, "isPresent", "()Z", &[])
         .expect("Should be able to call isPresent method on Optional object")
@@ -245,15 +244,10 @@ pub(crate) fn cast_joption_to_rust_option<'a>(
         None
     } else {
         Some(
-            _env.call_method(
-                opt_object,
-                "get",
-                "()Ljava/lang/Object;",
-                &[],
-            )
-            .expect("Should be able to unwrap a non empty Optional")
-            .l()
-            .unwrap(),
+            _env.call_method(opt_object, "get", "()Ljava/lang/Object;", &[])
+                .expect("Should be able to unwrap a non empty Optional")
+                .l()
+                .unwrap(),
         )
     }
 }

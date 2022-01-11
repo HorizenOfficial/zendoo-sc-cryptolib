@@ -430,7 +430,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
 
 #[cfg(test)]
 mod test {
-    use crate::{SUPPORTED_SEGMENT_SIZE, MAX_SEGMENT_SIZE};
+    use crate::{MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE};
 
     use super::*;
     use cctp_primitives::{
@@ -643,35 +643,23 @@ mod test {
         //Generate proof with correct witnesses and v > t
         let (proof, public_inputs) =
             generate_test_proof(n, 5, 4, 1, false, false, params.0.clone(), zk).unwrap();
-        assert!(CoboundaryMarlin::verify(
-            &params.1,
-            &ck,
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
+        assert!(
+            CoboundaryMarlin::verify(&params.1, &ck, public_inputs.as_slice(), &proof).unwrap()
+        );
 
         //Generate proof with bad pks_threshold_hash
         let (proof, public_inputs) =
             generate_test_proof(n, 5, 4, 1, true, false, params.0.clone(), zk).unwrap();
-        assert!(!CoboundaryMarlin::verify(
-            &params.1,
-            &ck,
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
+        assert!(
+            !CoboundaryMarlin::verify(&params.1, &ck, public_inputs.as_slice(), &proof).unwrap()
+        );
 
         //Generate proof with bad cert_data_hash
         let (proof, public_inputs) =
             generate_test_proof(n, 5, 4, 1, false, true, params.0.clone(), zk).unwrap();
-        assert!(!CoboundaryMarlin::verify(
-            &params.1,
-            &ck,
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
+        assert!(
+            !CoboundaryMarlin::verify(&params.1, &ck, public_inputs.as_slice(), &proof).unwrap()
+        );
     }
 
     #[serial]

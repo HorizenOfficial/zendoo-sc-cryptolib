@@ -310,7 +310,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
                 FieldElement::size_in_bits() - 1 >= amount_and_receiver_bits_g.len(),
                 "Field size is not enough to pack amount and receiver bits"
             );
-            
+
             FieldElementGadget::from_bits(
                 cs.ns(|| "read field element out of amount and bits"),
                 amount_and_receiver_bits_g.as_slice(),
@@ -369,8 +369,8 @@ mod test {
     use crate::{
         deserialize_fe_unchecked, split_field_element_at_index, CswFtOutputData, CswProverData,
         CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
-        MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT,
-        SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE,
+        MAX_SEGMENT_SIZE, MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT, SC_PUBLIC_KEY_LENGTH,
+        SC_TX_HASH_LENGTH, SUPPORTED_SEGMENT_SIZE,
     };
 
     use super::*;
@@ -765,18 +765,17 @@ mod test {
             let ck_g1 = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
             assert_eq!(ck_g1.comm_key.len(), SUPPORTED_SEGMENT_SIZE);
 
-            let setup_circuit = CeasedSidechainWithdrawalCircuit::get_instance_for_setup(num_commitment_hashes, num_custom_fields, constant.is_some());
+            let setup_circuit = CeasedSidechainWithdrawalCircuit::get_instance_for_setup(
+                num_commitment_hashes,
+                num_custom_fields,
+                constant.is_some(),
+            );
             let params = CoboundaryMarlin::index(&ck_g1, setup_circuit.clone()).unwrap();
             let rng = &mut thread_rng();
 
-            let proof = CoboundaryMarlin::prove(
-                &params.0.clone(),
-                &ck_g1,
-                circuit,
-                true,
-                Some(rng),
-            )
-            .unwrap();
+            let proof =
+                CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit, true, Some(rng))
+                    .unwrap();
 
             let current_public_inputs = {
                 if public_inputs.is_none() {

@@ -249,13 +249,8 @@ pub fn create_naive_threshold_sig_proof(
         ZendooProverKey::CoboundaryMarlin(pk) => {
             // Call prover
             let rng = &mut OsRng;
-            let proof = CoboundaryMarlin::prove(
-                &pk,
-                &g1_ck,
-                c,
-                zk,
-                if zk { Some(rng) } else { None },
-            )?;
+            let proof =
+                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })?;
             serialize_to_buffer(
                 &ZendooProof::CoboundaryMarlin(MarlinProof(proof)),
                 Some(compress_proof),
@@ -368,13 +363,8 @@ pub fn create_csw_proof(
         ZendooProverKey::CoboundaryMarlin(pk) => {
             // Call prover
             let rng = &mut OsRng;
-            let proof = CoboundaryMarlin::prove(
-                &pk,
-                &g1_ck,
-                c,
-                zk,
-                if zk { Some(rng) } else { None },
-            )?;
+            let proof =
+                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })?;
             serialize_to_buffer(
                 &ZendooProof::CoboundaryMarlin(MarlinProof(proof)),
                 Some(compress_proof),
