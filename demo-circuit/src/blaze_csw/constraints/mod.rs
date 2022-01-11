@@ -306,6 +306,11 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
 
             amount_and_receiver_bits_g.extend_from_slice(&receiver_g_bits[..]);
 
+            assert!(
+                FieldElement::size_in_bits() - 1 >= amount_and_receiver_bits_g.len(),
+                "Field size is not enough to pack amount and receiver bits"
+            );
+            
             FieldElementGadget::from_bits(
                 cs.ns(|| "read field element out of amount and bits"),
                 amount_and_receiver_bits_g.as_slice(),

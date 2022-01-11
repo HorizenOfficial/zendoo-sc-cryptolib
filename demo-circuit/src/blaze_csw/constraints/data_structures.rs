@@ -1481,35 +1481,36 @@ impl ScPublicKeyGadget {
         Ok(pk_x_coordinate_g)
     }
 
+
     fn convert_te_to_sw_point<CS: ConstraintSystemAbstract<FieldElement>>(
         mut cs: CS,
         te_pk_x_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement>,
         te_pk_y_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement>,
     ) -> Result<ECPointSimulationGadget, SynthesisError> {
-        let one_minus_y_ed = te_pk_y_coordinate_g
-            .negate(cs.ns(|| "-y_ed"))?
-            .add_constant(cs.ns(|| "1 - y_ed"), &SimulatedFieldElement::one())?;
+        let y_ed_minus_one = te_pk_y_coordinate_g
+            .add_constant(cs.ns(|| "y_ed - 1"), &-SimulatedFieldElement::one())?;
 
         let one_plus_y_ed = te_pk_y_coordinate_g
             .add_constant(cs.ns(|| "1 + y_ed"), &SimulatedFieldElement::one())?;
+
+        // TODO: These can be precomputed
+        let b_inv = <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B
+            .inverse()
+            .expect("B inverse must exist");
+
+        let a_over_three =
+        <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_A
+            * (SimulatedFieldElement::from(3u8)
+                .inverse()
+                .expect("Must be able to compute 3.inverse() in SimulatedField"));
 
         // Alloc x coordinate in SW representation
         let sw_pk_x_coordinate_g =
             NonNativeFieldGadget::<SimulatedFieldElement, FieldElement>::alloc(
                 cs.ns(|| "alloc x coord in SW"),
                 || {
-                    let a_over_three =
-                        <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_A
-                            * (SimulatedFieldElement::from(3u8)
-                                .inverse()
-                                .expect("Must be able to compute 3.inverse() in SimulatedField"));
-
-                    let b_inv = <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B
-                        .inverse()
-                        .expect("B inverse must exist");
-
                     let one_plus_te_y_coord = one_plus_y_ed.get_value().get()?;
-                    let one_minus_te_y_coord = one_minus_y_ed.get_value().get()?;
+                    let one_minus_te_y_coord = -y_ed_minus_one.get_value().get()?;
 
                     let one_plus_te_y_coord_over_one_minus_te_y_coord = one_plus_te_y_coord
                         * one_minus_te_y_coord.inverse().ok_or_else(|| {
@@ -1522,33 +1523,25 @@ impl ScPublicKeyGadget {
                 },
             )?;
 
-        // Check SW x coordinate
-        // x_sw * 3B(1 - y_ed) = 3(1 + y_ed) + A(1 - y_ed)
+        // Check SW x coordinate:
+        // x_sw * (1 - y_ed) = 1/B (1 + y_ed) + A/3B (1 - y_ed)
+        // Multiplication by - 1 => x_sw * (y_ed - 1) = -1/B (1 + y_ed) + A/3B (1 - y_ed)
+        // Write (1 + y_ed) as (y_ed + 2 - 1) => x_sw * (y_ed - 1) = -1/B (y_ed - 1) - 2/B + A/3B (y_ed - 1)
+        // Gathering by (y_ed - 1) => (x_sw + 1/B - A/3B) * (y_ed - 1) = -2/B
         {
-            let three_times_one_plus_y_ed = one_plus_y_ed
-                .mul_by_constant(cs.ns(|| "3 * (1 + y_ed"), &SimulatedFieldElement::from(3u8))?;
+            let minus_two_over_b = NonNativeFieldGadget::<SimulatedFieldElement, FieldElement>::from_value(
+                cs.ns(|| "hardcode -2_over_B"),
+                &(-b_inv * &SimulatedFieldElement::from(2u8)) //TODO: This can be precomputed
+            );
 
-            let a_times_one_minus_y_ed = one_minus_y_ed.mul_by_constant(
-                cs.ns(|| "A * (1 - y_ed)"),
-                &<SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_A,
-            )?;
-
-            let rhs = three_times_one_plus_y_ed.add(
-                cs.ns(|| "3(1 + y_ed) + A(1 - y_ed)"),
-                &a_times_one_minus_y_ed,
-            )?;
-
-            let three_b_times_one_minus_y_ed = one_minus_y_ed.mul_by_constant(
-                cs.ns(|| "3B * (1 - y_ed)"),
-                &(<SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B
-                    * SimulatedFieldElement::from(3u8)),
-            )?;
-
-            sw_pk_x_coordinate_g.mul_equals(
-                cs.ns(|| "check x_sw"),
-                &three_b_times_one_minus_y_ed,
-                &rhs,
-            )?;
+            sw_pk_x_coordinate_g
+                .add_constant(cs.ns(|| "x_sw + 1_over_B"), &b_inv)?
+                .sub_constant(cs.ns(|| "x_sw + 1_over_B - A_over_3B"), &(a_over_three * &b_inv))? //TODO: This can be precomputed
+                .mul_equals(
+                    cs.ns(|| "(x_sw + 1_over_B - A_over_3B) * (y_ed - 1) = -2_over_B"),
+                    &y_ed_minus_one,
+                    &minus_two_over_b
+                )?;
         }
 
         // Alloc y coordinate in sw representation
@@ -1561,7 +1554,7 @@ impl ScPublicKeyGadget {
                         .expect("B inverse must exist");
 
                     let one_plus_te_y_coord = one_plus_y_ed.get_value().get()?;
-                    let one_minus_te_y_coord = one_minus_y_ed.get_value().get()?;
+                    let one_minus_te_y_coord = -y_ed_minus_one.get_value().get()?;
 
                     let one_plus_te_y_coord_over_one_minus_te_y_coord = one_plus_te_y_coord
                         * one_minus_te_y_coord.inverse().ok_or_else(|| {
@@ -1585,19 +1578,21 @@ impl ScPublicKeyGadget {
             )?;
 
         // Check SW y coordinate
-        // y_sw * (x_ed(1 - y_ed)B) = (1 + y_ed)
+        // y_sw * (x_ed(y_ed - 1)B) = -(1 + y_ed)
         {
-            let b_x_ed_times_one_minus_y_ed = one_minus_y_ed
-                .mul(cs.ns(|| "x_ed(1 - y_ed)"), &te_pk_x_coordinate_g)?
+            let b_x_ed_times_one_minus_y_ed = y_ed_minus_one
+                .mul(cs.ns(|| "x_ed(y_ed - 1)"), &te_pk_x_coordinate_g)?
                 .mul_by_constant(
-                    cs.ns(|| "x_ed(1 - y_ed)B"),
+                    cs.ns(|| "x_ed(y_ed - 1)B"),
                     &<SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B,
                 )?;
+
+            let minus_one_plus_y_ed = one_plus_y_ed.negate(cs.ns(|| "-(1 + y_ed)"))?;
 
             sw_pk_y_coordinate_g.mul_equals(
                 cs.ns(|| "check y sw"),
                 &b_x_ed_times_one_minus_y_ed,
-                &one_plus_y_ed,
+                &minus_one_plus_y_ed,
             )?;
         }
 

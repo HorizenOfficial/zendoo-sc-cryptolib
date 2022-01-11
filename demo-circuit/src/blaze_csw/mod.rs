@@ -178,16 +178,16 @@ pub fn convert_te_pk_to_sw_pk(
 
     // Store the sign (last bit) of the X coordinate
     // The value is left-shifted to be used later in an OR operation
-    let x_sign = if sw_pk.x.is_odd() { 1 << 7 } else { 0u8 };
+    let y_sign = if sw_pk.y.is_odd() { 1 << 7 } else { 0u8 };
 
     // Extract the public key bytes as Y coordinate
-    let y_coordinate = sw_pk.y;
-    let mut pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
+    let x_coordinate = sw_pk.x;
+    let mut pk_bytes = serialize_to_buffer(&x_coordinate, None).unwrap();
 
     // Use the last (null) bit of the public key to store the sign of the X coordinate
     // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus
     let len = pk_bytes.len();
-    pk_bytes[len - 1] |= x_sign;
+    pk_bytes[len - 1] |= y_sign;
 
     Ok(pk_bytes.try_into().unwrap())
 }
@@ -308,15 +308,15 @@ mod test {
             // with the computed SW point
             let sw_pk_bytes = convert_te_pk_to_sw_pk(te_pk_bytes.try_into().unwrap()).unwrap();
 
-            let x_sign = if sw_public_key.x.is_odd() {
+            let y_sign = if sw_public_key.y.is_odd() {
                 1 << 7
             } else {
                 0u8
             };
-            let y_coordinate = sw_public_key.y;
-            let mut expected_sw_pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
+            let x_coordinate = sw_public_key.x;
+            let mut expected_sw_pk_bytes = serialize_to_buffer(&x_coordinate, None).unwrap();
             let len = expected_sw_pk_bytes.len();
-            expected_sw_pk_bytes[len - 1] |= x_sign;
+            expected_sw_pk_bytes[len - 1] |= y_sign;
 
             let expected_sw_pk_bytes: [u8; SC_PUBLIC_KEY_LENGTH] =
                 expected_sw_pk_bytes.try_into().unwrap();
