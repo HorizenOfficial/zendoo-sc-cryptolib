@@ -165,8 +165,8 @@ pub const FIELD_MODULUS: usize = FIELD_CAPACITY + 1;
 pub const MST_MERKLE_TREE_HEIGHT: usize = 22;
 
 pub const CSW_PHANTOM_PUB_KEY_BYTES: [u8; 32] = [
-    217, 127, 224, 199, 8, 45, 179, 51, 115, 161, 177, 30, 203, 183, 46, 176, 168, 185, 222, 243,
-    130, 216, 130, 102, 88, 154, 253, 135, 199, 233, 73, 48,
+    116, 235, 252, 191, 157, 10, 215, 119, 80, 119, 42, 220, 253, 161, 164, 23, 124, 161, 31, 54,
+    68, 234, 76, 50, 117, 58, 136, 35, 109, 160, 91, 196,
 ];
 
 #[cfg(test)]
@@ -180,9 +180,18 @@ mod test {
 
     use serial_test::*;
 
-    fn hash_to_curve<F: PrimeField, G: AffineCurve + FromCompressedBits>(
+    /// Hash into a valid FieldElement belonging to F using "blake2s_simd" hash until the provided
+    /// 'fe_to_point' function doesn't return Some(G).
+    /// New values are computed incrementing an internal state until a certain limit.
+    /// If no point has been found when the limit is reached, then function will return None.
+    fn hash_to_fe_and_map_to_point<
+        F: PrimeField,
+        G: AffineCurve + FromCompressedBits,
+        FN: Fn(F) -> Option<G>,
+    >(
         tag: &[u8],
         personalization: &[u8],
+        fe_to_point: FN,
     ) -> Option<G> {
         let compute_chunk = |input: &[u8], personalization: &[u8]| -> Hash {
             Params::new()
@@ -236,26 +245,37 @@ mod test {
                 None => continue,
             };
 
+            // If the sampled Field Element produces a valid point according to the supplied function,
+            // then interrupt the loop
+            match fe_to_point(fe) {
+                Some(point) => {
+                    g = Some(point);
+                    break;
+                }
+                None => continue,
+            }
+        }
+        g
+    }
+
+    fn hash_to_curve<F: PrimeField, G: AffineCurve + FromCompressedBits>(
+        tag: &[u8],
+        personalization: &[u8],
+    ) -> Option<G> {
+        hash_to_fe_and_map_to_point::<F, G, _>(tag, personalization, |fe| {
             //Get point from chunks
             let mut fe_bits = fe.write_bits();
             fe_bits.push(false); //We don't want an infinity point
             fe_bits.push(false); //We decide to choose the even y coordinate
-            match G::decompress(fe_bits) {
-                Ok(point) => {
-                    g = Some(point);
-                    break;
-                }
-                Err(_) => continue,
-            };
-        }
-        g
+            G::decompress(fe_bits).ok()
+        })
     }
 
     #[serial]
     #[test]
     fn test_pk_null_gen() {
         let tag = b"Strontium Sr 90";
-        let personalization = constants::NULL_PK_PERSONALIZATION;
+        let personalization = constants::CERT_NULL_PK_PERSONALIZATION;
         let htc_out = hash_to_curve::<FieldElement, G2>(tag, personalization)
             .unwrap()
             .into_projective();
@@ -291,20 +311,25 @@ mod test {
     #[serial]
     #[test]
     fn test_csw_phantom_public_key() {
-        let x = SimulatedFieldElement::from(BigInteger256([
-            15877199453377760308,
-            458271239891050623,
-            5539075294202620951,
-            5404726604943382876,
-        ]));
-        let y = SimulatedFieldElement::from(BigInteger256([
-            3725370832501899225,
-            12695286482625208691,
-            7386704395789842856,
-            3479569230309726808,
-        ]));
-        let simulated_te_point = SimulatedTEGroup::new(x, y);
-        assert_eq!(simulated_te_point.group_membership_test(), false);
+        let tag = b"Silicon Si 14";
+        let personalization = constants::CSW_NULL_TE_PK_PERSONALIZATION;
+
+        // Sample a point outside the curve
+        let simulated_te_point = hash_to_fe_and_map_to_point::<
+            SimulatedFieldElement,
+            SimulatedTEGroup,
+            _,
+        >(tag, personalization, |fe| {
+            let x = fe;
+            let y = fe + &SimulatedFieldElement::one();
+            let point = SimulatedTEGroup::new(x, y);
+            if !point.is_on_curve() {
+                Some(point)
+            } else {
+                None
+            }
+        })
+        .unwrap();
 
         // Store the sign (last bit) of the X coordinate
         // The value is left-shifted to be used later in an OR operation

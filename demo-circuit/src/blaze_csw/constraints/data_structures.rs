@@ -1606,6 +1606,10 @@ impl ScPublicKeyGadget {
     }
 
     /// Extract TE point from y coordinate and x sign, then convert it to SW and output it.
+    /// The function doesn't enforce the pk being non trivial or valid: a pk which is either
+    /// not on the curve or not of wished prime order is at most a threat to the privacy of
+    /// the secret key. An honest user will always choose it properly, and therefore he will
+    ///  practically be the only one who is able to provide an ownership proof.
     fn get_sw_pk_from_te_pk<CS: ConstraintSystemAbstract<FieldElement>>(
         mut cs: CS,
         te_pk_x_sign_bit_g: Boolean,

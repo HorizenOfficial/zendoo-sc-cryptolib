@@ -198,7 +198,11 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         let csw_data_g =
             CswProverDataGadget::alloc(cs.ns(|| "alloc csw data"), || Ok(&self.csw_data))?;
 
-        // Decide whether to enforce utxo or ft withdrawal
+        // Decide whether to enforce utxo or ft withdrawal.
+        // NOTE: We don't need to explicitly enforce that exactly one among 'should_enforce_utxo_withdrawal_g'
+        //       and 'should_enforce_ft_withdrawal_g' must be True (doable with a XOR constraint) as:
+        //       - They cannot be both phantom as pk ownership check won't pass;
+        //       - They cannot be both NOT phantom as nullifier can't be the same for both UTXO and FT.
         let should_enforce_utxo_withdrawal_g = csw_data_g
             .utxo_data_g
             .input_g
