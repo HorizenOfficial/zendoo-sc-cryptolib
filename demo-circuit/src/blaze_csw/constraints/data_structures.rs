@@ -26,7 +26,7 @@ use crate::{
     SIMULATED_SCALAR_FIELD_MODULUS_BITS,
 };
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct WithdrawalCertificateDataGadget {
     pub ledger_id_g: FieldElementGadget,
     pub epoch_id_g: UInt32,
@@ -36,22 +36,6 @@ pub struct WithdrawalCertificateDataGadget {
     pub ft_min_amount_g: UInt64,
     pub btr_min_fee_g: UInt64,
     pub custom_fields_g: Vec<FieldElementGadget>,
-}
-
-impl WithdrawalCertificateDataGadget {
-    pub fn is_phantom<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-        num_custom_fields: u32,
-    ) -> Result<Boolean, SynthesisError> {
-        let phantom_wcert_g = WithdrawalCertificateDataGadget::from_value(
-            cs.ns(|| "alloc phantom_wcert_g"),
-            &WithdrawalCertificateData::get_phantom(num_custom_fields),
-        );
-
-        self.ledger_id_g
-            .is_eq(cs.ns(|| "is wcert phantom"), &phantom_wcert_g.ledger_id_g)
-    }
 }
 
 impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertificateDataGadget {
@@ -153,63 +137,6 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
     }
 }
 
-impl ConstantGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertificateDataGadget {
-    fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
-        mut cs: CS,
-        value: &WithdrawalCertificateData,
-    ) -> Self {
-        let ledger_id_g =
-            FieldElementGadget::from_value(cs.ns(|| "alloc constant ledger_id"), &value.ledger_id);
-        let epoch_id_g = UInt32::constant(value.epoch_id);
-        let bt_list_root_g =
-            FieldElementGadget::from_value(cs.ns(|| "alloc constant bt_list_root"), &value.bt_root);
-        let quality_g = UInt64::constant(value.quality);
-        let mcb_sc_txs_com_g = FieldElementGadget::from_value(
-            cs.ns(|| "alloc constant mcb_sc_txs_com"),
-            &value.mcb_sc_txs_com,
-        );
-        let ft_min_amount_g = UInt64::constant(value.ft_min_amount);
-        let btr_min_fee_g = UInt64::constant(value.btr_min_fee);
-        let mut custom_fields_g = Vec::with_capacity(value.custom_fields.len());
-
-        for (i, custom_field) in value.custom_fields.iter().enumerate() {
-            let custom_field_g = FieldElementGadget::from_value(
-                cs.ns(|| format!("alloc constant custom field {}", i)),
-                &custom_field,
-            );
-            custom_fields_g.push(custom_field_g);
-        }
-
-        Self {
-            ledger_id_g,
-            epoch_id_g,
-            bt_list_root_g,
-            quality_g,
-            mcb_sc_txs_com_g,
-            ft_min_amount_g,
-            btr_min_fee_g,
-            custom_fields_g,
-        }
-    }
-
-    fn get_constant(&self) -> WithdrawalCertificateData {
-        WithdrawalCertificateData {
-            ledger_id: self.ledger_id_g.value.unwrap(),
-            epoch_id: self.epoch_id_g.value.unwrap(),
-            bt_root: self.bt_list_root_g.value.unwrap(),
-            quality: self.quality_g.get_value().unwrap(),
-            mcb_sc_txs_com: self.mcb_sc_txs_com_g.value.unwrap(),
-            ft_min_amount: self.ft_min_amount_g.get_value().unwrap(),
-            btr_min_fee: self.btr_min_fee_g.get_value().unwrap(),
-            custom_fields: self
-                .custom_fields_g
-                .iter()
-                .map(|custom_field_g| custom_field_g.value.unwrap())
-                .collect(),
-        }
-    }
-}
-
 impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget>
     for WithdrawalCertificateDataGadget
 {
@@ -281,70 +208,11 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget>
     }
 }
 
-impl EqGadget<FieldElement> for WithdrawalCertificateDataGadget {
-    fn is_eq<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-        other: &Self,
-    ) -> Result<Boolean, SynthesisError> {
-        let b1 = self
-            .ledger_id_g
-            .is_eq(cs.ns(|| "is eq ledger_id"), &other.ledger_id_g)?;
-        let b2 = self
-            .epoch_id_g
-            .is_eq(cs.ns(|| "is eq epoch_id"), &other.epoch_id_g)?;
-        let b3 = self
-            .bt_list_root_g
-            .is_eq(cs.ns(|| "is eq bt_list_root"), &other.bt_list_root_g)?;
-        let b4 = self
-            .quality_g
-            .is_eq(cs.ns(|| "is eq quality"), &other.quality_g)?;
-        let b5 = self
-            .mcb_sc_txs_com_g
-            .is_eq(cs.ns(|| "is eq mcb_sc_txs_com"), &other.mcb_sc_txs_com_g)?;
-        let b6 = self
-            .ft_min_amount_g
-            .is_eq(cs.ns(|| "is eq ft_min_amount"), &other.ft_min_amount_g)?;
-        let b7 = self
-            .btr_min_fee_g
-            .is_eq(cs.ns(|| "is eq btr_min_fee"), &other.btr_min_fee_g)?;
-        let mut b8 = Boolean::Constant(true);
-        if !self.custom_fields_g.is_empty() {
-            b8 = self
-                .custom_fields_g
-                .is_eq(cs.ns(|| "is eq custom_fields"), &other.custom_fields_g)?;
-        }
-
-        Boolean::kary_and(
-            cs.ns(|| "is_eq CswUtxoOutputDataGadget"),
-            &[b1, b2, b3, b4, b5, b6, b7, b8],
-        )
-    }
-}
-
-#[derive(PartialEq, Eq)]
 pub struct CswUtxoOutputDataGadget {
     pub spending_pub_key_g: [Boolean; SC_PUBLIC_KEY_LENGTH * 8],
     pub amount_g: UInt64,
     pub nonce_g: UInt64,
     pub custom_hash_g: [Boolean; SC_TX_HASH_LENGTH * 8],
-}
-
-impl CswUtxoOutputDataGadget {
-    pub fn is_phantom<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-    ) -> Result<Boolean, SynthesisError> {
-        let phantom_utxo_output_g = CswUtxoOutputDataGadget::from_value(
-            cs.ns(|| "alloc constant UTXO input phantom gadget"),
-            &CswUtxoOutputData::get_phantom(),
-        );
-
-        self.spending_pub_key_g.is_eq(
-            cs.ns(|| "is UTXO output phantom"),
-            &phantom_utxo_output_g.spending_pub_key_g,
-        )
-    }
 }
 
 impl AllocGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
@@ -422,66 +290,6 @@ impl AllocGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
     }
 }
 
-impl ConstantGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
-    fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
-        _cs: CS,
-        value: &CswUtxoOutputData,
-    ) -> Self {
-        let spending_pub_key_g = bytes_to_bits(&value.spending_pub_key)
-            .into_iter()
-            .map(Boolean::Constant)
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        let amount_g = UInt64::constant(value.amount);
-
-        let nonce_g = UInt64::constant(value.nonce);
-
-        let custom_hash_g = bytes_to_bits(&value.custom_hash)
-            .into_iter()
-            .map(Boolean::Constant)
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        Self {
-            spending_pub_key_g,
-            amount_g,
-            nonce_g,
-            custom_hash_g,
-        }
-    }
-
-    fn get_constant(&self) -> CswUtxoOutputData {
-        unimplemented!()
-    }
-}
-
-impl EqGadget<FieldElement> for CswUtxoOutputDataGadget {
-    fn is_eq<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-        other: &Self,
-    ) -> Result<Boolean, SynthesisError> {
-        let b1 = self.spending_pub_key_g.is_eq(
-            cs.ns(|| "is eq spending_pub_key_g"),
-            &other.spending_pub_key_g,
-        )?;
-        let b2 = self
-            .amount_g
-            .is_eq(cs.ns(|| "is eq amount_g"), &other.amount_g)?;
-        let b3 = self
-            .nonce_g
-            .is_eq(cs.ns(|| "is eq nonce_g"), &other.nonce_g)?;
-        let b4 = self
-            .custom_hash_g
-            .is_eq(cs.ns(|| "is eq custom_hash_g"), &other.custom_hash_g)?;
-
-        Boolean::kary_and(cs.ns(|| "is_eq CswUtxoOutputDataGadget"), &[b1, b2, b3, b4])
-    }
-}
-
 impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
     type FieldGadget = FieldElementGadget;
 
@@ -517,19 +325,9 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
     }
 }
 
-#[derive(PartialEq, Eq)]
 pub struct CswUtxoInputDataGadget {
     pub output_g: CswUtxoOutputDataGadget,
     pub secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
-}
-
-impl CswUtxoInputDataGadget {
-    pub fn is_phantom<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-    ) -> Result<Boolean, SynthesisError> {
-        self.output_g.is_phantom(cs.ns(|| "is output_g phantom"))
-    }
 }
 
 impl AllocGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
@@ -581,58 +379,6 @@ impl AllocGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
         T: Borrow<CswUtxoInputData>,
     {
         unimplemented!()
-    }
-}
-
-impl ConstantGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
-    fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
-        mut cs: CS,
-        value: &CswUtxoInputData,
-    ) -> Self {
-        let output_g = CswUtxoOutputDataGadget::from_value(cs.ns(|| "alloc output"), &value.output);
-
-        let secret_key_g = value
-            .secret_key
-            .iter()
-            .map(|&bit| Boolean::constant(bit))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        Self {
-            output_g,
-            secret_key_g,
-        }
-    }
-
-    fn get_constant(&self) -> CswUtxoInputData {
-        CswUtxoInputData {
-            output: self.output_g.get_constant(),
-            secret_key: self
-                .secret_key_g
-                .iter()
-                .map(|byte| byte.get_value().unwrap())
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
-        }
-    }
-}
-
-impl EqGadget<FieldElement> for CswUtxoInputDataGadget {
-    fn is_eq<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-        other: &Self,
-    ) -> Result<Boolean, SynthesisError> {
-        let b1 = self
-            .output_g
-            .is_eq(cs.ns(|| "is eq output_g"), &other.output_g)?;
-        let b2 = self
-            .secret_key_g
-            .is_eq(cs.ns(|| "is eq secret_key_g"), &other.secret_key_g)?;
-
-        Boolean::and(cs.ns(|| "is_eq CswUtxoInputDataGadget"), &b1, &b2)
     }
 }
 
@@ -763,30 +509,12 @@ impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
     }
 }
 
-#[derive(PartialEq, Eq)]
 pub struct CswFtOutputDataGadget {
     pub amount_g: UInt64,
     pub receiver_pub_key_g: [UInt8; SC_PUBLIC_KEY_LENGTH],
     pub payback_addr_data_hash_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
     pub tx_hash_g: [Boolean; FIELD_SIZE * 8],
     pub out_idx_g: UInt32,
-}
-
-impl CswFtOutputDataGadget {
-    pub fn is_phantom<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-    ) -> Result<Boolean, SynthesisError> {
-        let phantom_ft_input_g = CswFtOutputDataGadget::from_value(
-            cs.ns(|| "alloc constant FT input phantom gadget"),
-            &CswFtOutputData::get_phantom(),
-        );
-
-        self.payback_addr_data_hash_g.is_eq(
-            cs.ns(|| "is FT output phantom"),
-            &phantom_ft_input_g.payback_addr_data_hash_g,
-        )
-    }
 }
 
 impl AllocGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
@@ -877,81 +605,6 @@ impl AllocGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
     }
 }
 
-impl ConstantGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
-    fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
-        _cs: CS,
-        value: &CswFtOutputData,
-    ) -> Self {
-        let amount_g = UInt64::constant(value.amount);
-        let receiver_pub_key_g = value
-            .receiver_pub_key
-            .iter()
-            .map(|&byte| UInt8::constant(byte))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        let payback_addr_data_hash_g = bytes_to_bits(&value.payback_addr_data_hash)
-            .iter()
-            .map(|&bit| Boolean::constant(bit))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        let tx_hash_g = bytes_to_bits(&value.tx_hash)
-            .iter()
-            .map(|&bit| Boolean::constant(bit))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        let out_idx_g = UInt32::constant(value.out_idx);
-
-        Self {
-            amount_g,
-            receiver_pub_key_g,
-            payback_addr_data_hash_g,
-            tx_hash_g,
-            out_idx_g,
-        }
-    }
-
-    fn get_constant(&self) -> CswFtOutputData {
-        unimplemented!();
-    }
-}
-
-impl EqGadget<FieldElement> for CswFtOutputDataGadget {
-    fn is_eq<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-        other: &Self,
-    ) -> Result<Boolean, SynthesisError> {
-        let b1 = self
-            .amount_g
-            .is_eq(cs.ns(|| "is eq amount_g"), &other.amount_g)?;
-        let b2 = self.receiver_pub_key_g.is_eq(
-            cs.ns(|| "is eq receiver_pub_key_g"),
-            &other.receiver_pub_key_g,
-        )?;
-        let b3 = self.payback_addr_data_hash_g.is_eq(
-            cs.ns(|| "is eq payback_addr_data_hash_g"),
-            &other.payback_addr_data_hash_g,
-        )?;
-        let b4 = self
-            .tx_hash_g
-            .is_eq(cs.ns(|| "is eq tx_hash_g"), &other.tx_hash_g)?;
-        let b5 = self
-            .out_idx_g
-            .is_eq(cs.ns(|| "is eq out_idx_g"), &other.out_idx_g)?;
-
-        Boolean::kary_and(
-            cs.ns(|| "is_eq CswUtxoInputDataGadget"),
-            &[b1, b2, b3, b4, b5],
-        )
-    }
-}
-
 impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
     type FieldGadget = FieldElementGadget;
 
@@ -1023,7 +676,8 @@ impl CswFtProverDataGadget {
         &self,
         mut cs: CS,
         sidechain_id_g: &FieldElementGadget,
-        range_size: u32,
+        max_range_size: u32,
+        actual_range_size: u32,
         mcb_sc_txs_com_end_g: &FieldElementGadget,
         nullifier_g: &FieldElementGadget,
         amount_g: &FieldElementGadget,
@@ -1078,10 +732,11 @@ impl CswFtProverDataGadget {
             &FieldElement::from(0u8),
         );
 
-        // Alloc phantom field element
-        let phantom_g = FieldElementGadget::from_value(cs.ns(|| "Break"), &FieldElement::default());
+        assert_eq!(max_range_size as usize, self.sc_txs_com_hashes_g.len());
+        println!("Max range size: {}", max_range_size);
+        println!("Actual range size: {}", actual_range_size);
 
-        for i in 0..range_size as usize {
+        for i in 0..max_range_size as usize {
             // if (sc_txs_com_tree_root == sc_txs_com_hashes[i]) { cnt++ }
             let should_increase_counter = sc_txs_com_tree_root_g.is_eq(
                 cs.ns(|| format!("sc_txs_com_tree_root == sc_txs_com_hashes[{}]", i)),
@@ -1105,10 +760,12 @@ impl CswFtProverDataGadget {
             )?;
 
             // Ignore NULL hashes
-            let should_ignore_hash = self.sc_txs_com_hashes_g[i].is_eq(
-                cs.ns(|| format!("sc_txs_com_hashes[{}] == PHANTOM", i)),
-                &phantom_g,
-            )?;
+            let should_ignore_hash =
+                Boolean::alloc(cs.ns(|| format!("should ignore hash {}", i)), || {
+                    Ok(i >= actual_range_size as usize)
+                })?;
+
+            println!("Should ignore {}: {:?}", i, should_ignore_hash);
 
             sc_txs_com_cumulative_g = FieldElementGadget::conditionally_select(
                 cs.ns(|| format!("Conditionally select hash at iteration {}", i)),

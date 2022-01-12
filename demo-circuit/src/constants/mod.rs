@@ -164,15 +164,9 @@ pub const FIELD_MODULUS: usize = FIELD_CAPACITY + 1;
 
 pub const MST_MERKLE_TREE_HEIGHT: usize = 22;
 
-pub const CSW_PHANTOM_PUB_KEY_BYTES: [u8; 32] = [
-    116, 235, 252, 191, 157, 10, 215, 119, 80, 119, 42, 220, 253, 161, 164, 23, 124, 161, 31, 54,
-    68, 234, 76, 50, 117, 58, 136, 35, 109, 160, 91, 196,
-];
-
 #[cfg(test)]
 mod test {
     use algebra::{AffineCurve, FpParameters, FromCompressedBits, PrimeField};
-    use cctp_primitives::utils::serialization::serialize_to_buffer;
 
     use super::*;
     use bit_vec::BitVec;
@@ -306,48 +300,5 @@ mod test {
         println!("{:#?}", htc_g1_out);
         println!("{:#?}", htc_g2_out);
         assert_eq!(gh_generators, VRFParams::new().group_hash_generators);
-    }
-
-    #[serial]
-    #[test]
-    fn test_csw_phantom_public_key() {
-        let tag = b"Silicon Si 14";
-        let personalization = constants::CSW_NULL_TE_PK_PERSONALIZATION;
-
-        // Sample a point outside the curve
-        let simulated_te_point = hash_to_fe_and_map_to_point::<
-            SimulatedFieldElement,
-            SimulatedTEGroup,
-            _,
-        >(tag, personalization, |fe| {
-            let x = fe;
-            let y = fe + &SimulatedFieldElement::one();
-            let point = SimulatedTEGroup::new(x, y);
-            if !point.is_on_curve() {
-                Some(point)
-            } else {
-                None
-            }
-        })
-        .unwrap();
-
-        // Store the sign (last bit) of the X coordinate
-        // The value is left-shifted to be used later in an OR operation
-        let x_sign = if simulated_te_point.x.is_odd() {
-            1 << 7
-        } else {
-            0u8
-        };
-
-        // Extract the public key bytes as Y coordinate
-        let y_coordinate = simulated_te_point.y;
-        let mut pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
-
-        // Use the last (null) bit of the public key to store the sign of the X coordinate
-        // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus
-        let len = pk_bytes.len();
-        pk_bytes[len - 1] |= x_sign;
-
-        assert_eq!(pk_bytes, CSW_PHANTOM_PUB_KEY_BYTES);
     }
 }

@@ -5,7 +5,9 @@ use cctp_primitives::{
 };
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 use r1cs_crypto::{FieldBasedHashGadget, FieldHasherGadget};
-use r1cs_std::{alloc::AllocGadget, eq::EqGadget, fields::FieldGadget, FromBitsGadget};
+use r1cs_std::{
+    alloc::AllocGadget, boolean::Boolean, eq::EqGadget, fields::FieldGadget, FromBitsGadget,
+};
 
 use crate::{
     type_mapping::*, CswFtProverData, CswProverData, CswSysData, CswUtxoProverData,
@@ -24,7 +26,10 @@ pub struct CeasedSidechainWithdrawalCircuit {
 
     // Witnesses
     sidechain_id: FieldElement,
-    csw_data: CswProverData,
+    sys_data: CswSysData,
+    last_wcert: Option<WithdrawalCertificateData>,
+    utxo_data: Option<CswUtxoProverData>,
+    ft_data: Option<CswFtProverData>,
 
     // Public inputs
     constant: Option<FieldElement>,
@@ -80,86 +85,31 @@ impl CeasedSidechainWithdrawalCircuit {
         let csw_sys_data_hash = Self::compute_csw_sys_data_hash(&sys_data, sidechain_id)
             .map_err(|e| format!("Unable to compute csw_sys_data_hash: {:?}", e))?;
 
-        // Handle all cases
-        let csw_data = match (last_wcert, utxo_data, ft_data) {
-            // SC Utxo withdraw
-            (Some(last_wcert), Some(utxo_data), None) => Ok(CswProverData {
-                sys_data,
-                last_wcert,
-                utxo_data,
-                ft_data: CswFtProverData::get_phantom(range_size),
-            }),
-            // FT withdraw, with last_wcert present
-            (Some(last_wcert), None, Some(mut ft_data)) => {
-                // Pad if smaller than range size
-                if ft_data.sc_txs_com_hashes.len() < range_size as usize {
-                    ft_data.sc_txs_com_hashes.append(&mut vec![
-                        FieldElement::default();
-                        range_size as usize
-                            - ft_data.sc_txs_com_hashes.len()
-                    ])
-                }
-                Ok(CswProverData {
-                    sys_data,
-                    last_wcert,
-                    utxo_data: CswUtxoProverData::get_phantom(),
-                    ft_data,
-                })
-            }
-            // FT withdraw, with last_wcert not present
-            (None, None, Some(mut ft_data)) => {
-                // Pad if smaller than range size
-                if ft_data.sc_txs_com_hashes.len() < range_size as usize {
-                    ft_data.sc_txs_com_hashes.append(&mut vec![
-                        FieldElement::default();
-                        range_size as usize
-                            - ft_data.sc_txs_com_hashes.len()
-                    ])
-                }
-                Ok(CswProverData {
-                    sys_data,
-                    last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
-                    utxo_data: CswUtxoProverData::get_phantom(),
-                    ft_data,
-                })
-            }
+        // Handle exceptional cases
+        let _ = match (last_wcert.is_some(), utxo_data.is_some(), ft_data.is_some()) {
             // Attempt to withdraw a sc utxo without having specified a last_wcert
-            (None, Some(_), _) => Err(Error::from(
+            (false, true, _) => Err(Error::from(
                 "Attempt to withdraw SC Utxo without specifying last WCert",
             )),
             // Attempt to withdraw both a sc utxo and a ft
-            (_, Some(_), Some(_)) => Err(Error::from(
+            (_, true, true) => Err(Error::from(
                 "Cannot create a CSW proof for retrieving both a SC UTXO and a FT",
             )),
-            // Any other combination is not admissable
-            _ => Err(Error::from("Unexpected inputs combination")),
+            // Attempt to withdraw neither a sc utxo neither a ft
+            (_, false, false) => Err(Error::from(
+                "Cannot create a CSW proof for retrieving nothing",
+            )),
+            _ => Ok(()),
         }?;
 
         Ok(Self {
             range_size,
             num_custom_fields,
             sidechain_id,
-            csw_data,
-            constant,
-            csw_sys_data_hash,
-        })
-    }
-
-    // For testing, if useful
-    pub fn from_prover_data(
-        sidechain_id: FieldElement,
-        constant: Option<FieldElement>,
-        csw_data: CswProverData,
-        range_size: u32,
-        num_custom_fields: u32,
-    ) -> Result<Self, Error> {
-        let csw_sys_data_hash = Self::compute_csw_sys_data_hash(&csw_data.sys_data, sidechain_id)?;
-
-        Ok(CeasedSidechainWithdrawalCircuit {
-            sidechain_id,
-            csw_data,
-            range_size,
-            num_custom_fields,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             constant,
             csw_sys_data_hash,
         })
@@ -174,7 +124,10 @@ impl CeasedSidechainWithdrawalCircuit {
             range_size,
             num_custom_fields,
             sidechain_id: FieldElement::default(),
-            csw_data: CswProverData::get_default(range_size, num_custom_fields),
+            sys_data: CswSysData::default(),
+            last_wcert: None,
+            utxo_data: None,
+            ft_data: None,
             constant: if is_constant_present {
                 Some(FieldElement::default())
             } else {
@@ -190,41 +143,65 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
-        // Alloc sidechain id
-        let sidechain_id_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc sidechain_id_g"), || Ok(&self.sidechain_id))?;
-
-        // Alloc all witness data
-        let csw_data_g =
-            CswProverDataGadget::alloc(cs.ns(|| "alloc csw data"), || Ok(&self.csw_data))?;
-
         // Decide whether to enforce utxo or ft withdrawal.
         // NOTE: We don't need to explicitly enforce that exactly one among 'should_enforce_utxo_withdrawal_g'
         //       and 'should_enforce_ft_withdrawal_g' must be True (doable with a XOR constraint) as:
         //       - They cannot be both phantom as pk ownership check won't pass;
         //       - They cannot be both NOT phantom as nullifier can't be the same for both UTXO and FT.
-        let should_enforce_utxo_withdrawal_g = csw_data_g
-            .utxo_data_g
-            .input_g
-            .is_phantom(cs.ns(|| "should_enforce_utxo_withdrawal"))?
-            .not();
+        let should_enforce_utxo_withdrawal_g =
+            Boolean::alloc(cs.ns(|| "should_enforce_utxo_withdrawal"), || {
+                Ok(self.utxo_data.is_some())
+            })?;
 
-        let should_enforce_ft_withdrawal_g = csw_data_g
-            .ft_data_g
-            .ft_output_g
-            .is_phantom(cs.ns(|| "should_enforce_ft_withdrawal"))?
-            .not();
+        let should_enforce_ft_withdrawal_g = should_enforce_utxo_withdrawal_g.not();
 
-        let should_enforce_wcert_hash = csw_data_g
-            .last_wcert_g
-            .is_phantom(
-                cs.ns(|| "should_enforce_wcert_hash"),
-                self.num_custom_fields,
-            )?
-            .not();
+        // Alloc sidechain id
+        let sidechain_id_g =
+            FieldElementGadget::alloc(cs.ns(|| "alloc sidechain_id_g"), || Ok(&self.sidechain_id))?;
+
+        // Alloc all witness data
+        let (csw_data_g, actual_range_size) = {
+            let mut csw_data = CswProverData {
+                sys_data: self.sys_data.clone(),
+                last_wcert: self.last_wcert.clone().unwrap_or(
+                    WithdrawalCertificateData::get_default(self.num_custom_fields),
+                ),
+                utxo_data: self
+                    .utxo_data
+                    .clone()
+                    .unwrap_or(CswUtxoProverData::default()),
+                ft_data: self
+                    .ft_data
+                    .clone()
+                    .unwrap_or(CswFtProverData::get_default(self.range_size)),
+            };
+
+            // Get the actual number of sc_txs_com_hashes
+            let actual_range_size = csw_data.ft_data.sc_txs_com_hashes.len() as u32;
+
+            // Pad to reach maximum one (in case it wasn't)
+            if actual_range_size < self.range_size {
+                csw_data
+                    .ft_data
+                    .sc_txs_com_hashes
+                    .resize(self.range_size as usize, FieldElement::default())
+            }
+
+            (
+                CswProverDataGadget::alloc(cs.ns(|| "alloc csw data"), || Ok(csw_data))?,
+                actual_range_size,
+            )
+        };
 
         // if last_wcert != NULL
         // enforce(sys_data.sc_last_wcert_hash == H(last_wcert))
+        // TODO: Do we need to enforce this also in case of FT withdrawal ?
+        //       In that case, in fact, the prover has the freedom to choose
+        //       whether to enforce the certificate hash or not even if a last
+        //       certificate is present. If the intention was to oblige the
+        //       prover to enforce the hash if a last wcert is present, then
+        //       these constraints won't do the job.
+        //       As a temporary solution we enforce this check only in case of utxo withdrawal.
         let last_wcert_hash_g = csw_data_g
             .last_wcert_g
             .enforce_hash(cs.ns(|| "enforce last_wcert_hash"), None)?;
@@ -232,7 +209,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         last_wcert_hash_g.conditional_enforce_equal(
             cs.ns(|| "enforce sc_last_wcert_hash == last_wcert_hash"),
             &csw_data_g.sys_data_g.sc_last_wcert_hash_g,
-            &should_enforce_wcert_hash,
+            &should_enforce_utxo_withdrawal_g,
         )?;
 
         // Enforce UTXO widthdrawal if required
@@ -283,6 +260,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             cs.ns(|| "conditionally enforce ft withdrawal"),
             &sidechain_id_g,
             self.range_size,
+            actual_range_size,
             &csw_data_g.sys_data_g.mcb_sc_txs_com_end_g,
             &csw_data_g.sys_data_g.nullifier_g,
             &csw_data_g.sys_data_g.amount_g,
@@ -385,10 +363,10 @@ mod test {
     use std::{convert::TryInto, ops::AddAssign};
 
     use crate::{
-        deserialize_fe_unchecked, split_field_element_at_index, CswFtOutputData, CswProverData,
-        CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData,
-        MAX_SEGMENT_SIZE, MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT, SC_PUBLIC_KEY_LENGTH,
-        SC_TX_HASH_LENGTH, SUPPORTED_SEGMENT_SIZE,
+        deserialize_fe_unchecked, split_field_element_at_index, CswFtOutputData, CswUtxoInputData,
+        CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData, MAX_SEGMENT_SIZE,
+        MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
+        SUPPORTED_SEGMENT_SIZE,
     };
 
     use super::*;
@@ -518,10 +496,14 @@ mod test {
 
     fn generate_test_utxo_csw_data(
         num_custom_fields: u32,
-        num_commitment_hashes: u32,
         secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
         spending_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
-    ) -> CswProverData {
+    ) -> (
+        CswSysData,
+        Option<WithdrawalCertificateData>,
+        Option<CswUtxoProverData>,
+        Option<CswFtProverData>,
+    ) {
         let rng = &mut thread_rng();
         let utxo_input_data = CswUtxoInputData {
             output: CswUtxoOutputData {
@@ -579,14 +561,7 @@ mod test {
                 .unwrap(),
         };
 
-        let csw_prover_data = CswProverData {
-            sys_data,
-            last_wcert: cert_data,
-            utxo_data,
-            ft_data: CswFtProverData::get_phantom(num_commitment_hashes),
-        };
-
-        csw_prover_data
+        (sys_data, Some(cert_data), Some(utxo_data), None)
     }
 
     fn generate_ft_tree_data(
@@ -616,11 +591,15 @@ mod test {
 
     fn generate_test_ft_csw_data(
         sidechain_id: FieldElement,
-        num_custom_fields: u32,
         num_commitment_hashes: u32,
         ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
         receiver_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
-    ) -> CswProverData {
+    ) -> (
+        CswSysData,
+        Option<WithdrawalCertificateData>,
+        Option<CswUtxoProverData>,
+        Option<CswFtProverData>,
+    ) {
         let rng = &mut thread_rng();
 
         let ft_output_data = CswFtOutputData {
@@ -671,15 +650,18 @@ mod test {
             sc_txs_com_hashes: vec![FieldElement::default(); num_commitment_hashes as usize],
         };
 
-        ft_data.sc_txs_com_hashes[0] = sc_tree_root;
+        // Sample a random idx in which putting the sc_tree_root
+        let random_idx = rng.gen_range(0..num_commitment_hashes) as usize;
+        ft_data.sc_txs_com_hashes[random_idx] = sc_tree_root;
 
         let mut mcb_sc_txs_com_end = ft_data.mcb_sc_txs_com_start;
 
         ft_data
             .sc_txs_com_hashes
             .iter()
-            .for_each(|sc_txs_com_hash| {
-                if !sc_txs_com_hash.eq(&FieldElement::default()) {
+            .enumerate()
+            .for_each(|(i, sc_txs_com_hash)| {
+                if i < num_commitment_hashes as usize {
                     mcb_sc_txs_com_end = get_poseidon_hash_constant_length(2, None)
                         .update(mcb_sc_txs_com_end)
                         .update(*sc_txs_com_hash)
@@ -696,14 +678,7 @@ mod test {
             receiver: rng.gen::<[u8; MC_PK_SIZE]>(),
         };
 
-        let csw_prover_data = CswProverData {
-            sys_data,
-            last_wcert: WithdrawalCertificateData::get_phantom(num_custom_fields),
-            utxo_data: CswUtxoProverData::get_phantom(),
-            ft_data,
-        };
-
-        csw_prover_data
+        (sys_data, None, None, Some(ft_data))
     }
 
     fn generate_test_csw_prover_data(
@@ -713,7 +688,12 @@ mod test {
         num_commitment_hashes: u32,
         secret_key: Option<[bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS]>,
         public_key: Option<[u8; SC_PUBLIC_KEY_LENGTH]>,
-    ) -> CswProverData {
+    ) -> (
+        CswSysData,
+        Option<WithdrawalCertificateData>,
+        Option<CswUtxoProverData>,
+        Option<CswFtProverData>,
+    ) {
         let (public_key, secret_key) = {
             if secret_key.is_none() || public_key.is_none() {
                 get_test_key_pair()
@@ -723,15 +703,9 @@ mod test {
         };
 
         match csw_type {
-            CswType::UTXO => generate_test_utxo_csw_data(
-                num_custom_fields,
-                num_commitment_hashes,
-                secret_key,
-                public_key,
-            ),
+            CswType::UTXO => generate_test_utxo_csw_data(num_custom_fields, secret_key, public_key),
             CswType::FT => generate_test_ft_csw_data(
                 sidechain_id,
-                num_custom_fields,
                 num_commitment_hashes,
                 secret_key,
                 public_key,
@@ -743,35 +717,22 @@ mod test {
         debug_only: bool,
         sidechain_id: FieldElement,
         num_custom_fields: u32,
-        num_commitment_hashes: u32,
+        max_num_commitment_hashes: u32,
         constant: Option<FieldElement>,
-        csw_prover_data: CswProverData,
+        sys_data: CswSysData,
+        last_wcert: Option<WithdrawalCertificateData>,
+        utxo_data: Option<CswUtxoProverData>,
+        ft_data: Option<CswFtProverData>,
         public_inputs: Option<Vec<FieldElement>>,
     ) -> Option<String> {
-        let utxo_data = {
-            if csw_prover_data.utxo_data == CswUtxoProverData::get_phantom() {
-                None
-            } else {
-                Some(csw_prover_data.utxo_data)
-            }
-        };
-
-        let ft_data = {
-            if csw_prover_data.ft_data == CswFtProverData::get_phantom(num_commitment_hashes) {
-                None
-            } else {
-                Some(csw_prover_data.ft_data)
-            }
-        };
-
         let circuit = CeasedSidechainWithdrawalCircuit::new(
             sidechain_id,
             constant,
-            csw_prover_data.sys_data.clone(),
-            Some(csw_prover_data.last_wcert),
+            sys_data.clone(),
+            last_wcert,
             utxo_data,
             ft_data,
-            num_commitment_hashes,
+            max_num_commitment_hashes,
             num_custom_fields,
         )
         .unwrap();
@@ -784,7 +745,7 @@ mod test {
             assert_eq!(ck_g1.comm_key.len(), SUPPORTED_SEGMENT_SIZE);
 
             let setup_circuit = CeasedSidechainWithdrawalCircuit::get_instance_for_setup(
-                num_commitment_hashes,
+                max_num_commitment_hashes,
                 num_custom_fields,
                 constant.is_some(),
             );
@@ -805,7 +766,7 @@ mod test {
 
                     let csw_sys_data_hash =
                         CeasedSidechainWithdrawalCircuit::compute_csw_sys_data_hash(
-                            &csw_prover_data.sys_data,
+                            &sys_data,
                             sidechain_id,
                         )
                         .unwrap();
@@ -863,13 +824,13 @@ mod test {
 
     #[serial]
     #[test]
-    fn test_csw_circuit_utxo() {
+    fn complete_test_csw_circuit_utxo() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, _) =
             generate_circuit_test_data();
 
         let debug_only = false;
 
-        let csw_prover_data = generate_test_csw_prover_data(
+        let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::UTXO,
             sidechain_id,
             num_custom_fields,
@@ -884,7 +845,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -893,13 +857,13 @@ mod test {
 
     #[serial]
     #[test]
-    fn test_csw_circuit_ft() {
+    fn complete_test_csw_circuit_ft() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, _) =
             generate_circuit_test_data();
 
         let debug_only = false;
 
-        let csw_prover_data = generate_test_csw_prover_data(
+        let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::FT,
             sidechain_id,
             num_custom_fields,
@@ -914,7 +878,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -927,7 +894,7 @@ mod test {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
+        let (mut sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::UTXO,
             sidechain_id,
             num_custom_fields,
@@ -936,10 +903,7 @@ mod test {
             None,
         );
 
-        csw_prover_data
-            .sys_data
-            .sc_last_wcert_hash
-            .double_in_place();
+        sys_data.sc_last_wcert_hash.double_in_place();
 
         let failing_constraint = test_csw_circuit(
             debug_only,
@@ -947,9 +911,13 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             None,
         );
+
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint
             .unwrap()
@@ -962,7 +930,7 @@ mod test {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
+        let (mut sys_data, _, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::UTXO,
             sidechain_id,
             num_custom_fields,
@@ -971,27 +939,26 @@ mod test {
             None,
         );
 
-        csw_prover_data.last_wcert = WithdrawalCertificateData::get_phantom(num_custom_fields);
+        let empty_cert = WithdrawalCertificateData::get_default(num_custom_fields);
 
-        let custom_fields_ref = csw_prover_data
-            .last_wcert
+        let custom_fields_ref = empty_cert
             .custom_fields
             .iter()
             .collect::<Vec<&FieldElement>>();
 
         let computed_last_wcert_hash = hash_cert(
-            &csw_prover_data.last_wcert.ledger_id,
-            csw_prover_data.last_wcert.epoch_id,
-            csw_prover_data.last_wcert.quality,
+            &empty_cert.ledger_id,
+            empty_cert.epoch_id,
+            empty_cert.quality,
             None,
             Some(custom_fields_ref),
-            &csw_prover_data.last_wcert.mcb_sc_txs_com,
-            csw_prover_data.last_wcert.btr_min_fee,
-            csw_prover_data.last_wcert.ft_min_amount,
+            &empty_cert.mcb_sc_txs_com,
+            empty_cert.btr_min_fee,
+            empty_cert.ft_min_amount,
         )
         .unwrap();
 
-        csw_prover_data.sys_data.sc_last_wcert_hash = computed_last_wcert_hash;
+        sys_data.sc_last_wcert_hash = computed_last_wcert_hash;
 
         let failing_constraint = test_csw_circuit(
             debug_only,
@@ -999,7 +966,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            Some(empty_cert),
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -1014,7 +984,7 @@ mod test {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
+        let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::UTXO,
             sidechain_id,
             num_custom_fields,
@@ -1023,58 +993,72 @@ mod test {
             None,
         );
 
-        // Try to pass a path to the right leaf moved from position 0 to position 1
-        let moved_mst_path = {
-            let mut mst =
-                GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
-            let mst_leaf_hash = csw_prover_data.utxo_data.input.output.hash(None).unwrap();
-            mst.append(FieldElement::zero()).unwrap();
-            mst.append(mst_leaf_hash).unwrap();
-            mst.finalize_in_place().unwrap();
-            mst.get_merkle_path(1).unwrap().try_into().unwrap()
-        };
+        {
+            let mut utxo_data = utxo_data.clone().unwrap();
 
-        csw_prover_data.utxo_data.mst_path_to_output = moved_mst_path;
+            // Try to pass a path to the right leaf moved from position 0 to position 1
+            let moved_mst_path = {
+                let mut mst =
+                    GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
+                let mst_leaf_hash = utxo_data.input.output.hash(None).unwrap();
+                mst.append(FieldElement::zero()).unwrap();
+                mst.append(mst_leaf_hash).unwrap();
+                mst.finalize_in_place().unwrap();
+                mst.get_merkle_path(1).unwrap().try_into().unwrap()
+            };
 
-        let failing_constraint = test_csw_circuit(
-            debug_only,
-            sidechain_id,
-            num_custom_fields,
-            num_commitment_hashes,
-            constant,
-            csw_prover_data.clone(),
-            None,
-        );
-        println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint
-            .unwrap()
-            .contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
+            utxo_data.mst_path_to_output = moved_mst_path;
 
-        // Try to pass a path to the wrong leaf
-        let wrong_mst_path = {
-            let mut mst =
-                GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
-            let mst_leaf_hash = csw_prover_data.utxo_data.input.output.hash(None).unwrap();
-            mst.append(mst_leaf_hash).unwrap();
-            mst.finalize_in_place().unwrap();
-            mst.get_merkle_path(1).unwrap().try_into().unwrap()
-        };
+            let failing_constraint = test_csw_circuit(
+                debug_only,
+                sidechain_id,
+                num_custom_fields,
+                num_commitment_hashes,
+                constant,
+                sys_data.clone(),
+                last_wcert.clone(),
+                Some(utxo_data),
+                ft_data.clone(),
+                None,
+            );
+            println!("Failing constraint: {:?}", failing_constraint);
+            assert!(failing_constraint
+                .unwrap()
+                .contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
+        }
 
-        csw_prover_data.utxo_data.mst_path_to_output = wrong_mst_path;
+        {
+            let mut utxo_data = utxo_data.unwrap();
 
-        let failing_constraint = test_csw_circuit(
-            debug_only,
-            sidechain_id,
-            num_custom_fields,
-            num_commitment_hashes,
-            constant,
-            csw_prover_data,
-            None,
-        );
-        println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint
-            .unwrap()
-            .contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
+            // Try to pass a path to the wrong leaf
+            let wrong_mst_path = {
+                let mut mst =
+                    GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
+                let mst_leaf_hash = utxo_data.input.output.hash(None).unwrap();
+                mst.append(mst_leaf_hash).unwrap();
+                mst.finalize_in_place().unwrap();
+                mst.get_merkle_path(1).unwrap().try_into().unwrap()
+            };
+
+            utxo_data.mst_path_to_output = wrong_mst_path;
+
+            let failing_constraint = test_csw_circuit(
+                debug_only,
+                sidechain_id,
+                num_custom_fields,
+                num_commitment_hashes,
+                constant,
+                sys_data,
+                last_wcert,
+                Some(utxo_data),
+                ft_data,
+                None,
+            );
+            println!("Failing constraint: {:?}", failing_constraint);
+            assert!(failing_constraint
+                .unwrap()
+                .contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
+        }
     }
 
     #[serial]
@@ -1083,7 +1067,7 @@ mod test {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
+        let (mut sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::UTXO,
             sidechain_id,
             num_custom_fields,
@@ -1093,7 +1077,7 @@ mod test {
         );
 
         // Change the value of the nullifier
-        csw_prover_data.sys_data.nullifier.double_in_place();
+        sys_data.nullifier.double_in_place();
 
         let failing_constraint = test_csw_circuit(
             debug_only,
@@ -1101,7 +1085,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -1116,7 +1103,7 @@ mod test {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
+        let (mut sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::UTXO,
             sidechain_id,
             num_custom_fields,
@@ -1126,7 +1113,7 @@ mod test {
         );
 
         // Change the value of the amount
-        csw_prover_data.sys_data.amount += 1;
+        sys_data.amount += 1;
 
         let failing_constraint = test_csw_circuit(
             debug_only,
@@ -1134,7 +1121,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -1153,7 +1143,7 @@ mod test {
         let (mut public_key, secret_key) = get_test_key_pair();
         public_key[0] ^= 1;
 
-        let csw_prover_data = generate_test_csw_prover_data(
+        let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::UTXO,
             sidechain_id,
             num_custom_fields,
@@ -1168,7 +1158,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -1193,7 +1186,7 @@ mod test {
 
         let (_, secret_key) = get_test_key_pair();
 
-        let csw_prover_data = generate_test_csw_prover_data(
+        let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::UTXO,
             sidechain_id,
             num_custom_fields,
@@ -1208,7 +1201,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -1219,14 +1215,13 @@ mod test {
 
     #[serial]
     #[test]
-    fn test_csw_circuit_utxo_without_constant() {
+    fn complete_test_csw_circuit_utxo_without_constant() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, _, _) =
             generate_circuit_test_data();
 
         let debug_only = false;
-        let constant = None;
 
-        let csw_prover_data = generate_test_csw_prover_data(
+        let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::UTXO,
             sidechain_id,
             num_custom_fields,
@@ -1240,8 +1235,11 @@ mod test {
             sidechain_id,
             num_custom_fields,
             num_commitment_hashes,
-            constant,
-            csw_prover_data,
+            None,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -1256,7 +1254,7 @@ mod test {
 
         let num_custom_fields = 0;
 
-        let csw_prover_data = generate_test_csw_prover_data(
+        let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::UTXO,
             sidechain_id,
             num_custom_fields,
@@ -1271,7 +1269,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -1284,7 +1285,7 @@ mod test {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
+        let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::UTXO,
             sidechain_id,
             num_custom_fields,
@@ -1293,8 +1294,10 @@ mod test {
             None,
         );
 
-        assert!(!csw_prover_data.last_wcert.custom_fields.is_empty());
-        csw_prover_data.last_wcert.custom_fields[0].double_in_place();
+        let mut last_wcert = last_wcert.unwrap();
+
+        assert!(!last_wcert.custom_fields.is_empty());
+        last_wcert.custom_fields[0].double_in_place();
 
         let failing_constraint = test_csw_circuit(
             debug_only,
@@ -1302,7 +1305,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            Some(last_wcert),
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -1317,7 +1323,7 @@ mod test {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
+        let (mut sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::FT,
             sidechain_id,
             num_custom_fields,
@@ -1327,7 +1333,7 @@ mod test {
         );
 
         // Change the value of the amount
-        csw_prover_data.sys_data.amount += 1;
+        sys_data.amount += 1;
 
         let failing_constraint = test_csw_circuit(
             debug_only,
@@ -1335,7 +1341,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -1350,7 +1359,7 @@ mod test {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
+        let (mut sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::FT,
             sidechain_id,
             num_custom_fields,
@@ -1360,7 +1369,7 @@ mod test {
         );
 
         // Change the value of the nullifier
-        csw_prover_data.sys_data.nullifier.double_in_place();
+        sys_data.nullifier.double_in_place();
 
         let failing_constraint = test_csw_circuit(
             debug_only,
@@ -1368,7 +1377,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -1377,57 +1389,64 @@ mod test {
             .contains("require(nullifier == outputHash)"));
     }
 
-    #[serial]
-    #[test]
-    fn test_csw_circuit_ft_with_certificate() {
-        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
-            generate_circuit_test_data();
+    // TODO: Commented until we decide what to do with certificate hash when withdrawing FTs
+    // #[serial]
+    // #[test]
+    // fn complete_test_csw_circuit_ft_with_certificate() {
+    //     let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+    //         generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
-            CswType::FT,
-            sidechain_id,
-            num_custom_fields,
-            num_commitment_hashes,
-            None,
-            None,
-        );
+    //     let (mut sys_data, _, utxo_data, ft_data) = generate_test_csw_prover_data(
+    //         CswType::FT,
+    //         sidechain_id,
+    //         num_custom_fields,
+    //         num_commitment_hashes,
+    //         num_commitment_hashes,
+    //         None,
+    //         None,
+    //     );
 
-        let rng = &mut thread_rng();
-        let (cert_data, last_wcert_hash) =
-            compute_cert_data(vec![FieldElement::rand(rng), FieldElement::rand(rng)]);
+    //     let rng = &mut thread_rng();
+    //     let (cert_data, last_wcert_hash) =
+    //         compute_cert_data(vec![FieldElement::rand(rng), FieldElement::rand(rng)]);
 
-        csw_prover_data.last_wcert = cert_data;
+    //     let debug_only = false;
+    //     // The test should fail since we didn't update the last wcert hash in the sys data
+    //     let failing_constraint = test_csw_circuit(
+    //         debug_only,
+    //         sidechain_id,
+    //         num_custom_fields,
+    //         num_commitment_hashes,
+    //         constant,
+    //         sys_data.clone(),
+    //         Some(cert_data.clone()),
+    //         utxo_data.clone(),
+    //         ft_data.clone(),
+    //         None
+    //     );
+    //     println!("Failing constraint: {:?}", failing_constraint);
+    //     assert!(failing_constraint
+    //         .unwrap()
+    //         .contains("enforce sc_last_wcert_hash == last_wcert_hash/conditional_equals"));
 
-        // The test should fail since we didn't update the last wcert
-        let failing_constraint = test_csw_circuit(
-            debug_only,
-            sidechain_id,
-            num_custom_fields,
-            num_commitment_hashes,
-            constant,
-            csw_prover_data.clone(),
-            None,
-        );
-        println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint
-            .unwrap()
-            .contains("enforce sc_last_wcert_hash == last_wcert_hash/conditional_equals"));
+    //     sys_data.sc_last_wcert_hash = last_wcert_hash;
 
-        csw_prover_data.sys_data.sc_last_wcert_hash = last_wcert_hash;
-
-        // The test should now pass
-        let failing_constraint = test_csw_circuit(
-            debug_only,
-            sidechain_id,
-            num_custom_fields,
-            num_commitment_hashes,
-            constant,
-            csw_prover_data.clone(),
-            None,
-        );
-        println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint.is_none());
-    }
+    //     // The test should now pass
+    //     let failing_constraint = test_csw_circuit(
+    //         debug_only,
+    //         sidechain_id,
+    //         num_custom_fields,
+    //         num_commitment_hashes,
+    //         constant,
+    //         sys_data,
+    //         Some(cert_data),
+    //         utxo_data,
+    //         ft_data,
+    //         None
+    //     );
+    //     println!("Failing constraint: {:?}", failing_constraint);
+    //     assert!(failing_constraint.is_none());
+    // }
 
     #[serial]
     #[test]
@@ -1435,7 +1454,7 @@ mod test {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
+        let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::FT,
             sidechain_id,
             num_custom_fields,
@@ -1444,52 +1463,66 @@ mod test {
             None,
         );
 
-        // Try to pass a path to the right leaf moved from position 0 to position 1
-        let moved_ft_path = {
-            let mut ft_tree = GingerMHT::init(FWT_MT_HEIGHT, 1 << FWT_MT_HEIGHT).unwrap();
-            ft_tree.append(FieldElement::zero()).unwrap();
-            ft_tree.append(csw_prover_data.sys_data.nullifier).unwrap();
-            ft_tree.finalize_in_place().unwrap();
+        {
+            let mut ft_data = ft_data.clone().unwrap();
 
-            ft_tree.get_merkle_path(1).unwrap().try_into().unwrap()
-        };
+            // Try to pass a path to the right leaf moved from position 0 to position 1
+            let moved_ft_path = {
+                let mut ft_tree = GingerMHT::init(FWT_MT_HEIGHT, 1 << FWT_MT_HEIGHT).unwrap();
+                ft_tree.append(FieldElement::zero()).unwrap();
+                ft_tree.append(sys_data.nullifier).unwrap();
+                ft_tree.finalize_in_place().unwrap();
 
-        csw_prover_data.ft_data.ft_tree_path = moved_ft_path;
+                ft_tree.get_merkle_path(1).unwrap().try_into().unwrap()
+            };
 
-        let failing_constraint = test_csw_circuit(
-            debug_only,
-            sidechain_id,
-            num_custom_fields,
-            num_commitment_hashes,
-            constant,
-            csw_prover_data.clone(),
-            None,
-        );
-        println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
+            ft_data.ft_tree_path = moved_ft_path;
 
-        // Try to pass a path to the wrong leaf
-        let wrong_ft_path = {
-            let mut ft_tree = GingerMHT::init(FWT_MT_HEIGHT, 1 << FWT_MT_HEIGHT).unwrap();
-            ft_tree.append(csw_prover_data.sys_data.nullifier).unwrap();
-            ft_tree.finalize_in_place().unwrap();
+            let failing_constraint = test_csw_circuit(
+                debug_only,
+                sidechain_id,
+                num_custom_fields,
+                num_commitment_hashes,
+                constant,
+                sys_data.clone(),
+                last_wcert.clone(),
+                utxo_data.clone(),
+                Some(ft_data),
+                None,
+            );
+            println!("Failing constraint: {:?}", failing_constraint);
+            assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
+        }
 
-            ft_tree.get_merkle_path(1).unwrap().try_into().unwrap()
-        };
+        {
+            let mut ft_data = ft_data.clone().unwrap();
 
-        csw_prover_data.ft_data.ft_tree_path = wrong_ft_path;
+            // Try to pass a path to the wrong leaf
+            let wrong_ft_path = {
+                let mut ft_tree = GingerMHT::init(FWT_MT_HEIGHT, 1 << FWT_MT_HEIGHT).unwrap();
+                ft_tree.append(sys_data.nullifier).unwrap();
+                ft_tree.finalize_in_place().unwrap();
 
-        let failing_constraint = test_csw_circuit(
-            debug_only,
-            sidechain_id,
-            num_custom_fields,
-            num_commitment_hashes,
-            constant,
-            csw_prover_data,
-            None,
-        );
-        println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
+                ft_tree.get_merkle_path(1).unwrap().try_into().unwrap()
+            };
+
+            ft_data.ft_tree_path = wrong_ft_path;
+
+            let failing_constraint = test_csw_circuit(
+                debug_only,
+                sidechain_id,
+                num_custom_fields,
+                num_commitment_hashes,
+                constant,
+                sys_data,
+                last_wcert,
+                utxo_data,
+                Some(ft_data),
+                None,
+            );
+            println!("Failing constraint: {:?}", failing_constraint);
+            assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
+        }
     }
 
     #[serial]
@@ -1498,7 +1531,7 @@ mod test {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
+        let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::FT,
             sidechain_id,
             num_custom_fields,
@@ -1507,77 +1540,83 @@ mod test {
             None,
         );
 
-        // Try to pass a path to the right leaf moved from position 0 to position 1
+        let ft_data = ft_data.unwrap();
+
         let ft_tree_root = {
             let mut ft_tree = GingerMHT::init(FWT_MT_HEIGHT, 1 << FWT_MT_HEIGHT).unwrap();
-            ft_tree.append(csw_prover_data.sys_data.nullifier).unwrap();
+            ft_tree.append(sys_data.nullifier).unwrap();
             ft_tree.finalize_in_place().unwrap();
             ft_tree.root().unwrap()
         };
 
-        let sc_moved_tree_path: GingerMHTBinaryPath = {
-            let sc_hash = get_poseidon_hash_constant_length(5, None)
-                .update(ft_tree_root)
-                .update(csw_prover_data.ft_data.scb_btr_tree_root)
-                .update(csw_prover_data.ft_data.wcert_tree_root)
-                .update(csw_prover_data.ft_data.sc_creation_commitment)
-                .update(sidechain_id)
-                .finalize()
-                .unwrap();
+        let sc_hash = get_poseidon_hash_constant_length(5, None)
+            .update(ft_tree_root)
+            .update(ft_data.scb_btr_tree_root)
+            .update(ft_data.wcert_tree_root)
+            .update(ft_data.sc_creation_commitment)
+            .update(sidechain_id)
+            .finalize()
+            .unwrap();
 
-            let mut sc_tree = GingerMHT::init(CMT_MT_HEIGHT, 1 << CMT_MT_HEIGHT).unwrap();
-            sc_tree.append(FieldElement::zero()).unwrap();
-            sc_tree.append(sc_hash).unwrap();
-            sc_tree.finalize_in_place().unwrap();
+        {
+            let mut ft_data = ft_data.clone();
 
-            sc_tree.get_merkle_path(1).unwrap().try_into().unwrap()
-        };
+            // Try to pass a path to the right leaf moved from position 0 to position 1
+            let sc_moved_tree_path: GingerMHTBinaryPath = {
+                let mut sc_tree = GingerMHT::init(CMT_MT_HEIGHT, 1 << CMT_MT_HEIGHT).unwrap();
+                sc_tree.append(FieldElement::zero()).unwrap();
+                sc_tree.append(sc_hash).unwrap();
+                sc_tree.finalize_in_place().unwrap();
 
-        csw_prover_data.ft_data.merkle_path_to_sc_hash = sc_moved_tree_path;
+                sc_tree.get_merkle_path(1).unwrap().try_into().unwrap()
+            };
 
-        let failing_constraint = test_csw_circuit(
-            debug_only,
-            sidechain_id,
-            num_custom_fields,
-            num_commitment_hashes,
-            constant,
-            csw_prover_data.clone(),
-            None,
-        );
-        println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
+            ft_data.merkle_path_to_sc_hash = sc_moved_tree_path;
 
-        // Try to pass a path to the wrong leaf
-        let wrong_sc_path = {
-            let sc_hash = get_poseidon_hash_constant_length(5, None)
-                .update(ft_tree_root)
-                .update(csw_prover_data.ft_data.scb_btr_tree_root)
-                .update(csw_prover_data.ft_data.wcert_tree_root)
-                .update(csw_prover_data.ft_data.sc_creation_commitment)
-                .update(sidechain_id)
-                .finalize()
-                .unwrap();
+            let failing_constraint = test_csw_circuit(
+                debug_only,
+                sidechain_id,
+                num_custom_fields,
+                num_commitment_hashes,
+                constant,
+                sys_data.clone(),
+                last_wcert.clone(),
+                utxo_data.clone(),
+                Some(ft_data),
+                None,
+            );
+            println!("Failing constraint: {:?}", failing_constraint);
+            assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
+        }
 
-            let mut sc_tree = GingerMHT::init(CMT_MT_HEIGHT, 1 << CMT_MT_HEIGHT).unwrap();
-            sc_tree.append(sc_hash).unwrap();
-            sc_tree.finalize_in_place().unwrap();
+        {
+            let mut ft_data = ft_data.clone();
+            // Try to pass a path to the wrong leaf
+            let wrong_sc_path = {
+                let mut sc_tree = GingerMHT::init(CMT_MT_HEIGHT, 1 << CMT_MT_HEIGHT).unwrap();
+                sc_tree.append(sc_hash).unwrap();
+                sc_tree.finalize_in_place().unwrap();
 
-            sc_tree.get_merkle_path(1).unwrap().try_into().unwrap()
-        };
+                sc_tree.get_merkle_path(1).unwrap().try_into().unwrap()
+            };
 
-        csw_prover_data.ft_data.merkle_path_to_sc_hash = wrong_sc_path;
+            ft_data.merkle_path_to_sc_hash = wrong_sc_path;
 
-        let failing_constraint = test_csw_circuit(
-            debug_only,
-            sidechain_id,
-            num_custom_fields,
-            num_commitment_hashes,
-            constant,
-            csw_prover_data,
-            None,
-        );
-        println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
+            let failing_constraint = test_csw_circuit(
+                debug_only,
+                sidechain_id,
+                num_custom_fields,
+                num_commitment_hashes,
+                constant,
+                sys_data,
+                last_wcert,
+                utxo_data,
+                Some(ft_data),
+                None,
+            );
+            println!("Failing constraint: {:?}", failing_constraint);
+            assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
+        }
     }
 
     #[serial]
@@ -1586,7 +1625,7 @@ mod test {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
+        let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::FT,
             sidechain_id,
             num_custom_fields,
@@ -1595,8 +1634,15 @@ mod test {
             None,
         );
 
+        let mut ft_data = ft_data.unwrap();
+        let elem_idx_to_reset = ft_data
+            .sc_txs_com_hashes
+            .iter()
+            .position(|&elem| elem != FieldElement::default())
+            .unwrap();
+
         // Remove the SC_TREE_ROOT as the first element of the commitment hashes
-        csw_prover_data.ft_data.sc_txs_com_hashes[0] = FieldElement::default();
+        ft_data.sc_txs_com_hashes[elem_idx_to_reset] = FieldElement::default();
 
         let failing_constraint = test_csw_circuit(
             debug_only,
@@ -1604,7 +1650,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            Some(ft_data),
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
@@ -1613,25 +1662,20 @@ mod test {
 
     #[serial]
     #[test]
-    fn test_csw_circuit_ft_few_tx_com_hashes() {
-        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
+    fn complete_test_csw_circuit_ft_few_tx_com_hashes() {
+        let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, _) =
             generate_circuit_test_data();
 
-        let mut csw_prover_data = generate_test_csw_prover_data(
+        let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::FT,
             sidechain_id,
             num_custom_fields,
-            num_commitment_hashes,
+            num_commitment_hashes / 2,
             None,
             None,
         );
 
-        // Remove half of the commitment hashes to check if the circuit still works (it should automatically add phantom hashes to fill the gap)
-        csw_prover_data
-            .ft_data
-            .sc_txs_com_hashes
-            .truncate(num_commitment_hashes as usize / 2);
-        assert!(csw_prover_data.ft_data.sc_txs_com_hashes.len() < num_commitment_hashes as usize);
+        let debug_only = false;
 
         let failing_constraint = test_csw_circuit(
             debug_only,
@@ -1639,7 +1683,10 @@ mod test {
             num_custom_fields,
             num_commitment_hashes,
             constant,
-            csw_prover_data,
+            sys_data,
+            last_wcert,
+            utxo_data,
+            ft_data,
             None,
         );
         println!("Failing constraint: {:?}", failing_constraint);
