@@ -29,14 +29,13 @@ RUN set -eux && export GOSU_VERSION=1.12 && export DEBIAN_FRONTEND=noninteractiv
     \
 # verify the signature
     export GNUPGHOME="$(mktemp -d)"; \
-    gpg2 --batch --keyserver hkps://keys.openpgp.org --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 || \
-    gpg2 --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 || \
-    gpg2 --batch --keyserver hkp://ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 || \
-    gpg2 --batch --keyserver pgp.mit.edu --recv-key B42F6819007F00F88E364FD4036A9C25BF357DD4 || \
-    gpg2 --batch --keyserver keyserver.pgp.com --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 || \
-    gpg2 --batch --keyserver pgp.key-server.io --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \
-    gpg2 --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu; \
-    command -v gpgconf && gpgconf --kill all || :; \
+    ( gpg2 --batch --keyserver hkps://keys.openpgp.org --keyserver-options timeout=15 --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 || \
+      gpg2 --batch --keyserver keyserver.ubuntu.com --keyserver-options timeout=15 --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 || \
+      gpg2 --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --keyserver-options timeout=15 --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 || \
+      gpg2 --batch --keyserver hkp://ipv4.pool.sks-keyservers.net --keyserver-options timeout=15 --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 || \
+      gpg2 --batch --keyserver hkp://pgp.mit.edu:80 --keyserver-options timeout=15 --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 ) \
+    && gpg2 --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
+    && command -v gpgconf && gpgconf --kill all || :; \
     rm -rf "$GNUPGHOME" /usr/local/bin/gosu.asc; \
     \
 # clean up fetch dependencies
