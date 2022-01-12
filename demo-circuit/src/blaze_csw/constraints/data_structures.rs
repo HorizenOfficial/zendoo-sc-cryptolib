@@ -27,14 +27,20 @@ use crate::{
 };
 
 #[derive(Clone)]
+/// The gadget for a withdrawal certificate of a sidechain
 pub struct WithdrawalCertificateDataGadget {
     pub ledger_id_g: FieldElementGadget,
     pub epoch_id_g: UInt32,
+    /// Merkle root hash of all BTs from the certificate 
     pub bt_list_root_g: FieldElementGadget,
     pub quality_g: UInt64,
+    /// Reference to the state of the mainchain-to-sidechain transaction history.
+    /// Declares to which extent the sidechain processed forward transactions.
     pub mcb_sc_txs_com_g: FieldElementGadget,
     pub ft_min_amount_g: UInt64,
     pub btr_min_fee_g: UInt64,
+    /// Carries the reference to the sidechain state. (Currently the reference is 
+    /// split over two field elements)
     pub custom_fields_g: Vec<FieldElementGadget>,
 }
 
@@ -208,6 +214,7 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget>
     }
 }
 
+/// The gadget for an ordinary sidechain transaction output. 
 pub struct CswUtxoOutputDataGadget {
     pub spending_pub_key_g: [Boolean; SC_PUBLIC_KEY_LENGTH * 8],
     pub amount_g: UInt64,
@@ -354,6 +361,8 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswUtxoOutp
     }
 }
 
+/// The utxo gadget used for a ceased sidechain withdrawal. 
+/// Consists of the relavant utxo data plus the corresponding secret key.
 pub struct CswUtxoInputDataGadget {
     pub output_g: CswUtxoOutputDataGadget,
     pub secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
@@ -411,9 +420,15 @@ impl AllocGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
     }
 }
 
+/// The witness data needed for a utxo withdrawal proof. 
+/// Contains the utxo and secret key, and the witnesses for proving membership
+/// to the last sidechain state accepted by the mainchain.
 pub struct CswUtxoProverDataGadget {
-    pub input_g: CswUtxoInputDataGadget, // unspent output we are trying to withdraw
-    pub mst_path_to_output_g: GingerMHTBinaryGadget, // path to output in the MST of the known state
+    /// unspent output we are trying to withdraw
+    pub input_g: CswUtxoInputDataGadget, 
+    /// Merkle path to last state accepted sidechain state, which 
+    /// is extracted from the `custom_fields` of the `WithdrawalCertificateGadget`
+    pub mst_path_to_output_g: GingerMHTBinaryGadget, 
 }
 
 impl CswUtxoProverDataGadget {
@@ -529,6 +544,7 @@ impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
         unimplemented!()
     }
 }
+
 
 pub struct CswFtOutputDataGadget {
     pub amount_g: UInt64,
@@ -690,30 +706,54 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswFtOutput
     }
 }
 
+/// The witnesses needed for a forward transaction withdrawal proof.
+/// Consists of the forward transaction and its secret key, plus additional
+/// witness data for proving the ft being member of the mainchain-to-sidechain
+/// history maintained by the mainchain (by means of the Sc_Txs_Commitments).
 pub struct CswFtProverDataGadget {
+    /// The forward transaction output
     pub ft_output_g: CswFtOutputDataGadget,
+    /// and its secret key.
     pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+    /// The Sc_Txs_Commitment at the start of the time window the withdrawal proof refers to.
+    /// (The end is provided via public inputs)
     pub mcb_sc_txs_com_start_g: FieldElementGadget,
-    pub merkle_path_to_sc_hash_g: GingerMHTBinaryGadget,
-    pub ft_tree_path_g: GingerMHTBinaryGadget,
-    pub sc_creation_commitment_g: FieldElementGadget,
-    pub scb_btr_tree_root_g: FieldElementGadget,
-    pub wcert_tree_root_g: FieldElementGadget,
+    /// The complete hash chain of the Sc_Txs_Commitments 
     pub sc_txs_com_hashes_g: Vec<FieldElementGadget>,
+    //   
+    //  Witness data for proving the ft being member of an Sc_Txs_Commitment. 
+    //
+    /// The Merkle path for the sidechain-specific root within the Sc_Txs_Commitment.
+    pub merkle_path_to_sc_hash_g: GingerMHTBinaryGadget,
+    /// The Merkle path for the ft to its sidechain-specific root within the Sc_Txs_Commitment
+    pub ft_tree_path_g: GingerMHTBinaryGadget,
+    /// for completing the Merkle Path from the ft_tree root to the sidechain-specific root:
+    /// The sidechain creation commitment.
+    pub sc_creation_commitment_g: FieldElementGadget,
+    /// for completing the Merkle Path from the ft_tree root to the sidechain-specific root:
+    /// The backward transfer request commitment.
+    pub scb_btr_tree_root_g: FieldElementGadget,
+    /// for completing the Merkle Path from the ft_tree root to the sidechain-specific root:
+    /// The withdrawal certificate commitment.
+    pub wcert_tree_root_g: FieldElementGadget,
+
 }
 
 impl CswFtProverDataGadget {
     /// Enforce that:
-    /// 1) H(self.ft_output_g) belongs to one of the sc_txs_com_hashes between self.mcb_sc_txs_com_start_g and 'mcb_sc_txs_com_end_g'
-    /// 2) H(self.ft_output_g) == 'nullifier_g'
-    /// 3) self.ft_output_g.amount_g == 'amount_g'
+    /// 1) H(self.ft_output_g) belongs to one of the Sc_Tx_Commitments between `self.mcb_sc_txs_com_start_g` and `mcb_sc_txs_com_end_g`
+    /// 2) H(self.ft_output_g) == `nullifier_g`
+    /// 3) self.ft_output_g.amount_g == `amount_g`
     pub(crate) fn conditionally_enforce_ft_withdrawal<
         CS: ConstraintSystemAbstract<FieldElement>,
     >(
         &self,
         mut cs: CS,
         sidechain_id_g: &FieldElementGadget,
+        // The maximum time window range size supported by the circuit
+        // (as number of mainchain blocks)
         max_range_size: u32,
+        // The range size needed for the current withdrawal proof
         actual_range_size: u32,
         mcb_sc_txs_com_end_g: &FieldElementGadget,
         nullifier_g: &FieldElementGadget,
@@ -780,7 +820,8 @@ impl CswFtProverDataGadget {
                 FieldElement::one(),
             )?;
 
-            // sc_txs_com_cumulative = H(sc_txs_com_cumulative, sc_txs_com_hashes[i])
+            // sc_txs_com_cumulative = H(sc_txs_com_cumulative, sc_txs_com_hashes[i]) as 
+            // long as `i < actual_range_size`.
             let temp_sc_txs_com_cumulative = FieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| format!("H(sc_txs_com_cumulative, sc_txs_com_hashes[{}])", i)),
                 &[
@@ -789,7 +830,7 @@ impl CswFtProverDataGadget {
                 ],
             )?;
 
-            // Ignore NULL hashes
+            // Ignore update of hash chain beyond the range defined by `actual_range_size`
             let should_ignore_hash =
                 Boolean::alloc(cs.ns(|| format!("should ignore hash {}", i)), || {
                     Ok(i >= actual_range_size as usize)
@@ -960,11 +1001,17 @@ impl AllocGadget<CswFtProverData, FieldElement> for CswFtProverDataGadget {
     }
 }
 
+/// The public witnesses for a ceased sidechain withdrawal (csw) proof.
 pub struct CswSysDataGadget {
+    /// The last hash of the history of Sc_Tx_Commitments
     pub mcb_sc_txs_com_end_g: FieldElementGadget,
+    /// The hash of the last accepted withdrawal certificate 
     pub sc_last_wcert_hash_g: FieldElementGadget,
+    /// amount of the csw
     pub amount_g: FieldElementGadget,
+    /// nullifier for the csw, a unique reference to its utxo/ft
     pub nullifier_g: FieldElementGadget,
+    /// receipient address of the csw
     pub receiver_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
 }
 
@@ -1040,10 +1087,15 @@ impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
     }
 }
 
+/// The full data needed by a prover
 pub struct CswProverDataGadget {
+    /// public inputs
     pub sys_data_g: CswSysDataGadget,
-    pub last_wcert_g: WithdrawalCertificateDataGadget, // the last confirmed wcert in the MC
+    /// the last accepted withdrawal certificate in full length
+    pub last_wcert_g: WithdrawalCertificateDataGadget, 
+    /// private witnesses for a utxo withdrawal proof
     pub utxo_data_g: CswUtxoProverDataGadget,
+    /// private witnesses for a ft withdrawal proof
     pub ft_data_g: CswFtProverDataGadget,
 }
 
@@ -1101,6 +1153,8 @@ impl AllocGadget<CswProverData, FieldElement> for CswProverDataGadget {
     }
 }
 
+/// A phantom struct to bundle conversion functions between twisted Edwards and
+/// short Weierstrass public keys.
 // TODO: Define it as [Boolean; SC_PUBLIC_KEY_LENGTH * 8] and replace in all other data structures
 pub struct ScPublicKeyGadget {}
 
@@ -1341,6 +1395,7 @@ impl ScPublicKeyGadget {
         Ok((pk_x_sign_bit_g, pk_y_coordinate_g))
     }
 
+    /// Proves knowledge of the secret key behind a TE public key
     pub(crate) fn _enforce_pk_ownership<CS: ConstraintSystemAbstract<FieldElement>>(
         mut cs: CS,
         te_pk_x_sign_bit_g: Boolean,

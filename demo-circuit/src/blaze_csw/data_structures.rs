@@ -15,14 +15,20 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
+/// The content of a withdrawal certificate 
 pub struct WithdrawalCertificateData {
     pub ledger_id: FieldElement,
     pub epoch_id: u32,
-    pub bt_root: FieldElement, // Merkle root hash of all BTs from the certificate (recall that MC hashes all complex proof_data params from the certificate)
+    /// Merkle root hash of all BTs from the certificate 
+    pub bt_root: FieldElement, 
     pub quality: u64,
+    /// Reference to the state of the mainchain-to-sidechain transaction history.
+    /// Declares to which extent the sidechain processed forward transactions.
     pub mcb_sc_txs_com: FieldElement,
     pub ft_min_amount: u64,
     pub btr_min_fee: u64,
+    /// Carries the reference to the sidechain state. (Currently the reference is 
+    /// split over two field elements)
     pub custom_fields: Vec<FieldElement>,
 }
 

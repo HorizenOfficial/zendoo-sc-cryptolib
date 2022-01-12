@@ -20,19 +20,25 @@ pub mod data_structures;
 
 #[derive(Clone)]
 pub struct CeasedSidechainWithdrawalCircuit {
-    // Setup params
+    /// The range size (number of MC blocks) for a ft withdrawal
     range_size: u32,
     num_custom_fields: u32,
-
-    // Witnesses
     sidechain_id: FieldElement,
+    /// The (pre-images of the) public inputs
     sys_data: CswSysData,
+    // Witnesses for the prover
+    /// The last accepted withdrawal certificate. If not present, chosen default
+    /// by the circuit.
     last_wcert: Option<WithdrawalCertificateData>,
+    /// Witnesses for a utxo withdrawal. If present the circuit runs in utxo proving
+    /// mode. If not present, ft proving mode is selected.
     utxo_data: Option<CswUtxoProverData>,
+    /// Witnesses for an ft withdrawal. 
     ft_data: Option<CswFtProverData>,
 
-    // Public inputs
+    /// public input 1: currently not used
     constant: Option<FieldElement>,
+    /// public input 2: the hash of sys_data, the actual public input of the circuit.
     csw_sys_data_hash: FieldElement,
 }
 
@@ -144,10 +150,6 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         // Decide whether to enforce utxo or ft withdrawal.
-        // NOTE: We don't need to explicitly enforce that exactly one among 'should_enforce_utxo_withdrawal_g'
-        //       and 'should_enforce_ft_withdrawal_g' must be True (doable with a XOR constraint) as:
-        //       - They cannot be both phantom as pk ownership check won't pass;
-        //       - They cannot be both NOT phantom as nullifier can't be the same for both UTXO and FT.
         let should_enforce_utxo_withdrawal_g =
             Boolean::alloc(cs.ns(|| "should_enforce_utxo_withdrawal"), || {
                 Ok(self.utxo_data.is_some())
