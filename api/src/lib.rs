@@ -2899,7 +2899,7 @@ ffi_export!(
 
                 for (idx, leaf) in leaves.iter().enumerate() {
                     let leaf_field_ptr: jlong =
-                        (Box::into_raw(Box::new(*leaf)) as i64);
+                        Box::into_raw(Box::new(*leaf)) as i64;
 
                     let leaf_element = _env
                         .new_object(field_class, "(J)V", &[JValue::Long(leaf_field_ptr)])

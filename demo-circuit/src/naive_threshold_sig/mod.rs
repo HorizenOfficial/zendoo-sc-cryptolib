@@ -335,7 +335,7 @@ mod test {
     use algebra::ProjectiveCurve;
     use cctp_primitives::{
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
-        utils::commitment_tree::ByteAccumulator,
+        utils::commitment_tree::DataAccumulator,
     };
     use primitives::{
         crh::FieldBasedHash,
@@ -369,7 +369,7 @@ mod test {
         let btr_fee: u64 = rng.gen();
         let ft_min_amount: u64 = rng.gen();
         let fees_field_elements = {
-            let fes = ByteAccumulator::init()
+            let fes = DataAccumulator::init()
                 .update(btr_fee)?
                 .update(ft_min_amount)?
                 .get_field_elements()?;
