@@ -363,10 +363,10 @@ mod test {
     use std::{convert::TryInto, ops::AddAssign};
 
     use crate::{
-        deserialize_fe_unchecked, split_field_element_at_index, CswFtOutputData, CswUtxoInputData,
-        CswUtxoOutputData, GingerMHTBinaryPath, WithdrawalCertificateData, MAX_SEGMENT_SIZE,
-        MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
-        SUPPORTED_SEGMENT_SIZE,
+        constants::constants::BoxType, deserialize_fe_unchecked, split_field_element_at_index,
+        CswFtOutputData, CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath,
+        WithdrawalCertificateData, MAX_SEGMENT_SIZE, MC_RETURN_ADDRESS_BYTES,
+        MST_MERKLE_TREE_HEIGHT, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, SUPPORTED_SEGMENT_SIZE,
     };
 
     use super::*;
@@ -439,7 +439,9 @@ mod test {
     ) -> (FieldElement, FieldElement, GingerMHTBinaryPath) {
         let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
 
-        let mst_leaf_hash = utxo_output_data.hash(None).unwrap();
+        let mst_leaf_hash = utxo_output_data
+            .hash(Some(&[FieldElement::from(BoxType::CoinBox as u8)]))
+            .unwrap();
 
         mst.append(mst_leaf_hash).unwrap();
         mst.finalize_in_place().unwrap();
@@ -1000,7 +1002,11 @@ mod test {
             let moved_mst_path = {
                 let mut mst =
                     GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
-                let mst_leaf_hash = utxo_data.input.output.hash(None).unwrap();
+                let mst_leaf_hash = utxo_data
+                    .input
+                    .output
+                    .hash(Some(&[FieldElement::from(BoxType::CoinBox as u8)]))
+                    .unwrap();
                 mst.append(FieldElement::zero()).unwrap();
                 mst.append(mst_leaf_hash).unwrap();
                 mst.finalize_in_place().unwrap();
@@ -1034,7 +1040,11 @@ mod test {
             let wrong_mst_path = {
                 let mut mst =
                     GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
-                let mst_leaf_hash = utxo_data.input.output.hash(None).unwrap();
+                let mst_leaf_hash = utxo_data
+                    .input
+                    .output
+                    .hash(Some(&[FieldElement::from(BoxType::CoinBox as u8)]))
+                    .unwrap();
                 mst.append(mst_leaf_hash).unwrap();
                 mst.finalize_in_place().unwrap();
                 mst.get_merkle_path(1).unwrap().try_into().unwrap()

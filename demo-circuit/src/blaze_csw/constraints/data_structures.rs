@@ -325,6 +325,35 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
     }
 }
 
+impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswUtxoOutputDataGadget {
+    fn enforce_hash<CS: ConstraintSystemAbstract<FieldElement>>(
+        &self,
+        mut cs: CS,
+        personalization: Option<&[FieldElementGadget]>,
+    ) -> Result<FieldElementGadget, SynthesisError> {
+        // Initialize hash_input with personalization manually as we don't have, for now, hash gadget accepting personalization
+        // (https://github.com/HorizenOfficial/ginger-lib/issues/78)
+        let personalization = personalization.unwrap();
+        debug_assert!(personalization.len() == 1);
+
+        // Add padding 1
+        let mut hash_input = [
+            personalization,
+            &[FieldElementGadget::one(cs.ns(|| "hardcode padding 1"))?],
+        ]
+        .concat();
+
+        // Complete hash_input with the actual field elements coming from the utxo
+        let mut output_hash_elements_g =
+            self.to_field_gadget_elements(cs.ns(|| "sc_utxo_output to field elements"))?;
+
+        debug_assert_eq!(output_hash_elements_g.len(), 3);
+        hash_input.append(&mut output_hash_elements_g);
+
+        FieldHashGadget::enforce_hash_constant_length(cs.ns(|| "enforce hash"), &hash_input)
+    }
+}
+
 pub struct CswUtxoInputDataGadget {
     pub output_g: CswUtxoOutputDataGadget,
     pub secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
@@ -403,23 +432,15 @@ impl CswUtxoProverDataGadget {
         should_enforce: &Boolean,
     ) -> Result<(), SynthesisError> {
         // Enfore UTXO output hash computation
-        let box_type_coin_g = FieldElementGadget::from(
-            cs.ns(|| "alloc BoxType.Coin constant"),
+        let personalization = &[FieldElementGadget::from_value(
+            cs.ns(|| "hardcode BoxType.Coin constant"),
             &FieldElement::from(BoxType::CoinBox as u8),
-        );
+        )];
 
-        let mut output_hash_elements_g = self
+        let output_hash_g = self
             .input_g
             .output_g
-            .to_field_gadget_elements(cs.ns(|| "alloc output hash elements"))?;
-
-        debug_assert_eq!(output_hash_elements_g.len(), 3);
-        output_hash_elements_g.push(box_type_coin_g);
-
-        let output_hash_g = FieldHashGadget::enforce_hash_constant_length(
-            cs.ns(|| "H(input.output)"),
-            &output_hash_elements_g,
-        )?;
+            .enforce_hash(cs.ns(|| "H(input.output)"), Some(personalization))?;
 
         // 1 Check output presence in the known state
         // mst_root = reconstruct_merkle_root_hash(outputHash, mst_path_to_output)
@@ -653,6 +674,22 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
     }
 }
 
+impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswFtOutputDataGadget {
+    fn enforce_hash<CS: ConstraintSystemAbstract<FieldElement>>(
+        &self,
+        mut cs: CS,
+        _personalization: Option<&[FieldElementGadget]>,
+    ) -> Result<FieldElementGadget, SynthesisError> {
+        let ft_output_hash_elements = self
+            .to_field_gadget_elements(cs.ns(|| "ft_output_hash to field elements"))?;
+
+        FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "enforce hash"),
+            &ft_output_hash_elements,
+        )
+    }
+}
+
 pub struct CswFtProverDataGadget {
     pub ft_output_g: CswFtOutputDataGadget,
     pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
@@ -684,14 +721,9 @@ impl CswFtProverDataGadget {
         should_enforce: &Boolean,
     ) -> Result<(), SynthesisError> {
         // Enforce FT output hash
-        let ft_output_hash_elements = self
+        let ft_output_hash_g = self
             .ft_output_g
-            .to_field_gadget_elements(cs.ns(|| "alloc ft_output_hash input elements"))?;
-
-        let ft_output_hash_g = FieldHashGadget::enforce_hash_constant_length(
-            cs.ns(|| "H(ft_input)"),
-            &ft_output_hash_elements,
-        )?;
+            .enforce_hash(cs.ns(|| "H(ft_input)"), None)?;
 
         // 1) H(self.ft_output_g) belongs to one of the sc_txs_com_hashes between self.mcb_sc_txs_com_start_g and 'mcb_sc_txs_com_end_g'
 
@@ -733,8 +765,6 @@ impl CswFtProverDataGadget {
         );
 
         assert_eq!(max_range_size as usize, self.sc_txs_com_hashes_g.len());
-        println!("Max range size: {}", max_range_size);
-        println!("Actual range size: {}", actual_range_size);
 
         for i in 0..max_range_size as usize {
             // if (sc_txs_com_tree_root == sc_txs_com_hashes[i]) { cnt++ }
@@ -764,8 +794,6 @@ impl CswFtProverDataGadget {
                 Boolean::alloc(cs.ns(|| format!("should ignore hash {}", i)), || {
                     Ok(i >= actual_range_size as usize)
                 })?;
-
-            println!("Should ignore {}: {:?}", i, should_ignore_hash);
 
             sc_txs_com_cumulative_g = FieldElementGadget::conditionally_select(
                 cs.ns(|| format!("Conditionally select hash at iteration {}", i)),

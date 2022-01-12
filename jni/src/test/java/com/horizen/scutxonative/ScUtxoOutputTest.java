@@ -12,7 +12,7 @@ import org.junit.Test;
 public class ScUtxoOutputTest {
     static long seed = 1234567890L;
     static String expectedScUtxoOutputNullifierHex =
-        "dc10caecac96d6b32b7f8f46d4e4fdd5378611b01b1273fc7bebf8ac5e198804";
+        "9ef7685672544e69591a2b5f1b09e708c40582ac1378417acc821a3c8681870d";
 
     @Test
     public void testScUtxoOutputNullifier() {

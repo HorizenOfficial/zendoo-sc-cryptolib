@@ -19,8 +19,11 @@ use cctp_primitives::{
     },
 };
 use demo_circuit::{
-    constants::*, constraints::CeasedSidechainWithdrawalCircuit, deserialize_fe_unchecked,
-    generate_circuit_keypair, read_field_element_from_buffer_with_padding, type_mapping::*,
+    constants::{constants::BoxType, *},
+    constraints::CeasedSidechainWithdrawalCircuit,
+    deserialize_fe_unchecked, generate_circuit_keypair,
+    read_field_element_from_buffer_with_padding,
+    type_mapping::*,
     CswFtOutputData, CswFtProverData, CswSysData, CswUtxoInputData, CswUtxoOutputData,
     CswUtxoProverData, NaiveTresholdSignature, WithdrawalCertificateData,
 };
@@ -4513,7 +4516,9 @@ ffi_export!(
         _env: JNIEnv,
         _utxo_out: JObject,
     ) -> jobject {
-        match parse_sc_utxo_output(&_env, _utxo_out).hash(None) {
+        match parse_sc_utxo_output(&_env, _utxo_out)
+            .hash(Some(&[FieldElement::from(BoxType::CoinBox as u8)]))
+        {
             Ok(digest) => return_field_element(&_env, digest),
             Err(e) => {
                 log!(format!("Error while computing Utxo Output hash: {:?}", e));

@@ -10,8 +10,8 @@ use cctp_primitives::{
 use primitives::{FieldBasedHash, FieldBasedMerkleTreePath, FieldHasher};
 
 use crate::{
-    constants::constants::BoxType, type_mapping::*, GingerMHTBinaryPath, MST_MERKLE_TREE_HEIGHT,
-    SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
+    type_mapping::*, GingerMHTBinaryPath, MST_MERKLE_TREE_HEIGHT, SC_CUSTOM_HASH_LENGTH,
+    SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
 };
 
 #[derive(Clone, Debug)]
@@ -104,11 +104,10 @@ impl FieldHasher<FieldElement, FieldHash> for CswUtxoOutputData {
                 e
             )
         })?;
-        let mut h = FieldHash::init_constant_length(self_fes.len() + 1, personalization);
+        let mut h = FieldHash::init_constant_length(self_fes.len(), personalization);
         self_fes.into_iter().for_each(|fe| {
             h.update(fe);
         });
-        h.update(FieldElement::from(BoxType::CoinBox as u8));
         h.finalize()
     }
 }
