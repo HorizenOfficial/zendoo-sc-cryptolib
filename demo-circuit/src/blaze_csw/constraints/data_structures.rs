@@ -18,8 +18,8 @@ use r1cs_std::{
 };
 
 use crate::{
-    constants::constants::BoxType, CswFtOutputData, CswFtProverData, CswProverData, CswSysData,
-    CswUtxoInputData, CswUtxoOutputData, CswUtxoProverData, ECPointSimulationGadget,
+    constants::personalizations::BoxType, CswFtOutputData, CswFtProverData, CswProverData,
+    CswSysData, CswUtxoInputData, CswUtxoOutputData, CswUtxoProverData, ECPointSimulationGadget,
     FieldElementGadget, FieldHashGadget, GingerMHTBinaryGadget, SimulatedCurveParameters,
     SimulatedFieldElement, SimulatedSWGroup, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
     SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, SIMULATED_FIELD_BYTE_SIZE,
@@ -680,8 +680,8 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswFtOutput
         mut cs: CS,
         _personalization: Option<&[FieldElementGadget]>,
     ) -> Result<FieldElementGadget, SynthesisError> {
-        let ft_output_hash_elements = self
-            .to_field_gadget_elements(cs.ns(|| "ft_output_hash to field elements"))?;
+        let ft_output_hash_elements =
+            self.to_field_gadget_elements(cs.ns(|| "ft_output_hash to field elements"))?;
 
         FieldHashGadget::enforce_hash_constant_length(
             cs.ns(|| "enforce hash"),
@@ -1215,14 +1215,14 @@ impl ScPublicKeyGadget {
             let minus_two_over_b =
                 NonNativeFieldGadget::<SimulatedFieldElement, FieldElement>::from_value(
                     cs.ns(|| "hardcode -2_over_B"),
-                    &(-b_inv * &SimulatedFieldElement::from(2u8)), //TODO: This can be precomputed
+                    &(-b_inv * SimulatedFieldElement::from(2u8)), //TODO: This can be precomputed
                 );
 
             sw_pk_x_coordinate_g
                 .add_constant(cs.ns(|| "x_sw + 1_over_B"), &b_inv)?
                 .sub_constant(
                     cs.ns(|| "x_sw + 1_over_B - A_over_3B"),
-                    &(a_over_three * &b_inv),
+                    &(a_over_three * b_inv),
                 )? //TODO: This can be precomputed
                 .mul_equals(
                     cs.ns(|| "(x_sw + 1_over_B - A_over_3B) * (y_ed - 1) = -2_over_B"),

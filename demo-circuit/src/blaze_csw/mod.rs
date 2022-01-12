@@ -139,7 +139,7 @@ pub fn convert_te_pk_to_sw_pk(
     // First, let's reconstruct the TE point corresponding to te_pk_bytes
 
     // Fetch the sign of the x coordinate
-    let te_pk_x_sign = !((te_pk_bytes[SC_PUBLIC_KEY_LENGTH - 1] & (1 << 7)) == 0u8);
+    let te_pk_x_sign = (te_pk_bytes[SC_PUBLIC_KEY_LENGTH - 1] & (1 << 7)) != 0u8;
 
     // Mask away the sign byte
     te_pk_bytes[SC_PUBLIC_KEY_LENGTH - 1] &= 0x7F;
@@ -151,7 +151,7 @@ pub fn convert_te_pk_to_sw_pk(
     let te_pk_x = {
         let numerator = te_pk_y.square() - SimulatedFieldElement::one();
         let denominator = (te_pk_y.square() * SimulatedCurveParameters::COEFF_D)
-            - &<SimulatedCurveParameters as TEModelParameters>::COEFF_A;
+            - <SimulatedCurveParameters as TEModelParameters>::COEFF_A;
         let x2 = denominator.inverse().map(|denom| denom * numerator);
         x2.and_then(|x2| x2.sqrt()).map(|x| {
             let negx = -x;
@@ -216,7 +216,7 @@ mod test {
 
             // Also this way of restoring (used inside CSW circuit) should work
             let pow = FieldElement::one().double().pow(&[(i * 8) as u64]);
-            let restored_fe = fe_1 + &(pow * &fe_2);
+            let restored_fe = fe_1 + (pow * fe_2);
             assert_eq!(fe, restored_fe);
         }
     }

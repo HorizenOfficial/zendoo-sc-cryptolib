@@ -6,7 +6,7 @@ use primitives::{
 
 use crate::type_mapping::*;
 
-pub mod constants;
+pub mod personalizations;
 
 pub struct NaiveThresholdSigParams {
     pub null_sig: SchnorrSig,
@@ -192,7 +192,7 @@ mod test {
                 .hash_length(32)
                 .personal(personalization)
                 .to_state()
-                .update(constants::GH_FIRST_BLOCK)
+                .update(personalizations::GH_FIRST_BLOCK)
                 .update(input)
                 .finalize()
         };
@@ -269,7 +269,7 @@ mod test {
     #[test]
     fn test_pk_null_gen() {
         let tag = b"Strontium Sr 90";
-        let personalization = constants::CERT_NULL_PK_PERSONALIZATION;
+        let personalization = personalizations::CERT_NULL_PK_PERSONALIZATION;
         let htc_out = hash_to_curve::<FieldElement, G2>(tag, personalization)
             .unwrap()
             .into_projective();
@@ -281,7 +281,7 @@ mod test {
     #[serial]
     #[test]
     fn test_vrf_group_hash_gen() {
-        let personalization = constants::VRF_GROUP_HASH_GENERATORS_PERSONALIZATION;
+        let personalization = personalizations::VRF_GROUP_HASH_GENERATORS_PERSONALIZATION;
 
         //Gen1
         let tag = b"Magnesium Mg 12";

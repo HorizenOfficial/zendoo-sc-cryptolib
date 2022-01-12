@@ -511,8 +511,8 @@ mod test {
             .update(end_cumulative_sc_tx_comm_tree_root)
             .update(fees_field_elements);
 
-        if custom_fields_hash.is_some() {
-            h.update(custom_fields_hash.unwrap());
+        if let Some(custom_fields_hash) = custom_fields_hash {
+            h.update(custom_fields_hash);
         }
 
         let message = h.finalize().unwrap();
@@ -547,7 +547,7 @@ mod test {
         //Generate b
         let t_field = FieldElement::from_repr(FieldBigInteger::from(threshold as u64));
         let valid_field = FieldElement::from_repr(FieldBigInteger::from(valid_sigs as u64));
-        let b_field = valid_field - &t_field;
+        let b_field = valid_field - t_field;
 
         //Return concrete circuit instance
         let mut c = NaiveTresholdSignature::new(
@@ -669,7 +669,7 @@ mod test {
         let n = 6;
         let num_custom_fields = rng.gen_range(1..10);
 
-        for i in vec![0, num_custom_fields] {
+        for &i in &[0, num_custom_fields] {
             println!("Test success case with v > t");
             let v = rng.gen_range(1..n);
             let t = rng.gen_range(0..v);

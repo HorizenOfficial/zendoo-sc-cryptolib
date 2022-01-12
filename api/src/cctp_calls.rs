@@ -145,8 +145,7 @@ pub fn compute_msg_to_sign(
     };
 
     // Compute custom_fields_hash if they are present
-    let custom_fields_hash = if custom_fields.is_some() {
-        let custom_fields = custom_fields.unwrap();
+    let custom_fields_hash = if let Some(custom_fields) = custom_fields {
         let mut h = FieldHash::init_constant_length(custom_fields.len(), None);
         custom_fields.into_iter().for_each(|custom_field| {
             h.update(custom_field);
@@ -169,8 +168,8 @@ pub fn compute_msg_to_sign(
         .update(*end_cumulative_sc_tx_comm_tree_root)
         .update(fees_field_element);
 
-    if custom_fields_hash.is_some() {
-        h.update(custom_fields_hash.unwrap());
+    if let Some(custom_fields_hash) = custom_fields_hash {
+        h.update(custom_fields_hash);
     }
 
     let msg = h
@@ -328,7 +327,7 @@ pub fn verify_naive_threshold_sig_proof(
         epoch_number,
         quality: valid_sigs,
         bt_list: bt_list_opt,
-        custom_fields: if custom_fields.len() == 0 {
+        custom_fields: if custom_fields.is_empty() {
             None
         } else {
             Some(custom_fields.iter().collect())
@@ -351,7 +350,7 @@ pub fn verify_naive_threshold_sig_proof(
         .map_err(|e| format!("Unable to read proving system type from proof: {:?}", e))?;
 
     if vk_ps_type != proof_ps_type {
-        Err(ProvingSystemError::ProvingSystemMismatch)?
+        return Err(ProvingSystemError::ProvingSystemMismatch.into());
     }
 
     // Deserialize proof and vk
@@ -486,7 +485,7 @@ pub fn verify_csw_proof(
         .map_err(|e| format!("Unable to read proving system type from proof: {:?}", e))?;
 
     if vk_ps_type != proof_ps_type {
-        Err(ProvingSystemError::ProvingSystemMismatch)?
+        return Err(ProvingSystemError::ProvingSystemMismatch.into());
     }
 
     // Deserialize proof and vk
@@ -731,13 +730,11 @@ mod test {
         finalize_ginger_mht_in_place(&mut mht).unwrap();
         let mht_root = get_ginger_mht_root(&mht).expect("Tree must've been finalized");
 
-        for i in 0..leaves_num {
+        for (i, leaf) in mht_leaves.iter().enumerate().take(leaves_num) {
             //Create and verify merkle paths for each leaf
             let path = get_ginger_mht_path(&mht, i as u64).unwrap();
             assert!(verify_ginger_merkle_path_without_length_check(
-                &path,
-                &mht_leaves[i],
-                &mht_root
+                &path, leaf, &mht_root
             ));
 
             // Check leaf index is the correct one

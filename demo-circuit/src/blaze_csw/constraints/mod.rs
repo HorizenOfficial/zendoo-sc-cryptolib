@@ -163,17 +163,14 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         let (csw_data_g, actual_range_size) = {
             let mut csw_data = CswProverData {
                 sys_data: self.sys_data.clone(),
-                last_wcert: self.last_wcert.clone().unwrap_or(
-                    WithdrawalCertificateData::get_default(self.num_custom_fields),
-                ),
-                utxo_data: self
-                    .utxo_data
-                    .clone()
-                    .unwrap_or(CswUtxoProverData::default()),
+                last_wcert: self.last_wcert.clone().unwrap_or_else(|| {
+                    WithdrawalCertificateData::get_default(self.num_custom_fields)
+                }),
+                utxo_data: self.utxo_data.clone().unwrap_or_default(),
                 ft_data: self
                     .ft_data
                     .clone()
-                    .unwrap_or(CswFtProverData::get_default(self.range_size)),
+                    .unwrap_or_else(|| CswFtProverData::get_default(self.range_size)),
             };
 
             // Get the actual number of sc_txs_com_hashes
@@ -303,7 +300,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             amount_and_receiver_bits_g.extend_from_slice(&receiver_g_bits[..]);
 
             assert!(
-                FieldElement::size_in_bits() - 1 >= amount_and_receiver_bits_g.len(),
+                FieldElement::size_in_bits() > amount_and_receiver_bits_g.len(),
                 "Field size is not enough to pack amount and receiver bits"
             );
 
@@ -363,9 +360,9 @@ mod test {
     use std::{convert::TryInto, ops::AddAssign};
 
     use crate::{
-        constants::constants::BoxType, deserialize_fe_unchecked, split_field_element_at_index,
-        CswFtOutputData, CswUtxoInputData, CswUtxoOutputData, GingerMHTBinaryPath,
-        WithdrawalCertificateData, MAX_SEGMENT_SIZE, MC_RETURN_ADDRESS_BYTES,
+        constants::personalizations::BoxType, deserialize_fe_unchecked,
+        split_field_element_at_index, CswFtOutputData, CswUtxoInputData, CswUtxoOutputData,
+        GingerMHTBinaryPath, WithdrawalCertificateData, MAX_SEGMENT_SIZE, MC_RETURN_ADDRESS_BYTES,
         MST_MERKLE_TREE_HEIGHT, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, SUPPORTED_SEGMENT_SIZE,
     };
 
@@ -569,7 +566,7 @@ mod test {
     fn generate_ft_tree_data(
         ft_output_data: CswFtOutputData,
     ) -> (FieldElement, GingerMHTBinaryPath, FieldElement) {
-        let mut receiver_pub_key = ft_output_data.receiver_pub_key.clone();
+        let mut receiver_pub_key = ft_output_data.receiver_pub_key;
         receiver_pub_key.reverse();
 
         let ft_input_hash = hash_fwt(
@@ -696,13 +693,12 @@ mod test {
         Option<CswUtxoProverData>,
         Option<CswFtProverData>,
     ) {
-        let (public_key, secret_key) = {
-            if secret_key.is_none() || public_key.is_none() {
-                get_test_key_pair()
+        let (public_key, secret_key) =
+            if let (Some(public_key), Some(secret_key)) = (public_key, secret_key) {
+                (public_key, secret_key)
             } else {
-                (public_key.unwrap(), secret_key.unwrap())
-            }
-        };
+                get_test_key_pair()
+            };
 
         match csw_type {
             CswType::UTXO => generate_test_utxo_csw_data(num_custom_fields, secret_key, public_key),
@@ -751,38 +747,35 @@ mod test {
                 num_custom_fields,
                 constant.is_some(),
             );
-            let params = CoboundaryMarlin::index(&ck_g1, setup_circuit.clone()).unwrap();
+            let params = CoboundaryMarlin::index(&ck_g1, setup_circuit).unwrap();
             let rng = &mut thread_rng();
 
             let proof =
-                CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit, true, Some(rng))
+                CoboundaryMarlin::prove(&params.0, &ck_g1, circuit, true, Some(rng)).unwrap();
+
+            let current_public_inputs = if let Some(public_inputs) = public_inputs {
+                public_inputs
+            } else {
+                let mut tmp_public_inputs = Vec::new();
+
+                if let Some(constant) = constant {
+                    tmp_public_inputs.push(constant);
+                }
+
+                let csw_sys_data_hash =
+                    CeasedSidechainWithdrawalCircuit::compute_csw_sys_data_hash(
+                        &sys_data,
+                        sidechain_id,
+                    )
                     .unwrap();
 
-            let current_public_inputs = {
-                if public_inputs.is_none() {
-                    let mut tmp_public_inputs = Vec::new();
-
-                    if constant.is_some() {
-                        tmp_public_inputs.push(constant.unwrap());
-                    }
-
-                    let csw_sys_data_hash =
-                        CeasedSidechainWithdrawalCircuit::compute_csw_sys_data_hash(
-                            &sys_data,
-                            sidechain_id,
-                        )
-                        .unwrap();
-
-                    tmp_public_inputs.push(csw_sys_data_hash);
-                    tmp_public_inputs
-                } else {
-                    public_inputs.unwrap()
-                }
+                tmp_public_inputs.push(csw_sys_data_hash);
+                tmp_public_inputs
             };
 
             // Check that the proof gets correctly verified
             assert!(CoboundaryMarlin::verify(
-                &params.1.clone(),
+                &params.1,
                 &ck_g1,
                 current_public_inputs.as_slice(),
                 &proof
@@ -1505,7 +1498,7 @@ mod test {
         }
 
         {
-            let mut ft_data = ft_data.clone().unwrap();
+            let mut ft_data = ft_data.unwrap();
 
             // Try to pass a path to the wrong leaf
             let wrong_ft_path = {
@@ -1600,7 +1593,7 @@ mod test {
         }
 
         {
-            let mut ft_data = ft_data.clone();
+            let mut ft_data = ft_data;
             // Try to pass a path to the wrong leaf
             let wrong_sc_path = {
                 let mut sc_tree = GingerMHT::init(CMT_MT_HEIGHT, 1 << CMT_MT_HEIGHT).unwrap();

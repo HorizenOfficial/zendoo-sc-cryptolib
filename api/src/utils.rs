@@ -38,7 +38,7 @@ pub(crate) fn serialize_from_raw_pointer<T: CanonicalSerialize>(
     compressed: Option<bool>,
 ) -> Vec<u8> {
     serialize_to_buffer(read_raw_pointer(&_env, to_write), compressed)
-        .expect(format!("unable to write {} to buffer", type_name::<T>()).as_str())
+        .unwrap_or_else(|_| panic!("unable to write {} to buffer", type_name::<T>()))
 }
 
 pub(crate) fn return_jobject<'a, T: Sized>(
@@ -47,7 +47,7 @@ pub(crate) fn return_jobject<'a, T: Sized>(
     class_path: &str,
 ) -> JObject<'a> {
     //Return field element
-    let obj_ptr: jlong = jlong::from(Box::into_raw(Box::new(obj)) as i64);
+    let obj_ptr: jlong = Box::into_raw(Box::new(obj)) as i64;
 
     let obj_class = _env
         .find_class(class_path)
@@ -142,7 +142,7 @@ pub(crate) fn get_byte_array(_env: &JNIEnv, java_byte_array: &jbyteArray, buffer
 
 fn parse_jbyte_array_from_jobject(_env: &JNIEnv, obj: JObject, name: &str) -> jbyteArray {
     _env.get_field(obj, name, "[B")
-        .expect(format!("Should be able to read {} field", name).as_str())
+        .unwrap_or_else(|_| panic!("Should be able to read {} field", name))
         .l()
         .unwrap()
         .cast()
@@ -179,14 +179,14 @@ pub(crate) fn parse_fixed_size_bits_from_jbytearray_in_jobject<const N: usize>(
 
 pub(crate) fn parse_long_from_jobject(_env: &JNIEnv, obj: JObject, name: &str) -> u64 {
     _env.get_field(obj, name, "J")
-        .expect(format!("Should be able to read {} field", name).as_str())
+        .unwrap_or_else(|_| panic!("Should be able to read {} field", name))
         .j()
         .unwrap() as u64
 }
 
 pub(crate) fn parse_int_from_jobject(_env: &JNIEnv, obj: JObject, name: &str) -> u32 {
     _env.get_field(obj, name, "I")
-        .expect(format!("Should be able to read {} field", name).as_str())
+        .unwrap_or_else(|_| panic!("Should be able to read {} field", name))
         .i()
         .unwrap() as u32
 }
@@ -198,7 +198,7 @@ pub(crate) fn parse_field_element_from_jobject<'a>(
 ) -> &'a FieldElement {
     let field_object = _env
         .get_field(obj, name, "Lcom/horizen/librustsidechains/FieldElement;")
-        .expect(format!("Should be able to get {} FieldElement", name).as_str())
+        .unwrap_or_else(|_| panic!("Should be able to get {} FieldElement", name))
         .l()
         .unwrap();
 
@@ -235,7 +235,7 @@ pub(crate) fn parse_joption_from_jobject<'a>(
     // Parse Optional object
     let opt_object = _env
         .get_field(obj, opt_name, "Ljava/util/Optional;")
-        .expect(format!("Should be able to get {} Optional", opt_name).as_str())
+        .unwrap_or_else(|_| panic!("Should be able to get {} Optional", opt_name))
         .l()
         .unwrap();
 
@@ -271,7 +271,7 @@ pub(crate) fn parse_jobject_array_from_jobject(
     list_obj_name: &str,
 ) -> jobjectArray {
     _env.get_field(obj, field_name, format!("[L{};", list_obj_name).as_str())
-        .expect(format!("Should be able to get {}", field_name).as_str())
+        .unwrap_or_else(|_| panic!("Should be able to get {}", field_name))
         .l()
         .unwrap()
         .cast()
