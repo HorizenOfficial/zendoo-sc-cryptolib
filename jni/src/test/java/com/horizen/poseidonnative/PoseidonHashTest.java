@@ -27,11 +27,11 @@ public class PoseidonHashTest {
     }
 
     @Test
-    public void testFieldElementReset() throws Exception {
+    public void testReset() throws Exception {
 
         Random r = new Random(seed);
         FieldElement expectedHash = FieldElement.deserialize(TestUtils.fromHexString(expectedHashForReset));
-        PoseidonHash h1 = PoseidonHash.getInstanceConstantLength(2);
+        PoseidonHash h = PoseidonHash.getInstanceConstantLength(2);
 
         // Generate random FieldElement
         FieldElement input1 = FieldElement.createRandom(r);
@@ -39,13 +39,15 @@ public class PoseidonHashTest {
 
         for (int i = 0; i < 100; i++) {
             // Update acc
-            h1.update(input1);
-            h1.update(input2);
-            FieldElement hash = h1.finalizeHash();
-            h1.reset();
+            h.update(input1);
+            h.update(input2);
+            FieldElement hash = h.finalizeHash();
+            h.reset();
 
             assertEquals("hash must be equal to expected hash", hash, expectedHash);
+            hash.close();
         }
+        h.close();
     }
 
     @Test

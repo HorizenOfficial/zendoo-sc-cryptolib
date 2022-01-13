@@ -1,3 +1,15 @@
+#![allow(
+    clippy::upper_case_acronyms,
+    clippy::too_many_arguments,
+    clippy::type_complexity,
+    clippy::try_err,
+    clippy::map_collect_result_unit,
+    clippy::not_unsafe_ptr_arg_deref,
+    clippy::suspicious_op_assign_impl,
+    clippy::suspicious_arithmetic_impl,
+    clippy::assertions_on_constants
+)]
+
 extern crate jni;
 
 use algebra::{serialize::*, SemanticallyValid, ToBits};
@@ -19,8 +31,11 @@ use cctp_primitives::{
     },
 };
 use demo_circuit::{
-    constants::*, constraints::CeasedSidechainWithdrawalCircuit, deserialize_fe_unchecked,
-    generate_circuit_keypair, read_field_element_from_buffer_with_padding, type_mapping::*,
+    constants::{personalizations::BoxType, *},
+    constraints::CeasedSidechainWithdrawalCircuit,
+    deserialize_fe_unchecked, generate_circuit_keypair,
+    read_field_element_from_buffer_with_padding,
+    type_mapping::*,
     CswFtOutputData, CswFtProverData, CswSysData, CswUtxoInputData, CswUtxoOutputData,
     CswUtxoProverData, NaiveTresholdSignature, WithdrawalCertificateData,
 };
@@ -42,6 +57,7 @@ use cctp_calls::*;
 mod exception;
 use exception::*;
 
+#[macro_use]
 mod utils;
 use utils::*;
 
@@ -124,7 +140,10 @@ ffi_export!(
 
         match read_field_element_from_buffer_with_padding(fe_bytes.as_slice()) {
             Ok(fe) => return_field_element(&_env, fe),
-            Err(_) => std::ptr::null::<jobject>() as jobject,
+            Err(e) => {
+                log!(format!("Unable to deserialize FieldElement: {:?}", e));
+                std::ptr::null::<jobject>() as jobject
+            }
         }
     }
 );
@@ -567,7 +586,10 @@ ffi_export!(
         //Sign message and return opaque pointer to sig
         let signature = match schnorr_sign(message, secret_key, public_key) {
             Ok(sig) => sig,
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!("Unable to sign message: {:?}", e));
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         };
 
         return_jobject(
@@ -660,7 +682,10 @@ ffi_export!(
                     JNI_FALSE
                 }
             }
-            Err(_) => JNI_FALSE, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!("Signature verification error: {:?}", e));
+                JNI_FALSE
+            } //CRYPTO_ERROR
         }
     }
 );
@@ -680,13 +705,14 @@ ffi_export!(
 
         // Array can be empty
         for i in 0..personalization_len {
-            let field_obj = _env.get_object_array_element(_personalization, i).expect(
-                format!(
-                    "Should be able to read elem {} of the personalization array",
-                    i
-                )
-                .as_str(),
-            );
+            let field_obj = _env
+                .get_object_array_element(_personalization, i)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Should be able to read elem {} of the personalization array",
+                        i
+                    )
+                });
 
             let field = {
                 let f = _env
@@ -729,13 +755,14 @@ ffi_export!(
 
         // Array can be empty
         for i in 0..personalization_len {
-            let field_obj = _env.get_object_array_element(_personalization, i).expect(
-                format!(
-                    "Should be able to read elem {} of the personalization array",
-                    i
-                )
-                .as_str(),
-            );
+            let field_obj = _env
+                .get_object_array_element(_personalization, i)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Should be able to read elem {} of the personalization array",
+                        i
+                    )
+                });
 
             let field = {
                 let f = _env
@@ -808,7 +835,10 @@ ffi_export!(
         //Get digest
         let fe = match finalize_poseidon_hash(digest) {
             Ok(fe) => fe,
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!("Unable to compute hash: {:?}", e));
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         };
 
         return_field_element(&_env, fe)
@@ -838,13 +868,14 @@ ffi_export!(
 
         // Array can be empty
         for i in 0..personalization_len {
-            let field_obj = _env.get_object_array_element(_personalization, i).expect(
-                format!(
-                    "Should be able to read elem {} of the personalization array",
-                    i
-                )
-                .as_str(),
-            );
+            let field_obj = _env
+                .get_object_array_element(_personalization, i)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Should be able to read elem {} of the personalization array",
+                        i
+                    )
+                });
 
             let field = {
                 let f = _env
@@ -1132,7 +1163,13 @@ ffi_export!(
                 "com/horizen/merkletreenative/InMemoryAppendOnlyMerkleTree",
             )
             .into_inner(),
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!(
+                    "Unable to initialize InMemoryAppendOnlyMerkleTree: {:?}",
+                    e
+                ));
+                std::ptr::null::<jobject>() as jobject
+            } //CRYPTO_ERROR
         }
     }
 );
@@ -1161,7 +1198,13 @@ ffi_export!(
 
         match append_leaf_to_ginger_mht(tree, leaf) {
             Ok(_) => JNI_TRUE,
-            Err(_) => JNI_FALSE,
+            Err(e) => {
+                log!(format!(
+                    "Unable to append leaf to InMemoryAppendOnlyMerkleTree: {:?}",
+                    e
+                ));
+                JNI_FALSE
+            }
         }
     }
 );
@@ -1186,7 +1229,13 @@ ffi_export!(
                 "com/horizen/merkletreenative/InMemoryAppendOnlyMerkleTree",
             )
             .into_inner(),
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!(
+                    "Unable to finalize InMemoryAppendOnlyMerkleTree: {:?}",
+                    e
+                ));
+                std::ptr::null::<jobject>() as jobject
+            } //CRYPTO_ERROR
         }
     }
 );
@@ -1206,7 +1255,13 @@ ffi_export!(
 
         match finalize_ginger_mht_in_place(tree) {
             Ok(_) => JNI_TRUE,
-            Err(_) => JNI_FALSE,
+            Err(e) => {
+                log!(format!(
+                    "Unable to initialize InMemoryAppendOnlyMerkleTree in place: {:?}",
+                    e
+                ));
+                JNI_FALSE
+            }
         }
     }
 );
@@ -1226,7 +1281,10 @@ ffi_export!(
 
         match get_ginger_mht_root(tree) {
             Some(root) => return_field_element(&_env, root),
-            None => std::ptr::null::<jobject>() as jobject,
+            None => {
+                log!("Cannot return root. Have you finalized the tree ?");
+                std::ptr::null::<jobject>() as jobject
+            }
         }
     }
 );
@@ -1249,7 +1307,10 @@ ffi_export!(
             Some(path) => {
                 return_jobject(&_env, path, "com/horizen/merkletreenative/MerklePath").into_inner()
             }
-            None => std::ptr::null::<jobject>() as jobject,
+            None => {
+                log!("Cannot get path. Have you finalized the tree ?");
+                std::ptr::null::<jobject>() as jobject
+            }
         }
     }
 );
@@ -1264,25 +1325,22 @@ ffi_export!(
                 .get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
                 .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-            read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
-        };
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
+    };
 
-        reset_ginger_mht(tree);
-    }
-);
+    reset_ginger_mht(tree);
+});
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeFreeInMemoryOptimizedMerkleTree(
-        _env: JNIEnv,
-        _class: JClass,
-        _tree: *mut GingerMHT,
-    ) {
-        if _tree.is_null() {
-            return;
-        }
-        drop(unsafe { Box::from_raw(_tree) });
-    }
-);
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeFreeInMemoryAppendOnlyMerkleTree(
+    _env: JNIEnv,
+    _class: JClass,
+    _tree: *mut GingerMHT,
+)
+{
+    if _tree.is_null()  { return }
+    drop(unsafe { Box::from_raw(_tree) });
+});
 
 //VRF utility functions
 
@@ -1439,7 +1497,10 @@ ffi_export!(
                 return_jobject(&_env, proof, "com/horizen/vrfnative/VRFProof"),
                 return_jobject(&_env, vrf_out, "com/horizen/librustsidechains/FieldElement"),
             ),
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!("Unable to create VRF Proof: {:?}", e));
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         };
 
         //Create and return VRFProveResult instance
@@ -1532,7 +1593,10 @@ ffi_export!(
         //Verify vrf proof and get vrf output
         let vrf_out = match vrf_proof_to_hash(message, public_key, proof) {
             Ok(result) => result,
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(format!("Unable to get VRF output from VRF proof: {:?}", e));
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         };
 
         //Return vrf output
@@ -1563,7 +1627,7 @@ ffi_export!(
         for i in 0..pks_list_size {
             let pk_object = _env
                 .get_object_array_element(_schnorr_pks_list, i)
-                .expect(format!("Should be able to get elem {} of schnorr_pks_list", i).as_str());
+                .unwrap_or_else(|_| panic!("Should be able to get elem {} of schnorr_pks_list", i));
 
             let pk = _env
                 .get_field(pk_object, "publicKeyPointer", "J")
@@ -1581,7 +1645,10 @@ ffi_export!(
         //Compute constant
         match compute_pks_threshold_hash(pks.as_slice(), threshold) {
             Ok(constant) => return_field_element(&_env, constant),
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(e);
+                std::ptr::null::<jobject>() as jobject
+            } //CRYPTO_ERROR
         }
     }
 );
@@ -1613,7 +1680,9 @@ ffi_export!(
             for i in 0..bt_list_size {
                 let o = _env
                     .get_object_array_element(_bt_list, i)
-                    .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+                    .unwrap_or_else(|_| {
+                        panic!("Should be able to get elem {} of bt_list array", i)
+                    });
 
                 let p = _env
                     .call_method(o, "getPublicKeyHash", "()[B", &[])
@@ -1679,13 +1748,12 @@ ffi_export!(
             for i in 0..custom_fields_list_size {
                 let field_obj = _env
                     .get_object_array_element(_custom_fields_list, i)
-                    .expect(
-                        format!(
+                    .unwrap_or_else(|_| {
+                        panic!(
                             "Should be able to read elem {} of the personalization array",
                             i
                         )
-                        .as_str(),
-                    );
+                    });
 
                 let field = {
                     let f = _env
@@ -1711,7 +1779,10 @@ ffi_export!(
             custom_fields_list,
         ) {
             Ok((_, msg)) => msg,
-            Err(_) => return std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
+            Err(e) => {
+                log!(e);
+                return std::ptr::null::<jobject>() as jobject;
+            } //CRYPTO_ERROR
         };
 
         //Return msg
@@ -1741,20 +1812,18 @@ ffi_export!(
         _env: JNIEnv,
         _class: JClass,
         _proving_system: JObject,
-        _max_segment_size: jint,
-        _supported_segment_size: jint,
+        _segment_size: jint,
     ) -> jboolean {
         // Get proving system type
         let proving_system = get_proving_system_type(&_env, _proving_system);
 
         // Generate DLOG keypair
-        match init_dlog_keys(
-            proving_system,
-            _max_segment_size as usize,
-            _supported_segment_size as usize,
-        ) {
+        match init_dlog_keys(proving_system, _segment_size as usize) {
             Ok(_) => JNI_TRUE,
-            Err(_) => JNI_FALSE,
+            Err(e) => {
+                log!(format!("DLOG keys initialization failed: {:?}", e));
+                JNI_FALSE
+            }
         }
     }
 );
@@ -1776,17 +1845,18 @@ ffi_export!(
             .expect("Should be able to read jstring as Rust String");
 
         // Deserialize vk
-        let vk: ZendooVerifierKey = match read_from_file(
-            Path::new(vk_path.to_str().unwrap()),
-            Some(false),
-            Some(true),
-        ) {
-            Ok(vk) => vk,
-            Err(e) => {
-                println!("{:?}", e);
-                return JNI_FALSE;
-            }
-        };
+        let vk_path = vk_path.to_str().unwrap();
+        let vk: ZendooVerifierKey =
+            match read_from_file(Path::new(vk_path), Some(false), Some(true)) {
+                Ok(vk) => vk,
+                Err(e) => {
+                    log!(format!(
+                        "Unable to read vk at {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+                        vk_path, e, false, true
+                    ));
+                    return JNI_FALSE;
+                }
+            };
 
         // Read zk value
         let zk = _zk == JNI_TRUE;
@@ -1819,6 +1889,7 @@ ffi_export!(
         _proving_system: JObject,
         _max_pks: jlong,
         _num_custom_fields: jint,
+        _segment_size: JObject,
         _proving_key_path: JString,
         _verification_key_path: JString,
         _zk: jboolean,
@@ -1828,6 +1899,16 @@ ffi_export!(
     ) -> jboolean {
         // Get proving system type
         let proving_system = get_proving_system_type(&_env, _proving_system);
+
+        // Get supported degree
+        let supported_degree =
+            cast_joption_to_rust_option(&_env, _segment_size).map(|integer_object| {
+                _env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
 
         // Read paths
         let proving_key_path = _env
@@ -1850,6 +1931,7 @@ ffi_export!(
         match generate_circuit_keypair(
             circ,
             proving_system,
+            supported_degree,
             Path::new(proving_key_path.to_str().unwrap()),
             Path::new(verification_key_path.to_str().unwrap()),
             _max_proof_plus_vk_size as usize,
@@ -1859,7 +1941,7 @@ ffi_export!(
         ) {
             Ok(_) => JNI_TRUE,
             Err(e) => {
-                println!("{:?}", e);
+                log!(format!("(Pk, Vk) generation failed: {:?}", e));
                 JNI_FALSE
             }
         }
@@ -1868,9 +1950,9 @@ ffi_export!(
 
 fn get_proving_system_type_as_jint(_env: &JNIEnv, ps: ProvingSystem) -> jint {
     match ps {
-        ProvingSystem::Undefined => 0i32 as jint,
-        ProvingSystem::Darlin => 1i32 as jint,
-        ProvingSystem::CoboundaryMarlin => 2i32 as jint,
+        ProvingSystem::Undefined => 0_i32,
+        ProvingSystem::Darlin => 1_i32,
+        ProvingSystem::CoboundaryMarlin => 2_i32,
     }
 }
 
@@ -1881,17 +1963,20 @@ ffi_export!(
         _proving_key_path: JString,
     ) -> jint {
         // Read paths
-        let proving_key_path = _env
+        let proving_key_path_j = _env
             .get_string(_proving_key_path)
             .expect("Should be able to read jstring as Rust String");
 
-        match read_from_file::<ProvingSystem>(
-            Path::new(proving_key_path.to_str().unwrap()),
-            None,
-            None,
-        ) {
+        let proving_key_path = proving_key_path_j.to_str().unwrap();
+        match read_from_file::<ProvingSystem>(Path::new(proving_key_path), None, None) {
             Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
-            Err(_) => -1i32 as jint,
+            Err(e) => {
+                log!(format!(
+                    "Unable to read proving system type from pk at {:?}: {:?}",
+                    proving_key_path, e
+                ));
+                1_i32
+            }
         }
     }
 );
@@ -1903,17 +1988,20 @@ ffi_export!(
         _verifier_key_path: JString,
     ) -> jint {
         // Read paths
-        let verifier_key_path = _env
+        let verifier_key_path_j = _env
             .get_string(_verifier_key_path)
             .expect("Should be able to read jstring as Rust String");
 
-        match read_from_file::<ProvingSystem>(
-            Path::new(verifier_key_path.to_str().unwrap()),
-            None,
-            None,
-        ) {
+        let verifier_key_path = verifier_key_path_j.to_str().unwrap();
+        match read_from_file::<ProvingSystem>(Path::new(verifier_key_path), None, None) {
             Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
-            Err(_) => -1i32 as jint,
+            Err(e) => {
+                log!(format!(
+                    "Unable to read proving system type from vk at {:?}: {:?}",
+                    verifier_key_path, e
+                ));
+                1_i32
+            }
         }
     }
 );
@@ -1936,6 +2024,7 @@ ffi_export!(
         _schnorr_pks_list: jobjectArray,
         _threshold: jlong,
         _custom_fields_list: jobjectArray,
+        _segment_size: JObject,
         _proving_key_path: JString,
         _check_proving_key: jboolean,
         _zk: jboolean,
@@ -1953,7 +2042,9 @@ ffi_export!(
             for i in 0..bt_list_size {
                 let o = _env
                     .get_object_array_element(_bt_list, i)
-                    .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+                    .unwrap_or_else(|_| {
+                        panic!("Should be able to get elem {} of bt_list array", i)
+                    });
 
                 let p = _env
                     .call_method(o, "getPublicKeyHash", "()[B", &[])
@@ -2004,21 +2095,20 @@ ffi_export!(
             //Get i-th sig
             let sig_object = _env
                 .get_object_array_element(_schnorr_sigs_list, i)
-                .expect(format!("Should be able to get elem {} of schnorr_sigs_list", i).as_str());
+                .unwrap_or_else(|_| {
+                    panic!("Should be able to get elem {} of schnorr_sigs_list", i)
+                });
 
             let pk_object = _env
                 .get_object_array_element(_schnorr_pks_list, i)
-                .expect(format!("Should be able to get elem {} of schnorr_pks_list", i).as_str());
+                .unwrap_or_else(|_| panic!("Should be able to get elem {} of schnorr_pks_list", i));
 
             let signature = {
                 let sig = _env
                     .get_field(sig_object, "signaturePointer", "J")
                     .expect("Should be able to get field signaturePointer");
 
-                match read_nullable_raw_pointer(sig.j().unwrap() as *const SchnorrSig) {
-                    Some(sig) => Some(*sig),
-                    None => None,
-                }
+                read_nullable_raw_pointer(sig.j().unwrap() as *const SchnorrSig).copied()
             };
 
             let public_key = {
@@ -2053,6 +2143,16 @@ ffi_export!(
             read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         };
 
+        // Get supported degree
+        let supported_degree =
+            cast_joption_to_rust_option(&_env, _segment_size).map(|integer_object| {
+                _env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
+
         //Extract params_path str
         let proving_key_path = _env
             .get_string(_proving_key_path)
@@ -2071,13 +2171,12 @@ ffi_export!(
             for i in 0..custom_fields_list_size {
                 let field_obj = _env
                     .get_object_array_element(_custom_fields_list, i)
-                    .expect(
-                        format!(
+                    .unwrap_or_else(|_| {
+                        panic!(
                             "Should be able to read elem {} of the personalization array",
                             i
                         )
-                        .as_str(),
-                    );
+                    });
 
                 let field = {
                     let f = _env
@@ -2104,6 +2203,7 @@ ffi_export!(
             bt_list,
             _threshold as u64,
             custom_fields_list,
+            supported_degree,
             Path::new(proving_key_path.to_str().unwrap()),
             _check_proving_key == JNI_TRUE,
             _zk == JNI_TRUE,
@@ -2127,7 +2227,7 @@ ffi_export!(
                         "([BJ)V",
                         &[
                             JValue::Object(JObject::from(proof_serialized)),
-                            JValue::Long(jlong::from(quality as i64)),
+                            JValue::Long(quality as i64),
                         ],
                     )
                     .expect("Should be able to create new CreateProofResult:(byte[], long) object");
@@ -2135,7 +2235,10 @@ ffi_export!(
                 *result
             }
             Err(e) => {
-                eprintln!("Error creating proof {:?}", e);
+                log!(format!(
+                    "Error creating NaiveThresholdSignature proof {:?}",
+                    e
+                ));
                 JObject::null().into_inner()
             }
         }
@@ -2155,7 +2258,13 @@ ffi_export!(
 
         match deserialize_from_buffer::<ProvingSystem>(&proof_bytes[..1], None, None) {
             Ok(ps) => get_proving_system_type_as_jint(&_env, ps),
-            Err(_) => -1i32 as jint,
+            Err(e) => {
+                log!(format!(
+                    "Unable to read proving system type from proof: {:?}",
+                    e
+                ));
+                1_i32
+            }
         }
     }
 );
@@ -2195,7 +2304,9 @@ ffi_export!(
             for i in 0..bt_list_size {
                 let o = _env
                     .get_object_array_element(_bt_list, i)
-                    .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+                    .unwrap_or_else(|_| {
+                        panic!("Should be able to get elem {} of bt_list array", i)
+                    });
 
                 let p = _env
                     .call_method(o, "getPublicKeyHash", "()[B", &[])
@@ -2268,13 +2379,12 @@ ffi_export!(
             for i in 0..custom_fields_list_size {
                 let field_obj = _env
                     .get_object_array_element(_custom_fields_list, i)
-                    .expect(
-                        format!(
+                    .unwrap_or_else(|_| {
+                        panic!(
                             "Should be able to read elem {} of the personalization array",
                             i
                         )
-                        .as_str(),
-                    );
+                    });
 
                 let field = {
                     let f = _env
@@ -2323,7 +2433,13 @@ ffi_export!(
                     JNI_FALSE
                 }
             }
-            Err(_) => JNI_FALSE, // CRYPTO_ERROR or IO_ERROR
+            Err(e) => {
+                log!(format!(
+                    "Unable to verify NaiveThresholdSignature proof: {:?}",
+                    e
+                ));
+                JNI_FALSE
+            } // CRYPTO_ERROR or IO_ERROR
         }
     }
 );
@@ -2338,8 +2454,7 @@ ffi_export!(
         let commitment_tree = CommitmentTree::create();
 
         // Create and return new CommitmentTree Java side
-        let commitment_tree_ptr: jlong =
-            jlong::from(Box::into_raw(Box::new(commitment_tree)) as i64);
+        let commitment_tree_ptr: jlong = Box::into_raw(Box::new(commitment_tree)) as i64;
 
         _env.new_object(_class, "(J)V", &[JValue::Long(commitment_tree_ptr)])
             .expect("Should be able to create new CommitmentTree object")
@@ -2384,7 +2499,10 @@ ffi_export!(
             let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
             match FieldElement::deserialize(sc_id_bytes.as_slice()) {
                 Ok(fe) => fe,
-                Err(_) => return JNI_FALSE,
+                Err(e) => {
+                    log!(format!("ScId deserialization failed: {:?}", e));
+                    return JNI_FALSE;
+                }
             }
         };
 
@@ -2410,13 +2528,12 @@ ffi_export!(
             for i in 0..custom_field_size {
                 let custom_field_config = _env
                     .get_object_array_element(_custom_field_elements_configs, i)
-                    .expect(
-                        format!(
+                    .unwrap_or_else(|_| {
+                        panic!(
                             "Should be able to get elem {} of custom_field_elements_configs array",
                             i
                         )
-                        .as_str(),
-                    );
+                    });
 
                 let bits = _env
                     .call_method(custom_field_config, "getBits", "()B", &[])
@@ -2427,7 +2544,7 @@ ffi_export!(
                 custom_field_elements_configs.push(bits);
             }
         }
-        let custom_field_elements_configs_opt = if custom_field_elements_configs.len() > 0 {
+        let custom_field_elements_configs_opt = if !custom_field_elements_configs.is_empty() {
             Some(custom_field_elements_configs.as_slice())
         } else {
             None
@@ -2440,7 +2557,7 @@ ffi_export!(
         if custom_bitvector_elements_size > 0 {
             for i in 0..custom_bitvector_elements_size {
                 let custom_bitvector_element_config = _env.get_object_array_element(_custom_bitvector_elements_configs, i)
-                .expect(format!("Should be able to get elem {} of custom_bitvector_elements_configs array", i).as_str());
+                .unwrap_or_else(|_| panic!("Should be able to get elem {} of custom_bitvector_elements_configs array", i));
 
                 let bit_vector_size_bits = _env
                     .call_method(
@@ -2471,7 +2588,8 @@ ffi_export!(
             }
         }
 
-        let custom_bitvector_elements_configs_opt = if custom_bitvector_elements_configs.len() > 0 {
+        let custom_bitvector_elements_configs_opt = if !custom_bitvector_elements_configs.is_empty()
+        {
             Some(custom_bitvector_elements_configs.as_slice())
         } else {
             None
@@ -2485,7 +2603,7 @@ ffi_export!(
             .convert_byte_array(_custom_creation_data)
             .expect("Should be able to convert to Rust array");
 
-        let custom_creation_data_opt = if custom_creation_data.len() > 0 {
+        let custom_creation_data_opt = if !custom_creation_data.is_empty() {
             Some(custom_creation_data.as_slice())
         } else {
             None
@@ -2498,7 +2616,10 @@ ffi_export!(
             let constant_bytes = parse_jbyte_array_to_vec(&_env, &_constant_nullable, FIELD_SIZE);
             match FieldElement::deserialize(constant_bytes.as_slice()) {
                 Ok(constant_fe) => Option::Some(constant_fe),
-                Err(_) => return JNI_FALSE,
+                Err(e) => {
+                    log!(format!("constant deserialization failed: {:?}", e));
+                    return JNI_FALSE;
+                }
             }
         };
 
@@ -2602,6 +2723,184 @@ ffi_export!(
 );
 
 ffi_export!(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetFwtLeaves(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    match commitment_tree.get_fwt_leaves(&sc_id) {
+        Some(leaves) => {
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let initial_element = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(0)]).expect("Should be able to create new long for FieldElement");
+
+            let leaf_fe_array = _env.new_object_array(leaves.len() as i32, field_class, initial_element)
+                .expect("Should be able to create array of FieldElements");
+
+            for (idx, leaf) in leaves.iter().enumerate() {
+                let leaf_field_ptr = Box::into_raw(Box::new(*leaf)) as jlong;
+
+                let leaf_element = _env.new_object(field_class, "(J)V", &[
+                    JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+                _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
+                    .expect("Should be able to add FieldElement leaf to an array");
+            }
+
+
+            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+            let empty_res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::from(JObject::from(leaf_fe_array))])
+                .expect("Should be able to create new value for Optional");
+
+            *empty_res.l().unwrap()
+        }
+        _ => {
+            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
+
+            *empty_res.l().unwrap()
+        }
+    }
+});
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetBtrLeaves(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    match commitment_tree.get_bwtr_leaves(&sc_id) {
+        Some(leaves) => {
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let initial_element = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(0)]).expect("Should be able to create new long for FieldElement");
+
+            let leaf_fe_array = _env.new_object_array(leaves.len() as i32, field_class, initial_element)
+                .expect("Should be able to create array of FieldElements");
+
+            for (idx, leaf) in leaves.iter().enumerate() {
+                let leaf_field_ptr = Box::into_raw(Box::new(*leaf)) as i64;
+
+                let leaf_element = _env.new_object(field_class, "(J)V", &[
+                    JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+                _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
+                    .expect("Should be able to add FieldElement leaf to an array");
+            }
+
+
+            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+            let empty_res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::from(JObject::from(leaf_fe_array))])
+                .expect("Should be able to create new value for Optional");
+
+            *empty_res.l().unwrap()
+        }
+        _ => {
+            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
+
+            *empty_res.l().unwrap()
+        }
+    }
+});
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetCrtLeaves(
+    _env: JNIEnv,
+    _commitment_tree: JObject,
+    _sc_id: jbyteArray
+) -> jobject
+{
+    let sc_id = {
+        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
+    };
+
+    let commitment_tree = {
+
+        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
+            .expect("Should be able to get field commitmentTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
+    };
+
+    match commitment_tree.get_cert_leaves(&sc_id) {
+        Some(leaves) => {
+            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
+                .expect("Should be able to find FieldElement class");
+
+            let initial_element = _env.new_object(field_class, "(J)V", &[
+                JValue::Long(0)]).expect("Should be able to create new long for FieldElement");
+
+            let leaf_fe_array = _env.new_object_array(leaves.len() as i32, field_class, initial_element)
+                .expect("Should be able to create array of FieldElements");
+
+            for (idx, leaf) in leaves.iter().enumerate() {
+                let leaf_field_ptr = Box::into_raw(Box::new(*leaf)) as i64;
+                let leaf_element = _env.new_object(field_class, "(J)V", &[
+                    JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");
+
+                _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
+                    .expect("Should be able to add FieldElement leaf to an array");
+            }
+
+            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+            let empty_res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::from(JObject::from(leaf_fe_array))])
+                .expect("Should be able to create new value for Optional");
+
+            *empty_res.l().unwrap()
+        }
+        _ => {
+            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                .expect("Should be able to create new value for Optional.empty()");
+
+            *empty_res.l().unwrap()
+        }
+    }
+});
+
+ffi_export!(
     fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddBtr(
         _env: JNIEnv,
         _commitment_tree: JObject,
@@ -2633,13 +2932,14 @@ ffi_export!(
             .expect("Should be able to get _custom_field_elements_configs size");
         if sc_request_data_size > 0 {
             for i in 0..sc_request_data_size {
-                let o = _env.get_object_array_element(_sc_request_data, i).expect(
-                    format!(
-                        "Should be able to get elem {} of custom_field_elements_configs array",
-                        i
-                    )
-                    .as_str(),
-                );
+                let o = _env
+                    .get_object_array_element(_sc_request_data, i)
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "Should be able to get elem {} of custom_field_elements_configs array",
+                            i
+                        )
+                    });
 
                 let data = _env
                     .convert_byte_array(o.cast())
@@ -2714,7 +3014,9 @@ ffi_export!(
             for i in 0..bt_list_size {
                 let o = _env
                     .get_object_array_element(_bt_list, i)
-                    .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+                    .unwrap_or_else(|_| {
+                        panic!("Should be able to get elem {} of bt_list array", i)
+                    });
 
                 let p = _env
                     .call_method(o, "getPublicKeyHash", "()[B", &[])
@@ -2742,7 +3044,7 @@ ffi_export!(
             }
         }
 
-        let bt_list_opt = if bt_list.len() > 0 {
+        let bt_list_opt = if !bt_list.is_empty() {
             Some(bt_list.as_slice())
         } else {
             None
@@ -2760,10 +3062,9 @@ ffi_export!(
                 for i in 0..custom_fields_size {
                     let o = _env
                         .get_object_array_element(_custom_fields_nullable, i)
-                        .expect(
-                            format!("Should be able to get elem {} of custom_fields array", i)
-                                .as_str(),
-                        );
+                        .unwrap_or_else(|_| {
+                            panic!("Should be able to get elem {} of custom_fields array", i)
+                        });
 
                     let cf = _env
                         .convert_byte_array(o.cast())
@@ -2854,222 +3155,6 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetFwtLeaves(
-        _env: JNIEnv,
-        _commitment_tree: JObject,
-        _sc_id: jbyteArray,
-    ) -> jobject {
-        let sc_id = {
-            let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-            FieldElement::deserialize(sc_id_bytes.as_slice())
-                .expect("Can't parse the input sc_id_bytes into FieldElement")
-        };
-
-        let commitment_tree = {
-            let t = _env
-                .get_field(_commitment_tree, "commitmentTreePointer", "J")
-                .expect("Should be able to get field commitmentTreePointer");
-
-            read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
-        };
-
-        match commitment_tree.get_fwt_leaves(&sc_id) {
-            Some(leaves) => {
-                let field_class = _env
-                    .find_class("com/horizen/librustsidechains/FieldElement")
-                    .expect("Should be able to find FieldElement class");
-
-                let initial_element = _env
-                    .new_object(field_class, "(J)V", &[JValue::Long(0)])
-                    .expect("Should be able to create new long for FieldElement");
-
-                let leaf_fe_array = _env
-                    .new_object_array(leaves.len() as i32, field_class, initial_element)
-                    .expect("Should be able to create array of FieldElements");
-
-                for (idx, leaf) in leaves.iter().enumerate() {
-                    let leaf_field_ptr: jlong =
-                        jlong::from(Box::into_raw(Box::new(leaf.clone())) as i64);
-
-                    let leaf_element = _env
-                        .new_object(field_class, "(J)V", &[JValue::Long(leaf_field_ptr)])
-                        .expect("Should be able to create new long for FieldElement");
-
-                    _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
-                        .expect("Should be able to add FieldElement leaf to an array");
-                }
-
-                let cls_optional = _env.find_class("java/util/Optional").unwrap();
-
-                let empty_res = _env
-                    .call_static_method(
-                        cls_optional,
-                        "of",
-                        "(Ljava/lang/Object;)Ljava/util/Optional;",
-                        &[JValue::from(JObject::from(leaf_fe_array))],
-                    )
-                    .expect("Should be able to create new value for Optional");
-
-                *empty_res.l().unwrap()
-            }
-            _ => {
-                let cls_optional = _env.find_class("java/util/Optional").unwrap();
-
-                let empty_res = _env
-                    .call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
-                    .expect("Should be able to create new value for Optional.empty()");
-
-                *empty_res.l().unwrap()
-            }
-        }
-    }
-);
-
-ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetBtrLeaves(
-        _env: JNIEnv,
-        _commitment_tree: JObject,
-        _sc_id: jbyteArray,
-    ) -> jobject {
-        let sc_id = {
-            let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-            FieldElement::deserialize(sc_id_bytes.as_slice())
-                .expect("Can't parse the input sc_id_bytes into FieldElement")
-        };
-
-        let commitment_tree = {
-            let t = _env
-                .get_field(_commitment_tree, "commitmentTreePointer", "J")
-                .expect("Should be able to get field commitmentTreePointer");
-
-            read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
-        };
-
-        match commitment_tree.get_bwtr_leaves(&sc_id) {
-            Some(leaves) => {
-                let field_class = _env
-                    .find_class("com/horizen/librustsidechains/FieldElement")
-                    .expect("Should be able to find FieldElement class");
-
-                let initial_element = _env
-                    .new_object(field_class, "(J)V", &[JValue::Long(0)])
-                    .expect("Should be able to create new long for FieldElement");
-
-                let leaf_fe_array = _env
-                    .new_object_array(leaves.len() as i32, field_class, initial_element)
-                    .expect("Should be able to create array of FieldElements");
-
-                for (idx, leaf) in leaves.iter().enumerate() {
-                    let leaf_field_ptr: jlong =
-                        jlong::from(Box::into_raw(Box::new(leaf.clone())) as i64);
-
-                    let leaf_element = _env
-                        .new_object(field_class, "(J)V", &[JValue::Long(leaf_field_ptr)])
-                        .expect("Should be able to create new long for FieldElement");
-
-                    _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
-                        .expect("Should be able to add FieldElement leaf to an array");
-                }
-
-                let cls_optional = _env.find_class("java/util/Optional").unwrap();
-
-                let empty_res = _env
-                    .call_static_method(
-                        cls_optional,
-                        "of",
-                        "(Ljava/lang/Object;)Ljava/util/Optional;",
-                        &[JValue::from(JObject::from(leaf_fe_array))],
-                    )
-                    .expect("Should be able to create new value for Optional");
-
-                *empty_res.l().unwrap()
-            }
-            _ => {
-                let cls_optional = _env.find_class("java/util/Optional").unwrap();
-
-                let empty_res = _env
-                    .call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
-                    .expect("Should be able to create new value for Optional.empty()");
-
-                *empty_res.l().unwrap()
-            }
-        }
-    }
-);
-
-ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetCrtLeaves(
-        _env: JNIEnv,
-        _commitment_tree: JObject,
-        _sc_id: jbyteArray,
-    ) -> jobject {
-        let sc_id = {
-            let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-            FieldElement::deserialize(sc_id_bytes.as_slice())
-                .expect("Can't parse the input sc_id_bytes into FieldElement")
-        };
-
-        let commitment_tree = {
-            let t = _env
-                .get_field(_commitment_tree, "commitmentTreePointer", "J")
-                .expect("Should be able to get field commitmentTreePointer");
-
-            read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
-        };
-
-        match commitment_tree.get_cert_leaves(&sc_id) {
-            Some(leaves) => {
-                let field_class = _env
-                    .find_class("com/horizen/librustsidechains/FieldElement")
-                    .expect("Should be able to find FieldElement class");
-
-                let initial_element = _env
-                    .new_object(field_class, "(J)V", &[JValue::Long(0)])
-                    .expect("Should be able to create new long for FieldElement");
-
-                let leaf_fe_array = _env
-                    .new_object_array(leaves.len() as i32, field_class, initial_element)
-                    .expect("Should be able to create array of FieldElements");
-
-                for (idx, leaf) in leaves.iter().enumerate() {
-                    let leaf_field_ptr: jlong =
-                        jlong::from(Box::into_raw(Box::new(leaf.clone())) as i64);
-
-                    let leaf_element = _env
-                        .new_object(field_class, "(J)V", &[JValue::Long(leaf_field_ptr)])
-                        .expect("Should be able to create new long for FieldElement");
-
-                    _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
-                        .expect("Should be able to add FieldElement leaf to an array");
-                }
-
-                let cls_optional = _env.find_class("java/util/Optional").unwrap();
-
-                let empty_res = _env
-                    .call_static_method(
-                        cls_optional,
-                        "of",
-                        "(Ljava/lang/Object;)Ljava/util/Optional;",
-                        &[JValue::from(JObject::from(leaf_fe_array))],
-                    )
-                    .expect("Should be able to create new value for Optional");
-
-                *empty_res.l().unwrap()
-            }
-            _ => {
-                let cls_optional = _env.find_class("java/util/Optional").unwrap();
-
-                let empty_res = _env
-                    .call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
-                    .expect("Should be able to create new value for Optional.empty()");
-
-                *empty_res.l().unwrap()
-            }
-        }
-    }
-);
-
-ffi_export!(
     fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddCsw(
         _env: JNIEnv,
         _commitment_tree: JObject,
@@ -3135,8 +3220,7 @@ ffi_export!(
 
         match commitment_tree.get_scc(&sc_id) {
             Some(sc_cr_commitment_fe) => {
-                let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                let field_ptr: jlong = Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3190,8 +3274,7 @@ ffi_export!(
 
         match commitment_tree.get_fwt_commitment(&sc_id) {
             Some(sc_cr_commitment_fe) => {
-                let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                let field_ptr: jlong = Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3245,8 +3328,7 @@ ffi_export!(
 
         match commitment_tree.get_bwtr_commitment(&sc_id) {
             Some(sc_cr_commitment_fe) => {
-                let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                let field_ptr: jlong = Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3300,8 +3382,7 @@ ffi_export!(
 
         match commitment_tree.get_cert_commitment(&sc_id) {
             Some(sc_cr_commitment_fe) => {
-                let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                let field_ptr: jlong = Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3355,8 +3436,7 @@ ffi_export!(
 
         match commitment_tree.get_csw_commitment(&sc_id) {
             Some(sc_cr_commitment_fe) => {
-                let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                let field_ptr: jlong = Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3410,8 +3490,7 @@ ffi_export!(
 
         match commitment_tree.get_sc_commitment(&sc_id) {
             Some(sc_cr_commitment_fe) => {
-                let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                let field_ptr: jlong = Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3458,8 +3537,7 @@ ffi_export!(
 
         match commitment_tree.get_commitment() {
             Some(sc_cr_commitment_fe) => {
-                let field_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64);
+                let field_ptr: jlong = Box::into_raw(Box::new(sc_cr_commitment_fe)) as i64;
 
                 let field_class = _env
                     .find_class("com/horizen/librustsidechains/FieldElement")
@@ -3513,8 +3591,7 @@ ffi_export!(
 
         match commitment_tree.get_sc_commitment_merkle_path(&sc_id) {
             Some(merkle_path) => {
-                let merkle_path_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(merkle_path)) as i64);
+                let merkle_path_ptr: jlong = Box::into_raw(Box::new(merkle_path)) as i64;
 
                 let merkle_path_class = _env
                     .find_class("com/horizen/merkletreenative/MerklePath")
@@ -3571,8 +3648,7 @@ ffi_export!(
 
         match commitment_tree.get_fwt_merkle_path(&sc_id, leaf_index) {
             Some(merkle_path) => {
-                let merkle_path_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(merkle_path)) as i64);
+                let merkle_path_ptr: jlong = Box::into_raw(Box::new(merkle_path)) as i64;
 
                 let merkle_path_class = _env
                     .find_class("com/horizen/merkletreenative/MerklePath")
@@ -3629,8 +3705,7 @@ ffi_export!(
 
         match commitment_tree.get_bwtr_merkle_path(&sc_id, leaf_index) {
             Some(merkle_path) => {
-                let merkle_path_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(merkle_path)) as i64);
+                let merkle_path_ptr: jlong = Box::into_raw(Box::new(merkle_path)) as i64;
 
                 let merkle_path_class = _env
                     .find_class("com/horizen/merkletreenative/MerklePath")
@@ -3687,8 +3762,7 @@ ffi_export!(
 
         match commitment_tree.get_cert_merkle_path(&sc_id, leaf_index) {
             Some(merkle_path) => {
-                let merkle_path_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(merkle_path)) as i64);
+                let merkle_path_ptr: jlong = Box::into_raw(Box::new(merkle_path)) as i64;
 
                 let merkle_path_class = _env
                     .find_class("com/horizen/merkletreenative/MerklePath")
@@ -3743,8 +3817,7 @@ ffi_export!(
 
         match commitment_tree.get_sc_existence_proof(&sc_id) {
             Some(sc_existence_proof) => {
-                let proof_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_existence_proof)) as i64);
+                let proof_ptr: jlong = Box::into_raw(Box::new(sc_existence_proof)) as i64;
 
                 let existence_proof_class = _env
                     .find_class("com/horizen/commitmenttreenative/ScExistenceProof")
@@ -3795,8 +3868,7 @@ ffi_export!(
 
         match ScExistenceProof::deserialize(proof_bytes.as_slice()) {
             Ok(sc_existence_proof) => {
-                let proof_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_existence_proof)) as i64);
+                let proof_ptr: jlong = Box::into_raw(Box::new(sc_existence_proof)) as i64;
 
                 let existence_proof_class = _env
                     .find_class("com/horizen/commitmenttreenative/ScExistenceProof")
@@ -3808,7 +3880,10 @@ ffi_export!(
 
                 *jep
             }
-            Err(_) => std::ptr::null::<jobject>() as jobject,
+            Err(e) => {
+                log!(format!("ScExistenceProof deserialization failed: {:?}", e));
+                std::ptr::null::<jobject>() as jobject
+            }
         }
     }
 );
@@ -3851,8 +3926,7 @@ ffi_export!(
 
         match commitment_tree.get_sc_absence_proof(&sc_id) {
             Some(sc_absence_proof) => {
-                let proof_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_absence_proof)) as i64);
+                let proof_ptr: jlong = Box::into_raw(Box::new(sc_absence_proof)) as i64;
 
                 let absence_proof_class = _env
                     .find_class("com/horizen/commitmenttreenative/ScAbsenceProof")
@@ -3903,8 +3977,7 @@ ffi_export!(
 
         match ScAbsenceProof::deserialize(proof_bytes.as_slice()) {
             Ok(sc_absence_proof) => {
-                let proof_ptr: jlong =
-                    jlong::from(Box::into_raw(Box::new(sc_absence_proof)) as i64);
+                let proof_ptr: jlong = Box::into_raw(Box::new(sc_absence_proof)) as i64;
 
                 let absence_proof_class = _env
                     .find_class("com/horizen/commitmenttreenative/ScAbsenceProof")
@@ -3916,7 +3989,10 @@ ffi_export!(
 
                 *jep
             }
-            Err(_) => std::ptr::null::<jobject>() as jobject,
+            Err(e) => {
+                log!(format!("ScAbsenceProof deserialization failed: {:?}", e));
+                std::ptr::null::<jobject>() as jobject
+            }
         }
     }
 );
@@ -4065,41 +4141,34 @@ ffi_export!(
 
 ffi_export!(
     fn Java_com_horizen_librustsidechains_Utils_nativeCompressedBitvectorMerkleRootWithSizeCheck(
-        _env: JNIEnv,
-        _utils: JClass,
-        _compressed_bit_vector: jbyteArray,
-        _expected_uncompressed_size: jint,
-    ) -> jbyteArray {
-        // Parse compressed_bit_vector into a vector
-        let compressed_bit_vector = _env
-            .convert_byte_array(_compressed_bit_vector)
-            .expect("Should be able to convert to Rust byte array");
+    _env: JNIEnv,
+    _utils: JClass,
+    _compressed_bit_vector: jbyteArray,
+    _expected_uncompressed_size: jint
+) -> jbyteArray
+{
+    // Parse compressed_bit_vector into a vector
+    let compressed_bit_vector = _env.convert_byte_array(_compressed_bit_vector)
+        .expect("Should be able to convert to Rust byte array");
 
-        let expected_uncompressed_size = _expected_uncompressed_size as usize;
+    let expected_uncompressed_size = _expected_uncompressed_size as usize;
 
-        // Compute merkle_root
-        match merkle_root_from_compressed_bytes(
-            compressed_bit_vector.as_slice(),
-            expected_uncompressed_size,
-        ) {
-            Ok(merkle_root) => {
-                // Return merkle_root bytes
-                let merkle_root_bytes = serialize_to_buffer(&merkle_root, None)
-                    .expect("Should be able to serialize merkle_root");
-                _env.byte_array_from_slice(merkle_root_bytes.as_slice())
-                    .expect("Cannot write jobject.")
-            }
-            Err(_) => {
-                throw!(
-                    &_env,
-                    "java/lang/Exception",
-                    "Cannot compute merkle root with size check.",
-                    JObject::null().into_inner()
-                );
-            }
+    // Compute merkle_root
+    match merkle_root_from_compressed_bytes(compressed_bit_vector.as_slice(), expected_uncompressed_size) {
+        Ok(merkle_root) => {
+            // Return merkle_root bytes
+            let merkle_root_bytes = serialize_to_buffer(
+                &merkle_root,
+                None,
+            ).expect("Should be able to serialize merkle_root");
+            _env.byte_array_from_slice(merkle_root_bytes.as_slice()).expect("Cannot write jobject.")
+        }
+        Err(e) => {
+            throw!(&_env, "java/lang/Exception", format!("Cannot compute merkle root with size check: {:?}", e).as_str(), JObject::null().into_inner());
         }
     }
-);
+});
+
 
 ////////////LAZY SPARSE MERKLE TREE
 
@@ -4113,7 +4182,7 @@ ffi_export!(
         let mt = GingerSparseMHT::init(_height as u8);
 
         // Create and return new InMemorySparseMerkleTree Java side
-        let mt_ptr: jlong = jlong::from(Box::into_raw(Box::new(mt)) as i64);
+        let mt_ptr: jlong = Box::into_raw(Box::new(mt)) as i64;
 
         _env.new_object(_class, "(J)V", &[JValue::Long(mt_ptr)])
             .expect("Should be able to create new InMemorySparseMerkleTree object")
@@ -4224,9 +4293,11 @@ ffi_export!(
 
         // Array can be empty
         for i in 0..positions_len {
-            let long_obj = _env.get_object_array_element(_positions, i).expect(
-                format!("Should be able to read elem {} of the positions array", i).as_str(),
-            );
+            let long_obj = _env
+                .get_object_array_element(_positions, i)
+                .unwrap_or_else(|_| {
+                    panic!("Should be able to read elem {} of the positions array", i)
+                });
 
             // Read position
             let position = _env
@@ -4249,7 +4320,7 @@ ffi_export!(
 
         // Update the tree with leaves
         match tree.remove_leaves(positions) {
-            Ok(_) => return,
+            Ok(_) => {}
             Err(e) => throw!(
                 &_env,
                 "java/lang/Exception",
@@ -4275,7 +4346,7 @@ ffi_export!(
 
         // Update the root of the tree
         match tree.finalize_in_place() {
-            Ok(_) => return,
+            Ok(_) => {}
             Err(e) => throw!(
                 &_env,
                 "java/lang/Exception",
@@ -4402,10 +4473,12 @@ ffi_export!(
         _env: JNIEnv,
         _utxo_out: JObject,
     ) -> jobject {
-        match parse_sc_utxo_output(&_env, _utxo_out).hash(None) {
+        match parse_sc_utxo_output(&_env, _utxo_out)
+            .hash(Some(&[FieldElement::from(BoxType::CoinBox as u8)]))
+        {
             Ok(digest) => return_field_element(&_env, digest),
             Err(e) => {
-                eprintln!("Error while computing Utxo Output hash: {:?}", e);
+                log!(format!("Error while computing Utxo Output hash: {:?}", e));
                 JObject::null().into_inner()
             }
         }
@@ -4454,7 +4527,7 @@ ffi_export!(
         // Parse sc_ft_output
         let sc_ft_output = parse_sc_ft_output(&_env, _ft_out);
 
-        let mut receiver_pub_key = sc_ft_output.receiver_pub_key.clone();
+        let mut receiver_pub_key = sc_ft_output.receiver_pub_key;
         receiver_pub_key.reverse();
 
         match hash_fwt(
@@ -4466,7 +4539,7 @@ ffi_export!(
         ) {
             Ok(digest) => return_field_element(&_env, digest),
             Err(e) => {
-                eprintln!("Error while computing FT hash: {:?}", e);
+                log!(format!("Error while computing FT hash: {:?}", e));
                 JObject::null().into_inner()
             }
         }
@@ -4497,7 +4570,7 @@ fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateData {
         for i in 0..bt_list_size {
             let o = _env
                 .get_object_array_element(bt_list_obj, i)
-                .expect(format!("Should be able to get elem {} of bt_list array", i).as_str());
+                .unwrap_or_else(|_| panic!("Should be able to get elem {} of bt_list array", i));
 
             let p = _env
                 .call_method(o, "getPublicKeyHash", "()[B", &[])
@@ -4543,9 +4616,9 @@ fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateData {
         for i in 0..custom_fields_size {
             let o = _env
                 .get_object_array_element(custom_fields_list_obj, i)
-                .expect(
-                    format!("Should be able to get elem {} of custom_fields array", i).as_str(),
-                );
+                .unwrap_or_else(|_| {
+                    panic!("Should be able to get elem {} of custom_fields array", i)
+                });
 
             let field = {
                 let f = _env
@@ -4592,7 +4665,7 @@ ffi_export!(
         let cert = parse_wcert(_env, _cert);
 
         // Convert custom fields in the expected form
-        let custom_fields_hash = if cert.custom_fields.len() == 0 {
+        let custom_fields_hash = if cert.custom_fields.is_empty() {
             None
         } else {
             Some(hash_vec(cert.custom_fields).unwrap())
@@ -4611,7 +4684,7 @@ ffi_export!(
         ) {
             Ok(digest) => return_field_element(&_env, digest),
             Err(e) => {
-                eprintln!("Error while computing FT hash: {:?}", e);
+                log!(format!("Error while computing cert hash: {:?}", e));
                 JObject::null().into_inner()
             }
         }
@@ -4626,6 +4699,7 @@ ffi_export!(
         _range_size: jint,
         _num_custom_fields: jint,
         _is_constant_present: jboolean,
+        _segment_size: JObject,
         _proving_key_path: JString,
         _verification_key_path: JString,
         _zk: jboolean,
@@ -4635,6 +4709,16 @@ ffi_export!(
     ) -> jboolean {
         // Get proving system type
         let proving_system = get_proving_system_type(&_env, _proving_system);
+
+        // Get supported degree
+        let supported_degree =
+            cast_joption_to_rust_option(&_env, _segment_size).map(|integer_object| {
+                _env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
 
         // Read paths
         let proving_key_path = _env
@@ -4658,6 +4742,7 @@ ffi_export!(
         match generate_circuit_keypair(
             circ,
             proving_system,
+            supported_degree,
             Path::new(proving_key_path.to_str().unwrap()),
             Path::new(verification_key_path.to_str().unwrap()),
             _max_proof_plus_vk_size as usize,
@@ -4667,7 +4752,7 @@ ffi_export!(
         ) {
             Ok(_) => JNI_TRUE,
             Err(e) => {
-                println!("{:?}", e);
+                log!(format!("(Pk, Vk) generation failed: {:?}", e));
                 JNI_FALSE
             }
         }
@@ -4675,13 +4760,7 @@ ffi_export!(
 );
 
 fn parse_sys_data(_env: JNIEnv, _sys_data: JObject) -> (Option<FieldElement>, CswSysData) {
-    let constant = cast_joption_to_rust_option(
-        &_env,
-        _sys_data,
-        "constant",
-        "com/horizen/librustsidechains/FieldElement",
-    )
-    .map(|field_object| {
+    let constant = parse_joption_from_jobject(&_env, _sys_data, "constant").map(|field_object| {
         let f = _env
             .get_field(field_object, "fieldElementPointer", "J")
             .expect("Should be able to get field fieldElementPointer");
@@ -4691,26 +4770,14 @@ fn parse_sys_data(_env: JNIEnv, _sys_data: JObject) -> (Option<FieldElement>, Cs
     let sys_data = CswSysData::new(
         // Map a JObject which is a Java's Optional<FieldElement> into Option<JObject>.
         // If Option is present, converts it into an Option<FieldElement>, otherwise converts it to None.
-        cast_joption_to_rust_option(
-            &_env,
-            _sys_data,
-            "mcbScTxsComEnd",
-            "com/horizen/librustsidechains/FieldElement",
-        )
-        .map(|field_object| {
+        parse_joption_from_jobject(&_env, _sys_data, "mcbScTxsComEnd").map(|field_object| {
             let f = _env
                 .get_field(field_object, "fieldElementPointer", "J")
                 .expect("Should be able to get field fieldElementPointer");
 
             *read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         }),
-        cast_joption_to_rust_option(
-            &_env,
-            _sys_data,
-            "scLastWcertHash",
-            "com/horizen/librustsidechains/FieldElement",
-        )
-        .map(|field_object| {
+        parse_joption_from_jobject(&_env, _sys_data, "scLastWcertHash").map(|field_object| {
             let f = _env
                 .get_field(field_object, "fieldElementPointer", "J")
                 .expect("Should be able to get field fieldElementPointer");
@@ -4742,22 +4809,23 @@ fn parse_utxo_prover_data(_env: JNIEnv, _utxo_data: JObject) -> CswUtxoProverDat
     // Parse input
 
     // Parse secret key
-    let secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS] =
-        {
-            // Parse sk bytes
-            let sk_bytes = parse_fixed_size_byte_array_from_jobject::<
-                SC_SECRET_KEY_LENGTH,
-            >(&_env, _utxo_data, "utxoInputSecretKey");
+    let secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS] = {
+        // Parse sk bytes
+        let sk_bytes = parse_fixed_size_byte_array_from_jobject::<SC_SECRET_KEY_LENGTH>(
+            &_env,
+            _utxo_data,
+            "utxoInputSecretKey",
+        );
 
-            // Interpret bytes as a LE integer and read a SimulatedScalarFieldElement out of it
-            // reducing it if required
-            let sk = deserialize_fe_unchecked(sk_bytes.to_vec());
+        // Interpret bytes as a LE integer and read a SimulatedScalarFieldElement out of it
+        // reducing it if required
+        let sk = deserialize_fe_unchecked(sk_bytes.to_vec());
 
-            // Convert it to bits and reverse them (circuit expects them in LE but write_bits outputs in BE)
-            let mut sk_bits = sk.write_bits();
-            sk_bits.reverse();
-            sk_bits.try_into().unwrap()
-        };
+        // Convert it to bits and reverse them (circuit expects them in LE but write_bits outputs in BE)
+        let mut sk_bits = sk.write_bits();
+        sk_bits.reverse();
+        sk_bits.try_into().unwrap()
+    };
 
     let input = CswUtxoInputData { output, secret_key };
 
@@ -4820,13 +4888,12 @@ fn parse_ft_prover_data(_env: JNIEnv, _ft_data: JObject) -> CswFtProverData {
     for i in 0..sc_txs_com_hashes_size {
         let o = _env
             .get_object_array_element(sc_txs_com_hashes_list_obj, i)
-            .expect(
-                format!(
+            .unwrap_or_else(|_| {
+                panic!(
                     "Should be able to get elem {} of sc_txs_com_hashes array",
                     i
                 )
-                .as_str(),
-            );
+            });
 
         let field = {
             let f = _env
@@ -4840,22 +4907,23 @@ fn parse_ft_prover_data(_env: JNIEnv, _ft_data: JObject) -> CswFtProverData {
     }
 
     // Parse secret key
-    let ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS] =
-        {
-            // Parse sk bytes
-            let sk_bytes = parse_fixed_size_byte_array_from_jobject::<
-                SC_SECRET_KEY_LENGTH,
-            >(&_env, _ft_data, "ftInputSecretKey");
+    let ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS] = {
+        // Parse sk bytes
+        let sk_bytes = parse_fixed_size_byte_array_from_jobject::<SC_SECRET_KEY_LENGTH>(
+            &_env,
+            _ft_data,
+            "ftInputSecretKey",
+        );
 
-            // Interpret bytes as a LE integer and read a SimulatedScalarFieldElement out of it
-            // reducing it if required
-            let sk = deserialize_fe_unchecked(sk_bytes.to_vec());
+        // Interpret bytes as a LE integer and read a SimulatedScalarFieldElement out of it
+        // reducing it if required
+        let sk = deserialize_fe_unchecked(sk_bytes.to_vec());
 
-            // Convert it to bits and reverse them (circuit expects them in LE but write_bits outputs in BE)
-            let mut sk_bits = sk.write_bits();
-            sk_bits.reverse();
-            sk_bits.try_into().unwrap()
-        };
+        // Convert it to bits and reverse them (circuit expects them in LE but write_bits outputs in BE)
+        let mut sk_bits = sk.write_bits();
+        sk_bits.reverse();
+        sk_bits.try_into().unwrap()
+    };
 
     CswFtProverData {
         ft_output,
@@ -4889,6 +4957,7 @@ ffi_export!(
         _last_wcert: JObject,
         _utxo_data: JObject,
         _ft_data: JObject,
+        _segment_size: JObject,
         _proving_key_path: JString,
         _check_proving_key: jboolean,
         _zk: jboolean,
@@ -4929,6 +4998,16 @@ ffi_export!(
             read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         };
 
+        // Get supported degree
+        let supported_degree =
+            cast_joption_to_rust_option(&_env, _segment_size).map(|integer_object| {
+                _env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
+
         //Extract params_path str
         let proving_key_path = _env
             .get_string(_proving_key_path)
@@ -4944,6 +5023,7 @@ ffi_export!(
             csw_ft_prover_data,
             _range_size as u32,
             _num_custom_fields as u32,
+            supported_degree,
             Path::new(proving_key_path.to_str().unwrap()),
             _check_proving_key == JNI_TRUE,
             _zk == JNI_TRUE,
@@ -4956,7 +5036,7 @@ ffi_export!(
                 .expect("Should be able to convert Rust slice into jbytearray"),
 
             Err(e) => {
-                eprintln!("Error creating proof {:?}", e);
+                log!(format!("Error creating proof {:?}", e));
                 JObject::null().into_inner()
             }
         }
@@ -5017,7 +5097,10 @@ ffi_export!(
                     JNI_FALSE
                 }
             }
-            Err(_) => JNI_FALSE, // CRYPTO_ERROR or IO_ERROR
+            Err(e) => {
+                log!(format!("Unable to verify CSW proof: {:?}", e));
+                JNI_FALSE
+            } // CRYPTO_ERROR or IO_ERROR
         }
     }
 );

@@ -1,3 +1,8 @@
+//! The ceased sidechain withdrawal proof according to [[blaze]]. Used to recover a forward 
+//! transfer / utxo (the latter whenever possible) in case that the sidechain is considered as ceased. 
+//! The recoveries refer to the last confirmed sidechain certificate, which in this version is the one 
+//! before the last valid certificate before ceasing (The epoch between these two certificates is 
+//! considered as reverted). 
 pub mod constraints;
 
 pub mod data_structures;
@@ -87,8 +92,12 @@ pub fn combine_field_elements_at_index(
 pub fn deserialize_fe_unchecked(bytes: Vec<u8>) -> SimulatedScalarFieldElement {
     let mut acc = SimulatedScalarFieldElement::zero();
     let two = SimulatedScalarFieldElement::one().double();
-    for i in 0..SIMULATED_SCALAR_FIELD_BYTE_SIZE {
-        let mut num = SimulatedScalarFieldElement::from(bytes[i]);
+    for (i, byte) in bytes
+        .iter()
+        .enumerate()
+        .take(SIMULATED_SCALAR_FIELD_BYTE_SIZE)
+    {
+        let mut num = SimulatedScalarFieldElement::from(*byte);
         num *= two.pow(&[(8 * i) as u64]);
         acc += num;
     }
@@ -103,12 +112,12 @@ fn convert_te_point_to_sw_point(te_point: SimulatedTEGroup) -> SimulatedSWGroup 
         .expect("B inverse must exist");
 
     let a_over_three = <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_A
-        * &(SimulatedFieldElement::from(3u8)
+        * (SimulatedFieldElement::from(3u8)
             .inverse()
             .expect("Must be able to compute 3.inverse() in SimulatedField"));
 
-    let one_plus_te_y_coord = one + &te_point.y;
-    let one_minus_te_y_coord = one - &te_point.y;
+    let one_plus_te_y_coord = one + te_point.y;
+    let one_minus_te_y_coord = one - te_point.y;
     let te_x_coord_inv = te_point
         .x
         .inverse()
@@ -118,8 +127,8 @@ fn convert_te_point_to_sw_point(te_point: SimulatedTEGroup) -> SimulatedSWGroup 
             .inverse()
             .expect("Should be able to compute inverse of (1 - y_te) ");
 
-    let sw_x_coord = (one_plus_te_y_coord_over_one_minus_te_y_coord + &a_over_three) * &b_inv;
-    let sw_y_coord = b_inv * &one_plus_te_y_coord_over_one_minus_te_y_coord * &te_x_coord_inv;
+    let sw_x_coord = (one_plus_te_y_coord_over_one_minus_te_y_coord + a_over_three) * b_inv;
+    let sw_y_coord = b_inv * one_plus_te_y_coord_over_one_minus_te_y_coord * te_x_coord_inv;
 
     let sw_point = SimulatedSWGroup::new(sw_x_coord, sw_y_coord, false);
 
@@ -135,11 +144,7 @@ pub fn convert_te_pk_to_sw_pk(
     // First, let's reconstruct the TE point corresponding to te_pk_bytes
 
     // Fetch the sign of the x coordinate
-    let te_pk_x_sign = if (te_pk_bytes[SC_PUBLIC_KEY_LENGTH - 1] & (1 << 7)) == 0u8 {
-        false
-    } else {
-        true
-    };
+    let te_pk_x_sign = (te_pk_bytes[SC_PUBLIC_KEY_LENGTH - 1] & (1 << 7)) != 0u8;
 
     // Mask away the sign byte
     te_pk_bytes[SC_PUBLIC_KEY_LENGTH - 1] &= 0x7F;
@@ -149,19 +154,20 @@ pub fn convert_te_pk_to_sw_pk(
 
     // Reconstruct the x coordinate from the y coordinate and the sign
     let te_pk_x = {
-        let numerator = te_pk_y.square() - &SimulatedFieldElement::one();
-        let denominator = (te_pk_y.square() * &SimulatedCurveParameters::COEFF_D)
-            - &<SimulatedCurveParameters as TEModelParameters>::COEFF_A;
-        let x2 = denominator.inverse().map(|denom| denom * &numerator);
+        let numerator = te_pk_y.square() - SimulatedFieldElement::one();
+        let denominator = (te_pk_y.square() * SimulatedCurveParameters::COEFF_D)
+            - <SimulatedCurveParameters as TEModelParameters>::COEFF_A;
+        let x2 = denominator.inverse().map(|denom| denom * numerator);
         x2.and_then(|x2| x2.sqrt()).map(|x| {
             let negx = -x;
-            let x = if x.is_odd() ^ te_pk_x_sign { negx } else { x };
-            x
+            if x.is_odd() ^ te_pk_x_sign {
+                negx
+            } else {
+                x
+            }
         })
     }
-    .ok_or(Error::from(
-        "Invalid pk. Unable to reconstruct x coordinate.",
-    ))?;
+    .ok_or_else(|| Error::from("Invalid pk. Unable to reconstruct x coordinate."))?;
 
     // Reconstruct the TE point and check that it's on curve
     let te_pk = SimulatedTEGroup::new(te_pk_x, te_pk_y);
@@ -177,16 +183,16 @@ pub fn convert_te_pk_to_sw_pk(
 
     // Store the sign (last bit) of the X coordinate
     // The value is left-shifted to be used later in an OR operation
-    let x_sign = if sw_pk.x.is_odd() { 1 << 7 } else { 0u8 };
+    let y_sign = if sw_pk.y.is_odd() { 1 << 7 } else { 0u8 };
 
     // Extract the public key bytes as Y coordinate
-    let y_coordinate = sw_pk.y;
-    let mut pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
+    let x_coordinate = sw_pk.x;
+    let mut pk_bytes = serialize_to_buffer(&x_coordinate, None).unwrap();
 
     // Use the last (null) bit of the public key to store the sign of the X coordinate
     // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus
     let len = pk_bytes.len();
-    pk_bytes[len - 1] |= x_sign;
+    pk_bytes[len - 1] |= y_sign;
 
     Ok(pk_bytes.try_into().unwrap())
 }
@@ -215,7 +221,7 @@ mod test {
 
             // Also this way of restoring (used inside CSW circuit) should work
             let pow = FieldElement::one().double().pow(&[(i * 8) as u64]);
-            let restored_fe = fe_1 + &(pow * &fe_2);
+            let restored_fe = fe_1 + (pow * fe_2);
             assert_eq!(fe, restored_fe);
         }
     }
@@ -307,15 +313,15 @@ mod test {
             // with the computed SW point
             let sw_pk_bytes = convert_te_pk_to_sw_pk(te_pk_bytes.try_into().unwrap()).unwrap();
 
-            let x_sign = if sw_public_key.x.is_odd() {
+            let y_sign = if sw_public_key.y.is_odd() {
                 1 << 7
             } else {
                 0u8
             };
-            let y_coordinate = sw_public_key.y;
-            let mut expected_sw_pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
+            let x_coordinate = sw_public_key.x;
+            let mut expected_sw_pk_bytes = serialize_to_buffer(&x_coordinate, None).unwrap();
             let len = expected_sw_pk_bytes.len();
-            expected_sw_pk_bytes[len - 1] |= x_sign;
+            expected_sw_pk_bytes[len - 1] |= y_sign;
 
             let expected_sw_pk_bytes: [u8; SC_PUBLIC_KEY_LENGTH] =
                 expected_sw_pk_bytes.try_into().unwrap();

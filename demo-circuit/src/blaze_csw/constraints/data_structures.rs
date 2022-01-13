@@ -18,39 +18,30 @@ use r1cs_std::{
 };
 
 use crate::{
-    constants::constants::BoxType, CswFtOutputData, CswFtProverData, CswProverData, CswSysData,
-    CswUtxoInputData, CswUtxoOutputData, CswUtxoProverData, ECPointSimulationGadget,
+    constants::personalizations::BoxType, CswFtOutputData, CswFtProverData, CswProverData,
+    CswSysData, CswUtxoInputData, CswUtxoOutputData, CswUtxoProverData, ECPointSimulationGadget,
     FieldElementGadget, FieldHashGadget, GingerMHTBinaryGadget, SimulatedCurveParameters,
     SimulatedFieldElement, SimulatedSWGroup, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
-    PHANTOM_FIELD_ELEMENT, SC_CUSTOM_HASH_LENGTH,
-    SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
+    SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, SIMULATED_FIELD_BYTE_SIZE,
+    SIMULATED_SCALAR_FIELD_MODULUS_BITS,
 };
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
+/// The gadget for a withdrawal certificate of a sidechain
 pub struct WithdrawalCertificateDataGadget {
     pub ledger_id_g: FieldElementGadget,
     pub epoch_id_g: UInt32,
+    /// Merkle root hash of all BTs from the certificate 
     pub bt_list_root_g: FieldElementGadget,
     pub quality_g: UInt64,
+    /// Reference to the state of the mainchain-to-sidechain transaction history.
+    /// Declares to which extent the sidechain processed forward transactions.
     pub mcb_sc_txs_com_g: FieldElementGadget,
     pub ft_min_amount_g: UInt64,
     pub btr_min_fee_g: UInt64,
+    /// Carries the reference to the sidechain state. (Currently the reference is 
+    /// split over two field elements)
     pub custom_fields_g: Vec<FieldElementGadget>,
-}
-
-impl WithdrawalCertificateDataGadget {
-    pub fn is_phantom<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-        num_custom_fields: u32,
-    ) -> Result<Boolean, SynthesisError> {
-        let phantom_wcert_g = WithdrawalCertificateDataGadget::from_value(
-            cs.ns(|| "alloc phantom_wcert_g"),
-            &WithdrawalCertificateData::get_phantom(num_custom_fields),
-        );
-
-        self.is_eq(cs.ns(|| "is wcert phantom"), &phantom_wcert_g)
-    }
 }
 
 impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertificateDataGadget {
@@ -152,63 +143,6 @@ impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertific
     }
 }
 
-impl ConstantGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertificateDataGadget {
-    fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
-        mut cs: CS,
-        value: &WithdrawalCertificateData,
-    ) -> Self {
-        let ledger_id_g =
-            FieldElementGadget::from_value(cs.ns(|| "alloc constant ledger_id"), &value.ledger_id);
-        let epoch_id_g = UInt32::constant(value.epoch_id);
-        let bt_list_root_g =
-            FieldElementGadget::from_value(cs.ns(|| "alloc constant bt_list_root"), &value.bt_root);
-        let quality_g = UInt64::constant(value.quality);
-        let mcb_sc_txs_com_g = FieldElementGadget::from_value(
-            cs.ns(|| "alloc constant mcb_sc_txs_com"),
-            &value.mcb_sc_txs_com,
-        );
-        let ft_min_amount_g = UInt64::constant(value.ft_min_amount);
-        let btr_min_fee_g = UInt64::constant(value.btr_min_fee);
-        let mut custom_fields_g = Vec::with_capacity(value.custom_fields.len());
-
-        for (i, custom_field) in value.custom_fields.iter().enumerate() {
-            let custom_field_g = FieldElementGadget::from_value(
-                cs.ns(|| format!("alloc constant custom field {}", i)),
-                &custom_field,
-            );
-            custom_fields_g.push(custom_field_g);
-        }
-
-        Self {
-            ledger_id_g,
-            epoch_id_g,
-            bt_list_root_g,
-            quality_g,
-            mcb_sc_txs_com_g,
-            ft_min_amount_g,
-            btr_min_fee_g,
-            custom_fields_g,
-        }
-    }
-
-    fn get_constant(&self) -> WithdrawalCertificateData {
-        WithdrawalCertificateData {
-            ledger_id: self.ledger_id_g.value.unwrap(),
-            epoch_id: self.epoch_id_g.value.unwrap(),
-            bt_root: self.bt_list_root_g.value.unwrap(),
-            quality: self.quality_g.get_value().unwrap(),
-            mcb_sc_txs_com: self.mcb_sc_txs_com_g.value.unwrap(),
-            ft_min_amount: self.ft_min_amount_g.get_value().unwrap(),
-            btr_min_fee: self.btr_min_fee_g.get_value().unwrap(),
-            custom_fields: self
-                .custom_fields_g
-                .iter()
-                .map(|custom_field_g| custom_field_g.value.unwrap())
-                .collect(),
-        }
-    }
-}
-
 impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget>
     for WithdrawalCertificateDataGadget
 {
@@ -280,67 +214,12 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget>
     }
 }
 
-impl EqGadget<FieldElement> for WithdrawalCertificateDataGadget {
-    fn is_eq<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-        other: &Self,
-    ) -> Result<Boolean, SynthesisError> {
-        let b1 = self
-            .ledger_id_g
-            .is_eq(cs.ns(|| "is eq ledger_id"), &other.ledger_id_g)?;
-        let b2 = self
-            .epoch_id_g
-            .is_eq(cs.ns(|| "is eq epoch_id"), &other.epoch_id_g)?;
-        let b3 = self
-            .bt_list_root_g
-            .is_eq(cs.ns(|| "is eq bt_list_root"), &other.bt_list_root_g)?;
-        let b4 = self
-            .quality_g
-            .is_eq(cs.ns(|| "is eq quality"), &other.quality_g)?;
-        let b5 = self
-            .mcb_sc_txs_com_g
-            .is_eq(cs.ns(|| "is eq mcb_sc_txs_com"), &other.mcb_sc_txs_com_g)?;
-        let b6 = self
-            .ft_min_amount_g
-            .is_eq(cs.ns(|| "is eq ft_min_amount"), &other.ft_min_amount_g)?;
-        let b7 = self
-            .btr_min_fee_g
-            .is_eq(cs.ns(|| "is eq btr_min_fee"), &other.btr_min_fee_g)?;
-        let mut b8 = Boolean::Constant(true);
-        if !self.custom_fields_g.is_empty() {
-            b8 = self
-                .custom_fields_g
-                .is_eq(cs.ns(|| "is eq custom_fields"), &other.custom_fields_g)?;
-        }
-
-        Boolean::kary_and(
-            cs.ns(|| "is_eq CswUtxoOutputDataGadget"),
-            &[b1, b2, b3, b4, b5, b6, b7, b8],
-        )
-    }
-}
-
-#[derive(PartialEq, Eq)]
+/// The gadget for an ordinary sidechain transaction output. 
 pub struct CswUtxoOutputDataGadget {
     pub spending_pub_key_g: [Boolean; SC_PUBLIC_KEY_LENGTH * 8],
     pub amount_g: UInt64,
     pub nonce_g: UInt64,
     pub custom_hash_g: [Boolean; SC_TX_HASH_LENGTH * 8],
-}
-
-impl CswUtxoOutputDataGadget {
-    pub fn is_phantom<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-    ) -> Result<Boolean, SynthesisError> {
-        let phantom_utxo_output_g = CswUtxoOutputDataGadget::from_value(
-            cs.ns(|| "alloc constant UTXO input phantom gadget"),
-            &CswUtxoOutputData::get_phantom(),
-        );
-
-        self.is_eq(cs.ns(|| "is UTXO output phantom"), &phantom_utxo_output_g)
-    }
 }
 
 impl AllocGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
@@ -418,66 +297,6 @@ impl AllocGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
     }
 }
 
-impl ConstantGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
-    fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
-        _cs: CS,
-        value: &CswUtxoOutputData,
-    ) -> Self {
-        let spending_pub_key_g = bytes_to_bits(&value.spending_pub_key)
-            .into_iter()
-            .map(|bit| Boolean::Constant(bit))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        let amount_g = UInt64::constant(value.amount);
-
-        let nonce_g = UInt64::constant(value.nonce);
-
-        let custom_hash_g = bytes_to_bits(&value.custom_hash)
-            .into_iter()
-            .map(|bit| Boolean::Constant(bit))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        Self {
-            spending_pub_key_g,
-            amount_g,
-            nonce_g,
-            custom_hash_g,
-        }
-    }
-
-    fn get_constant(&self) -> CswUtxoOutputData {
-        unimplemented!()
-    }
-}
-
-impl EqGadget<FieldElement> for CswUtxoOutputDataGadget {
-    fn is_eq<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-        other: &Self,
-    ) -> Result<Boolean, SynthesisError> {
-        let b1 = self.spending_pub_key_g.is_eq(
-            cs.ns(|| "is eq spending_pub_key_g"),
-            &other.spending_pub_key_g,
-        )?;
-        let b2 = self
-            .amount_g
-            .is_eq(cs.ns(|| "is eq amount_g"), &other.amount_g)?;
-        let b3 = self
-            .nonce_g
-            .is_eq(cs.ns(|| "is eq nonce_g"), &other.nonce_g)?;
-        let b4 = self
-            .custom_hash_g
-            .is_eq(cs.ns(|| "is eq custom_hash_g"), &other.custom_hash_g)?;
-
-        Boolean::kary_and(cs.ns(|| "is_eq CswUtxoOutputDataGadget"), &[b1, b2, b3, b4])
-    }
-}
-
 impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
     type FieldGadget = FieldElementGadget;
 
@@ -496,7 +315,7 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
         nonce_big_endian_g.reverse();
         bits.extend_from_slice(&nonce_big_endian_g);
 
-        let mut custom_hash_bits_g = self.custom_hash_g.clone();
+        let mut custom_hash_bits_g = self.custom_hash_g;
         custom_hash_bits_g.reverse();
 
         bits.extend_from_slice(&custom_hash_bits_g);
@@ -513,32 +332,40 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
     }
 }
 
-#[derive(PartialEq, Eq)]
+impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswUtxoOutputDataGadget {
+    fn enforce_hash<CS: ConstraintSystemAbstract<FieldElement>>(
+        &self,
+        mut cs: CS,
+        personalization: Option<&[FieldElementGadget]>,
+    ) -> Result<FieldElementGadget, SynthesisError> {
+        // Initialize hash_input with personalization manually as we don't have, for now, hash gadget accepting personalization
+        // (https://github.com/HorizenOfficial/ginger-lib/issues/78)
+        let personalization = personalization.unwrap();
+        debug_assert!(personalization.len() == 1);
+
+        // Add padding 1
+        let mut hash_input = [
+            personalization,
+            &[FieldElementGadget::one(cs.ns(|| "hardcode padding 1"))?],
+        ]
+        .concat();
+
+        // Complete hash_input with the actual field elements coming from the utxo
+        let mut output_hash_elements_g =
+            self.to_field_gadget_elements(cs.ns(|| "sc_utxo_output to field elements"))?;
+
+        debug_assert_eq!(output_hash_elements_g.len(), 3);
+        hash_input.append(&mut output_hash_elements_g);
+
+        FieldHashGadget::enforce_hash_constant_length(cs.ns(|| "enforce hash"), &hash_input)
+    }
+}
+
+/// The utxo gadget used for a ceased sidechain withdrawal. 
+/// Consists of the relavant utxo data plus the corresponding secret key.
 pub struct CswUtxoInputDataGadget {
     pub output_g: CswUtxoOutputDataGadget,
     pub secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
-}
-
-impl CswUtxoInputDataGadget {
-    pub fn is_phantom<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-    ) -> Result<Boolean, SynthesisError> {
-        let phantom_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS] =
-            CswUtxoInputData::get_phantom().secret_key
-                .iter()
-                .map(|&bit| Boolean::constant(bit))
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap();
-
-        let b1 = self.output_g.is_phantom(cs.ns(|| "is output_g phantom"))?;
-        let b2 = self
-            .secret_key_g
-            .is_eq(cs.ns(|| "is secret_key_g phantom"), &phantom_secret_key_g)?;
-
-        Boolean::and(cs.ns(|| "is_phantom CswUtxoInputDataGadget"), &b1, &b2)
-    }
 }
 
 impl AllocGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
@@ -593,98 +420,72 @@ impl AllocGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
     }
 }
 
-impl ConstantGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
-    fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
-        mut cs: CS,
-        value: &CswUtxoInputData,
-    ) -> Self {
-        let output_g = CswUtxoOutputDataGadget::from_value(cs.ns(|| "alloc output"), &value.output);
-
-        let secret_key_g = value
-            .secret_key
-            .iter()
-            .map(|&bit| Boolean::constant(bit))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        Self {
-            output_g,
-            secret_key_g,
-        }
-    }
-
-    fn get_constant(&self) -> CswUtxoInputData {
-        CswUtxoInputData {
-            output: self.output_g.get_constant(),
-            secret_key: self
-                .secret_key_g
-                .iter()
-                .map(|byte| byte.get_value().unwrap())
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
-        }
-    }
-}
-
-impl EqGadget<FieldElement> for CswUtxoInputDataGadget {
-    fn is_eq<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-        other: &Self,
-    ) -> Result<Boolean, SynthesisError> {
-        let b1 = self
-            .output_g
-            .is_eq(cs.ns(|| "is eq output_g"), &other.output_g)?;
-        let b2 = self
-            .secret_key_g
-            .is_eq(cs.ns(|| "is eq secret_key_g"), &other.secret_key_g)?;
-
-        Boolean::and(cs.ns(|| "is_eq CswUtxoInputDataGadget"), &b1, &b2)
-    }
-}
-
+/// The witness data needed for a utxo withdrawal proof. 
+/// Contains the utxo and secret key, and the witnesses for proving membership
+/// to the last sidechain state accepted by the mainchain.
 pub struct CswUtxoProverDataGadget {
-    pub input_g: CswUtxoInputDataGadget, // unspent output we are trying to withdraw
-    pub mst_path_to_output_g: GingerMHTBinaryGadget, // path to output in the MST of the known state
+    /// unspent output we are trying to withdraw
+    pub input_g: CswUtxoInputDataGadget, 
+    /// Merkle path to last state accepted sidechain state, which 
+    /// is extracted from the `custom_fields` of the `WithdrawalCertificateGadget`
+    pub mst_path_to_output_g: GingerMHTBinaryGadget, 
 }
 
 impl CswUtxoProverDataGadget {
     /// Enforce that:
     /// 1) H(self.input_g.output_g) belongs to merkle tree with root 'scb_new_mst_root_g';
-    /// 2) H(self.input_g.output_g) == 'nullifier_g'
-    /// 3) self.input_g.output_g.amount_g == 'amount_g'
+    /// 2) H(last_wcert_g) == 'expected_sc_last_wcert_hash_g' 
+    /// 3) H(self.input_g.output_g) == 'nullifier_g'
+    /// 4) self.input_g.output_g.amount_g == 'amount_g'
     pub(crate) fn conditionally_enforce_utxo_withdrawal<
         CS: ConstraintSystemAbstract<FieldElement>,
     >(
         &self,
         mut cs: CS,
-        scb_new_mst_root_g: &FieldElementGadget,
+        last_wcert_g: &WithdrawalCertificateDataGadget,
+        expected_sc_last_wcert_hash_g: &FieldElementGadget,
         nullifier_g: &FieldElementGadget,
         amount_g: &FieldElementGadget,
         should_enforce: &Boolean,
     ) -> Result<(), SynthesisError> {
-        // Enfore UTXO output hash computation
-        let box_type_coin_g = FieldElementGadget::from(
-            cs.ns(|| "alloc BoxType.Coin constant"),
-            &FieldElement::from(BoxType::CoinBox as u8),
-        );
 
-        let mut output_hash_elements_g = self
+        // 1. Check output presence in the known state
+
+        // Reconstruct scb_new_mst_root from firt 2 custom fields
+        // We use two custom fields (with half of the bits set) to store a single Field Element
+        assert!(last_wcert_g.custom_fields_g.len() >= 2);
+
+        let scb_new_mst_root_g = {
+            // Compute 2^128 in the field
+            let pow = FieldElement::one().double().pow(&[128u64]);
+
+            // Combine the two custom fields as custom_fields[0] + (2^128) * custom_fields[1]
+            // We assume here that the 2 FieldElements were originally truncated at the 128th bit .
+            // Note that the prover is able to find multiple custom_fields[0], custom_fields[1]
+            // leading to the same result but this will change the certificate hash, binded to
+            // the sys_data_hash public input, for which he would need to find a collision,
+            // and this is unfeasible.
+            let first_half = &last_wcert_g.custom_fields_g[0];
+            let second_half = last_wcert_g.custom_fields_g[1]
+                .mul_by_constant(cs.ns(|| "2^128 * custom_fields[1]"), &pow)?;
+
+            first_half.add(
+                cs.ns(|| "custom_fields[0] + (2^128) * custom_fields[1]"),
+                &second_half,
+            )
+        }?;
+
+        // Enfore UTXO output hash computation
+        let personalization = &[FieldElementGadget::from_value(
+            cs.ns(|| "hardcode BoxType.Coin constant"),
+            &FieldElement::from(BoxType::CoinBox as u8),
+        )];
+
+        let output_hash_g = self
             .input_g
             .output_g
-            .to_field_gadget_elements(cs.ns(|| "alloc output hash elements"))?;
+            .enforce_hash(cs.ns(|| "H(input.output)"), Some(personalization))?;
 
-        debug_assert_eq!(output_hash_elements_g.len(), 3);
-        output_hash_elements_g.push(box_type_coin_g);
-
-        let output_hash_g = FieldHashGadget::enforce_hash_constant_length(
-            cs.ns(|| "H(input.output)"),
-            &output_hash_elements_g,
-        )?;
-
-        // 1 Check output presence in the known state
         // mst_root = reconstruct_merkle_root_hash(outputHash, mst_path_to_output)
         let mst_root_g = self.mst_path_to_output_g.enforce_root_from_leaf(
             cs.ns(|| "reconstruct_merkle_root_hash(outputHash, mst_path_to_output)"),
@@ -694,18 +495,28 @@ impl CswUtxoProverDataGadget {
         // require(last_wcert.proof_data.scb_new_mst_root == mst_root)
         mst_root_g.conditional_enforce_equal(
             cs.ns(|| "last_wcert.proof_data.scb_new_mst_root == mst_root"),
-            scb_new_mst_root_g,
+            &scb_new_mst_root_g,
             should_enforce,
         )?;
 
-        // 2 Enforce nullifier
+        // 2. enforce cert hash
+        let last_wcert_hash_g = last_wcert_g
+            .enforce_hash(cs.ns(|| "enforce last_wcert_hash"), None)?;
+
+        last_wcert_hash_g.conditional_enforce_equal(
+            cs.ns(|| "enforce sc_last_wcert_hash == last_wcert_hash"),
+            expected_sc_last_wcert_hash_g,
+            should_enforce,
+        )?;
+
+        // 3. Enforce nullifier
         output_hash_g.conditional_enforce_equal(
             cs.ns(|| "require(nullifier == outputHash)"),
             nullifier_g,
             should_enforce,
         )?;
 
-        // 3. Enforce amount
+        // 4. Enforce amount
         let mut utxo_amount_big_endian_bits_g = self.input_g.output_g.amount_g.to_bits_le();
         utxo_amount_big_endian_bits_g.reverse();
 
@@ -772,27 +583,13 @@ impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
     }
 }
 
-#[derive(PartialEq, Eq)]
+/// The relevant public data of a forward transaction
 pub struct CswFtOutputDataGadget {
     pub amount_g: UInt64,
     pub receiver_pub_key_g: [UInt8; SC_PUBLIC_KEY_LENGTH],
     pub payback_addr_data_hash_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
     pub tx_hash_g: [Boolean; FIELD_SIZE * 8],
     pub out_idx_g: UInt32,
-}
-
-impl CswFtOutputDataGadget {
-    pub fn is_phantom<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-    ) -> Result<Boolean, SynthesisError> {
-        let phantom_ft_input_g = CswFtOutputDataGadget::from_value(
-            cs.ns(|| "alloc constant FT input phantom gadget"),
-            &CswFtOutputData::get_phantom(),
-        );
-
-        self.is_eq(cs.ns(|| "is FT output phantom"), &phantom_ft_input_g)
-    }
 }
 
 impl AllocGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
@@ -826,14 +623,15 @@ impl AllocGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
 
         let amount_g = UInt64::alloc(cs.ns(|| "alloc amount"), amount.ok())?;
 
-        let receiver_pub_key_g = Vec::<UInt8>::alloc(cs.ns(|| "alloc receiver pub key"), || receiver_pub_key)?
-        .try_into()
-        .map_err(|_| {
-            SynthesisError::Other(format!(
-                "invalid size for public key, expected {} bytes",
-                SC_PUBLIC_KEY_LENGTH
-            ))
-        })?;
+        let receiver_pub_key_g =
+            Vec::<UInt8>::alloc(cs.ns(|| "alloc receiver pub key"), || receiver_pub_key)?
+                .try_into()
+                .map_err(|_| {
+                    SynthesisError::Other(format!(
+                        "invalid size for public key, expected {} bytes",
+                        SC_PUBLIC_KEY_LENGTH
+                    ))
+                })?;
 
         let payback_addr_data_hash_g =
             Vec::<Boolean>::alloc(cs.ns(|| "alloc payback addr data hash"), || {
@@ -882,80 +680,6 @@ impl AllocGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
     }
 }
 
-impl ConstantGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
-    fn from_value<CS: ConstraintSystemAbstract<FieldElement>>(
-        _cs: CS,
-        value: &CswFtOutputData,
-    ) -> Self {
-        let amount_g = UInt64::constant(value.amount);
-        let receiver_pub_key_g = value.receiver_pub_key
-            .iter()
-            .map(|&byte| UInt8::constant(byte))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        let payback_addr_data_hash_g = bytes_to_bits(&value.payback_addr_data_hash)
-            .iter()
-            .map(|&bit| Boolean::constant(bit))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        let tx_hash_g = bytes_to_bits(&value.tx_hash)
-            .iter()
-            .map(|&bit| Boolean::constant(bit))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        let out_idx_g = UInt32::constant(value.out_idx);
-
-        Self {
-            amount_g,
-            receiver_pub_key_g,
-            payback_addr_data_hash_g,
-            tx_hash_g,
-            out_idx_g,
-        }
-    }
-
-    fn get_constant(&self) -> CswFtOutputData {
-        unimplemented!();
-    }
-}
-
-impl EqGadget<FieldElement> for CswFtOutputDataGadget {
-    fn is_eq<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-        other: &Self,
-    ) -> Result<Boolean, SynthesisError> {
-        let b1 = self
-            .amount_g
-            .is_eq(cs.ns(|| "is eq amount_g"), &other.amount_g)?;
-        let b2 = self.receiver_pub_key_g.is_eq(
-            cs.ns(|| "is eq receiver_pub_key_g"),
-            &other.receiver_pub_key_g,
-        )?;
-        let b3 = self.payback_addr_data_hash_g.is_eq(
-            cs.ns(|| "is eq payback_addr_data_hash_g"),
-            &other.payback_addr_data_hash_g,
-        )?;
-        let b4 = self
-            .tx_hash_g
-            .is_eq(cs.ns(|| "is eq tx_hash_g"), &other.tx_hash_g)?;
-        let b5 = self
-            .out_idx_g
-            .is_eq(cs.ns(|| "is eq out_idx_g"), &other.out_idx_g)?;
-
-        Boolean::kary_and(
-            cs.ns(|| "is_eq CswUtxoInputDataGadget"),
-            &[b1, b2, b3, b4, b5],
-        )
-    }
-}
-
 impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
     type FieldGadget = FieldElementGadget;
 
@@ -966,7 +690,8 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
         let mut bits = self.amount_g.to_bits_le();
         bits.reverse();
 
-        let mut receiver_pub_key_bits = self.receiver_pub_key_g
+        let mut receiver_pub_key_bits = self
+            .receiver_pub_key_g
             .iter()
             .rev() // Reverse the bytes due to a MC <-> SC endianness incompatibility
             .flat_map(|byte| byte.into_bits_le())
@@ -1003,44 +728,80 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
     }
 }
 
+impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswFtOutputDataGadget {
+    fn enforce_hash<CS: ConstraintSystemAbstract<FieldElement>>(
+        &self,
+        mut cs: CS,
+        _personalization: Option<&[FieldElementGadget]>,
+    ) -> Result<FieldElementGadget, SynthesisError> {
+        let ft_output_hash_elements =
+            self.to_field_gadget_elements(cs.ns(|| "ft_output_hash to field elements"))?;
+
+        FieldHashGadget::enforce_hash_constant_length(
+            cs.ns(|| "enforce hash"),
+            &ft_output_hash_elements,
+        )
+    }
+}
+
+/// The witnesses needed for a forward transaction withdrawal proof.
+/// Consists of the forward transaction and its secret key, plus additional
+/// witness data for proving the ft being member of the mainchain-to-sidechain
+/// history maintained by the mainchain (by means of the Sc_Txs_Commitments).
 pub struct CswFtProverDataGadget {
+    /// The forward transaction output
     pub ft_output_g: CswFtOutputDataGadget,
+    /// and its secret key.
     pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
+    /// The Sc_Txs_Commitment at the start of the time window the withdrawal proof refers to.
+    /// (The end is provided via public inputs)
     pub mcb_sc_txs_com_start_g: FieldElementGadget,
-    pub merkle_path_to_sc_hash_g: GingerMHTBinaryGadget,
-    pub ft_tree_path_g: GingerMHTBinaryGadget,
-    pub sc_creation_commitment_g: FieldElementGadget,
-    pub scb_btr_tree_root_g: FieldElementGadget,
-    pub wcert_tree_root_g: FieldElementGadget,
+    /// The complete hash chain of the Sc_Txs_Commitments 
     pub sc_txs_com_hashes_g: Vec<FieldElementGadget>,
+    //   
+    //  Witness data for proving the ft being member of an Sc_Txs_Commitment. 
+    //
+    /// The Merkle path for the sidechain-specific root within the Sc_Txs_Commitment.
+    pub merkle_path_to_sc_hash_g: GingerMHTBinaryGadget,
+    /// The Merkle path for the ft to its sidechain-specific root within the Sc_Txs_Commitment
+    pub ft_tree_path_g: GingerMHTBinaryGadget,
+    /// for completing the Merkle Path from the ft_tree root to the sidechain-specific root:
+    /// The sidechain creation commitment.
+    pub sc_creation_commitment_g: FieldElementGadget,
+    /// for completing the Merkle Path from the ft_tree root to the sidechain-specific root:
+    /// The backward transfer request commitment.
+    pub scb_btr_tree_root_g: FieldElementGadget,
+    /// for completing the Merkle Path from the ft_tree root to the sidechain-specific root:
+    /// The withdrawal certificate commitment.
+    pub wcert_tree_root_g: FieldElementGadget,
+
 }
 
 impl CswFtProverDataGadget {
     /// Enforce that:
-    /// 1) H(self.ft_output_g) belongs to one of the sc_txs_com_hashes between self.mcb_sc_txs_com_start_g and 'mcb_sc_txs_com_end_g'
-    /// 2) H(self.ft_output_g) == 'nullifier_g'
-    /// 3) self.ft_output_g.amount_g == 'amount_g'
+    /// 1) H(self.ft_output_g) belongs to one of the Sc_Tx_Commitments between `self.mcb_sc_txs_com_start_g` and `mcb_sc_txs_com_end_g`
+    /// 2) H(self.ft_output_g) == `nullifier_g`
+    /// 3) self.ft_output_g.amount_g == `amount_g`
     pub(crate) fn conditionally_enforce_ft_withdrawal<
         CS: ConstraintSystemAbstract<FieldElement>,
     >(
         &self,
         mut cs: CS,
         sidechain_id_g: &FieldElementGadget,
-        range_size: u32,
+        // The maximum time window range size supported by the circuit
+        // (as number of mainchain blocks)
+        max_range_size: u32,
+        // The range size needed for the current withdrawal proof
+        actual_range_size: u32,
         mcb_sc_txs_com_end_g: &FieldElementGadget,
         nullifier_g: &FieldElementGadget,
         amount_g: &FieldElementGadget,
         should_enforce: &Boolean,
     ) -> Result<(), SynthesisError> {
         // Enforce FT output hash
-        let ft_output_hash_elements = self
+        let ft_output_hash_g = self
             .ft_output_g
-            .to_field_gadget_elements(cs.ns(|| "alloc ft_output_hash input elements"))?;
-
-        let ft_output_hash_g = FieldHashGadget::enforce_hash_constant_length(
-            cs.ns(|| "H(ft_input)"),
-            &ft_output_hash_elements,
-        )?;
+            .enforce_hash(cs.ns(|| "H(ft_input)"), None)?;
 
         // 1) H(self.ft_output_g) belongs to one of the sc_txs_com_hashes between self.mcb_sc_txs_com_start_g and 'mcb_sc_txs_com_end_g'
 
@@ -1081,10 +842,9 @@ impl CswFtProverDataGadget {
             &FieldElement::from(0u8),
         );
 
-        // Alloc phantom field element
-        let phantom_g = FieldElementGadget::from_value(cs.ns(|| "Break"), &PHANTOM_FIELD_ELEMENT);
+        assert_eq!(max_range_size as usize, self.sc_txs_com_hashes_g.len());
 
-        for i in 0..range_size as usize {
+        for i in 0..max_range_size as usize {
             // if (sc_txs_com_tree_root == sc_txs_com_hashes[i]) { cnt++ }
             let should_increase_counter = sc_txs_com_tree_root_g.is_eq(
                 cs.ns(|| format!("sc_txs_com_tree_root == sc_txs_com_hashes[{}]", i)),
@@ -1098,7 +858,8 @@ impl CswFtProverDataGadget {
                 FieldElement::one(),
             )?;
 
-            // sc_txs_com_cumulative = H(sc_txs_com_cumulative, sc_txs_com_hashes[i])
+            // sc_txs_com_cumulative = H(sc_txs_com_cumulative, sc_txs_com_hashes[i]) as 
+            // long as `i < actual_range_size`.
             let temp_sc_txs_com_cumulative = FieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| format!("H(sc_txs_com_cumulative, sc_txs_com_hashes[{}])", i)),
                 &[
@@ -1107,11 +868,11 @@ impl CswFtProverDataGadget {
                 ],
             )?;
 
-            // Ignore NULL hashes
-            let should_ignore_hash = self.sc_txs_com_hashes_g[i].is_eq(
-                cs.ns(|| format!("sc_txs_com_hashes[{}] == PHANTOM", i)),
-                &phantom_g,
-            )?;
+            // Ignore update of hash chain beyond the range defined by `actual_range_size`
+            let should_ignore_hash =
+                Boolean::alloc(cs.ns(|| format!("should ignore hash {}", i)), || {
+                    Ok(i >= actual_range_size as usize)
+                })?;
 
             sc_txs_com_cumulative_g = FieldElementGadget::conditionally_select(
                 cs.ns(|| format!("Conditionally select hash at iteration {}", i)),
@@ -1278,11 +1039,17 @@ impl AllocGadget<CswFtProverData, FieldElement> for CswFtProverDataGadget {
     }
 }
 
+/// The public witnesses for a ceased sidechain withdrawal (csw) proof.
 pub struct CswSysDataGadget {
+    /// The last hash of the history of Sc_Tx_Commitments
     pub mcb_sc_txs_com_end_g: FieldElementGadget,
+    /// The hash of the last accepted withdrawal certificate 
     pub sc_last_wcert_hash_g: FieldElementGadget,
+    /// amount of the csw
     pub amount_g: FieldElementGadget,
+    /// nullifier for the csw, a unique reference to its utxo/ft
     pub nullifier_g: FieldElementGadget,
+    /// recipient address of the csw
     pub receiver_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
 }
 
@@ -1358,10 +1125,15 @@ impl AllocGadget<CswSysData, FieldElement> for CswSysDataGadget {
     }
 }
 
+/// The full data needed by a prover
 pub struct CswProverDataGadget {
+    /// public inputs
     pub sys_data_g: CswSysDataGadget,
-    pub last_wcert_g: WithdrawalCertificateDataGadget, // the last confirmed wcert in the MC
+    /// the last accepted withdrawal certificate in full length
+    pub last_wcert_g: WithdrawalCertificateDataGadget, 
+    /// private witnesses for a utxo withdrawal proof
     pub utxo_data_g: CswUtxoProverDataGadget,
+    /// private witnesses for a ft withdrawal proof
     pub ft_data_g: CswFtProverDataGadget,
 }
 
@@ -1419,6 +1191,8 @@ impl AllocGadget<CswProverData, FieldElement> for CswProverDataGadget {
     }
 }
 
+/// A phantom struct to bundle conversion functions between twisted Edwards and
+/// short Weierstrass public keys.
 // TODO: Define it as [Boolean; SC_PUBLIC_KEY_LENGTH * 8] and replace in all other data structures
 pub struct ScPublicKeyGadget {}
 
@@ -1436,19 +1210,19 @@ impl ScPublicKeyGadget {
             cs.ns(|| "alloc pk_x"),
             || {
                 let te_pk_y = pk_y_coordinate_g.get_value().get()?;
-                let numerator = te_pk_y.square() - &SimulatedFieldElement::one();
-                let denominator = (te_pk_y.square() * &SimulatedCurveParameters::COEFF_D)
-                    - &<SimulatedCurveParameters as TEModelParameters>::COEFF_A;
+                let numerator = te_pk_y.square() - SimulatedFieldElement::one();
+                let denominator = (te_pk_y.square() * SimulatedCurveParameters::COEFF_D)
+                    - <SimulatedCurveParameters as TEModelParameters>::COEFF_A;
                 let x2 = denominator
                     .inverse()
-                    .map(|denom| denom * &numerator)
-                    .ok_or(SynthesisError::Other(
-                        "Must be able to compute denominator".to_string(),
-                    ))?;
+                    .map(|denom| denom * numerator)
+                    .ok_or_else(|| {
+                        SynthesisError::Other("Must be able to compute denominator".to_string())
+                    })?;
 
-                let x = x2.sqrt().ok_or(SynthesisError::Other(
-                    "x^2 square root must exist in the field".to_string(),
-                ))?;
+                let x = x2.sqrt().ok_or_else(|| {
+                    SynthesisError::Other("x^2 square root must exist in the field".to_string())
+                })?;
                 let negx = -x;
                 let x = if x.is_odd() ^ pk_x_sign_bit_g.get_value().get()? {
                     negx
@@ -1489,67 +1263,64 @@ impl ScPublicKeyGadget {
         te_pk_x_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement>,
         te_pk_y_coordinate_g: NonNativeFieldGadget<SimulatedFieldElement, FieldElement>,
     ) -> Result<ECPointSimulationGadget, SynthesisError> {
-        let one_minus_y_ed = te_pk_y_coordinate_g
-            .negate(cs.ns(|| "-y_ed"))?
-            .add_constant(cs.ns(|| "1 - y_ed"), &SimulatedFieldElement::one())?;
+        let y_ed_minus_one = te_pk_y_coordinate_g
+            .add_constant(cs.ns(|| "y_ed - 1"), &-SimulatedFieldElement::one())?;
 
         let one_plus_y_ed = te_pk_y_coordinate_g
             .add_constant(cs.ns(|| "1 + y_ed"), &SimulatedFieldElement::one())?;
+
+        // TODO: These can be precomputed
+        let b_inv = <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B
+            .inverse()
+            .expect("B inverse must exist");
+
+        let a_over_three = <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_A
+            * (SimulatedFieldElement::from(3u8)
+                .inverse()
+                .expect("Must be able to compute 3.inverse() in SimulatedField"));
 
         // Alloc x coordinate in SW representation
         let sw_pk_x_coordinate_g =
             NonNativeFieldGadget::<SimulatedFieldElement, FieldElement>::alloc(
                 cs.ns(|| "alloc x coord in SW"),
                 || {
-                    let a_over_three =
-                        <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_A
-                            * &(SimulatedFieldElement::from(3u8)
-                                .inverse()
-                                .expect("Must be able to compute 3.inverse() in SimulatedField"));
-
-                    let b_inv = <SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B
-                        .inverse()
-                        .expect("B inverse must exist");
-
                     let one_plus_te_y_coord = one_plus_y_ed.get_value().get()?;
-                    let one_minus_te_y_coord = one_minus_y_ed.get_value().get()?;
+                    let one_minus_te_y_coord = -y_ed_minus_one.get_value().get()?;
 
                     let one_plus_te_y_coord_over_one_minus_te_y_coord = one_plus_te_y_coord
-                        * one_minus_te_y_coord.inverse().ok_or(SynthesisError::Other(
-                            "Should be able to compute inverse of (1 - y_te)".to_string(),
-                        ))?;
+                        * one_minus_te_y_coord.inverse().ok_or_else(|| {
+                            SynthesisError::Other(
+                                "Should be able to compute inverse of (1 - y_te)".to_string(),
+                            )
+                        })?;
 
-                    Ok((one_plus_te_y_coord_over_one_minus_te_y_coord + &a_over_three) * &b_inv)
+                    Ok((one_plus_te_y_coord_over_one_minus_te_y_coord + a_over_three) * b_inv)
                 },
             )?;
 
-        // Check SW x coordinate
-        // x_sw * 3B(1 - y_ed) = 3(1 + y_ed) + A(1 - y_ed)
+        // Check SW x coordinate:
+        // x_sw * (1 - y_ed) = 1/B (1 + y_ed) + A/3B (1 - y_ed)
+        // Multiplication by - 1 => x_sw * (y_ed - 1) = -1/B (1 + y_ed) + A/3B (1 - y_ed)
+        // Write (1 + y_ed) as (y_ed + 2 - 1) => x_sw * (y_ed - 1) = -1/B (y_ed - 1) - 2/B + A/3B (y_ed - 1)
+        // Gathering by (y_ed - 1) => (x_sw + 1/B - A/3B) * (y_ed - 1) = -2/B
         {
-            let three_times_one_plus_y_ed = one_plus_y_ed
-                .mul_by_constant(cs.ns(|| "3 * (1 + y_ed"), &SimulatedFieldElement::from(3u8))?;
+            let minus_two_over_b =
+                NonNativeFieldGadget::<SimulatedFieldElement, FieldElement>::from_value(
+                    cs.ns(|| "hardcode -2_over_B"),
+                    &(-b_inv * SimulatedFieldElement::from(2u8)), //TODO: This can be precomputed
+                );
 
-            let a_times_one_minus_y_ed = one_minus_y_ed.mul_by_constant(
-                cs.ns(|| "A * (1 - y_ed)"),
-                &<SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_A,
-            )?;
-
-            let rhs = three_times_one_plus_y_ed.add(
-                cs.ns(|| "3(1 + y_ed) + A(1 - y_ed)"),
-                &a_times_one_minus_y_ed,
-            )?;
-
-            let three_b_times_one_minus_y_ed = one_minus_y_ed.mul_by_constant(
-                cs.ns(|| "3B * (1 - y_ed)"),
-                &(<SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B
-                    * &SimulatedFieldElement::from(3u8)),
-            )?;
-
-            sw_pk_x_coordinate_g.mul_equals(
-                cs.ns(|| "check x_sw"),
-                &three_b_times_one_minus_y_ed,
-                &rhs,
-            )?;
+            sw_pk_x_coordinate_g
+                .add_constant(cs.ns(|| "x_sw + 1_over_B"), &b_inv)?
+                .sub_constant(
+                    cs.ns(|| "x_sw + 1_over_B - A_over_3B"),
+                    &(a_over_three * b_inv),
+                )? //TODO: This can be precomputed
+                .mul_equals(
+                    cs.ns(|| "(x_sw + 1_over_B - A_over_3B) * (y_ed - 1) = -2_over_B"),
+                    &y_ed_minus_one,
+                    &minus_two_over_b,
+                )?;
         }
 
         // Alloc y coordinate in sw representation
@@ -1562,37 +1333,45 @@ impl ScPublicKeyGadget {
                         .expect("B inverse must exist");
 
                     let one_plus_te_y_coord = one_plus_y_ed.get_value().get()?;
-                    let one_minus_te_y_coord = one_minus_y_ed.get_value().get()?;
+                    let one_minus_te_y_coord = -y_ed_minus_one.get_value().get()?;
 
                     let one_plus_te_y_coord_over_one_minus_te_y_coord = one_plus_te_y_coord
-                        * one_minus_te_y_coord.inverse().ok_or(SynthesisError::Other(
-                            "Should be able to compute inverse of (1 - y_te)".to_string(),
-                        ))?;
+                        * one_minus_te_y_coord.inverse().ok_or_else(|| {
+                            SynthesisError::Other(
+                                "Should be able to compute inverse of (1 - y_te)".to_string(),
+                            )
+                        })?;
 
-                    let te_x_coord_inv = te_pk_x_coordinate_g.get_value().get()?.inverse().ok_or(
-                        SynthesisError::Other(
-                            "Should be able to compute inverse of x_te".to_string(),
-                        ),
-                    )?;
+                    let te_x_coord_inv = te_pk_x_coordinate_g
+                        .get_value()
+                        .get()?
+                        .inverse()
+                        .ok_or_else(|| {
+                            SynthesisError::Other(
+                                "Should be able to compute inverse of x_te".to_string(),
+                            )
+                        })?;
 
-                    Ok(b_inv * &one_plus_te_y_coord_over_one_minus_te_y_coord * &te_x_coord_inv)
+                    Ok(b_inv * one_plus_te_y_coord_over_one_minus_te_y_coord * te_x_coord_inv)
                 },
             )?;
 
         // Check SW y coordinate
-        // y_sw * (x_ed(1 - y_ed)B) = (1 + y_ed)
+        // y_sw * (x_ed(y_ed - 1)B) = -(1 + y_ed)
         {
-            let b_x_ed_times_one_minus_y_ed = one_minus_y_ed
-                .mul(cs.ns(|| "x_ed(1 - y_ed)"), &te_pk_x_coordinate_g)?
+            let b_x_ed_times_one_minus_y_ed = y_ed_minus_one
+                .mul(cs.ns(|| "x_ed(y_ed - 1)"), &te_pk_x_coordinate_g)?
                 .mul_by_constant(
-                    cs.ns(|| "x_ed(1 - y_ed)B"),
+                    cs.ns(|| "x_ed(y_ed - 1)B"),
                     &<SimulatedCurveParameters as MontgomeryModelParameters>::COEFF_B,
                 )?;
+
+            let minus_one_plus_y_ed = one_plus_y_ed.negate(cs.ns(|| "-(1 + y_ed)"))?;
 
             sw_pk_y_coordinate_g.mul_equals(
                 cs.ns(|| "check y sw"),
                 &b_x_ed_times_one_minus_y_ed,
-                &one_plus_y_ed,
+                &minus_one_plus_y_ed,
             )?;
         }
 
@@ -1604,6 +1383,10 @@ impl ScPublicKeyGadget {
     }
 
     /// Extract TE point from y coordinate and x sign, then convert it to SW and output it.
+    /// The function doesn't enforce the pk being non trivial or valid: a pk which is either
+    /// not on the curve or not of wished prime order is at most a threat to the privacy of
+    /// the secret key. An honest user will always choose it properly, and therefore he will
+    ///  practically be the only one who is able to provide an ownership proof.
     fn get_sw_pk_from_te_pk<CS: ConstraintSystemAbstract<FieldElement>>(
         mut cs: CS,
         te_pk_x_sign_bit_g: Boolean,
@@ -1637,7 +1420,7 @@ impl ScPublicKeyGadget {
         ),
         SynthesisError,
     > {
-        let mut pk_bits_g = public_key_bits_g.clone();
+        let mut pk_bits_g = *public_key_bits_g;
         pk_bits_g.reverse(); // BE
 
         // Get the Boolean corresponding to the sign of the x coordinate
@@ -1650,6 +1433,7 @@ impl ScPublicKeyGadget {
         Ok((pk_x_sign_bit_g, pk_y_coordinate_g))
     }
 
+    /// Proves knowledge of the secret key behind a TE public key
     pub(crate) fn _enforce_pk_ownership<CS: ConstraintSystemAbstract<FieldElement>>(
         mut cs: CS,
         te_pk_x_sign_bit_g: Boolean,
@@ -1701,7 +1485,7 @@ impl ScPublicKeyGadget {
                 .collect::<Vec<_>>()
                 .try_into()
                 .unwrap();
-            
+
             let (ft_pk_x_sign_bit_g, ft_pk_y_coordinate_g) =
                 Self::get_x_sign_and_y_coord_from_pk_bits(
                     cs.ns(|| "unpack ft pk bits"),

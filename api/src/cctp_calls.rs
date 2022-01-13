@@ -93,12 +93,17 @@ pub fn compute_pks_threshold_hash(
     pks.iter().for_each(|pk| {
         h.update(pk.x);
     });
-    let pks_hash = h.finalize()?;
+    let pks_hash = h
+        .finalize()
+        .map_err(|e| format!("Unable to compute pks hash: {:?}", e))?;
 
-    FieldHash::init_constant_length(2, None)
+    let pks_threshold_hash = FieldHash::init_constant_length(2, None)
         .update(pks_hash)
         .update(threshold_field)
         .finalize()
+        .map_err(|e| format!("Unable to compute pks_treshold_hash: {:?}", e))?;
+
+    Ok(pks_threshold_hash)
 }
 
 //Compute and return (MR(bt_list), H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount, [H(custom_fields)]))
@@ -119,25 +124,36 @@ pub fn compute_msg_to_sign(
     } else {
         None
     };
-    let mr_bt = get_bt_merkle_root(bt_list_opt)?;
+    let mr_bt = get_bt_merkle_root(bt_list_opt)
+        .map_err(|e| format!("Backward transfer Merkle Root computation failed: {:?}", e))?;
 
     let fees_field_element = {
         let fes = DataAccumulator::init()
-            .update(btr_fee)?
-            .update(ft_min_amount)?
-            .get_field_elements()?;
+            .update(btr_fee)
+            .map_err(|e| format!("Unable to update DataAccumulator with btr_fee: {:?}", e))?
+            .update(ft_min_amount)
+            .map_err(|e| {
+                format!(
+                    "Unable to update DataAccumulator with ft_min_amount: {:?}",
+                    e
+                )
+            })?
+            .get_field_elements()
+            .map_err(|e| format!("Unable to finalize DataAccumulator {:?}", e))?;
         assert_eq!(fes.len(), 1);
         fes[0]
     };
 
     // Compute custom_fields_hash if they are present
-    let custom_fields_hash = if custom_fields.is_some() {
-        let custom_fields = custom_fields.unwrap();
+    let custom_fields_hash = if let Some(custom_fields) = custom_fields {
         let mut h = FieldHash::init_constant_length(custom_fields.len(), None);
         custom_fields.into_iter().for_each(|custom_field| {
             h.update(custom_field);
         });
-        Some(h.finalize().unwrap())
+        Some(
+            h.finalize()
+                .map_err(|e| format!("Unable to compute custom_fields_hash: {:?}", e))?,
+        )
     } else {
         None
     };
@@ -152,11 +168,13 @@ pub fn compute_msg_to_sign(
         .update(*end_cumulative_sc_tx_comm_tree_root)
         .update(fees_field_element);
 
-    if custom_fields_hash.is_some() {
-        h.update(custom_fields_hash.unwrap());
+    if let Some(custom_fields_hash) = custom_fields_hash {
+        h.update(custom_fields_hash);
     }
 
-    let msg = h.finalize()?;
+    let msg = h
+        .finalize()
+        .map_err(|e| format!("Unable to compute final hash: {:?}", e))?;
 
     Ok((mr_bt, msg))
 }
@@ -172,6 +190,7 @@ pub fn create_naive_threshold_sig_proof(
     bt_list: Vec<BackwardTransfer>,
     threshold: u64,
     custom_fields: Option<Vec<FieldElement>>,
+    supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
     proving_key_path: &Path,
     enforce_membership: bool,
     zk: bool,
@@ -191,14 +210,16 @@ pub fn create_naive_threshold_sig_proof(
         ft_min_amount,
         bt_list,
         custom_fields.clone(),
-    )?;
+    )
+    .map_err(|e| format!("Unable to compute msg_to_sign: {:?}", e))?;
 
     // Iterate over sigs, check and count number of valid signatures,
     // and replace with NULL_CONST.null_sig the None ones
     let mut valid_signatures = 0;
     for i in 0..max_pks {
         if sigs[i].is_some() {
-            let is_verified = schnorr_verify_signature(&msg, &pks[i], &sigs[i].unwrap())?;
+            let is_verified = schnorr_verify_signature(&msg, &pks[i], &sigs[i].unwrap())
+                .map_err(|e| format!("Unable to verify signature {}: {:?}", i, e))?;
             if is_verified {
                 valid_signatures += 1;
             }
@@ -239,26 +260,39 @@ pub fn create_naive_threshold_sig_proof(
         proving_key_path,
         Some(enforce_membership),
         Some(compressed_pk),
-    )?;
+    )
+    .map_err(|e| {
+        format!(
+            "Unable to read proving key from file {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+            proving_key_path, e, enforce_membership, compressed_pk
+        )
+    })?;
 
-    let g1_ck = get_g1_committer_key()?;
+    let g1_ck = get_g1_committer_key(supported_degree).map_err(|e| {
+        format!(
+            "Unable to get DLOG key of degree {:?}: {:?}",
+            supported_degree, e
+        )
+    })?;
 
     let proof = match pk {
         ZendooProverKey::Darlin(_) => unimplemented!(),
         ZendooProverKey::CoboundaryMarlin(pk) => {
             // Call prover
             let rng = &mut OsRng;
-            let proof = CoboundaryMarlin::prove(
-                &pk,
-                g1_ck.as_ref().unwrap(),
-                c,
-                zk,
-                if zk { Some(rng) } else { None },
-            )?;
+            let proof =
+                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })
+                    .map_err(|e| format!("Error during proof creation: {:?}", e))?;
             serialize_to_buffer(
                 &ZendooProof::CoboundaryMarlin(MarlinProof(proof)),
                 Some(compress_proof),
-            )?
+            )
+            .map_err(|e| {
+                format!(
+                    "Proof serialization (compressed: {}) failed: {:?}",
+                    compress_proof, e
+                )
+            })?
         }
     };
     Ok((proof, valid_signatures))
@@ -293,7 +327,7 @@ pub fn verify_naive_threshold_sig_proof(
         epoch_number,
         quality: valid_sigs,
         bt_list: bt_list_opt,
-        custom_fields: if custom_fields.len() == 0 {
+        custom_fields: if custom_fields.is_empty() {
             None
         } else {
             Some(custom_fields.iter().collect())
@@ -305,23 +339,42 @@ pub fn verify_naive_threshold_sig_proof(
 
     // Check that the proving system type of the vk and proof are the same, before
     // deserializing them all
-    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None)?;
+    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None).map_err(|e| {
+        format!(
+            "Unable to read proving system type from vk at {:?}: {:?}",
+            vk_path, e
+        )
+    })?;
 
-    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)?;
+    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)
+        .map_err(|e| format!("Unable to read proving system type from proof: {:?}", e))?;
 
     if vk_ps_type != proof_ps_type {
-        Err(ProvingSystemError::ProvingSystemMismatch)?
+        return Err(ProvingSystemError::ProvingSystemMismatch.into());
     }
 
     // Deserialize proof and vk
-    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))?;
+    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))
+        .map_err(|e| {
+            format!(
+                "Unable to read vk at {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+                vk_path, e, check_vk, compressed_vk
+            )
+        })?;
 
     let proof: ZendooProof =
-        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))?;
+        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))
+            .map_err(|e| {
+                format!(
+                    "Unable to read proof: {:?}. Semantic checks: {}, Compressed: {}",
+                    e, check_proof, compressed_proof
+                )
+            })?;
 
     // Verify proof
     let rng = &mut OsRng;
-    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))?;
+    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))
+        .map_err(|e| format!("Proof verification error: {:?}", e))?;
 
     Ok(is_verified)
 }
@@ -336,6 +389,7 @@ pub fn create_csw_proof(
     ft_data: Option<CswFtProverData>,
     range_size: u32,
     num_custom_fields: u32,
+    supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
     proving_key_path: &Path,
     enforce_membership: bool,
     zk: bool,
@@ -352,7 +406,8 @@ pub fn create_csw_proof(
         ft_data,
         range_size,
         num_custom_fields,
-    )?;
+    )
+    .map_err(|e| format!("Unable to create concrete instance of CSW circuit: {:?}", e))?;
 
     if debug_first {
         match debug_circuit(c.clone()).unwrap() {
@@ -365,28 +420,42 @@ pub fn create_csw_proof(
         proving_key_path,
         Some(enforce_membership),
         Some(compressed_pk),
-    )?;
+    )
+    .map_err(|e| {
+        format!(
+            "Unable to read proving key from file {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+            proving_key_path, e, enforce_membership, compressed_pk
+        )
+    })?;
 
-    let g1_ck = get_g1_committer_key()?;
+    let g1_ck = get_g1_committer_key(supported_degree).map_err(|e| {
+        format!(
+            "Unable to get DLOG key of degree {:?}: {:?}",
+            supported_degree, e
+        )
+    })?;
 
     let proof = match pk {
         ZendooProverKey::Darlin(_) => unimplemented!(),
         ZendooProverKey::CoboundaryMarlin(pk) => {
             // Call prover
             let rng = &mut OsRng;
-            let proof = CoboundaryMarlin::prove(
-                &pk,
-                g1_ck.as_ref().unwrap(),
-                c,
-                zk,
-                if zk { Some(rng) } else { None },
-            )?;
+            let proof =
+                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })
+                    .map_err(|e| format!("Error during proof creation: {:?}", e))?;
             serialize_to_buffer(
                 &ZendooProof::CoboundaryMarlin(MarlinProof(proof)),
                 Some(compress_proof),
-            )?
+            )
+            .map_err(|e| {
+                format!(
+                    "Proof serialization (compressed: {}) failed: {:?}",
+                    compress_proof, e
+                )
+            })?
         }
     };
+
     Ok(proof)
 }
 
@@ -413,23 +482,42 @@ pub fn verify_csw_proof(
 
     // Check that the proving system type of the vk and proof are the same, before
     // deserializing them all
-    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None)?;
+    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None).map_err(|e| {
+        format!(
+            "Unable to read proving system type from vk at {:?}: {:?}",
+            vk_path, e
+        )
+    })?;
 
-    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)?;
+    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)
+        .map_err(|e| format!("Unable to read proving system type from proof: {:?}", e))?;
 
     if vk_ps_type != proof_ps_type {
-        Err(ProvingSystemError::ProvingSystemMismatch)?
+        return Err(ProvingSystemError::ProvingSystemMismatch.into());
     }
 
     // Deserialize proof and vk
-    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))?;
+    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))
+        .map_err(|e| {
+            format!(
+                "Unable to read vk at {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+                vk_path, e, check_vk, compressed_vk
+            )
+        })?;
 
     let proof: ZendooProof =
-        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))?;
+        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))
+            .map_err(|e| {
+                format!(
+                    "Unable to read proof: {:?}. Semantic checks: {}, Compressed: {}",
+                    e, check_proof, compressed_proof
+                )
+            })?;
 
     // Verify proof
     let rng = &mut OsRng;
-    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))?;
+    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))
+        .map_err(|e| format!("Proof verification error: {:?}", e))?;
 
     Ok(is_verified)
 }
@@ -524,243 +612,8 @@ pub(crate) fn into_i8(v: Vec<u8>) -> Vec<i8> {
 mod test {
     use super::*;
     use algebra::Field;
-    use cctp_primitives::proving_system::init_dlog_keys;
     use cctp_primitives::utils::{mht::*, poseidon_hash::*};
-    use demo_circuit::generate_circuit_keypair;
-    use rand::Rng;
-
     use serial_test::*;
-
-    fn create_sample_naive_threshold_sig_circuit(
-        bt_num: usize,
-        custom_fields_len: usize,
-        pk_path: &Path,
-        vk_path: &Path,
-        proof_path: &Path,
-    ) {
-        //assume to have 3 pks, threshold = 2
-        let mut rng = OsRng;
-
-        // Generate random data
-        let mut bt_list = vec![];
-        for _ in 0..bt_num {
-            bt_list.push(BackwardTransfer::default());
-        }
-
-        let end_cumulative_sc_tx_comm_tree_root = FieldElement::rand(&mut rng);
-        let sc_id = FieldElement::rand(&mut rng);
-        let epoch_number: u32 = rng.gen();
-        let btr_fee: u64 = rng.gen();
-        let ft_min_amount: u64 = rng.gen();
-        let custom_fields = if custom_fields_len > 0 {
-            let random_fields = (0..custom_fields_len)
-                .map(|_| rng.gen())
-                .collect::<Vec<_>>();
-            Some(random_fields)
-        } else {
-            None
-        };
-
-        println!("Custom fields len: {}", custom_fields_len);
-        println!("Custom fields: {:?}", custom_fields);
-
-        //Compute msg to sign
-        let (_, msg) = compute_msg_to_sign(
-            &sc_id,
-            epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root,
-            btr_fee,
-            ft_min_amount,
-            bt_list.clone(),
-            custom_fields.clone(),
-        )
-        .unwrap();
-        println!("compute_msg_to_sign finished");
-
-        //Generate params and write them to file
-        let circ = NaiveTresholdSignature::get_instance_for_setup(3, custom_fields_len);
-        generate_circuit_keypair(
-            circ,
-            ProvingSystem::CoboundaryMarlin,
-            pk_path,
-            vk_path,
-            9000,
-            false,
-            Some(true),
-            Some(true),
-        )
-        .unwrap();
-        println!("generate_parameters finished");
-
-        //Generate sample pks and sigs vec
-        let threshold: u64 = 2;
-        let mut pks = vec![];
-        let mut sks = vec![];
-        for _ in 0..3 {
-            let keypair = schnorr_generate_key();
-            pks.push(keypair.0);
-            sks.push(keypair.1);
-            println!(
-                "sk: {:?}",
-                into_i8(serialize_to_buffer(&keypair.1, None).unwrap())
-            );
-        }
-        println!("pks / sks finished");
-
-        let mut sigs = vec![];
-        sigs.push(Some(schnorr_sign(&msg, &sks[0], &pks[0]).unwrap()));
-        sigs.push(None);
-        sigs.push(Some(schnorr_sign(&msg, &sks[2], &pks[2]).unwrap()));
-
-        println!(
-            "sk: {:?}",
-            into_i8(serialize_to_buffer(&sks[0], None).unwrap())
-        );
-        println!(
-            "sk: {:?}",
-            into_i8(serialize_to_buffer(&sks[2], None).unwrap())
-        );
-        println!(
-            "sk: {:?}",
-            into_i8(serialize_to_buffer(&sks[1], None).unwrap())
-        );
-
-        println!(
-            "sig: {:?}",
-            into_i8(serialize_to_buffer(&sigs[0], None).unwrap())
-        );
-        println!(
-            "sig: {:?}",
-            into_i8(serialize_to_buffer(&sigs[2], None).unwrap())
-        );
-
-        let constant = compute_pks_threshold_hash(pks.as_slice(), threshold).unwrap();
-        println!(
-            "Constant u8: {:?}",
-            serialize_to_buffer(&constant, None).unwrap()
-        );
-
-        //Create and serialize proof
-        let (proof, quality) = create_naive_threshold_sig_proof(
-            pks.as_slice(),
-            sigs,
-            &sc_id,
-            epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root,
-            btr_fee,
-            ft_min_amount,
-            bt_list.clone(),
-            threshold,
-            custom_fields.clone(),
-            pk_path,
-            false,
-            false,
-            true,
-            true,
-        )
-        .unwrap();
-        write_to_file(&proof, proof_path, Some(true)).unwrap();
-
-        //Verify proof
-        assert!(verify_naive_threshold_sig_proof(
-            &constant,
-            &sc_id,
-            epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root,
-            btr_fee,
-            ft_min_amount,
-            bt_list.clone(),
-            quality,
-            if custom_fields.is_some() {
-                custom_fields.clone().unwrap()
-            } else {
-                vec![]
-            },
-            proof.clone(),
-            true,
-            true,
-            vk_path,
-            true,
-            true,
-        )
-        .unwrap());
-
-        //Generate wrong public inputs by changing quality and assert proof verification doesn't pass
-        assert!(!verify_naive_threshold_sig_proof(
-            &constant,
-            &sc_id,
-            epoch_number,
-            &end_cumulative_sc_tx_comm_tree_root,
-            btr_fee,
-            ft_min_amount,
-            bt_list,
-            quality - 1,
-            if custom_fields.is_some() {
-                custom_fields.unwrap()
-            } else {
-                vec![]
-            },
-            proof,
-            true,
-            true,
-            vk_path,
-            true,
-            true,
-        )
-        .unwrap());
-    }
-
-    #[serial]
-    #[test]
-    fn sample_calls_naive_threshold_sig_circuit() {
-        let tmp_dir = std::env::temp_dir();
-        let ps_type = ProvingSystem::CoboundaryMarlin;
-        let custom_fields = 10;
-
-        init_dlog_keys(ps_type, 1 << 17, 1 << 14).unwrap();
-
-        for i in vec![0, custom_fields as usize] {
-            println!("****************With BWT**********************");
-
-            let mut pk_path = tmp_dir.clone();
-            pk_path.push("sample_pk");
-
-            let mut vk_path = tmp_dir.clone();
-            vk_path.push("sample_vk");
-
-            let mut proof_path = tmp_dir.clone();
-            proof_path.push("sample_proof");
-
-            create_sample_naive_threshold_sig_circuit(10, i, &pk_path, &vk_path, &proof_path);
-
-            println!("****************Without BWT*******************");
-
-            let mut pk_path_no_bwt = tmp_dir.clone();
-            pk_path_no_bwt.push("sample_pk_no_bwt");
-
-            let mut vk_path_no_bwt = tmp_dir.clone();
-            vk_path_no_bwt.push("sample_vk_no_bwt");
-
-            let mut proof_path_no_bwt = tmp_dir.clone();
-            proof_path_no_bwt.push("sample_proof_no_bwt");
-
-            create_sample_naive_threshold_sig_circuit(
-                0,
-                i,
-                &pk_path_no_bwt,
-                &vk_path_no_bwt,
-                &proof_path_no_bwt,
-            );
-
-            println!("*************** Clean up **********************");
-            std::fs::remove_file(pk_path).unwrap();
-            std::fs::remove_file(vk_path).unwrap();
-            std::fs::remove_file(proof_path).unwrap();
-            std::fs::remove_file(pk_path_no_bwt).unwrap();
-            std::fs::remove_file(vk_path_no_bwt).unwrap();
-            std::fs::remove_file(proof_path_no_bwt).unwrap();
-        }
-    }
 
     #[serial]
     #[test]
@@ -885,13 +738,11 @@ mod test {
         finalize_ginger_mht_in_place(&mut mht).unwrap();
         let mht_root = get_ginger_mht_root(&mht).expect("Tree must've been finalized");
 
-        for i in 0..leaves_num {
+        for (i, leaf) in mht_leaves.iter().enumerate().take(leaves_num) {
             //Create and verify merkle paths for each leaf
             let path = get_ginger_mht_path(&mht, i as u64).unwrap();
             assert!(verify_ginger_merkle_path_without_length_check(
-                &path,
-                &mht_leaves[i],
-                &mht_root
+                &path, leaf, &mht_root
             ));
 
             // Check leaf index is the correct one

@@ -6,7 +6,7 @@ use primitives::{
 
 use crate::type_mapping::*;
 
-pub mod constants;
+pub mod personalizations;
 
 pub struct NaiveThresholdSigParams {
     pub null_sig: SchnorrSig,
@@ -164,23 +164,9 @@ pub const FIELD_MODULUS: usize = FIELD_CAPACITY + 1;
 
 pub const MST_MERKLE_TREE_HEIGHT: usize = 22;
 
-pub const PHANTOM_FIELD_ELEMENT: FieldElement = field_new!(
-    FieldElement,
-    BigInteger256([
-        4113438167814256341,
-        6017662335620633663,
-        3729794390834568355,
-        4611686018427387136
-    ])
-);
-
-pub const CSW_PHANTOM_PUB_KEY_BYTES: [u8; 32] = [217, 127, 224, 199, 8, 45, 179, 51, 115, 161, 177, 30, 203, 183, 46, 176, 168, 185, 222, 243, 130, 216, 130, 102, 88, 154, 253, 135, 199, 233, 73, 48];
-
 #[cfg(test)]
 mod test {
-    use crate::read_field_element_from_buffer_with_padding;
     use algebra::{AffineCurve, FpParameters, FromCompressedBits, PrimeField};
-    use cctp_primitives::utils::serialization::serialize_to_buffer;
 
     use super::*;
     use bit_vec::BitVec;
@@ -188,16 +174,25 @@ mod test {
 
     use serial_test::*;
 
-    fn hash_to_curve<F: PrimeField, G: AffineCurve + FromCompressedBits>(
+    /// Hash into a valid FieldElement belonging to F using "blake2s_simd" hash until the provided
+    /// 'fe_to_point' function doesn't return Some(G).
+    /// New values are computed incrementing an internal state until a certain limit.
+    /// If no point has been found when the limit is reached, then function will return None.
+    fn hash_to_fe_and_map_to_point<
+        F: PrimeField,
+        G: AffineCurve + FromCompressedBits,
+        FN: Fn(F) -> Option<G>,
+    >(
         tag: &[u8],
         personalization: &[u8],
+        fe_to_point: FN,
     ) -> Option<G> {
         let compute_chunk = |input: &[u8], personalization: &[u8]| -> Hash {
             Params::new()
                 .hash_length(32)
                 .personal(personalization)
                 .to_state()
-                .update(constants::GH_FIRST_BLOCK)
+                .update(personalizations::GH_FIRST_BLOCK)
                 .update(input)
                 .finalize()
         };
@@ -244,26 +239,37 @@ mod test {
                 None => continue,
             };
 
+            // If the sampled Field Element produces a valid point according to the supplied function,
+            // then interrupt the loop
+            match fe_to_point(fe) {
+                Some(point) => {
+                    g = Some(point);
+                    break;
+                }
+                None => continue,
+            }
+        }
+        g
+    }
+
+    fn hash_to_curve<F: PrimeField, G: AffineCurve + FromCompressedBits>(
+        tag: &[u8],
+        personalization: &[u8],
+    ) -> Option<G> {
+        hash_to_fe_and_map_to_point::<F, G, _>(tag, personalization, |fe| {
             //Get point from chunks
             let mut fe_bits = fe.write_bits();
             fe_bits.push(false); //We don't want an infinity point
             fe_bits.push(false); //We decide to choose the even y coordinate
-            match G::decompress(fe_bits) {
-                Ok(point) => {
-                    g = Some(point);
-                    break;
-                }
-                Err(_) => continue,
-            };
-        }
-        g
+            G::decompress(fe_bits).ok()
+        })
     }
 
     #[serial]
     #[test]
     fn test_pk_null_gen() {
         let tag = b"Strontium Sr 90";
-        let personalization = constants::NULL_PK_PERSONALIZATION;
+        let personalization = personalizations::CERT_NULL_PK_PERSONALIZATION;
         let htc_out = hash_to_curve::<FieldElement, G2>(tag, personalization)
             .unwrap()
             .into_projective();
@@ -275,7 +281,7 @@ mod test {
     #[serial]
     #[test]
     fn test_vrf_group_hash_gen() {
-        let personalization = constants::VRF_GROUP_HASH_GENERATORS_PERSONALIZATION;
+        let personalization = personalizations::VRF_GROUP_HASH_GENERATORS_PERSONALIZATION;
 
         //Gen1
         let tag = b"Magnesium Mg 12";
@@ -294,38 +300,5 @@ mod test {
         println!("{:#?}", htc_g1_out);
         println!("{:#?}", htc_g2_out);
         assert_eq!(gh_generators, VRFParams::new().group_hash_generators);
-    }
-
-    #[serial]
-    #[test]
-    fn test_csw_phantom_field_element() {
-        let tag = b"Krypton 36";
-        let field_element = read_field_element_from_buffer_with_padding(tag).unwrap();
-        println!("Phantom field element: {:?}", field_element);
-        assert_eq!(field_element, PHANTOM_FIELD_ELEMENT);
-    }
-
-    #[serial]
-    #[test]
-    fn test_csw_phantom_public_key() {
-        let x = SimulatedFieldElement::from(BigInteger256([15877199453377760308, 458271239891050623, 5539075294202620951, 5404726604943382876]));
-        let y = SimulatedFieldElement::from(BigInteger256([3725370832501899225, 12695286482625208691, 7386704395789842856, 3479569230309726808]));
-        let simulated_te_point = SimulatedTEGroup::new(x, y);
-        assert_eq!(simulated_te_point.group_membership_test(), false);
-
-        // Store the sign (last bit) of the X coordinate
-        // The value is left-shifted to be used later in an OR operation
-        let x_sign = if simulated_te_point.x.is_odd() { 1 << 7 } else { 0u8 };
-
-        // Extract the public key bytes as Y coordinate
-        let y_coordinate = simulated_te_point.y;
-        let mut pk_bytes = serialize_to_buffer(&y_coordinate, None).unwrap();
-
-        // Use the last (null) bit of the public key to store the sign of the X coordinate
-        // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus
-        let len = pk_bytes.len();
-        pk_bytes[len - 1] |= x_sign;
-
-        assert_eq!(pk_bytes, CSW_PHANTOM_PUB_KEY_BYTES);
     }
 }

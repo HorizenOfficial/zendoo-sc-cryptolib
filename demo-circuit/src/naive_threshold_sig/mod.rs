@@ -430,6 +430,8 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
 
 #[cfg(test)]
 mod test {
+    use crate::{MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE};
+
     use super::*;
     use cctp_primitives::{
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
@@ -509,8 +511,8 @@ mod test {
             .update(end_cumulative_sc_tx_comm_tree_root)
             .update(fees_field_elements);
 
-        if custom_fields_hash.is_some() {
-            h.update(custom_fields_hash.unwrap());
+        if let Some(custom_fields_hash) = custom_fields_hash {
+            h.update(custom_fields_hash);
         }
 
         let message = h.finalize().unwrap();
@@ -545,7 +547,7 @@ mod test {
         //Generate b
         let t_field = FieldElement::from_repr(FieldBigInteger::from(threshold as u64));
         let valid_field = FieldElement::from_repr(FieldBigInteger::from(valid_sigs as u64));
-        let b_field = valid_field - &t_field;
+        let b_field = valid_field - t_field;
 
         //Return concrete circuit instance
         let mut c = NaiveTresholdSignature::new(
@@ -595,10 +597,12 @@ mod test {
 
         //Return proof and public inputs if success
         let rng = &mut OsRng;
-        let ck_g1 = get_g1_committer_key().unwrap();
+        let ck_g1 = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
+        assert_eq!(ck_g1.comm_key.len(), SUPPORTED_SEGMENT_SIZE);
+
         match CoboundaryMarlin::prove(
             &index_pk,
-            ck_g1.as_ref().unwrap(),
+            &ck_g1,
             c.clone(),
             zk,
             if zk { Some(rng) } else { None },
@@ -628,44 +632,34 @@ mod test {
         let n = 6;
         let zk = false;
 
-        load_g1_committer_key(1 << 17, 1 << 15).unwrap();
-        let ck = get_g1_committer_key().unwrap();
+        let _ = load_g1_committer_key(MAX_SEGMENT_SIZE - 1);
+        let ck = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
+        assert_eq!(ck.comm_key.len(), SUPPORTED_SEGMENT_SIZE);
+
         let circ = NaiveTresholdSignature::get_instance_for_setup(n, 1);
 
-        let params = CoboundaryMarlin::index(ck.as_ref().unwrap(), circ).unwrap();
+        let params = CoboundaryMarlin::index(&ck, circ).unwrap();
 
         //Generate proof with correct witnesses and v > t
         let (proof, public_inputs) =
             generate_test_proof(n, 5, 4, 1, false, false, params.0.clone(), zk).unwrap();
-        assert!(CoboundaryMarlin::verify(
-            &params.1,
-            ck.as_ref().unwrap(),
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
+        assert!(
+            CoboundaryMarlin::verify(&params.1, &ck, public_inputs.as_slice(), &proof).unwrap()
+        );
 
         //Generate proof with bad pks_threshold_hash
         let (proof, public_inputs) =
             generate_test_proof(n, 5, 4, 1, true, false, params.0.clone(), zk).unwrap();
-        assert!(!CoboundaryMarlin::verify(
-            &params.1,
-            ck.as_ref().unwrap(),
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
+        assert!(
+            !CoboundaryMarlin::verify(&params.1, &ck, public_inputs.as_slice(), &proof).unwrap()
+        );
 
         //Generate proof with bad cert_data_hash
         let (proof, public_inputs) =
             generate_test_proof(n, 5, 4, 1, false, true, params.0.clone(), zk).unwrap();
-        assert!(!CoboundaryMarlin::verify(
-            &params.1,
-            ck.as_ref().unwrap(),
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
+        assert!(
+            !CoboundaryMarlin::verify(&params.1, &ck, public_inputs.as_slice(), &proof).unwrap()
+        );
     }
 
     #[serial]
@@ -675,7 +669,7 @@ mod test {
         let n = 6;
         let num_custom_fields = rng.gen_range(1..10);
 
-        for i in vec![0, num_custom_fields] {
+        for &i in &[0, num_custom_fields] {
             println!("Test success case with v > t");
             let v = rng.gen_range(1..n);
             let t = rng.gen_range(0..v);
