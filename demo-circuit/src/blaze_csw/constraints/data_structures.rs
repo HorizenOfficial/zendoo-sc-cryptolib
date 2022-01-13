@@ -545,7 +545,7 @@ impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
     }
 }
 
-
+/// The relevant public data of a forward transaction
 pub struct CswFtOutputDataGadget {
     pub amount_g: UInt64,
     pub receiver_pub_key_g: [UInt8; SC_PUBLIC_KEY_LENGTH],
@@ -1011,7 +1011,7 @@ pub struct CswSysDataGadget {
     pub amount_g: FieldElementGadget,
     /// nullifier for the csw, a unique reference to its utxo/ft
     pub nullifier_g: FieldElementGadget,
-    /// receipient address of the csw
+    /// recipient address of the csw
     pub receiver_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
 }
 

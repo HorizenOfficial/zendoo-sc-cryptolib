@@ -75,6 +75,7 @@ impl WithdrawalCertificateData {
 }
 
 #[derive(Clone, Default)]
+/// The relevant public data on a utxo
 pub struct CswUtxoOutputData {
     pub spending_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
     pub amount: u64,
@@ -118,6 +119,7 @@ impl FieldHasher<FieldElement, FieldHash> for CswUtxoOutputData {
     }
 }
 
+// The relevant witness data for proving ownership of a utxo
 #[derive(Clone)]
 pub struct CswUtxoInputData {
     pub output: CswUtxoOutputData,
@@ -133,6 +135,7 @@ impl Default for CswUtxoInputData {
     }
 }
 
+/// The relevant public data of a forward transaction
 #[derive(Clone, Default)]
 pub struct CswFtOutputData {
     pub amount: u64,
@@ -142,14 +145,19 @@ pub struct CswFtOutputData {
     pub out_idx: u32,
 }
 
+/// The relevant public data of a ceased sidechain withdrawal
 #[derive(Clone, Default)]
 pub struct CswSysData {
-    pub mcb_sc_txs_com_end: FieldElement, // Passed directly by MC. The cumulative SCTxsCommitment hash taken from the MC block where the SC was ceased (needed to recover FTs in reverted epochs).
-    pub sc_last_wcert_hash: FieldElement, // hash of the last confirmed WCert (excluding reverted) for this sidechain (calculated directly by MC). Note that it should be a hash of WithdrawalCertificateData
-    pub amount: u64,                      // taken from CSW and passed directly by the MC
-    pub nullifier: FieldElement,          // taken from CSW and passed directly by the MC
-    pub receiver: [u8; MC_PK_SIZE], // the receiver is fixed by the proof, otherwise someone will be able to front-run the tx and steel the proof.
-                                    // Note that we actually don't need to do anything with the receiver in the circuit, it's enough just to have it as a public input
+    /// The last hash of the history of Sc_Tx_Commitments
+    pub mcb_sc_txs_com_end: FieldElement,
+    /// The hash of the last accepted withdrawal certificate 
+    pub sc_last_wcert_hash: FieldElement,
+    /// amount of the csw
+    pub amount: u64,
+    /// nullifier for the csw, a unique reference to its utxo/ft                    
+    pub nullifier: FieldElement,
+    /// recipient address of the csw
+    pub receiver: [u8; MC_PK_SIZE], 
 }
 
 impl CswSysData {
@@ -170,10 +178,16 @@ impl CswSysData {
     }
 }
 
+/// The witness data needed for a utxo withdrawal proof. 
+/// Contains the utxo and secret key, and the witnesses for proving membership
+/// to the last sidechain state accepted by the mainchain.
 #[derive(Clone)]
 pub struct CswUtxoProverData {
-    pub input: CswUtxoInputData, // unspent output we are trying to withdraw
-    pub mst_path_to_output: GingerMHTBinaryPath, // path to output in the MST of the known state
+    /// unspent output we are trying to withdraw
+    pub input: CswUtxoInputData, 
+    /// Merkle path to last state accepted sidechain state, which 
+    /// is extracted from the `custom_fields` of the withdrawal certificate
+    pub mst_path_to_output: GingerMHTBinaryPath, 
 }
 
 impl Default for CswUtxoProverData {
@@ -188,20 +202,37 @@ impl Default for CswUtxoProverData {
     }
 }
 
+/// The witnesses needed for a forward transaction withdrawal proof.
+/// Consists of the forward transaction and its secret key, plus additional
+/// witness data for proving the ft being member of the mainchain-to-sidechain
+/// history maintained by the mainchain (by means of the Sc_Txs_Commitments).
 #[derive(Clone)]
 pub struct CswFtProverData {
-    pub ft_output: CswFtOutputData, // FT output in the MC block
-    pub ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS], // secret key that authorizes ft_input spending.
-    pub mcb_sc_txs_com_start: FieldElement, // Cumulative ScTxsCommittment taken from the last MC block of the last confirmed (not reverted) epoch
+    /// The forward transaction output
+    pub ft_output: CswFtOutputData, 
+    /// The secret key for the ft's recipient address
+    pub ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS], 
+    /// The Sc_Txs_Commitment at the start of the time window the withdrawal proof refers to.
+    /// (The end is provided via public inputs)
+    pub mcb_sc_txs_com_start: FieldElement,
+    /// The complete hash chain of the Sc_Txs_Commitments 
+    pub sc_txs_com_hashes: Vec<FieldElement>,
+    //   
+    //  Witness data for proving the ft being member of an Sc_Txs_Commitment. 
+    //
+    /// The Merkle path for the sidechain-specific root within the Sc_Txs_Commitment.
     pub merkle_path_to_sc_hash: GingerMHTBinaryPath, // Merkle path to a particular sidechain in the ScTxsComm tree
+    /// The Merkle path for the ft to its sidechain-specific root within the Sc_Txs_Commitment
     pub ft_tree_path: GingerMHTBinaryPath, // path to the ft_input_hash in the FT Merkle tree included in ScTxsComm tree
+    /// for completing the Merkle Path from the ft_tree root to the sidechain-specific root:
+    /// The sidechain creation commitment.
     pub sc_creation_commitment: FieldElement,
-    pub scb_btr_tree_root: FieldElement, // root hash of the BTR tree included in ScTxsComm tree
-    pub wcert_tree_root: FieldElement,   // root hash of the Wcert tree included in ScTxsComm tree
-    pub sc_txs_com_hashes: Vec<FieldElement>, // contains all ScTxsComm cumulative hashes on the way from `mcb_sc_txs_com_start` to `mcb_sc_txs_com_end`
-                                              // RANGE_SIZE is a number of blocks between `mcb_sc_txs_com_start` and `mcb_sc_txs_com_end`.
-                                              // It seems it can be a constant as the number of blocks between the last confirmed block and SC ceasing block should be fixed for a particular sidechain
-                                              // witnesses [END]
+    /// for completing the Merkle Path from the ft_tree root to the sidechain-specific root:
+    /// The backward transfer request commitment.
+    pub scb_btr_tree_root: FieldElement, 
+    /// for completing the Merkle Path from the ft_tree root to the sidechain-specific root:
+    /// The withdrawal certificate commitment.
+    pub wcert_tree_root: FieldElement,   
 }
 
 impl CswFtProverData {
@@ -226,6 +257,7 @@ impl CswFtProverData {
     }
 }
 
+/// The complete witness data for creating a csw proof.
 #[derive(Clone)]
 pub struct CswProverData {
     pub sys_data: CswSysData,
