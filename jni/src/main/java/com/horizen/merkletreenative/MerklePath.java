@@ -17,7 +17,17 @@ public class MerklePath implements AutoCloseable {
         this.merklePathPointer = merklePathPointer;
     }
 
-    private native boolean nativeVerify(int merkleTreeHeight, FieldElement leaf, FieldElement root);
+    private native int nativeGetLength();
+
+    /**
+     * Get the length of this MerklePath
+     * @return the length of this MerklePath
+     */
+    public int getLength() {
+        return nativeGetLength();
+    }
+
+    private native boolean nativeVerify(FieldElement leaf, FieldElement root);
 
     /*
     * Verify the Merkle Path for `leaf` given the `root` of a Merkle Tree with height `merkleTreeHeight`.
@@ -25,10 +35,10 @@ public class MerklePath implements AutoCloseable {
     public boolean verify(int merkleTreeHeight, FieldElement leaf, FieldElement root) {
         if (merklePathPointer == 0)
             throw new IllegalStateException("MerklePath instance was freed.");
-        return nativeVerify(merkleTreeHeight, leaf, root);
+        if (merkleTreeHeight != this.getLength())
+            return false;
+        return nativeVerify(leaf, root);
     }
-
-    private native boolean nativeVerifyWithoutLengthCheck(FieldElement leaf, FieldElement root);
 
     /*
     * Verify the Merkle Path for `leaf` given the `root` of a Merkle Tree. Doesn't check if the
@@ -38,7 +48,7 @@ public class MerklePath implements AutoCloseable {
     public boolean verify(FieldElement leaf, FieldElement root) {
         if (merklePathPointer == 0)
             throw new IllegalStateException("MerklePath instance was freed.");
-        return nativeVerifyWithoutLengthCheck(leaf, root);
+        return nativeVerify(leaf, root);
     }
 
     private native FieldElement nativeApply(FieldElement leaf);

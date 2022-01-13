@@ -6,7 +6,7 @@ use primitives::{
 
 use crate::type_mapping::*;
 
-pub mod constants;
+pub mod personalizations;
 
 pub struct NaiveThresholdSigParams {
     pub null_sig: SchnorrSig,
@@ -139,9 +139,9 @@ impl VRFParams {
         generators: Vec<G2Projective>,
     ) -> Vec<Vec<G2Projective>> {
         let mut gen_table = Vec::new();
-        for i in 0..VRFWindow::NUM_WINDOWS {
+        for generator in generators.iter().take(VRFWindow::NUM_WINDOWS) {
             let mut generators_for_segment = Vec::new();
-            let mut base = generators[i];
+            let mut base = *generator;
             for _ in 0..VRFWindow::WINDOW_SIZE {
                 generators_for_segment.push(base);
                 for _ in 0..4 {
@@ -154,23 +154,45 @@ impl VRFParams {
     }
 }
 
+//TODO: Move these constants in cctp-lib
+pub const SC_PUBLIC_KEY_LENGTH: usize = 32;
+pub const SC_SECRET_KEY_LENGTH: usize = 32;
+pub const SC_TX_HASH_LENGTH: usize = 32;
+pub const SC_CUSTOM_HASH_LENGTH: usize = 32;
+pub const MC_RETURN_ADDRESS_BYTES: usize = 20;
+pub const FIELD_MODULUS: usize = FIELD_CAPACITY + 1;
+
+pub const MST_MERKLE_TREE_HEIGHT: usize = 22;
+
 #[cfg(test)]
 mod test {
-    use super::*;
     use algebra::{AffineCurve, FpParameters, FromCompressedBits, PrimeField};
+
+    use super::*;
     use bit_vec::BitVec;
     use blake2s_simd::{Hash, Params};
 
-    fn hash_to_curve<F: PrimeField, G: AffineCurve + FromCompressedBits>(
+    use serial_test::*;
+
+    /// Hash into a valid FieldElement belonging to F using "blake2s_simd" hash until the provided
+    /// 'fe_to_point' function doesn't return Some(G).
+    /// New values are computed incrementing an internal state until a certain limit.
+    /// If no point has been found when the limit is reached, then function will return None.
+    fn hash_to_fe_and_map_to_point<
+        F: PrimeField,
+        G: AffineCurve + FromCompressedBits,
+        FN: Fn(F) -> Option<G>,
+    >(
         tag: &[u8],
         personalization: &[u8],
+        fe_to_point: FN,
     ) -> Option<G> {
         let compute_chunk = |input: &[u8], personalization: &[u8]| -> Hash {
             Params::new()
                 .hash_length(32)
                 .personal(personalization)
                 .to_state()
-                .update(constants::GH_FIRST_BLOCK)
+                .update(personalizations::GH_FIRST_BLOCK)
                 .update(input)
                 .finalize()
         };
@@ -217,25 +239,37 @@ mod test {
                 None => continue,
             };
 
-            //Get point from chunks
-            let mut fe_bits = fe.write_bits();
-            fe_bits.push(false); //We don't want an infinity point
-            fe_bits.push(false); //We decide to choose the even y coordinate
-            match G::decompress(fe_bits) {
-                Ok(point) => {
+            // If the sampled Field Element produces a valid point according to the supplied function,
+            // then interrupt the loop
+            match fe_to_point(fe) {
+                Some(point) => {
                     g = Some(point);
                     break;
                 }
-                Err(_) => continue,
-            };
+                None => continue,
+            }
         }
         g
     }
 
+    fn hash_to_curve<F: PrimeField, G: AffineCurve + FromCompressedBits>(
+        tag: &[u8],
+        personalization: &[u8],
+    ) -> Option<G> {
+        hash_to_fe_and_map_to_point::<F, G, _>(tag, personalization, |fe| {
+            //Get point from chunks
+            let mut fe_bits = fe.write_bits();
+            fe_bits.push(false); //We don't want an infinity point
+            fe_bits.push(false); //We decide to choose the even y coordinate
+            G::decompress(fe_bits).ok()
+        })
+    }
+
+    #[serial]
     #[test]
     fn test_pk_null_gen() {
         let tag = b"Strontium Sr 90";
-        let personalization = constants::NULL_PK_PERSONALIZATION;
+        let personalization = personalizations::CERT_NULL_PK_PERSONALIZATION;
         let htc_out = hash_to_curve::<FieldElement, G2>(tag, personalization)
             .unwrap()
             .into_projective();
@@ -244,9 +278,10 @@ mod test {
         assert_eq!(htc_out, null_pk);
     }
 
+    #[serial]
     #[test]
     fn test_vrf_group_hash_gen() {
-        let personalization = constants::VRF_GROUP_HASH_GENERATORS_PERSONALIZATION;
+        let personalization = personalizations::VRF_GROUP_HASH_GENERATORS_PERSONALIZATION;
 
         //Gen1
         let tag = b"Magnesium Mg 12";

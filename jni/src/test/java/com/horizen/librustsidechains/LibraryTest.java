@@ -14,6 +14,7 @@ public class LibraryTest {
     public void testExceptionOnNullPointer() {
         FieldElement fe = new FieldElement(0);
         fe.nativeSerializeFieldElement();
+        fe.close(); // Suppress warning on line 15. This instruction will be unreachable anyway.
     }
 
     @Test(expected = NullPointerException.class)
@@ -24,6 +25,7 @@ public class LibraryTest {
         // tries to print the bytes, causing a panic that will be caught and converted into a
         // JavaRunTimeException. Assert that the function only returns the first exception.
         fe.nativePrintFieldElementBytes();
+        fe.close(); // Suppress warning on line 22. This instruction will be unreachable anyway.
     }
 
     @Test(expected = RuntimeException.class)

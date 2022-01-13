@@ -1,4 +1,4 @@
-package com.horizen.commitmenttree;
+package com.horizen.commitmenttreenative;
 
 import com.horizen.librustsidechains.Library;
 

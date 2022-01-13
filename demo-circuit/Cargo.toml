@@ -13,11 +13,11 @@ edition = "2018"
 include = ["Cargo.toml", "src"]
 
 [dependencies]
-algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
+algebra = {features = ["tweedle", "ed25519"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
 primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
-r1cs-crypto = {features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
+r1cs-crypto = {features = ["tweedle", "signature", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
 r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
-r1cs-std = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
+r1cs-std = {features = ["tweedle", "nonnative"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
 
 cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "integration" }
 
@@ -31,6 +31,9 @@ blake2 = { version = "=0.8.1", default-features = false }
 digest = "=0.8.1"
 blake2s_simd = "=0.5.11"
 bit-vec = "=0.6.3"
+sha2 = "=0.9.5"
+hex = "=0.4.3"
+serial_test = "=0.5.1"
 
 [features]
 default = [ "asm" ]

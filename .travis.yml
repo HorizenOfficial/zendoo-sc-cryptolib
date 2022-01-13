@@ -1,5 +1,7 @@
 os: linux
 dist: focal
+vm:
+  size: large
 language: generic
 addons:
   apt:
@@ -10,7 +12,7 @@ services:
 
 env:
   global:
-    - CONTAINER_JAVA_VER="openjdk-8-jdk"
+    - CONTAINER_JAVA_VER="openjdk-11-jdk"
 jobs:
     #- name: rust_1.51
     #  env: CONTAINER_RUST_VER='1.51.0'

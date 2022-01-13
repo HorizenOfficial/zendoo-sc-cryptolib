@@ -1,4 +1,4 @@
-package com.horizen.sigproofnative;
+package com.horizen.certnative;
 
 import com.horizen.librustsidechains.Library;
 
