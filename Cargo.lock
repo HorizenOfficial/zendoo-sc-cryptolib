@@ -35,7 +35,7 @@ dependencies = [
 
 [[package]]
 name = "api"
-version = "0.1.0"
+version = "0.4.1"
 dependencies = [
  "algebra",
  "blake2",
@@ -150,7 +150,7 @@ checksum = "22a9137b95ea06864e018375b72adfb7db6e6f68cfc8df5a04d00288050485ee"
 [[package]]
 name = "cctp_primitives"
 version = "0.1.1"
-source = "git+https://github.com/HorizenOfficial/zendoo-cctp-lib.git?branch=integration#99c6c55ae3392865ba6a7c0c7ae92cdc6febdf27"
+source = "git+https://github.com/HorizenOfficial/zendoo-cctp-lib.git?branch=sync_ginger_mht#5cb88e6e466ebc7f26babe633b05ee99acb640ed"
 dependencies = [
  "algebra",
  "bit-vec",
@@ -260,7 +260,7 @@ dependencies = [
 
 [[package]]
 name = "demo-circuit"
-version = "0.1.0"
+version = "0.4.1"
 dependencies = [
  "algebra",
  "bit-vec",

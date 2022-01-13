@@ -1,5 +1,5 @@
 use jni::JNIEnv;
-use std::{error::Error, any::Any};
+use std::{any::Any, error::Error};
 
 /// Tries to get meaningful description from panic-error.
 pub(crate) fn any_to_string(any: Box<dyn Any + Send>) -> String {
@@ -18,11 +18,12 @@ pub(crate) fn _throw_inner(env: &JNIEnv, exception: &str, description: &str) {
     // Do nothing if there is a pending Java-exception that will be thrown
     // automatically by the JVM when the native method returns.
     if !env.exception_check().unwrap() {
-        let exception_class = env.find_class(exception)
-            .expect(&format!("Unable to find {} class", exception));
+        let exception_class = env
+            .find_class(exception)
+            .unwrap_or_else(|_| panic!("Unable to find {} class", exception));
 
         env.throw_new(exception_class, description)
-            .expect(&format!("Should be able to throw {}", exception));
+            .unwrap_or_else(|_| panic!("Should be able to throw {}", exception));
     }
 }
 
@@ -31,12 +32,12 @@ pub(crate) fn _throw_inner(env: &JNIEnv, exception: &str, description: &str) {
 macro_rules! throw {
     ($env:expr, $exception:expr, $description:expr, $default: expr) => {{
         _throw_inner($env, $exception, $description);
-        return $default
+        return $default;
     }};
 
     ($env:expr, $exception:expr, $description:expr) => {{
         _throw_inner($env, $exception, $description);
-        return
+        return;
     }};
 }
 
@@ -46,7 +47,10 @@ macro_rules! throw {
 macro_rules! throw_and_exit {
     ($env:expr, $exception:expr, $description:expr) => {
         _throw_inner($env, $exception, $description);
-        panic!("Thrown exception: {} for reason: {}", $exception, $description)
+        panic!(
+            "Thrown exception: {} for reason: {}",
+            $exception, $description
+        )
     };
 }
 
