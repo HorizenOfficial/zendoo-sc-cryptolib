@@ -103,11 +103,11 @@ public class InMemoryAppendOnlyMerkleTree implements AutoCloseable {
         nativeReset();
     }
 
-    private native void nativeFreeInMemoryOptimizedMerkleTree(long inMemoryOptimizedMerkleTreePointer);
+    private native void nativeFreeInMemoryAppendOnlyMerkleTree(long inMemoryOptimizedMerkleTreePointer);
 
     public void freeInMemoryOptimizedMerkleTree(){
         if (inMemoryOptimizedMerkleTreePointer != 0) {
-            nativeFreeInMemoryOptimizedMerkleTree(this.inMemoryOptimizedMerkleTreePointer);
+            nativeFreeInMemoryAppendOnlyMerkleTree(this.inMemoryOptimizedMerkleTreePointer);
             inMemoryOptimizedMerkleTreePointer = 0;
         }
     }
