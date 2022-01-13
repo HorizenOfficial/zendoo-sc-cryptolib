@@ -2754,7 +2754,7 @@ ffi_export!(
                 .expect("Should be able to create array of FieldElements");
 
             for (idx, leaf) in leaves.iter().enumerate() {
-                let leaf_field_ptr: jlong = jlong::from(Box::into_raw(Box::new(leaf.clone())) as i64);
+                let leaf_field_ptr = Box::into_raw(Box::new(*leaf)) as jlong;
 
                 let leaf_element = _env.new_object(field_class, "(J)V", &[
                     JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");
@@ -2814,7 +2814,7 @@ ffi_export!(
                 .expect("Should be able to create array of FieldElements");
 
             for (idx, leaf) in leaves.iter().enumerate() {
-                let leaf_field_ptr: jlong = jlong::from(Box::into_raw(Box::new(leaf.clone())) as i64);
+                let leaf_field_ptr = Box::into_raw(Box::new(*leaf)) as i64;
 
                 let leaf_element = _env.new_object(field_class, "(J)V", &[
                     JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");
@@ -2874,15 +2874,13 @@ ffi_export!(
                 .expect("Should be able to create array of FieldElements");
 
             for (idx, leaf) in leaves.iter().enumerate() {
-                let leaf_field_ptr: jlong = jlong::from(Box::into_raw(Box::new(leaf.clone())) as i64);
-
+                let leaf_field_ptr = Box::into_raw(Box::new(*leaf)) as i64;
                 let leaf_element = _env.new_object(field_class, "(J)V", &[
                     JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");
 
                 _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
                     .expect("Should be able to add FieldElement leaf to an array");
             }
-
 
             let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
