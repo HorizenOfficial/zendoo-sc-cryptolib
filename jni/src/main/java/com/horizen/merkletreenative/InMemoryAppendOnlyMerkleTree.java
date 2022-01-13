@@ -3,7 +3,7 @@ package com.horizen.merkletreenative;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
-public class InMemoryOptimizedMerkleTree implements AutoCloseable {
+public class InMemoryAppendOnlyMerkleTree implements AutoCloseable {
     
     private long inMemoryOptimizedMerkleTreePointer;
 
@@ -11,20 +11,20 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
         Library.load();
     }
 
-    private InMemoryOptimizedMerkleTree(long inMemoryOptimizedMerkleTreePointer) {
+    private InMemoryAppendOnlyMerkleTree(long inMemoryOptimizedMerkleTreePointer) {
         if (inMemoryOptimizedMerkleTreePointer == 0)
             throw new IllegalArgumentException("inMemoryOptimizedMerkleTreePointer must be not null.");
         this.inMemoryOptimizedMerkleTreePointer = inMemoryOptimizedMerkleTreePointer;
     }
 
-    private static native InMemoryOptimizedMerkleTree nativeInit(int height, long processingStep);
+    private static native InMemoryAppendOnlyMerkleTree nativeInit(int height, long processingStep);
 
     /* Creates a new tree given its `height` and `processing_step`, that defines the
     *  number of leaves to store before triggering the computation of the hashes
     *  of the upper levels. Changing this parameter will affect the performances.
     *  Return NULL if it was not possible to initialize the tree.
     */
-    public static InMemoryOptimizedMerkleTree init(int height, long processingStep){
+    public static InMemoryAppendOnlyMerkleTree init(int height, long processingStep){
         return nativeInit(height, processingStep);
     }
 
@@ -38,20 +38,20 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
      */
     public boolean append(FieldElement input) {
         if (inMemoryOptimizedMerkleTreePointer == 0)
-            throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
+            throw new IllegalStateException("InMemoryAppendOnlyMerkleTree instance was freed.");
         return nativeAppend(input);
     }
 
-    private native InMemoryOptimizedMerkleTree nativeFinalize();
+    private native InMemoryAppendOnlyMerkleTree nativeFinalize();
 
     /*
      * Finalize the tree by computing the root and returns the finalized tree. It is possible
      * to continue updating the original tree.
      * Return NULL if it was not possible to finalize the tree.
      */
-    public InMemoryOptimizedMerkleTree finalizeTree() {
+    public InMemoryAppendOnlyMerkleTree finalizeTree() {
         if (inMemoryOptimizedMerkleTreePointer == 0)
-            throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
+            throw new IllegalStateException("InMemoryAppendOnlyMerkleTree instance was freed.");
         return nativeFinalize();
     }
 
@@ -64,7 +64,7 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
      */
     public boolean finalizeTreeInPlace() {
         if (inMemoryOptimizedMerkleTreePointer == 0)
-            throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
+            throw new IllegalStateException("InMemoryAppendOnlyMerkleTree instance was freed.");
         return nativeFinalizeInPlace();
     }
 
@@ -76,7 +76,7 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
      */
     public FieldElement root() {
         if (inMemoryOptimizedMerkleTreePointer == 0)
-            throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
+            throw new IllegalStateException("InMemoryAppendOnlyMerkleTree instance was freed.");
         return nativeRoot();
     }
 
@@ -88,7 +88,7 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
     */
     public MerklePath getMerklePath(long leafIndex) {
         if (inMemoryOptimizedMerkleTreePointer == 0)
-            throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
+            throw new IllegalStateException("InMemoryAppendOnlyMerkleTree instance was freed.");
         return nativeGetMerklePath(leafIndex);
     }
 
@@ -99,15 +99,15 @@ public class InMemoryOptimizedMerkleTree implements AutoCloseable {
      */
     public void reset() {
         if (inMemoryOptimizedMerkleTreePointer == 0)
-            throw new IllegalStateException("InMemoryOptimizedMerkleTree instance was freed.");
+            throw new IllegalStateException("InMemoryAppendOnlyMerkleTree instance was freed.");
         nativeReset();
     }
 
-    private native void nativeFreeInMemoryOptimizedMerkleTree(long inMemoryOptimizedMerkleTreePointer);
+    private native void nativeFreeInMemoryAppendOnlyMerkleTree(long inMemoryOptimizedMerkleTreePointer);
 
     public void freeInMemoryOptimizedMerkleTree(){
         if (inMemoryOptimizedMerkleTreePointer != 0) {
-            nativeFreeInMemoryOptimizedMerkleTree(this.inMemoryOptimizedMerkleTreePointer);
+            nativeFreeInMemoryAppendOnlyMerkleTree(this.inMemoryOptimizedMerkleTreePointer);
             inMemoryOptimizedMerkleTreePointer = 0;
         }
     }

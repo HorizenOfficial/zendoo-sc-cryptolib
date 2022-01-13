@@ -1,12 +1,12 @@
+use crate::constants::VRFWindow;
 pub use cctp_primitives::type_mapping::*;
 use primitives::{
     crh::bowe_hopwood::BoweHopwoodPedersenCRH,
-    signature::{
-    schnorr::field_based_schnorr::{
-        FieldBasedSchnorrSignatureScheme, FieldBasedSchnorrSignature,
+    signature::schnorr::field_based_schnorr::{
+        FieldBasedSchnorrSignature, FieldBasedSchnorrSignatureScheme,
     },
-}, vrf::ecvrf::*};
-use crate::constants::VRFWindow;
+    vrf::ecvrf::*,
+};
 
 pub const SCHNORR_PK_SIZE: usize = GROUP_COMPRESSED_SIZE;
 pub const SCHNORR_SK_SIZE: usize = SCALAR_FIELD_SIZE;
