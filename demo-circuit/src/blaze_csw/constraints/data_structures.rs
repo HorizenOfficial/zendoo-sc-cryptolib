@@ -434,18 +434,47 @@ pub struct CswUtxoProverDataGadget {
 impl CswUtxoProverDataGadget {
     /// Enforce that:
     /// 1) H(self.input_g.output_g) belongs to merkle tree with root 'scb_new_mst_root_g';
-    /// 2) H(self.input_g.output_g) == 'nullifier_g'
-    /// 3) self.input_g.output_g.amount_g == 'amount_g'
+    /// 2) H(last_wcert_g) == 'expected_sc_last_wcert_hash_g' 
+    /// 3) H(self.input_g.output_g) == 'nullifier_g'
+    /// 4) self.input_g.output_g.amount_g == 'amount_g'
     pub(crate) fn conditionally_enforce_utxo_withdrawal<
         CS: ConstraintSystemAbstract<FieldElement>,
     >(
         &self,
         mut cs: CS,
-        scb_new_mst_root_g: &FieldElementGadget,
+        last_wcert_g: &WithdrawalCertificateDataGadget,
+        expected_sc_last_wcert_hash_g: &FieldElementGadget,
         nullifier_g: &FieldElementGadget,
         amount_g: &FieldElementGadget,
         should_enforce: &Boolean,
     ) -> Result<(), SynthesisError> {
+
+        // 1. Check output presence in the known state
+
+        // Reconstruct scb_new_mst_root from firt 2 custom fields
+        // We use two custom fields (with half of the bits set) to store a single Field Element
+        assert!(last_wcert_g.custom_fields_g.len() >= 2);
+
+        let scb_new_mst_root_g = {
+            // Compute 2^128 in the field
+            let pow = FieldElement::one().double().pow(&[128u64]);
+
+            // Combine the two custom fields as custom_fields[0] + (2^128) * custom_fields[1]
+            // We assume here that the 2 FieldElements were originally truncated at the 128th bit .
+            // Note that the prover is able to find multiple custom_fields[0], custom_fields[1]
+            // leading to the same result but this will change the certificate hash, binded to
+            // the sys_data_hash public input, for which he would need to find a collision,
+            // and this is unfeasible.
+            let first_half = &last_wcert_g.custom_fields_g[0];
+            let second_half = last_wcert_g.custom_fields_g[1]
+                .mul_by_constant(cs.ns(|| "2^128 * custom_fields[1]"), &pow)?;
+
+            first_half.add(
+                cs.ns(|| "custom_fields[0] + (2^128) * custom_fields[1]"),
+                &second_half,
+            )
+        }?;
+
         // Enfore UTXO output hash computation
         let personalization = &[FieldElementGadget::from_value(
             cs.ns(|| "hardcode BoxType.Coin constant"),
@@ -457,7 +486,6 @@ impl CswUtxoProverDataGadget {
             .output_g
             .enforce_hash(cs.ns(|| "H(input.output)"), Some(personalization))?;
 
-        // 1 Check output presence in the known state
         // mst_root = reconstruct_merkle_root_hash(outputHash, mst_path_to_output)
         let mst_root_g = self.mst_path_to_output_g.enforce_root_from_leaf(
             cs.ns(|| "reconstruct_merkle_root_hash(outputHash, mst_path_to_output)"),
@@ -467,18 +495,28 @@ impl CswUtxoProverDataGadget {
         // require(last_wcert.proof_data.scb_new_mst_root == mst_root)
         mst_root_g.conditional_enforce_equal(
             cs.ns(|| "last_wcert.proof_data.scb_new_mst_root == mst_root"),
-            scb_new_mst_root_g,
+            &scb_new_mst_root_g,
             should_enforce,
         )?;
 
-        // 2 Enforce nullifier
+        // 2. enforce cert hash
+        let last_wcert_hash_g = last_wcert_g
+            .enforce_hash(cs.ns(|| "enforce last_wcert_hash"), None)?;
+
+        last_wcert_hash_g.conditional_enforce_equal(
+            cs.ns(|| "enforce sc_last_wcert_hash == last_wcert_hash"),
+            expected_sc_last_wcert_hash_g,
+            should_enforce,
+        )?;
+
+        // 3. Enforce nullifier
         output_hash_g.conditional_enforce_equal(
             cs.ns(|| "require(nullifier == outputHash)"),
             nullifier_g,
             should_enforce,
         )?;
 
-        // 3. Enforce amount
+        // 4. Enforce amount
         let mut utxo_amount_big_endian_bits_g = self.input_g.output_g.amount_g.to_bits_le();
         utxo_amount_big_endian_bits_g.reverse();
 
