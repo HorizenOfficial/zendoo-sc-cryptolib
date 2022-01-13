@@ -2446,7 +2446,7 @@ ffi_export!(
 
 ///////// COMMITMENT TREE
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeInit(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeInit(
         _env: JNIEnv,
         _class: JClass,
     ) -> jobject {
@@ -2463,7 +2463,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeFreeCommitmentTree(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeFreeCommitmentTree(
         _env: JNIEnv,
         _class: JClass,
         _commitment_tree: *mut CommitmentTree,
@@ -2476,7 +2476,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeAddScCr(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddScCr(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -2670,7 +2670,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeAddFwt(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddFwt(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -2983,7 +2983,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeAddCert(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddCert(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3122,7 +3122,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeAddCertLeaf(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddCertLeaf(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3199,7 +3199,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeGetScCrCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetScCrCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3253,7 +3253,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeGetFwtCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetFwtCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3307,7 +3307,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeBtrCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeBtrCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3361,7 +3361,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeGetCertCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetCertCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3415,7 +3415,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeGetCswCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetCswCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3469,7 +3469,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeGetScCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetScCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3523,7 +3523,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeGetCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetCommitment(
         _env: JNIEnv,
         _commitment_tree: JObject,
     ) -> jobject {
@@ -3570,7 +3570,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeGetScCommitmentMerklePath(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetScCommitmentMerklePath(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3624,7 +3624,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeGetFwtMerklePath(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetFwtMerklePath(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3681,7 +3681,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeGetBtrMerklePath(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetBtrMerklePath(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3738,7 +3738,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeGetCertMerklePath(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetCertMerklePath(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3796,7 +3796,7 @@ ffi_export!(
 
 // Sc Existence proof functions
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeGetScExistenceProof(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetScExistenceProof(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -3905,7 +3905,7 @@ ffi_export!(
 
 // Sc Absence proof functions
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeGetScAbsenceProof(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetScAbsenceProof(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
@@ -4015,7 +4015,7 @@ ffi_export!(
 // Verify existence/absence functions.
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeVerifyScCommitment(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeVerifyScCommitment(
         _env: JNIEnv,
         _commitment_tree_class: JObject,
         _sc_commitment: JObject,
@@ -4054,7 +4054,7 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_commitmenttreenative_commitmenttreenative_nativeVerifyScAbsence(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeVerifyScAbsence(
         _env: JNIEnv,
         _commitment_tree: JObject,
         _sc_id: jbyteArray,
