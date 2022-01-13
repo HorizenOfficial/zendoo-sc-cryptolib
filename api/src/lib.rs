@@ -1409,7 +1409,7 @@ ffi_export!(
 });
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeFreeInMemoryOptimizedMerkleTree(
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeFreeInMemoryAppendOnlyMerkleTree(
     _env: JNIEnv,
     _class: JClass,
     _tree: *mut GingerMHT,

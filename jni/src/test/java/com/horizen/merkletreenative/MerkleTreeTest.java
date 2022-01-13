@@ -201,6 +201,7 @@ public class MerkleTreeTest {
         }
 
         // Free memory
+        smt.freeInMemorySparseMerkleTree();
         mht.freeInMemoryOptimizedMerkleTree();
         mhtRoot.freeFieldElement();
         for (FieldElement leaf: testLeaves)
