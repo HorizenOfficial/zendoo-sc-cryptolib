@@ -1,10 +1,8 @@
-//! The ceased sidechain withdrawal proof according to [[bft_sidechain/v1]]. Used to recover a forward 
+//! The ceased sidechain withdrawal proof according to [[blaze]]. Used to recover a forward 
 //! transfer / utxo (the latter whenever possible) in case that the sidechain is considered as ceased. 
 //! The recoveries refer to the last confirmed sidechain certificate, which in this version is the one 
 //! before the last valid certificate before ceasing (The epoch between these two certificates is 
 //! considered as reverted). 
-//! 
-//! [bft_sidechain/v1]: https://github.com/HorizenLabs/snarks-architecture/blob/master/proofs/bft_sidechain/v1%20(simplest)/SNARK__bft_ceased_sidechain_withdrawal.txt
 pub mod constraints;
 
 pub mod data_structures;
