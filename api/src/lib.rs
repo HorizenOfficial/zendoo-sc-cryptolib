@@ -2006,31 +2006,15 @@ ffi_export!(
     }
 );
 
-ffi_export!(
-    fn Java_com_horizen_certnative_NaiveThresholdSigProof_nativeCreateProof(
-        _env: JNIEnv,
-        // this is the class that owns our
-        // static method. Not going to be
-        // used, but still needs to have
-        // an argument slot
-        _class: JClass,
-        _bt_list: jobjectArray,
-        _sc_id: JObject,
-        _epoch_number: jint,
-        _end_cumulative_sc_tx_comm_tree_root: JObject,
-        _btr_fee: jlong,
-        _ft_min_amount: jlong,
-        _schnorr_sigs_list: jobjectArray,
-        _schnorr_pks_list: jobjectArray,
-        _threshold: jlong,
-        _custom_fields_list: jobjectArray,
-        _segment_size: JObject,
-        _proving_key_path: JString,
-        _check_proving_key: jboolean,
-        _zk: jboolean,
-        _compressed_pk: jboolean,
-        _compress_proof: jboolean,
-    ) -> jobject {
+fn parse_naive_threshold_sig_circuit_data<'a>(
+    _env: &'a JNIEnv,
+    _bt_list: jobjectArray,
+    _sc_id: JObject,
+    _end_cumulative_sc_tx_comm_tree_root: JObject,
+    _schnorr_sigs_list: jobjectArray,
+    _schnorr_pks_list: jobjectArray,
+    _custom_fields_list: jobjectArray,
+) -> (Vec<SchnorrPk>, Vec<Option<SchnorrSig>>, &'a FieldElement, &'a FieldElement, Vec<BackwardTransfer>, Option<Vec<FieldElement>>) {
         // Extract backward transfers
         let mut bt_list = vec![];
 
@@ -2143,21 +2127,6 @@ ffi_export!(
             read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
         };
 
-        // Get supported degree
-        let supported_degree =
-            cast_joption_to_rust_option(&_env, _segment_size).map(|integer_object| {
-                _env.call_method(integer_object, "intValue", "()I", &[])
-                    .expect("Should be able to call intValue() on Optional<Integer>")
-                    .i()
-                    .unwrap() as usize
-                    - 1
-            });
-
-        //Extract params_path str
-        let proving_key_path = _env
-            .get_string(_proving_key_path)
-            .expect("Should be able to read jstring as Rust String");
-
         // Read custom fields if they are present
         let mut custom_fields_list = None;
 
@@ -2190,6 +2159,123 @@ ffi_export!(
             }
             custom_fields_list = Some(custom_fields);
         }
+    (pks, sigs, sc_id, end_cumulative_sc_tx_comm_tree_root, bt_list, custom_fields_list)
+}
+
+ffi_export!(
+    fn Java_com_horizen_certnative_NaiveThresholdSigProof_nativeDebugCircuit(
+        _env: JNIEnv,
+        _class: JClass,
+        _bt_list: jobjectArray,
+        _sc_id: JObject,
+        _epoch_number: jint,
+        _end_cumulative_sc_tx_comm_tree_root: JObject,
+        _btr_fee: jlong,
+        _ft_min_amount: jlong,
+        _schnorr_sigs_list: jobjectArray,
+        _schnorr_pks_list: jobjectArray,
+        _threshold: jlong,
+        _custom_fields_list: jobjectArray,
+    ) -> jobject {
+
+        let (pks, sigs, sc_id, end_cumulative_sc_tx_comm_tree_root, bt_list, custom_fields_list) = parse_naive_threshold_sig_circuit_data(
+            &_env,
+            _bt_list,
+            _sc_id,
+            _end_cumulative_sc_tx_comm_tree_root,
+            _schnorr_sigs_list,
+            _schnorr_pks_list,
+            _custom_fields_list,
+        );
+
+        //create proof
+        match debug_naive_threshold_sig_circuit(
+            pks.as_slice(),
+            sigs,
+            sc_id,
+            _epoch_number as u32,
+            end_cumulative_sc_tx_comm_tree_root,
+            _btr_fee as u64,
+            _ft_min_amount as u64,
+            bt_list,
+            _threshold as u64,
+            custom_fields_list,
+        ) {
+            Ok(failing_constraint) => {
+                let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+                if let Some(failing_constraint) = failing_constraint {
+                    let j_str = *_env
+                        .new_string(failing_constraint)
+                        .expect("Should be able to build Java String from Rust String");
+
+                    _env
+                        .call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::Object(j_str)])
+                        .expect("Should be able to create new Optional from String")
+                } else {
+                    _env
+                        .call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                        .expect("Should be able to create new value for Optional.empty()")
+                }.l().unwrap().into_inner()
+            },
+            Err(e) => {
+                log!(format!("Error debugging circuit: {:?}", e));
+                JObject::null().into_inner()
+            }
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_certnative_NaiveThresholdSigProof_nativeCreateProof(
+        _env: JNIEnv,
+        // this is the class that owns our
+        // static method. Not going to be
+        // used, but still needs to have
+        // an argument slot
+        _class: JClass,
+        _bt_list: jobjectArray,
+        _sc_id: JObject,
+        _epoch_number: jint,
+        _end_cumulative_sc_tx_comm_tree_root: JObject,
+        _btr_fee: jlong,
+        _ft_min_amount: jlong,
+        _schnorr_sigs_list: jobjectArray,
+        _schnorr_pks_list: jobjectArray,
+        _threshold: jlong,
+        _custom_fields_list: jobjectArray,
+        _segment_size: JObject,
+        _proving_key_path: JString,
+        _check_proving_key: jboolean,
+        _zk: jboolean,
+        _compressed_pk: jboolean,
+        _compress_proof: jboolean,
+    ) -> jobject {
+
+        let (pks, sigs, sc_id, end_cumulative_sc_tx_comm_tree_root, bt_list, custom_fields_list) = parse_naive_threshold_sig_circuit_data(
+            &_env,
+            _bt_list,
+            _sc_id,
+            _end_cumulative_sc_tx_comm_tree_root,
+            _schnorr_sigs_list,
+            _schnorr_pks_list,
+            _custom_fields_list,
+        );
+
+        // Get supported degree
+        let supported_degree =
+            cast_joption_to_rust_option(&_env, _segment_size).map(|integer_object| {
+                _env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
+
+        //Extract params_path str
+        let proving_key_path = _env
+            .get_string(_proving_key_path)
+            .expect("Should be able to read jstring as Rust String");
 
         //create proof
         match create_naive_threshold_sig_proof(
@@ -4945,6 +5031,87 @@ fn parse_ft_prover_data(_env: JNIEnv, _ft_data: JObject) -> CswFtProverData {
         sc_txs_com_hashes,
     }
 }
+
+ffi_export!(
+    fn Java_com_horizen_cswnative_CswProof_nativeDebugCircuit(
+        _env: JNIEnv,
+        _class: JClass,
+        _range_size: jint,
+        _num_custom_fields: jint,
+        _sys_data: JObject,
+        _sc_id: JObject,
+        _last_wcert: JObject,
+        _utxo_data: JObject,
+        _ft_data: JObject,
+    ) -> jobject {
+        // Parse cert if present
+        let cert = if _last_wcert.into_inner().is_null() {
+            None
+        } else {
+            Some(parse_wcert(_env, _last_wcert))
+        };
+
+        // Parse sys_data
+        let (constant, sys_data) = parse_sys_data(_env, _sys_data);
+
+        // Parse csw utxo prover data
+        let csw_utxo_prover_data = if _utxo_data.into_inner().is_null() {
+            None
+        } else {
+            Some(parse_utxo_prover_data(_env, _utxo_data))
+        };
+
+        // Parse csw ft prover data
+        let csw_ft_prover_data = if _ft_data.into_inner().is_null() {
+            None
+        } else {
+            Some(parse_ft_prover_data(_env, _ft_data))
+        };
+
+        // Parse sc_id
+        let sc_id = {
+            let f = _env
+                .get_field(_sc_id, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+        };
+
+        //debug circuit
+        match debug_csw_circuit(
+            *sc_id,
+            constant,
+            sys_data,
+            cert,
+            csw_utxo_prover_data,
+            csw_ft_prover_data,
+            _range_size as u32,
+            _num_custom_fields as u32,
+        ) {
+            Ok(failing_constraint) => {
+                let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+                if let Some(failing_constraint) = failing_constraint {
+                    let j_str = *_env
+                        .new_string(failing_constraint)
+                        .expect("Should be able to build Java String from Rust String");
+
+                    _env
+                        .call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::Object(j_str)])
+                        .expect("Should be able to create new Optional from String")
+                } else {
+                    _env
+                        .call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                        .expect("Should be able to create new value for Optional.empty()")
+                }.l().unwrap().into_inner()
+            },
+            Err(e) => {
+                log!(format!("Error debugging circuit: {:?}", e));
+                JObject::null().into_inner()
+            }
+        }
+    }
+);
 
 ffi_export!(
     fn Java_com_horizen_cswnative_CswProof_nativeCreateProof(

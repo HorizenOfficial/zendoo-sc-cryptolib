@@ -1,15 +1,15 @@
 use algebra::{AffineCurve, ProjectiveCurve, ToConstraintField, UniformRand};
-use primitives::{
-    crh::{bowe_hopwood::BoweHopwoodPedersenParameters, FieldBasedHash},
-    signature::{schnorr::field_based_schnorr::FieldBasedSchnorrPk, FieldBasedSignatureScheme},
-    vrf::{ecvrf::FieldBasedEcVrfPk, FieldBasedVrf},
-};
-
 use demo_circuit::{
     constants::VRFParams, constraints::CeasedSidechainWithdrawalCircuit, naive_threshold_sig::*,
     type_mapping::*, CswFtProverData, CswSysData, CswUtxoProverData, WithdrawalCertificateData,
 };
 use lazy_static::*;
+use primitives::{
+    crh::{bowe_hopwood::BoweHopwoodPedersenParameters, FieldBasedHash},
+    signature::{schnorr::field_based_schnorr::FieldBasedSchnorrPk, FieldBasedSignatureScheme},
+    vrf::{ecvrf::FieldBasedEcVrfPk, FieldBasedVrf},
+};
+use r1cs_core::debug_circuit;
 use rand::{rngs::OsRng, SeedableRng};
 use rand_xorshift::XorShiftRng;
 
@@ -179,7 +179,7 @@ pub fn compute_msg_to_sign(
     Ok((mr_bt, msg))
 }
 
-pub fn create_naive_threshold_sig_proof(
+fn get_naive_threshold_sig_circuit_prover_data(
     pks: &[SchnorrPk],
     mut sigs: Vec<Option<SchnorrSig>>,
     sc_id: &FieldElement,
@@ -190,13 +190,7 @@ pub fn create_naive_threshold_sig_proof(
     bt_list: Vec<BackwardTransfer>,
     threshold: u64,
     custom_fields: Option<Vec<FieldElement>>,
-    supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
-    proving_key_path: &Path,
-    enforce_membership: bool,
-    zk: bool,
-    compressed_pk: bool,
-    compress_proof: bool,
-) -> Result<(Vec<u8>, u64), Error> {
+) -> Result<(NaiveTresholdSignature, u64), Error> {
     //Get max pks
     let max_pks = pks.len();
     assert_eq!(sigs.len(), max_pks);
@@ -255,6 +249,83 @@ pub fn create_naive_threshold_sig_proof(
         valid_signatures,
         custom_fields,
     );
+
+    Ok((c, valid_signatures))
+}
+
+pub fn debug_naive_threshold_sig_circuit(
+    pks: &[SchnorrPk],
+    sigs: Vec<Option<SchnorrSig>>,
+    sc_id: &FieldElement,
+    epoch_number: u32,
+    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
+    btr_fee: u64,
+    ft_min_amount: u64,
+    bt_list: Vec<BackwardTransfer>,
+    threshold: u64,
+    custom_fields: Option<Vec<FieldElement>>,
+) -> Result<Option<String>, Error> {
+    let (c, _) = get_naive_threshold_sig_circuit_prover_data(
+        pks,
+        sigs,
+        sc_id,
+        epoch_number,
+        end_cumulative_sc_tx_comm_tree_root,
+        btr_fee,
+        ft_min_amount,
+        bt_list,
+        threshold,
+        custom_fields,
+    )
+    .map_err(|e| {
+        format!(
+            "Unable to create concrete instance of NaiveThresholdSignature circuit: {:?}",
+            e
+        )
+    })?;
+
+    let failing_constraint = debug_circuit(c)
+        .map_err(|e| format!("Unable to debug received instance of CSW circuit: {:?}", e))?;
+
+    Ok(failing_constraint)
+}
+
+pub fn create_naive_threshold_sig_proof(
+    pks: &[SchnorrPk],
+    sigs: Vec<Option<SchnorrSig>>,
+    sc_id: &FieldElement,
+    epoch_number: u32,
+    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
+    btr_fee: u64,
+    ft_min_amount: u64,
+    bt_list: Vec<BackwardTransfer>,
+    threshold: u64,
+    custom_fields: Option<Vec<FieldElement>>,
+    supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
+    proving_key_path: &Path,
+    enforce_membership: bool,
+    zk: bool,
+    compressed_pk: bool,
+    compress_proof: bool,
+) -> Result<(Vec<u8>, u64), Error> {
+    let (c, valid_signatures) = get_naive_threshold_sig_circuit_prover_data(
+        pks,
+        sigs,
+        sc_id,
+        epoch_number,
+        end_cumulative_sc_tx_comm_tree_root,
+        btr_fee,
+        ft_min_amount,
+        bt_list,
+        threshold,
+        custom_fields,
+    )
+    .map_err(|e| {
+        format!(
+            "Unable to create concrete instance of NaiveThresholdSignature circuit: {:?}",
+            e
+        )
+    })?;
 
     let pk: ZendooProverKey = read_from_file(
         proving_key_path,
@@ -380,6 +451,34 @@ pub fn verify_naive_threshold_sig_proof(
 }
 
 // ******************************* CSW Proof ***************************
+pub fn debug_csw_circuit(
+    sidechain_id: FieldElement,
+    constant: Option<FieldElement>,
+    sys_data: CswSysData,
+    last_wcert: Option<WithdrawalCertificateData>,
+    utxo_data: Option<CswUtxoProverData>,
+    ft_data: Option<CswFtProverData>,
+    range_size: u32,
+    num_custom_fields: u32,
+) -> Result<Option<String>, Error> {
+    let c = CeasedSidechainWithdrawalCircuit::new(
+        sidechain_id,
+        constant,
+        sys_data,
+        last_wcert,
+        utxo_data,
+        ft_data,
+        range_size,
+        num_custom_fields,
+    )
+    .map_err(|e| format!("Unable to create concrete instance of CSW circuit: {:?}", e))?;
+
+    let failing_constraint = debug_circuit(c)
+        .map_err(|e| format!("Unable to debug received instance of CSW circuit: {:?}", e))?;
+
+    Ok(failing_constraint)
+}
+
 pub fn create_csw_proof(
     sidechain_id: FieldElement,
     constant: Option<FieldElement>,

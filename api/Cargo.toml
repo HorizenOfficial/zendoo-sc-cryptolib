@@ -18,7 +18,7 @@ algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/gin
 primitives = {features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
 
 cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "integration" }
-
+r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
 #ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
 

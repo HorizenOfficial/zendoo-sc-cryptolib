@@ -45,6 +45,7 @@ dependencies = [
  "jni",
  "lazy_static",
  "primitives",
+ "r1cs-core",
  "radix_trie",
  "rand",
  "rand_xorshift",

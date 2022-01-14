@@ -117,10 +117,33 @@ public class CswProofTest {
             receiver
         );
 
-        // Create proof
+        // Debug with correct data
+        Optional<String> failingConstraint = CswProof.debugCircuit(
+            rangeSize, 2, sysData, wCert.getScId(), Optional.of(wCert),
+            Optional.of(utxoData), Optional.empty()
+        );
+        assertFalse("Circuit must be satisified", failingConstraint.isPresent());
+
+        // Debug with invalid data
+        CswSysData invalidSysData = new CswSysData(
+            Optional.empty(),
+            Optional.of(scLastWcertHash),
+            Optional.empty(),
+            scUtxoOutput.getAmount() + 1,
+            nullifier,
+            receiver
+        );
+        failingConstraint = CswProof.debugCircuit(
+            rangeSize, 2, invalidSysData, wCert.getScId(), Optional.of(wCert),
+            Optional.of(utxoData), Optional.empty()
+        );
+        assertTrue("Circuit must NOT be satisfied", failingConstraint.isPresent());
+        assertEquals(failingConstraint.get(), "enforce utxo withdrawal/input.amount == sys_data.amount/conditional_equals"); // Regression
+
+        // Create valid proof
         byte[] proof = CswProof.createProof(
             rangeSize, 2, sysData, wCert.getScId(), Optional.of(wCert), Optional.of(utxoData),
-            Optional.empty(), Optional.of(TestUtils.CSW_SEGMENT_SIZE), snarkPkPath
+            Optional.empty(), Optional.of(TestUtils.CSW_SEGMENT_SIZE), snarkPkPath, false, true, true, true
         );
 
         // Proof verification must be successfull
@@ -224,10 +247,31 @@ public class CswProofTest {
             receiver
         );
 
+        // Debug with correct data
+        Optional<String> failingConstraint = CswProof.debugCircuit(
+            rangeSize, 2, sysData, wCert.getScId(), Optional.empty(), Optional.empty(), Optional.of(ftData)
+        );
+        assertFalse("Circuit must be satisified", failingConstraint.isPresent());
+
+        // Debug with incorrect data
+        CswSysData invalidSysData = new CswSysData(
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(mcbScTxsComEnd),
+            ftOutput.getAmount() + 1,
+            nullifier,
+            receiver
+        );
+        failingConstraint = CswProof.debugCircuit(
+            rangeSize, 2, invalidSysData, wCert.getScId(), Optional.empty(), Optional.empty(), Optional.of(ftData)
+        );
+        assertTrue("Circuit must NOT be satisified", failingConstraint.isPresent());
+        assertEquals(failingConstraint.get(), "conditionally enforce ft withdrawal/input.amount == sys_data.amount/conditional_equals"); // Regression
+
         // Create proof
         byte[] proof = CswProof.createProof(
             rangeSize, 2, sysData, wCert.getScId(), Optional.empty(), Optional.empty(),
-            Optional.of(ftData), Optional.of(TestUtils.CSW_SEGMENT_SIZE), snarkPkPath
+            Optional.of(ftData), Optional.of(TestUtils.CSW_SEGMENT_SIZE), snarkPkPath, false, true, true, true
         );
         
         // Proof verification must be successfull
