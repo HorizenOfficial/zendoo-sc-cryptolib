@@ -205,15 +205,17 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
         )?;
 
         // Enforce FT withdrawal if required
-        csw_data_g.ft_data_g.conditionally_enforce_ft_withdrawal(
-            cs.ns(|| "conditionally enforce ft withdrawal"),
-            &sidechain_id_g,
-            self.range_size,
-            actual_range_size,
-            &csw_data_g.sys_data_g.mcb_sc_txs_com_end_g,
-            &csw_data_g.sys_data_g.nullifier_g,
-            &csw_data_g.sys_data_g.amount_g,
-            &should_enforce_ft_withdrawal_g,
+        csw_data_g
+            .ft_data_g
+            .conditionally_enforce_ft_withdrawal(
+                cs.ns(|| "conditionally enforce ft withdrawal"),
+                &sidechain_id_g,
+                self.range_size,
+                actual_range_size,
+                &csw_data_g.sys_data_g.mcb_sc_txs_com_end_g,
+                &csw_data_g.sys_data_g.nullifier_g,
+                &csw_data_g.sys_data_g.amount_g,
+                &should_enforce_ft_withdrawal_g,
         )?;
 
         // We check the public key ownership just once for both, choosing the appropriate public key
@@ -1249,7 +1251,7 @@ mod test {
         println!("Failing constraint: {:?}", failing_constraint);
         assert!(failing_constraint
             .unwrap()
-            .contains("enforce sc_last_wcert_hash == last_wcert_hash"));
+            .contains("enforce utxo withdrawal/last_wcert.proof_data.scb_new_mst_root == mst_root/conditional_equals"));
     }
 
     #[serial]

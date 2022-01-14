@@ -449,32 +449,6 @@ impl CswUtxoProverDataGadget {
         should_enforce: &Boolean,
     ) -> Result<(), SynthesisError> {
 
-        // 1. Check output presence in the known state
-
-        // Reconstruct scb_new_mst_root from firt 2 custom fields
-        // We use two custom fields (with half of the bits set) to store a single Field Element
-        assert!(last_wcert_g.custom_fields_g.len() >= 2);
-
-        let scb_new_mst_root_g = {
-            // Compute 2^128 in the field
-            let pow = FieldElement::one().double().pow(&[128u64]);
-
-            // Combine the two custom fields as custom_fields[0] + (2^128) * custom_fields[1]
-            // We assume here that the 2 FieldElements were originally truncated at the 128th bit .
-            // Note that the prover is able to find multiple custom_fields[0], custom_fields[1]
-            // leading to the same result but this will change the certificate hash, binded to
-            // the sys_data_hash public input, for which he would need to find a collision,
-            // and this is unfeasible.
-            let first_half = &last_wcert_g.custom_fields_g[0];
-            let second_half = last_wcert_g.custom_fields_g[1]
-                .mul_by_constant(cs.ns(|| "2^128 * custom_fields[1]"), &pow)?;
-
-            first_half.add(
-                cs.ns(|| "custom_fields[0] + (2^128) * custom_fields[1]"),
-                &second_half,
-            )
-        }?;
-
         // Enfore UTXO output hash computation
         let personalization = &[FieldElementGadget::from_value(
             cs.ns(|| "hardcode BoxType.Coin constant"),
@@ -486,18 +460,48 @@ impl CswUtxoProverDataGadget {
             .output_g
             .enforce_hash(cs.ns(|| "H(input.output)"), Some(personalization))?;
 
-        // mst_root = reconstruct_merkle_root_hash(outputHash, mst_path_to_output)
-        let mst_root_g = self.mst_path_to_output_g.enforce_root_from_leaf(
-            cs.ns(|| "reconstruct_merkle_root_hash(outputHash, mst_path_to_output)"),
-            &output_hash_g,
-        )?;
+        // 1. Check output presence in the known state
+        // NOTE: For sake of completeness we also give the possibility to not specify any custom fields,
+        //       thus not enforcing any custom logic associated to it (in this case the belonging to the MST).
+        //       For Blaze CSW we will always have it.
+        if !last_wcert_g.custom_fields_g.is_empty() {
+            // Reconstruct scb_new_mst_root from firt 2 custom fields
+            // We use two custom fields (with half of the bits set) to store a single Field Element
+            assert!(last_wcert_g.custom_fields_g.len() >= 2);
 
-        // require(last_wcert.proof_data.scb_new_mst_root == mst_root)
-        mst_root_g.conditional_enforce_equal(
-            cs.ns(|| "last_wcert.proof_data.scb_new_mst_root == mst_root"),
-            &scb_new_mst_root_g,
-            should_enforce,
-        )?;
+            let scb_new_mst_root_g = {
+                // Compute 2^128 in the field
+                let pow = FieldElement::one().double().pow(&[128u64]);
+
+                // Combine the two custom fields as custom_fields[0] + (2^128) * custom_fields[1]
+                // We assume here that the 2 FieldElements were originally truncated at the 128th bit .
+                // Note that the prover is able to find multiple custom_fields[0], custom_fields[1]
+                // leading to the same result but this will change the certificate hash, binded to
+                // the sys_data_hash public input, for which he would need to find a collision,
+                // and this is unfeasible.
+                let first_half = &last_wcert_g.custom_fields_g[0];
+                let second_half = last_wcert_g.custom_fields_g[1]
+                    .mul_by_constant(cs.ns(|| "2^128 * custom_fields[1]"), &pow)?;
+
+                first_half.add(
+                    cs.ns(|| "custom_fields[0] + (2^128) * custom_fields[1]"),
+                    &second_half,
+                )
+            }?;
+
+            // mst_root = reconstruct_merkle_root_hash(outputHash, mst_path_to_output)
+            let mst_root_g = self.mst_path_to_output_g.enforce_root_from_leaf(
+                cs.ns(|| "reconstruct_merkle_root_hash(outputHash, mst_path_to_output)"),
+                &output_hash_g,
+            )?;
+
+            // require(last_wcert.proof_data.scb_new_mst_root == mst_root)
+            mst_root_g.conditional_enforce_equal(
+                cs.ns(|| "last_wcert.proof_data.scb_new_mst_root == mst_root"),
+                &scb_new_mst_root_g,
+                should_enforce,
+            )?;
+        }
 
         // 2. enforce cert hash
         let last_wcert_hash_g = last_wcert_g
