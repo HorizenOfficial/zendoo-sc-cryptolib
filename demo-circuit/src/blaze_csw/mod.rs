@@ -1,8 +1,8 @@
-//! The ceased sidechain withdrawal proof according to [[blaze]]. Used to recover a forward 
-//! transfer / utxo (the latter whenever possible) in case that the sidechain is considered as ceased. 
-//! The recoveries refer to the last confirmed sidechain certificate, which in this version is the one 
-//! before the last valid certificate before ceasing (The epoch between these two certificates is 
-//! considered as reverted). 
+//! The ceased sidechain withdrawal proof according to [[blaze]]. Used to recover a forward
+//! transfer / utxo (the latter whenever possible) in case that the sidechain is considered as ceased.
+//! The recoveries refer to the last confirmed sidechain certificate, which in this version is the one
+//! before the last valid certificate before ceasing (The epoch between these two certificates is
+//! considered as reverted).
 pub mod constraints;
 
 pub mod data_structures;

@@ -128,6 +128,23 @@ public class NaiveThresholdSigProofTest {
         for (SchnorrKeyPair kp: keyPairList)
             kp.getSecretKey().freeSecretKey();
 
+        // Debug circuit with valid data
+        Optional<String> failingConstraint = NaiveThresholdSigProof.debugCircuit(
+            btList, scId, epochNumber, endCumulativeScTxCommTreeRoot,
+            btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
+            customFields
+        );
+        assertFalse("Circuit must be satisified", failingConstraint.isPresent());
+
+        // Debug circuit with invalid data
+        failingConstraint = NaiveThresholdSigProof.debugCircuit(
+            btList, FieldElement.createRandom(r), epochNumber, endCumulativeScTxCommTreeRoot,
+            btrFee, ftMinAmount, signatureList, publicKeyList, threshold,
+            customFields
+        );
+        assertTrue("Circuit must NOT be satisified", failingConstraint.isPresent());
+        assertEquals(failingConstraint.get(), "threshold check/conditional_equals"); // Regression
+
         // Create and verify proof
 
         // Positive test

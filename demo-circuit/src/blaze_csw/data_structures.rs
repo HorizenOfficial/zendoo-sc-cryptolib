@@ -15,19 +15,19 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-/// The content of a withdrawal certificate 
+/// The content of a withdrawal certificate
 pub struct WithdrawalCertificateData {
     pub ledger_id: FieldElement,
     pub epoch_id: u32,
-    /// Merkle root hash of all BTs from the certificate 
-    pub bt_root: FieldElement, 
+    /// Merkle root hash of all BTs from the certificate
+    pub bt_root: FieldElement,
     pub quality: u64,
     /// Reference to the state of the mainchain-to-sidechain transaction history.
     /// Declares to which extent the sidechain processed forward transactions.
     pub mcb_sc_txs_com: FieldElement,
     pub ft_min_amount: u64,
     pub btr_min_fee: u64,
-    /// Carries the reference to the sidechain state. (Currently the reference is 
+    /// Carries the reference to the sidechain state. (Currently the reference is
     /// split over two field elements)
     pub custom_fields: Vec<FieldElement>,
 }
@@ -150,14 +150,14 @@ pub struct CswFtOutputData {
 pub struct CswSysData {
     /// The last hash of the history of Sc_Tx_Commitments
     pub mcb_sc_txs_com_end: FieldElement,
-    /// The hash of the last accepted withdrawal certificate 
+    /// The hash of the last accepted withdrawal certificate
     pub sc_last_wcert_hash: FieldElement,
     /// amount of the csw
     pub amount: u64,
     /// nullifier for the csw, a unique reference to its utxo/ft                    
     pub nullifier: FieldElement,
     /// recipient address of the csw
-    pub receiver: [u8; MC_PK_SIZE], 
+    pub receiver: [u8; MC_PK_SIZE],
 }
 
 impl CswSysData {
@@ -178,16 +178,16 @@ impl CswSysData {
     }
 }
 
-/// The witness data needed for a utxo withdrawal proof. 
+/// The witness data needed for a utxo withdrawal proof.
 /// Contains the utxo and secret key, and the witnesses for proving membership
 /// to the last sidechain state accepted by the mainchain.
 #[derive(Clone)]
 pub struct CswUtxoProverData {
     /// unspent output we are trying to withdraw
-    pub input: CswUtxoInputData, 
-    /// Merkle path to last state accepted sidechain state, which 
+    pub input: CswUtxoInputData,
+    /// Merkle path to last state accepted sidechain state, which
     /// is extracted from the `custom_fields` of the withdrawal certificate
-    pub mst_path_to_output: GingerMHTBinaryPath, 
+    pub mst_path_to_output: GingerMHTBinaryPath,
 }
 
 impl Default for CswUtxoProverData {
@@ -209,16 +209,16 @@ impl Default for CswUtxoProverData {
 #[derive(Clone)]
 pub struct CswFtProverData {
     /// The forward transaction output
-    pub ft_output: CswFtOutputData, 
+    pub ft_output: CswFtOutputData,
     /// The secret key for the ft's recipient address
-    pub ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS], 
+    pub ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
     /// The Sc_Txs_Commitment at the start of the time window the withdrawal proof refers to.
     /// (The end is provided via public inputs)
     pub mcb_sc_txs_com_start: FieldElement,
-    /// The complete hash chain of the Sc_Txs_Commitments 
+    /// The complete hash chain of the Sc_Txs_Commitments
     pub sc_txs_com_hashes: Vec<FieldElement>,
-    //   
-    //  Witness data for proving the ft being member of an Sc_Txs_Commitment. 
+    //
+    //  Witness data for proving the ft being member of an Sc_Txs_Commitment.
     //
     /// The Merkle path for the sidechain-specific root within the Sc_Txs_Commitment.
     pub merkle_path_to_sc_hash: GingerMHTBinaryPath, // Merkle path to a particular sidechain in the ScTxsComm tree
@@ -229,10 +229,10 @@ pub struct CswFtProverData {
     pub sc_creation_commitment: FieldElement,
     /// for completing the Merkle Path from the ft_tree root to the sidechain-specific root:
     /// The backward transfer request commitment.
-    pub scb_btr_tree_root: FieldElement, 
+    pub scb_btr_tree_root: FieldElement,
     /// for completing the Merkle Path from the ft_tree root to the sidechain-specific root:
     /// The withdrawal certificate commitment.
-    pub wcert_tree_root: FieldElement,   
+    pub wcert_tree_root: FieldElement,
 }
 
 impl CswFtProverData {

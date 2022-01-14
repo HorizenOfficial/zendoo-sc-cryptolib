@@ -153,6 +153,52 @@ public class CswProof {
         );
     }
 
+    private static native Optional<String> nativeDebugCircuit(
+        int rangeSize,
+        int numCustomFields,
+        CswSysData sysData,
+        FieldElement scId,
+        WithdrawalCertificate lastWcert,
+        CswUtxoProverData utxoData,
+        CswFtProverData ftData
+    );
+
+    /**
+     * Checks if possible to create a valid proof with the supplied data. Useful to understand
+     * the reason for which proof creation fails (usually some inconsistency with input data).
+     * @param rangeSize - number of blocks between `mcbScTxsComStart` and `mcbScTxsComEnd`
+     * @param numCustomFields - exact number of custom fields the circuit must support
+     * @param sysData - certificate sys data.
+     * @param scId - the id of the corresponding sidechain
+     * @param lastWcert - the last confirmed wcert in the MC. Can be empty if SC has ceased before we have at least
+     *                    certs for 2 epochs (in this case we can only withdraw FT)
+     * @param utxoData - data required to prove withdraw of a SC utxo. Must be empty if the prover wants to prove
+     *                   withdraw of a FT instead. If this field is present, then lastWCert and sysData.scLastWCertHash
+     *                   must be present too.
+     * @param ftData - data required to prove withdraw of a FT. Must be empty if the prover wants to prove
+     *                 withdraw of a SC utxo instead. If present, then sysData.mcbScTxsComEnd must be present too.
+     * @return an Optional containing the name of the first failing constraint if the supplied data don't satisfy
+     *         all the circuit's constraints, and nothing if all constraints are satisfied.
+     * @throws IllegalArgumentException - if inputs are not consistent
+     */
+    public static Optional<String> debugCircuit(
+        int rangeSize,
+        int numCustomFields,
+        CswSysData sysData,
+        FieldElement scId,
+        Optional<WithdrawalCertificate> lastWcert,
+        Optional<CswUtxoProverData> utxoData,
+        Optional<CswFtProverData> ftData
+    ) throws IllegalArgumentException 
+    {
+        checkProofDataConsistency(sysData, lastWcert, utxoData, ftData);
+
+        // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
+        return nativeDebugCircuit(
+            rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null)
+        );
+    }
+
     private static native byte[] nativeCreateProof(
         int rangeSize,
         int numCustomFields,
@@ -166,8 +212,7 @@ public class CswProof {
         boolean checkProvingKey,
         boolean zk,
         boolean compressed_pk,
-        boolean compress_proof,
-        boolean debug_first
+        boolean compress_proof
     );
 
     /**
@@ -183,7 +228,7 @@ public class CswProof {
      *                 withdraw of a SC utxo instead. If present, then sysData.mcbScTxsComEnd must be present too.
      * @throws IllegalArgumentException - if inputs are not consistent
      */
-    private static void checkCreateProofInputsConsistency(
+    private static void checkProofDataConsistency(
         CswSysData sysData,
         Optional<WithdrawalCertificate> lastWcert,
         Optional<CswUtxoProverData> utxoData,
@@ -225,7 +270,6 @@ public class CswProof {
      * @param zk - if proof must be created using zk property or not
      * @param compressed_pk - if the pk read from provingKeyPath is in compressed form or not
      * @param compress_proof - whether to return the proof bytes in compressed form or not
-     * @param debug_first - debug the circuit first and print the result.
      * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
      */
@@ -242,16 +286,15 @@ public class CswProof {
         boolean checkProvingKey,
         boolean zk,
         boolean compressed_pk,
-        boolean compress_proof,
-        boolean debug_first
+        boolean compress_proof
     ) throws IllegalArgumentException 
     {
-        checkCreateProofInputsConsistency(sysData, lastWcert, utxoData, ftData);
+        checkProofDataConsistency(sysData, lastWcert, utxoData, ftData);
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
             rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
-            segmentSize, provingKeyPath, checkProvingKey, zk, compressed_pk, compress_proof, debug_first
+            segmentSize, provingKeyPath, checkProvingKey, zk, compressed_pk, compress_proof
         );
     }
 
@@ -292,12 +335,12 @@ public class CswProof {
         boolean zk
     ) throws IllegalArgumentException 
     {
-        checkCreateProofInputsConsistency(sysData, lastWcert, utxoData, ftData);
+        checkProofDataConsistency(sysData, lastWcert, utxoData, ftData);
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
             rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
-            segmentSize, provingKeyPath, checkProvingKey, zk, true, true, false
+            segmentSize, provingKeyPath, checkProvingKey, zk, true, true
         );
     }
 
@@ -336,12 +379,12 @@ public class CswProof {
         boolean zk
     ) throws IllegalArgumentException 
     {
-        checkCreateProofInputsConsistency(sysData, lastWcert, utxoData, ftData);
+        checkProofDataConsistency(sysData, lastWcert, utxoData, ftData);
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
             rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
-            segmentSize, provingKeyPath, false, zk, true, true, false
+            segmentSize, provingKeyPath, false, zk, true, true
         );
     }
 
@@ -378,12 +421,12 @@ public class CswProof {
         String provingKeyPath
     ) throws IllegalArgumentException 
     {
-        checkCreateProofInputsConsistency(sysData, lastWcert, utxoData, ftData);
+        checkProofDataConsistency(sysData, lastWcert, utxoData, ftData);
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
             rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
-            segmentSize, provingKeyPath, false, true, true, true, false
+            segmentSize, provingKeyPath, false, true, true, true
         );
     }
 
@@ -415,12 +458,12 @@ public class CswProof {
         String provingKeyPath
     ) throws IllegalArgumentException 
     {
-        checkCreateProofInputsConsistency(sysData, lastWcert, utxoData, ftData);
+        checkProofDataConsistency(sysData, lastWcert, utxoData, ftData);
 
         // Note: to avoid too much unpacking boilerplate Rust side, we pass the empty Optional instances as null pointer instead.
         return nativeCreateProof(
             rangeSize, numCustomFields, sysData, scId, lastWcert.orElse(null), utxoData.orElse(null), ftData.orElse(null),
-            Optional.empty(), provingKeyPath, false, true, true, true, false
+            Optional.empty(), provingKeyPath, false, true, true, true
         );
     }
 

@@ -206,6 +206,57 @@ public class NaiveThresholdSigProof {
         );
     }
 
+    private static native Optional<String> nativeDebugCircuit(
+        BackwardTransfer[] bt,
+        FieldElement scId,
+        int epochNumber,
+        FieldElement endCumulativeScTxCommTreeRoot,
+        long btrFee,
+        long ftMinAmount,
+        SchnorrSignature[] schnorrSignatures,
+        SchnorrPublicKey[] schnorrPublicKeys,
+        long threshold,
+        FieldElement[] customFields
+    );
+
+    /**
+     * Checks if possible to create a valid proof with the supplied data. Useful to understand
+     * the reason for which proof creation fails (usually some inconsistency with input data).
+     * @param btList - the list of backward transfer for a given certificate
+     * @param scId - the id of the corresponding sidechain
+     * @param epochNumber - the epoch number for the certificate
+     * @param endCumulativeScTxCommTreeRoot - the value of the cumulative sidechain transaction commitment tree at epoch end
+     * @param btrFee - fee for BackwardTransfer
+     * @param ftMinAmount - minimum amount for Forward Transfer
+     * @param schnorrSignatureList - list of Schnorr signatures to be verified using the corresponding public keys passed in SchnorrPublicKeyList
+     * @param schnorrPublicKeyList - list of Schnorr public keys corresponding to schnorrSignaturesList
+     * @param threshold - Minimum number of signatures that must be verified for the certificate to be accepted
+     * @param customFields - additional parameters. Can be empty.
+     * @return an Optional containing the name of the first failing constraint if the supplied data don't satisfy
+     *         all the circuit's constraints, and nothing if all constraints are satisfied.
+     */
+    public static Optional<String> debugCircuit(
+            List<BackwardTransfer> btList,
+            FieldElement scId,
+            int epochNumber,
+            FieldElement endCumulativeScTxCommTreeRoot,
+            long btrFee,
+            long ftMinAmount,
+            List<SchnorrSignature> schnorrSignatureList,
+            List<SchnorrPublicKey> schnorrPublicKeyList,
+            long threshold,
+            List<FieldElement> customFields
+    )
+    {
+        return nativeDebugCircuit(
+            btList.toArray(new BackwardTransfer[0]), scId, epochNumber,
+            endCumulativeScTxCommTreeRoot, btrFee, ftMinAmount,
+            schnorrSignatureList.toArray(new SchnorrSignature[0]),
+            schnorrPublicKeyList.toArray(new SchnorrPublicKey[0]),
+            threshold, customFields.toArray(new FieldElement[0])
+        );
+    }
+
     private static native CreateProofResult nativeCreateProof(
             BackwardTransfer[] bt,
             FieldElement scId,

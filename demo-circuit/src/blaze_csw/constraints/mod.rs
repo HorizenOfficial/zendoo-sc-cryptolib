@@ -5,9 +5,7 @@ use cctp_primitives::{
 };
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 use r1cs_crypto::FieldBasedHashGadget;
-use r1cs_std::{
-    alloc::AllocGadget, boolean::Boolean, eq::EqGadget, FromBitsGadget,
-};
+use r1cs_std::{alloc::AllocGadget, boolean::Boolean, eq::EqGadget, FromBitsGadget};
 
 use crate::{
     type_mapping::*, CswFtProverData, CswProverData, CswSysData, CswUtxoProverData,
@@ -33,7 +31,7 @@ pub struct CeasedSidechainWithdrawalCircuit {
     /// Witnesses for a utxo withdrawal. If present the circuit runs in utxo proving
     /// mode. If not present, ft proving mode is selected.
     utxo_data: Option<CswUtxoProverData>,
-    /// Witnesses for an ft withdrawal. 
+    /// Witnesses for an ft withdrawal.
     ft_data: Option<CswFtProverData>,
 
     /// public input 1: currently not used
@@ -202,20 +200,18 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
                 &csw_data_g.sys_data_g.nullifier_g,
                 &csw_data_g.sys_data_g.amount_g,
                 &should_enforce_utxo_withdrawal_g,
-        )?;
+            )?;
 
         // Enforce FT withdrawal if required
-        csw_data_g
-            .ft_data_g
-            .conditionally_enforce_ft_withdrawal(
-                cs.ns(|| "conditionally enforce ft withdrawal"),
-                &sidechain_id_g,
-                self.range_size,
-                actual_range_size,
-                &csw_data_g.sys_data_g.mcb_sc_txs_com_end_g,
-                &csw_data_g.sys_data_g.nullifier_g,
-                &csw_data_g.sys_data_g.amount_g,
-                &should_enforce_ft_withdrawal_g,
+        csw_data_g.ft_data_g.conditionally_enforce_ft_withdrawal(
+            cs.ns(|| "conditionally enforce ft withdrawal"),
+            &sidechain_id_g,
+            self.range_size,
+            actual_range_size,
+            &csw_data_g.sys_data_g.mcb_sc_txs_com_end_g,
+            &csw_data_g.sys_data_g.nullifier_g,
+            &csw_data_g.sys_data_g.amount_g,
+            &should_enforce_ft_withdrawal_g,
         )?;
 
         // We check the public key ownership just once for both, choosing the appropriate public key
@@ -507,7 +503,7 @@ mod test {
             Some(last_wcert_hash),
             utxo_input_data.output.amount,
             mst_leaf_hash,
-            rng.gen::<[u8; MC_PK_SIZE]>()
+            rng.gen::<[u8; MC_PK_SIZE]>(),
         );
 
         (sys_data, Some(cert_data), Some(utxo_data), None)
@@ -624,7 +620,7 @@ mod test {
             None,
             ft_data.ft_output.amount,
             ft_output_hash,
-            rng.gen::<[u8; MC_PK_SIZE]>()
+            rng.gen::<[u8; MC_PK_SIZE]>(),
         );
 
         (sys_data, None, None, Some(ft_data))
