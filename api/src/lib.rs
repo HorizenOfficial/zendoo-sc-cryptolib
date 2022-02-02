@@ -1325,22 +1325,25 @@ ffi_export!(
                 .get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
                 .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
-    };
+            read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
+        };
 
-    reset_ginger_mht(tree);
-});
+        reset_ginger_mht(tree);
+    }
+);
 
 ffi_export!(
     fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeFreeInMemoryAppendOnlyMerkleTree(
-    _env: JNIEnv,
-    _class: JClass,
-    _tree: *mut GingerMHT,
-)
-{
-    if _tree.is_null()  { return }
-    drop(unsafe { Box::from_raw(_tree) });
-});
+        _env: JNIEnv,
+        _class: JClass,
+        _tree: *mut GingerMHT,
+    ) {
+        if _tree.is_null() {
+            return;
+        }
+        drop(unsafe { Box::from_raw(_tree) });
+    }
+);
 
 //VRF utility functions
 
@@ -2014,152 +2017,162 @@ fn parse_naive_threshold_sig_circuit_data<'a>(
     _schnorr_sigs_list: jobjectArray,
     _schnorr_pks_list: jobjectArray,
     _custom_fields_list: jobjectArray,
-) -> (Vec<SchnorrPk>, Vec<Option<SchnorrSig>>, &'a FieldElement, &'a FieldElement, Vec<BackwardTransfer>, Option<Vec<FieldElement>>) {
-        // Extract backward transfers
-        let mut bt_list = vec![];
+) -> (
+    Vec<SchnorrPk>,
+    Vec<Option<SchnorrSig>>,
+    &'a FieldElement,
+    &'a FieldElement,
+    Vec<BackwardTransfer>,
+    Option<Vec<FieldElement>>,
+) {
+    // Extract backward transfers
+    let mut bt_list = vec![];
 
-        let bt_list_size = _env
-            .get_array_length(_bt_list)
-            .expect("Should be able to get bt_list size");
+    let bt_list_size = _env
+        .get_array_length(_bt_list)
+        .expect("Should be able to get bt_list size");
 
-        if bt_list_size > 0 {
-            for i in 0..bt_list_size {
-                let o = _env
-                    .get_object_array_element(_bt_list, i)
-                    .unwrap_or_else(|_| {
-                        panic!("Should be able to get elem {} of bt_list array", i)
-                    });
+    if bt_list_size > 0 {
+        for i in 0..bt_list_size {
+            let o = _env
+                .get_object_array_element(_bt_list, i)
+                .unwrap_or_else(|_| panic!("Should be able to get elem {} of bt_list array", i));
 
-                let p = _env
-                    .call_method(o, "getPublicKeyHash", "()[B", &[])
-                    .expect("Should be able to call getPublicKeyHash method")
-                    .l()
-                    .unwrap()
-                    .cast();
+            let p = _env
+                .call_method(o, "getPublicKeyHash", "()[B", &[])
+                .expect("Should be able to call getPublicKeyHash method")
+                .l()
+                .unwrap()
+                .cast();
 
-                let pk: [u8; 20] = _env
-                    .convert_byte_array(p)
-                    .expect("Should be able to convert to Rust byte array")
-                    .try_into()
-                    .expect("Should be able to write into fixed buffer of size 20");
+            let pk: [u8; 20] = _env
+                .convert_byte_array(p)
+                .expect("Should be able to convert to Rust byte array")
+                .try_into()
+                .expect("Should be able to write into fixed buffer of size 20");
 
-                let a = _env
-                    .call_method(o, "getAmount", "()J", &[])
-                    .expect("Should be able to call getAmount method")
-                    .j()
-                    .unwrap() as u64;
+            let a = _env
+                .call_method(o, "getAmount", "()J", &[])
+                .expect("Should be able to call getAmount method")
+                .j()
+                .unwrap() as u64;
 
-                bt_list.push((a, pk));
-            }
+            bt_list.push((a, pk));
         }
+    }
 
-        let bt_list = bt_list
-            .into_iter()
-            .map(|bt_raw| BackwardTransfer {
-                pk_dest: bt_raw.1,
-                amount: bt_raw.0,
-            })
-            .collect::<Vec<_>>();
+    let bt_list = bt_list
+        .into_iter()
+        .map(|bt_raw| BackwardTransfer {
+            pk_dest: bt_raw.1,
+            amount: bt_raw.0,
+        })
+        .collect::<Vec<_>>();
 
-        //Extract Schnorr signatures and the corresponding Schnorr pks
-        let mut sigs = vec![];
-        let mut pks = vec![];
+    //Extract Schnorr signatures and the corresponding Schnorr pks
+    let mut sigs = vec![];
+    let mut pks = vec![];
 
-        let sigs_list_size = _env
-            .get_array_length(_schnorr_sigs_list)
-            .expect("Should be able to get schnorr_sigs_list size");
+    let sigs_list_size = _env
+        .get_array_length(_schnorr_sigs_list)
+        .expect("Should be able to get schnorr_sigs_list size");
 
-        let pks_list_size = _env
-            .get_array_length(_schnorr_pks_list)
-            .expect("Should be able to get schnorr_pks_list size");
+    let pks_list_size = _env
+        .get_array_length(_schnorr_pks_list)
+        .expect("Should be able to get schnorr_pks_list size");
 
-        assert_eq!(sigs_list_size, pks_list_size);
+    assert_eq!(sigs_list_size, pks_list_size);
 
-        for i in 0..sigs_list_size {
-            //Get i-th sig
-            let sig_object = _env
-                .get_object_array_element(_schnorr_sigs_list, i)
+    for i in 0..sigs_list_size {
+        //Get i-th sig
+        let sig_object = _env
+            .get_object_array_element(_schnorr_sigs_list, i)
+            .unwrap_or_else(|_| panic!("Should be able to get elem {} of schnorr_sigs_list", i));
+
+        let pk_object = _env
+            .get_object_array_element(_schnorr_pks_list, i)
+            .unwrap_or_else(|_| panic!("Should be able to get elem {} of schnorr_pks_list", i));
+
+        let signature = {
+            let sig = _env
+                .get_field(sig_object, "signaturePointer", "J")
+                .expect("Should be able to get field signaturePointer");
+
+            read_nullable_raw_pointer(sig.j().unwrap() as *const SchnorrSig).copied()
+        };
+
+        let public_key = {
+            let pk = _env
+                .get_field(pk_object, "publicKeyPointer", "J")
+                .expect("Should be able to get field publicKeyPointer");
+
+            read_raw_pointer(&_env, pk.j().unwrap() as *const SchnorrPk)
+        };
+
+        sigs.push(signature);
+        pks.push(*public_key);
+    }
+
+    let sc_id = {
+        let f = _env
+            .get_field(_sc_id, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+    };
+
+    let end_cumulative_sc_tx_comm_tree_root = {
+        let f = _env
+            .get_field(
+                _end_cumulative_sc_tx_comm_tree_root,
+                "fieldElementPointer",
+                "J",
+            )
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+    };
+
+    // Read custom fields if they are present
+    let mut custom_fields_list = None;
+
+    let custom_fields_list_size = _env
+        .get_array_length(_custom_fields_list)
+        .expect("Should be able to get custom_fields_list size");
+
+    if custom_fields_list_size > 0 {
+        let mut custom_fields = Vec::with_capacity(custom_fields_list_size as usize);
+
+        for i in 0..custom_fields_list_size {
+            let field_obj = _env
+                .get_object_array_element(_custom_fields_list, i)
                 .unwrap_or_else(|_| {
-                    panic!("Should be able to get elem {} of schnorr_sigs_list", i)
+                    panic!(
+                        "Should be able to read elem {} of the personalization array",
+                        i
+                    )
                 });
 
-            let pk_object = _env
-                .get_object_array_element(_schnorr_pks_list, i)
-                .unwrap_or_else(|_| panic!("Should be able to get elem {} of schnorr_pks_list", i));
+            let field = {
+                let f = _env
+                    .get_field(field_obj, "fieldElementPointer", "J")
+                    .expect("Should be able to get field fieldElementPointer");
 
-            let signature = {
-                let sig = _env
-                    .get_field(sig_object, "signaturePointer", "J")
-                    .expect("Should be able to get field signaturePointer");
-
-                read_nullable_raw_pointer(sig.j().unwrap() as *const SchnorrSig).copied()
+                read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
             };
 
-            let public_key = {
-                let pk = _env
-                    .get_field(pk_object, "publicKeyPointer", "J")
-                    .expect("Should be able to get field publicKeyPointer");
-
-                read_raw_pointer(&_env, pk.j().unwrap() as *const SchnorrPk)
-            };
-
-            sigs.push(signature);
-            pks.push(*public_key);
+            custom_fields.push(*field);
         }
-
-        let sc_id = {
-            let f = _env
-                .get_field(_sc_id, "fieldElementPointer", "J")
-                .expect("Should be able to get field fieldElementPointer");
-
-            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-        };
-
-        let end_cumulative_sc_tx_comm_tree_root = {
-            let f = _env
-                .get_field(
-                    _end_cumulative_sc_tx_comm_tree_root,
-                    "fieldElementPointer",
-                    "J",
-                )
-                .expect("Should be able to get field fieldElementPointer");
-
-            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-        };
-
-        // Read custom fields if they are present
-        let mut custom_fields_list = None;
-
-        let custom_fields_list_size = _env
-            .get_array_length(_custom_fields_list)
-            .expect("Should be able to get custom_fields_list size");
-
-        if custom_fields_list_size > 0 {
-            let mut custom_fields = Vec::with_capacity(custom_fields_list_size as usize);
-
-            for i in 0..custom_fields_list_size {
-                let field_obj = _env
-                    .get_object_array_element(_custom_fields_list, i)
-                    .unwrap_or_else(|_| {
-                        panic!(
-                            "Should be able to read elem {} of the personalization array",
-                            i
-                        )
-                    });
-
-                let field = {
-                    let f = _env
-                        .get_field(field_obj, "fieldElementPointer", "J")
-                        .expect("Should be able to get field fieldElementPointer");
-
-                    read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-                };
-
-                custom_fields.push(*field);
-            }
-            custom_fields_list = Some(custom_fields);
-        }
-    (pks, sigs, sc_id, end_cumulative_sc_tx_comm_tree_root, bt_list, custom_fields_list)
+        custom_fields_list = Some(custom_fields);
+    }
+    (
+        pks,
+        sigs,
+        sc_id,
+        end_cumulative_sc_tx_comm_tree_root,
+        bt_list,
+        custom_fields_list,
+    )
 }
 
 ffi_export!(
@@ -2177,16 +2190,16 @@ ffi_export!(
         _threshold: jlong,
         _custom_fields_list: jobjectArray,
     ) -> jobject {
-
-        let (pks, sigs, sc_id, end_cumulative_sc_tx_comm_tree_root, bt_list, custom_fields_list) = parse_naive_threshold_sig_circuit_data(
-            &_env,
-            _bt_list,
-            _sc_id,
-            _end_cumulative_sc_tx_comm_tree_root,
-            _schnorr_sigs_list,
-            _schnorr_pks_list,
-            _custom_fields_list,
-        );
+        let (pks, sigs, sc_id, end_cumulative_sc_tx_comm_tree_root, bt_list, custom_fields_list) =
+            parse_naive_threshold_sig_circuit_data(
+                &_env,
+                _bt_list,
+                _sc_id,
+                _end_cumulative_sc_tx_comm_tree_root,
+                _schnorr_sigs_list,
+                _schnorr_pks_list,
+                _custom_fields_list,
+            );
 
         //create proof
         match debug_naive_threshold_sig_circuit(
@@ -2209,15 +2222,21 @@ ffi_export!(
                         .new_string(failing_constraint)
                         .expect("Should be able to build Java String from Rust String");
 
-                    _env
-                        .call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::Object(j_str)])
-                        .expect("Should be able to create new Optional from String")
+                    _env.call_static_method(
+                        cls_optional,
+                        "of",
+                        "(Ljava/lang/Object;)Ljava/util/Optional;",
+                        &[JValue::Object(j_str)],
+                    )
+                    .expect("Should be able to create new Optional from String")
                 } else {
-                    _env
-                        .call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                    _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
                         .expect("Should be able to create new value for Optional.empty()")
-                }.l().unwrap().into_inner()
-            },
+                }
+                .l()
+                .unwrap()
+                .into_inner()
+            }
             Err(e) => {
                 log!(format!("Error debugging circuit: {:?}", e));
                 JObject::null().into_inner()
@@ -2251,16 +2270,16 @@ ffi_export!(
         _compressed_pk: jboolean,
         _compress_proof: jboolean,
     ) -> jobject {
-
-        let (pks, sigs, sc_id, end_cumulative_sc_tx_comm_tree_root, bt_list, custom_fields_list) = parse_naive_threshold_sig_circuit_data(
-            &_env,
-            _bt_list,
-            _sc_id,
-            _end_cumulative_sc_tx_comm_tree_root,
-            _schnorr_sigs_list,
-            _schnorr_pks_list,
-            _custom_fields_list,
-        );
+        let (pks, sigs, sc_id, end_cumulative_sc_tx_comm_tree_root, bt_list, custom_fields_list) =
+            parse_naive_threshold_sig_circuit_data(
+                &_env,
+                _bt_list,
+                _sc_id,
+                _end_cumulative_sc_tx_comm_tree_root,
+                _schnorr_sigs_list,
+                _schnorr_pks_list,
+                _custom_fields_list,
+            );
 
         // Get supported degree
         let supported_degree =
@@ -2810,181 +2829,215 @@ ffi_export!(
 
 ffi_export!(
     fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetFwtLeaves(
-    _env: JNIEnv,
-    _commitment_tree: JObject,
-    _sc_id: jbyteArray
-) -> jobject
-{
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
-    };
+        _env: JNIEnv,
+        _commitment_tree: JObject,
+        _sc_id: jbyteArray,
+    ) -> jobject {
+        let sc_id = {
+            let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+            FieldElement::deserialize(sc_id_bytes.as_slice())
+                .expect("Can't parse the input sc_id_bytes into FieldElement")
+        };
 
-    let commitment_tree = {
+        let commitment_tree = {
+            let t = _env
+                .get_field(_commitment_tree, "commitmentTreePointer", "J")
+                .expect("Should be able to get field commitmentTreePointer");
 
-        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
-            .expect("Should be able to get field commitmentTreePointer");
+            read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
+        };
 
-        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
-    };
+        match commitment_tree.get_fwt_leaves(&sc_id) {
+            Some(leaves) => {
+                let field_class = _env
+                    .find_class("com/horizen/librustsidechains/FieldElement")
+                    .expect("Should be able to find FieldElement class");
 
-    match commitment_tree.get_fwt_leaves(&sc_id) {
-        Some(leaves) => {
-            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
-                .expect("Should be able to find FieldElement class");
+                let initial_element = _env
+                    .new_object(field_class, "(J)V", &[JValue::Long(0)])
+                    .expect("Should be able to create new long for FieldElement");
 
-            let initial_element = _env.new_object(field_class, "(J)V", &[
-                JValue::Long(0)]).expect("Should be able to create new long for FieldElement");
+                let leaf_fe_array = _env
+                    .new_object_array(leaves.len() as i32, field_class, initial_element)
+                    .expect("Should be able to create array of FieldElements");
 
-            let leaf_fe_array = _env.new_object_array(leaves.len() as i32, field_class, initial_element)
-                .expect("Should be able to create array of FieldElements");
+                for (idx, leaf) in leaves.iter().enumerate() {
+                    let leaf_field_ptr = Box::into_raw(Box::new(*leaf)) as jlong;
 
-            for (idx, leaf) in leaves.iter().enumerate() {
-                let leaf_field_ptr = Box::into_raw(Box::new(*leaf)) as jlong;
+                    let leaf_element = _env
+                        .new_object(field_class, "(J)V", &[JValue::Long(leaf_field_ptr)])
+                        .expect("Should be able to create new long for FieldElement");
 
-                let leaf_element = _env.new_object(field_class, "(J)V", &[
-                    JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");
+                    _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
+                        .expect("Should be able to add FieldElement leaf to an array");
+                }
 
-                _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
-                    .expect("Should be able to add FieldElement leaf to an array");
+                let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+                let empty_res = _env
+                    .call_static_method(
+                        cls_optional,
+                        "of",
+                        "(Ljava/lang/Object;)Ljava/util/Optional;",
+                        &[JValue::from(JObject::from(leaf_fe_array))],
+                    )
+                    .expect("Should be able to create new value for Optional");
+
+                *empty_res.l().unwrap()
             }
+            _ => {
+                let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
+                let empty_res = _env
+                    .call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                    .expect("Should be able to create new value for Optional.empty()");
 
-            let cls_optional = _env.find_class("java/util/Optional").unwrap();
-
-            let empty_res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::from(JObject::from(leaf_fe_array))])
-                .expect("Should be able to create new value for Optional");
-
-            *empty_res.l().unwrap()
-        }
-        _ => {
-            let cls_optional = _env.find_class("java/util/Optional").unwrap();
-
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
-                .expect("Should be able to create new value for Optional.empty()");
-
-            *empty_res.l().unwrap()
+                *empty_res.l().unwrap()
+            }
         }
     }
-});
+);
 
 ffi_export!(
     fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetBtrLeaves(
-    _env: JNIEnv,
-    _commitment_tree: JObject,
-    _sc_id: jbyteArray
-) -> jobject
-{
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
-    };
+        _env: JNIEnv,
+        _commitment_tree: JObject,
+        _sc_id: jbyteArray,
+    ) -> jobject {
+        let sc_id = {
+            let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+            FieldElement::deserialize(sc_id_bytes.as_slice())
+                .expect("Can't parse the input sc_id_bytes into FieldElement")
+        };
 
-    let commitment_tree = {
+        let commitment_tree = {
+            let t = _env
+                .get_field(_commitment_tree, "commitmentTreePointer", "J")
+                .expect("Should be able to get field commitmentTreePointer");
 
-        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
-            .expect("Should be able to get field commitmentTreePointer");
+            read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
+        };
 
-        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
-    };
+        match commitment_tree.get_bwtr_leaves(&sc_id) {
+            Some(leaves) => {
+                let field_class = _env
+                    .find_class("com/horizen/librustsidechains/FieldElement")
+                    .expect("Should be able to find FieldElement class");
 
-    match commitment_tree.get_bwtr_leaves(&sc_id) {
-        Some(leaves) => {
-            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
-                .expect("Should be able to find FieldElement class");
+                let initial_element = _env
+                    .new_object(field_class, "(J)V", &[JValue::Long(0)])
+                    .expect("Should be able to create new long for FieldElement");
 
-            let initial_element = _env.new_object(field_class, "(J)V", &[
-                JValue::Long(0)]).expect("Should be able to create new long for FieldElement");
+                let leaf_fe_array = _env
+                    .new_object_array(leaves.len() as i32, field_class, initial_element)
+                    .expect("Should be able to create array of FieldElements");
 
-            let leaf_fe_array = _env.new_object_array(leaves.len() as i32, field_class, initial_element)
-                .expect("Should be able to create array of FieldElements");
+                for (idx, leaf) in leaves.iter().enumerate() {
+                    let leaf_field_ptr = Box::into_raw(Box::new(*leaf)) as i64;
 
-            for (idx, leaf) in leaves.iter().enumerate() {
-                let leaf_field_ptr = Box::into_raw(Box::new(*leaf)) as i64;
+                    let leaf_element = _env
+                        .new_object(field_class, "(J)V", &[JValue::Long(leaf_field_ptr)])
+                        .expect("Should be able to create new long for FieldElement");
 
-                let leaf_element = _env.new_object(field_class, "(J)V", &[
-                    JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");
+                    _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
+                        .expect("Should be able to add FieldElement leaf to an array");
+                }
 
-                _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
-                    .expect("Should be able to add FieldElement leaf to an array");
+                let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+                let empty_res = _env
+                    .call_static_method(
+                        cls_optional,
+                        "of",
+                        "(Ljava/lang/Object;)Ljava/util/Optional;",
+                        &[JValue::from(JObject::from(leaf_fe_array))],
+                    )
+                    .expect("Should be able to create new value for Optional");
+
+                *empty_res.l().unwrap()
             }
+            _ => {
+                let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
+                let empty_res = _env
+                    .call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                    .expect("Should be able to create new value for Optional.empty()");
 
-            let cls_optional = _env.find_class("java/util/Optional").unwrap();
-
-            let empty_res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::from(JObject::from(leaf_fe_array))])
-                .expect("Should be able to create new value for Optional");
-
-            *empty_res.l().unwrap()
-        }
-        _ => {
-            let cls_optional = _env.find_class("java/util/Optional").unwrap();
-
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
-                .expect("Should be able to create new value for Optional.empty()");
-
-            *empty_res.l().unwrap()
+                *empty_res.l().unwrap()
+            }
         }
     }
-});
+);
 
 ffi_export!(
     fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetCrtLeaves(
-    _env: JNIEnv,
-    _commitment_tree: JObject,
-    _sc_id: jbyteArray
-) -> jobject
-{
-    let sc_id = {
-        let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
-        FieldElement::deserialize(sc_id_bytes.as_slice()).expect("Can't parse the input sc_id_bytes into FieldElement")
-    };
+        _env: JNIEnv,
+        _commitment_tree: JObject,
+        _sc_id: jbyteArray,
+    ) -> jobject {
+        let sc_id = {
+            let sc_id_bytes = parse_jbyte_array_to_vec(&_env, &_sc_id, FIELD_SIZE);
+            FieldElement::deserialize(sc_id_bytes.as_slice())
+                .expect("Can't parse the input sc_id_bytes into FieldElement")
+        };
 
-    let commitment_tree = {
+        let commitment_tree = {
+            let t = _env
+                .get_field(_commitment_tree, "commitmentTreePointer", "J")
+                .expect("Should be able to get field commitmentTreePointer");
 
-        let t =_env.get_field(_commitment_tree, "commitmentTreePointer", "J")
-            .expect("Should be able to get field commitmentTreePointer");
+            read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
+        };
 
-        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut CommitmentTree)
-    };
+        match commitment_tree.get_cert_leaves(&sc_id) {
+            Some(leaves) => {
+                let field_class = _env
+                    .find_class("com/horizen/librustsidechains/FieldElement")
+                    .expect("Should be able to find FieldElement class");
 
-    match commitment_tree.get_cert_leaves(&sc_id) {
-        Some(leaves) => {
-            let field_class =  _env.find_class("com/horizen/librustsidechains/FieldElement")
-                .expect("Should be able to find FieldElement class");
+                let initial_element = _env
+                    .new_object(field_class, "(J)V", &[JValue::Long(0)])
+                    .expect("Should be able to create new long for FieldElement");
 
-            let initial_element = _env.new_object(field_class, "(J)V", &[
-                JValue::Long(0)]).expect("Should be able to create new long for FieldElement");
+                let leaf_fe_array = _env
+                    .new_object_array(leaves.len() as i32, field_class, initial_element)
+                    .expect("Should be able to create array of FieldElements");
 
-            let leaf_fe_array = _env.new_object_array(leaves.len() as i32, field_class, initial_element)
-                .expect("Should be able to create array of FieldElements");
+                for (idx, leaf) in leaves.iter().enumerate() {
+                    let leaf_field_ptr = Box::into_raw(Box::new(*leaf)) as i64;
+                    let leaf_element = _env
+                        .new_object(field_class, "(J)V", &[JValue::Long(leaf_field_ptr)])
+                        .expect("Should be able to create new long for FieldElement");
 
-            for (idx, leaf) in leaves.iter().enumerate() {
-                let leaf_field_ptr = Box::into_raw(Box::new(*leaf)) as i64;
-                let leaf_element = _env.new_object(field_class, "(J)V", &[
-                    JValue::Long(leaf_field_ptr)]).expect("Should be able to create new long for FieldElement");
+                    _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
+                        .expect("Should be able to add FieldElement leaf to an array");
+                }
 
-                _env.set_object_array_element(leaf_fe_array, idx as i32, leaf_element)
-                    .expect("Should be able to add FieldElement leaf to an array");
+                let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+                let empty_res = _env
+                    .call_static_method(
+                        cls_optional,
+                        "of",
+                        "(Ljava/lang/Object;)Ljava/util/Optional;",
+                        &[JValue::from(JObject::from(leaf_fe_array))],
+                    )
+                    .expect("Should be able to create new value for Optional");
+
+                *empty_res.l().unwrap()
             }
+            _ => {
+                let cls_optional = _env.find_class("java/util/Optional").unwrap();
 
-            let cls_optional = _env.find_class("java/util/Optional").unwrap();
+                let empty_res = _env
+                    .call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                    .expect("Should be able to create new value for Optional.empty()");
 
-            let empty_res = _env.call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::from(JObject::from(leaf_fe_array))])
-                .expect("Should be able to create new value for Optional");
-
-            *empty_res.l().unwrap()
-        }
-        _ => {
-            let cls_optional = _env.find_class("java/util/Optional").unwrap();
-
-            let empty_res = _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
-                .expect("Should be able to create new value for Optional.empty()");
-
-            *empty_res.l().unwrap()
+                *empty_res.l().unwrap()
+            }
         }
     }
-});
+);
 
 ffi_export!(
     fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeAddBtr(
@@ -4227,34 +4280,41 @@ ffi_export!(
 
 ffi_export!(
     fn Java_com_horizen_librustsidechains_Utils_nativeCompressedBitvectorMerkleRootWithSizeCheck(
-    _env: JNIEnv,
-    _utils: JClass,
-    _compressed_bit_vector: jbyteArray,
-    _expected_uncompressed_size: jint
-) -> jbyteArray
-{
-    // Parse compressed_bit_vector into a vector
-    let compressed_bit_vector = _env.convert_byte_array(_compressed_bit_vector)
-        .expect("Should be able to convert to Rust byte array");
+        _env: JNIEnv,
+        _utils: JClass,
+        _compressed_bit_vector: jbyteArray,
+        _expected_uncompressed_size: jint,
+    ) -> jbyteArray {
+        // Parse compressed_bit_vector into a vector
+        let compressed_bit_vector = _env
+            .convert_byte_array(_compressed_bit_vector)
+            .expect("Should be able to convert to Rust byte array");
 
-    let expected_uncompressed_size = _expected_uncompressed_size as usize;
+        let expected_uncompressed_size = _expected_uncompressed_size as usize;
 
-    // Compute merkle_root
-    match merkle_root_from_compressed_bytes(compressed_bit_vector.as_slice(), expected_uncompressed_size) {
-        Ok(merkle_root) => {
-            // Return merkle_root bytes
-            let merkle_root_bytes = serialize_to_buffer(
-                &merkle_root,
-                None,
-            ).expect("Should be able to serialize merkle_root");
-            _env.byte_array_from_slice(merkle_root_bytes.as_slice()).expect("Cannot write jobject.")
-        }
-        Err(e) => {
-            throw!(&_env, "java/lang/Exception", format!("Cannot compute merkle root with size check: {:?}", e).as_str(), JObject::null().into_inner());
+        // Compute merkle_root
+        match merkle_root_from_compressed_bytes(
+            compressed_bit_vector.as_slice(),
+            expected_uncompressed_size,
+        ) {
+            Ok(merkle_root) => {
+                // Return merkle_root bytes
+                let merkle_root_bytes = serialize_to_buffer(&merkle_root, None)
+                    .expect("Should be able to serialize merkle_root");
+                _env.byte_array_from_slice(merkle_root_bytes.as_slice())
+                    .expect("Cannot write jobject.")
+            }
+            Err(e) => {
+                throw!(
+                    &_env,
+                    "java/lang/Exception",
+                    format!("Cannot compute merkle root with size check: {:?}", e).as_str(),
+                    JObject::null().into_inner()
+                );
+            }
         }
     }
-});
-
+);
 
 ////////////LAZY SPARSE MERKLE TREE
 
@@ -5096,15 +5156,21 @@ ffi_export!(
                         .new_string(failing_constraint)
                         .expect("Should be able to build Java String from Rust String");
 
-                    _env
-                        .call_static_method(cls_optional, "of", "(Ljava/lang/Object;)Ljava/util/Optional;", &[JValue::Object(j_str)])
-                        .expect("Should be able to create new Optional from String")
+                    _env.call_static_method(
+                        cls_optional,
+                        "of",
+                        "(Ljava/lang/Object;)Ljava/util/Optional;",
+                        &[JValue::Object(j_str)],
+                    )
+                    .expect("Should be able to create new Optional from String")
                 } else {
-                    _env
-                        .call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                    _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
                         .expect("Should be able to create new value for Optional.empty()")
-                }.l().unwrap().into_inner()
-            },
+                }
+                .l()
+                .unwrap()
+                .into_inner()
+            }
             Err(e) => {
                 log!(format!("Error debugging circuit: {:?}", e));
                 JObject::null().into_inner()
