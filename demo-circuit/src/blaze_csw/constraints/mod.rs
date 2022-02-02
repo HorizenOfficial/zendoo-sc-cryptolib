@@ -760,8 +760,8 @@ mod test {
         )
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn complete_test_csw_circuit_utxo() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, _) =
             generate_circuit_test_data();
@@ -792,8 +792,8 @@ mod test {
         assert!(failing_constraint.is_none());
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn complete_test_csw_circuit_ft() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, _) =
             generate_circuit_test_data();
@@ -824,8 +824,8 @@ mod test {
         assert!(failing_constraint.is_none());
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_utxo_wrong_cert_hash() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -859,8 +859,8 @@ mod test {
             .contains("enforce sc_last_wcert_hash == last_wcert_hash"));
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_utxo_without_certificate() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -912,8 +912,8 @@ mod test {
             .contains("last_wcert.proof_data.scb_new_mst_root == mst_root"));
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_utxo_wrong_mst_path() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1001,8 +1001,8 @@ mod test {
         }
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_utxo_wrong_nullifier() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1036,8 +1036,8 @@ mod test {
             .contains("require(nullifier == outputHash)"));
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_utxo_wrong_amount() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1071,8 +1071,8 @@ mod test {
             .contains("input.amount == sys_data.amount"));
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_utxo_wrong_public_key_x_sign() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1109,8 +1109,8 @@ mod test {
         );
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_utxo_wrong_public_key_y_coordinate() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1149,8 +1149,8 @@ mod test {
             .contains("enforce pk ownership/enforce ownership inner/expected_pk == actual_pk/enforce condition/conditional_equals"));
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn complete_test_csw_circuit_utxo_without_constant() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, _, _) =
             generate_circuit_test_data();
@@ -1181,8 +1181,9 @@ mod test {
         assert!(failing_constraint.is_none());
     }
 
-    #[serial]
     #[test]
+    #[serial]
+    #[should_panic]
     fn test_csw_circuit_utxo_without_custom_fields() {
         let (sidechain_id, _, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1198,7 +1199,7 @@ mod test {
             None,
         );
 
-        let failing_constraint = test_csw_circuit(
+        test_csw_circuit(
             debug_only,
             sidechain_id,
             num_custom_fields,
@@ -1209,12 +1210,10 @@ mod test {
             utxo_data,
             ft_data,
         );
-        println!("Failing constraint: {:?}", failing_constraint);
-        assert!(failing_constraint.is_none());
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_utxo_with_wrong_custom_fields() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1250,8 +1249,8 @@ mod test {
             .contains("enforce utxo withdrawal/last_wcert.proof_data.scb_new_mst_root == mst_root/conditional_equals"));
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_ft_wrong_amount() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1285,8 +1284,8 @@ mod test {
             .contains("input.amount == sys_data.amount"));
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_ft_wrong_nullifier() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1320,8 +1319,8 @@ mod test {
             .contains("require(nullifier == outputHash)"));
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn complete_test_csw_circuit_ft_wrong_phantom_certificate_hash() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1378,8 +1377,8 @@ mod test {
     }
 
     // Same test as before but we use a real certificate this time, just to show that nothing changes
-    #[serial]
     #[test]
+    #[serial]
     fn complete_test_csw_circuit_ft_wrong_certificate_hash() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1438,8 +1437,8 @@ mod test {
         }
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_ft_wrong_ft_path() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1513,8 +1512,8 @@ mod test {
         }
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_ft_wrong_sc_hash_path() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1605,8 +1604,8 @@ mod test {
         }
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn test_csw_circuit_ft_missing_com_tx() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, debug_only) =
             generate_circuit_test_data();
@@ -1645,8 +1644,8 @@ mod test {
         assert!(failing_constraint.unwrap().contains("require(cnt == 1)"));
     }
 
-    #[serial]
     #[test]
+    #[serial]
     fn complete_test_csw_circuit_ft_few_tx_com_hashes() {
         let (sidechain_id, num_custom_fields, num_commitment_hashes, constant, _) =
             generate_circuit_test_data();
