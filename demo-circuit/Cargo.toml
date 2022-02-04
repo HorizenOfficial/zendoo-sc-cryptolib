@@ -13,13 +13,13 @@ edition = "2018"
 include = ["Cargo.toml", "src"]
 
 [dependencies]
-algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-r1cs-crypto = {features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-r1cs-std = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
+primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
+r1cs-crypto = {features = ["tweedle", "signature"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
+r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
+r1cs-std = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "dev" }
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "sync_ginger_mht" }
 
 derivative = "=2.2.0"
 lazy_static = "=1.4.0"
@@ -34,4 +34,4 @@ bit-vec = "=0.6.3"
 
 [features]
 default = [ "asm" ]
-asm = [ "algebra/llvm_asm", "cctp_primitives/asm" ]
+asm = [ "algebra/llvm_asm", "cctp_primitives/asm", "primitives/llvm_asm" ]

@@ -207,6 +207,7 @@ pub fn create_naive_threshold_sig_proof(
         ft_min_amount,
         btr_fee,
         max_pks,
+        valid_signatures,
     );
 
     let pk: ZendooProverKey = read_from_file(

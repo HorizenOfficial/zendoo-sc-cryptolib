@@ -14,11 +14,17 @@ extern crate jni;
 
 use algebra::{serialize::*, SemanticallyValid};
 use cctp_primitives::{
-    proving_system::{init_dlog_keys, ProvingSystem},
-    utils::{data_structures::*, mht::*, poseidon_hash::*, serialization::*},
+    proving_system::{ProvingSystem, init_dlog_keys},
+    utils::{
+        serialization::*,
+        poseidon_hash::*,
+        mht::*,
+        data_structures::*,
+    }
 };
-use demo_circuit::{generate_circuit_keypair, get_instance_for_setup, type_mapping::*};
-use std::{any::type_name, path::Path};
+use demo_circuit::{type_mapping::*, GingerSparseMHT, GingerMHTPath, get_instance_for_setup, generate_circuit_keypair};
+use primitives::{FieldBasedMerkleTree, FieldBasedSparseMerkleTree};
+use std::{any::type_name, collections::{HashMap, HashSet}, path::Path};
 
 mod cctp_calls;
 use cctp_calls::*;
@@ -151,10 +157,10 @@ use cctp_primitives::bit_vector::merkle_tree::{
 };
 use cctp_primitives::proving_system::{check_proof_vk_size, ZendooVerifierKey};
 use cctp_primitives::utils::compute_sc_id;
-use jni::objects::{JClass, JObject, JString, JValue};
-use jni::sys::{jboolean, jbyte, jbyteArray, jint, jlong, jobject, jobjectArray};
-use jni::sys::{JNI_FALSE, JNI_TRUE};
-use jni::JNIEnv;
+use jni::{JNIEnv, objects::JMap, sys::jlongArray};
+use jni::objects::{JClass, JString, JObject, JValue};
+use jni::sys::{jbyteArray, jboolean, jint, jlong, jobject, jobjectArray, jbyte};
+use jni::sys::{JNI_TRUE, JNI_FALSE};
 use std::convert::TryInto;
 
 //Field element related functions
@@ -1213,6 +1219,37 @@ ffi_export!(
 );
 
 ffi_export!(
+    fn Java_com_horizen_merkletreenative_MerklePath_nativeEquals(
+    _env: JNIEnv,
+    _path_1: JObject,
+    _path_2: JObject,
+) -> jboolean
+{
+    //Read path_1
+    let path_1 = {
+
+        let t =_env.get_field(_path_1, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    //Read path_1
+    let path_2 = {
+
+        let t =_env.get_field(_path_2, "merklePathPointer", "J")
+            .expect("Should be able to get field merklePathPointer");
+
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
+    };
+
+    match path_1 == path_2 {
+        true => JNI_TRUE,
+        false => JNI_FALSE,
+    }
+});
+
+ffi_export!(
     fn Java_com_horizen_merkletreenative_MerklePath_nativeFreeMerklePath(
         _env: JNIEnv,
         _class: JClass,
@@ -1226,174 +1263,161 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeInit(
-        _env: JNIEnv,
-        _class: JClass,
-        _height: jint,
-        _processing_step: jlong,
-    ) -> jobject {
-        // Create new InMemoryOptimizedMerkleTree Rust side
-        let mt = new_ginger_mht(_height as usize, _processing_step as usize);
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeInit(
+    _env: JNIEnv,
+    _class: JClass,
+    _height: jint,
+    _processing_step: jlong,
+) -> jobject
+{
+    // Create new InMemoryAppendOnlyMerkleTree Rust side
+    let mt = new_ginger_mht(
+        _height as usize,
+        _processing_step as usize
+    );
 
-        // Create and return new InMemoryOptimizedMerkleTree Java side
-        match mt {
-            Ok(mt) => return_jobject(
-                &_env,
-                mt,
-                "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree",
-            )
-            .into_inner(),
-            Err(_) => std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
-        }
+    // Create and return new InMemoryAppendOnlyMerkleTree Java side
+    match mt {
+        Ok(mt) => return_jobject(&_env, mt, "com/horizen/merkletreenative/InMemoryAppendOnlyMerkleTree").into_inner(),
+        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
     }
-);
+});
+
+ffi_export!(    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeAppend(
+    _env: JNIEnv,
+    _tree: JObject,
+    _leaf: JObject,
+) -> jboolean
+{
+    let leaf = {
+
+        let fe =_env.get_field(_leaf, "fieldElementPointer", "J")
+            .expect("Should be able to get field fieldElementPointer");
+
+        read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
+    };
+    let tree = {
+        let t = _env
+            .get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
+    };
+
+    match append_leaf_to_ginger_mht(tree, leaf) {
+        Ok(_) => JNI_TRUE,
+        Err(_) => JNI_FALSE,
+    }
+});
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeAppend(
-        _env: JNIEnv,
-        _tree: JObject,
-        _leaf: JObject,
-    ) -> jboolean {
-        let leaf = {
-            let fe = _env
-                .get_field(_leaf, "fieldElementPointer", "J")
-                .expect("Should be able to get field fieldElementPointer");
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeFinalize(
+    _env: JNIEnv,
+    _tree: JObject,
+) -> jobject
+{
+    let tree = {
 
-            read_raw_pointer(&_env, fe.j().unwrap() as *const FieldElement)
-        };
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        let tree = {
-            let t = _env
-                .get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
-                .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHT)
+    };
 
-            read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
-        };
-
-        match append_leaf_to_ginger_mht(tree, leaf) {
-            Ok(_) => JNI_TRUE,
-            Err(_) => JNI_FALSE,
-        }
+    match finalize_ginger_mht(tree) {
+        Ok(tree_copy) => return_jobject(&_env, tree_copy, "com/horizen/merkletreenative/InMemoryAppendOnlyMerkleTree").into_inner(),
+        Err(_) => return std::ptr::null::<jobject>() as jobject //CRYPTO_ERROR
     }
-);
+});
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalize(
-        _env: JNIEnv,
-        _tree: JObject,
-    ) -> jobject {
-        let tree = {
-            let t = _env
-                .get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
-                .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeFinalizeInPlace(
+    _env: JNIEnv,
+    _tree: JObject,
+) -> jboolean
+{
+    let tree = {
 
-            read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHT)
-        };
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        match finalize_ginger_mht(tree) {
-            Ok(tree_copy) => return_jobject(
-                &_env,
-                tree_copy,
-                "com/horizen/merkletreenative/InMemoryOptimizedMerkleTree",
-            )
-            .into_inner(),
-            Err(_) => std::ptr::null::<jobject>() as jobject, //CRYPTO_ERROR
-        }
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
+    };
+
+    match finalize_ginger_mht_in_place(tree) {
+        Ok(_) => JNI_TRUE,
+        Err(_) => JNI_FALSE,
     }
-);
+});
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFinalizeInPlace(
-        _env: JNIEnv,
-        _tree: JObject,
-    ) -> jboolean {
-        let tree = {
-            let t = _env
-                .get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
-                .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeRoot(
+    _env: JNIEnv,
+    _tree: JObject,
+) -> jobject
+{
+    let tree = {
 
-            read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
-        };
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        match finalize_ginger_mht_in_place(tree) {
-            Ok(_) => JNI_TRUE,
-            Err(_) => JNI_FALSE,
-        }
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHT)
+    };
+
+    match get_ginger_mht_root(tree) {
+        Some(root) => return_field_element(&_env, root),
+        None => std::ptr::null::<jobject>() as jobject,
     }
-);
+});
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeRoot(
-        _env: JNIEnv,
-        _tree: JObject,
-    ) -> jobject {
-        let tree = {
-            let t = _env
-                .get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
-                .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeGetMerklePath(
+    _env: JNIEnv,
+    _tree: JObject,
+    _leaf_index: jlong,
+) -> jobject
+{
+    let tree = {
 
-            read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHT)
-        };
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
 
-        match get_ginger_mht_root(tree) {
-            Some(root) => return_field_element(&_env, root),
-            None => std::ptr::null::<jobject>() as jobject,
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHT)
+    };
+
+    match get_ginger_mht_path(tree, _leaf_index as u64) {
+        Some(path) => {
+            return_jobject(&_env, path, "com/horizen/merkletreenative/MerklePath").into_inner()
         }
+        None => std::ptr::null::<jobject>() as jobject,
     }
-);
+});
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeReset(
+    _env: JNIEnv,
+    _tree: JObject,
+)
+{
+    let tree = {
+        let t =_env.get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
+            .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
+    };
+
+    reset_ginger_mht(tree);
+});
 
 ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeGetMerklePath(
-        _env: JNIEnv,
-        _tree: JObject,
-        _leaf_index: jlong,
-    ) -> jobject {
-        let tree = {
-            let t = _env
-                .get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
-                .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
-
-            read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHT)
-        };
-
-        match get_ginger_mht_path(tree, _leaf_index as u64) {
-            Some(path) => {
-                return_jobject(&_env, path, "com/horizen/merkletreenative/MerklePath").into_inner()
-            }
-            None => std::ptr::null::<jobject>() as jobject,
-        }
-    }
-);
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeReset(
-        _env: JNIEnv,
-        _tree: JObject,
-    ) {
-        let tree = {
-            let t = _env
-                .get_field(_tree, "inMemoryOptimizedMerkleTreePointer", "J")
-                .expect("Should be able to get field inMemoryOptimizedMerkleTreePointer");
-
-            read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerMHT)
-        };
-
-        reset_ginger_mht(tree);
-    }
-);
-
-ffi_export!(
-    fn Java_com_horizen_merkletreenative_InMemoryOptimizedMerkleTree_nativeFreeInMemoryOptimizedMerkleTree(
-        _env: JNIEnv,
-        _class: JClass,
-        _tree: *mut GingerMHT,
-    ) {
-        if _tree.is_null() {
-            return;
-        }
-        drop(unsafe { Box::from_raw(_tree) });
-    }
-);
+    fn Java_com_horizen_merkletreenative_InMemoryAppendOnlyMerkleTree_nativeFreeInMemoryAppendOnlyMerkleTree(
+    _env: JNIEnv,
+    _class: JClass,
+    _tree: *mut GingerMHT,
+)
+{
+    if _tree.is_null()  { return }
+    drop(unsafe { Box::from_raw(_tree) });
+});
 
 //VRF utility functions
 
@@ -3702,38 +3726,241 @@ ffi_export!(
 
 ffi_export!(
     fn Java_com_horizen_librustsidechains_Utils_nativeCompressedBitvectorMerkleRootWithSizeCheck(
-        _env: JNIEnv,
-        _utils: JClass,
-        _compressed_bit_vector: jbyteArray,
-        _expected_uncompressed_size: jint,
-    ) -> jbyteArray {
-        // Parse compressed_bit_vector into a vector
-        let compressed_bit_vector = _env
-            .convert_byte_array(_compressed_bit_vector)
-            .expect("Should be able to convert to Rust byte array");
+    _env: JNIEnv,
+    _utils: JClass,
+    _compressed_bit_vector: jbyteArray,
+    _expected_uncompressed_size: jint
+) -> jbyteArray
+{
+    // Parse compressed_bit_vector into a vector
+    let compressed_bit_vector = _env.convert_byte_array(_compressed_bit_vector)
+        .expect("Should be able to convert to Rust byte array");
 
-        let expected_uncompressed_size = _expected_uncompressed_size as usize;
+    let expected_uncompressed_size = _expected_uncompressed_size as usize;
 
-        // Compute merkle_root
-        match merkle_root_from_compressed_bytes(
-            compressed_bit_vector.as_slice(),
-            expected_uncompressed_size,
-        ) {
-            Ok(merkle_root) => {
-                // Return merkle_root bytes
-                let merkle_root_bytes = serialize_to_buffer(&merkle_root, None)
-                    .expect("Should be able to serialize merkle_root");
-                _env.byte_array_from_slice(merkle_root_bytes.as_slice())
-                    .expect("Cannot write jobject.")
-            }
-            Err(_) => {
-                throw!(
-                    &_env,
-                    "java/lang/Exception",
-                    "Cannot compute merkle root with size check.",
-                    JObject::null().into_inner()
-                );
-            }
+    // Compute merkle_root
+    match merkle_root_from_compressed_bytes(compressed_bit_vector.as_slice(), expected_uncompressed_size) {
+        Ok(merkle_root) => {
+            // Return merkle_root bytes
+            let merkle_root_bytes = serialize_to_buffer(
+                &merkle_root,
+                None,
+            ).expect("Should be able to serialize merkle_root");
+            _env.byte_array_from_slice(merkle_root_bytes.as_slice()).expect("Cannot write jobject.")
+        }
+        Err(_) => {
+            throw!(&_env, "java/lang/Exception", "Cannot compute merkle root with size check.", JObject::null().into_inner());
         }
     }
-);
+});
+
+
+////////////LAZY SPARSE MERKLE TREE
+
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeInit(
+    _env: JNIEnv,
+    _class: JClass,
+    _height: jint,
+) -> jobject
+{
+    // Create new InMemorySparseMerkleTree Rust side
+    let mt = GingerSparseMHT::init(_height as u8);
+
+    // Create and return new InMemorySparseMerkleTree Java side
+    let mt_ptr: jlong = jlong::from(Box::into_raw(Box::new(mt)) as i64);
+
+    _env.new_object(_class, "(J)V", &[JValue::Long(mt_ptr)])
+        .expect("Should be able to create new InMemorySparseMerkleTree object")
+        .into_inner()
+});
+
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeIsPositionEmpty(
+    _env: JNIEnv,
+    _tree: JObject,
+    _position: jlong,
+) -> jboolean
+{
+    // Read tree
+    let tree = {
+        let t =_env.get_field(_tree, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerSparseMHT)
+    };
+
+    // Call corresponding function and return result if Ok(), otherwise throw Exception
+    match tree.is_leaf_empty(_position as u32) {
+        Ok(result) => if result { JNI_TRUE } else { JNI_FALSE },
+        Err(e) => throw!(&_env, "java/lang/Exception", format!("Cannot check if position is empty: {}", e.to_string()).as_str(), JNI_FALSE)
+    }
+});
+
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeAddLeaves(
+    _env: JNIEnv,
+    _tree: JObject,
+    _leaves: JObject,
+)
+{
+    //Read _leaves as HashMap<u32, FieldElement>
+    let leaves_map = JMap::from_env(&_env, _leaves).expect("Should be able to construct JMap from _leaves JObject");
+    let mut leaves = HashMap::new();
+
+    for (pos, fe) in leaves_map.iter().expect("Should be able to get JMap iterator") {
+        // Read FieldElement
+        let field = {
+            let f =_env.get_field(fe, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+        };
+
+        // Read position
+        let position = _env
+            .get_field(pos, "value", "J")
+            .expect("Should be able to get value member").j().unwrap() as u32;
+
+        leaves.insert(position, *field);
+    }
+
+    // Read tree
+    let tree = {
+        let t =_env.get_field(_tree, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerSparseMHT)
+    };
+
+    // Update the tree with leaves
+    match tree.insert_leaves(leaves) {
+        Ok(_) => {},
+        Err(e) => throw!(&_env, "java/lang/Exception", format!("Cannot insert leaves: {}", e.to_string()).as_str())
+    };    
+});
+
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeRemoveLeaves(
+    _env: JNIEnv,
+    _tree: JObject,
+    _positions: jlongArray,
+)
+{
+    //Read _positions as an array of jlongs
+    let positions_len = _env.get_array_length(_positions)
+        .expect("Should be able to read positions array size");
+    let mut positions = HashSet::new();
+
+    // Array can be empty
+    for i in 0..positions_len {
+        let long_obj = _env.get_object_array_element(_positions, i)
+            .expect(format!("Should be able to read elem {} of the positions array", i).as_str());
+
+        // Read position
+        let position = _env
+            .get_field(long_obj, "value", "J")
+            .expect("Should be able to get value member").j().unwrap() as u32;
+
+        positions.insert(position);
+    }
+
+    // Read tree
+    let tree = {
+        let t =_env.get_field(_tree, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerSparseMHT)
+    };
+
+    // Update the tree with leaves
+    match tree.remove_leaves(positions)
+    {
+        Ok(_) => return,
+        Err(e) => throw!(&_env, "java/lang/Exception", format!("Cannot remove leaves: {}", e.to_string()).as_str())
+    }
+});
+
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeFinalizeInPlace(
+    _env: JNIEnv,
+    _tree: JObject,
+)
+{
+    // Read tree
+    let tree = {
+        let t =_env.get_field(_tree, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        read_mut_raw_pointer(&_env, t.j().unwrap() as *mut GingerSparseMHT)
+    };
+
+    // Update the root of the tree
+    match tree.finalize_in_place()
+    {
+        Ok(_) => return,
+        Err(e) => throw!(&_env, "java/lang/Exception", format!("Cannot finalize tree: {}", e.to_string()).as_str())
+    };
+});
+
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeRoot(
+    _env: JNIEnv,
+    _tree: JObject,
+) -> jobject
+{
+    // Read tree
+    let tree = {
+        let t =_env.get_field(_tree, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerSparseMHT)
+    };
+
+    match tree.root() {
+        Some(root) => return_field_element(&_env, root),
+        None => throw!(&_env, "java/lang/Exception", "Unable to return root. Have you finalized the tree ?", JObject::null().into_inner())
+    }
+});
+
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeGetMerklePath(
+    _env: JNIEnv,
+    _tree: JObject,
+    _leaf_position: jlong,
+) -> jobject
+{
+    // Read tree
+    let tree = {
+        let t =_env.get_field(_tree, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        read_raw_pointer(&_env, t.j().unwrap() as *const GingerSparseMHT)
+    };
+
+    match tree.get_merkle_path(_leaf_position as u32) {
+        Some(path) => {
+            let converted_path: GingerMHTPath = path.try_into().unwrap();
+            *return_jobject(&_env, converted_path, "com/horizen/merkletreenative/MerklePath")
+        },
+        None => throw!(&_env, "java/lang/Exception", "Cannot compute path. Have you finalized the tree ?", JObject::null().into_inner())
+    }
+});
+
+ffi_export!(
+    fn Java_com_horizen_merkletreenative_InMemorySparseMerkleTree_nativeFreeInMemorySparseMerkleTree(
+    _env: JNIEnv,
+    _tree: JObject,
+)
+{
+    // Read tree
+    let tree_ptr = {
+        let t =_env.get_field(_tree, "merkleTreePointer", "J")
+            .expect("Should be able to get field merkleTreePointer");
+
+        t.j().unwrap() as *mut GingerSparseMHT
+    };
+
+    if tree_ptr.is_null()  { return }
+    drop(unsafe { Box::from_raw(tree_ptr) });
+});

@@ -9,12 +9,13 @@ checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 [[package]]
 name = "algebra"
 version = "0.3.1"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#b4a2e8cd851ddc43b0a1da406e0f522cd89fca63"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=integration#c046f0d439d612fc9365deb2e91bb696d148df34"
 dependencies = [
  "algebra-derive",
  "byteorder",
  "derivative",
  "field-assembly",
+ "num-bigint",
  "rand",
  "rayon",
  "rustc_version",
@@ -25,7 +26,7 @@ dependencies = [
 [[package]]
 name = "algebra-derive"
 version = "0.2.0"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#b4a2e8cd851ddc43b0a1da406e0f522cd89fca63"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=integration#c046f0d439d612fc9365deb2e91bb696d148df34"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -70,7 +71,7 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 [[package]]
 name = "bench-utils"
 version = "0.3.1"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#b4a2e8cd851ddc43b0a1da406e0f522cd89fca63"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=integration#c046f0d439d612fc9365deb2e91bb696d148df34"
 
 [[package]]
 name = "bit-vec"
@@ -149,7 +150,7 @@ checksum = "22a9137b95ea06864e018375b72adfb7db6e6f68cfc8df5a04d00288050485ee"
 [[package]]
 name = "cctp_primitives"
 version = "0.1.1"
-source = "git+https://github.com/HorizenOfficial/zendoo-cctp-lib.git?branch=dev#7ef6c0a20aa09226eb47df798263d341546d93ba"
+source = "git+https://github.com/HorizenOfficial/zendoo-cctp-lib.git?branch=sync_ginger_mht#5cb88e6e466ebc7f26babe633b05ee99acb640ed"
 dependencies = [
  "algebra",
  "bit-vec",
@@ -180,9 +181,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "combine"
-version = "4.6.2"
+version = "4.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2b2f5d0ee456f3928812dfc8c6d9a1d592b98678f6d56db9b0cd2b7bc6c8db5"
+checksum = "50b727aacc797f9fc28e355d21f34709ac4fc9adecfe470ad07b8f4464f53062"
 dependencies = [
  "bytes",
  "memchr",
@@ -312,7 +313,7 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 [[package]]
 name = "field-assembly"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#b4a2e8cd851ddc43b0a1da406e0f522cd89fca63"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=integration#c046f0d439d612fc9365deb2e91bb696d148df34"
 dependencies = [
  "mince",
 ]
@@ -408,7 +409,7 @@ dependencies = [
 [[package]]
 name = "marlin"
 version = "0.2.0"
-source = "git+https://github.com/HorizenLabs/marlin?branch=dev#357e2fb5e5a2f18e7160e5f230042b1be1679444"
+source = "git+https://github.com/HorizenLabs/marlin?branch=integration#d334449abfbc32358fe06f3b9d47141c3c0dcc63"
 dependencies = [
  "algebra",
  "bench-utils",
@@ -441,7 +442,7 @@ dependencies = [
 [[package]]
 name = "mince"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#b4a2e8cd851ddc43b0a1da406e0f522cd89fca63"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=integration#c046f0d439d612fc9365deb2e91bb696d148df34"
 dependencies = [
  "quote",
  "syn",
@@ -464,6 +465,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77a5d83df9f36fe23f0c3648c6bbb8b0298bb5f1939c8f2704431371f4b84d43"
 dependencies = [
  "smallvec",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-integer"
+version = "0.1.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2cc698a63b549a70bc047073d2949cce27cd1c7b0a4a862d08a8031bc2801db"
+dependencies = [
+ "autocfg",
+ "num-traits",
+]
+
+[[package]]
+name = "num-traits"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
+dependencies = [
+ "autocfg",
 ]
 
 [[package]]
@@ -491,7 +522,7 @@ checksum = "58893f751c9b0412871a09abd62ecd2a00298c6c83befa223ef98c52aef40cbe"
 [[package]]
 name = "poly-commit"
 version = "0.2.0"
-source = "git+https://github.com/HorizenLabs/poly-commit?branch=dev#c99a265d74869ac747fa82df4215b7ad30a94d38"
+source = "git+https://github.com/HorizenLabs/poly-commit?branch=integration#c0f18df80e32ddbf34b80522b4263f5d8d5a58c4"
 dependencies = [
  "algebra",
  "bench-utils",
@@ -512,7 +543,7 @@ checksum = "eb9f9e6e233e5c4a35559a617bf40a4ec447db2e84c20b55a6f83167b7e57872"
 [[package]]
 name = "primitives"
 version = "0.3.1"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#b4a2e8cd851ddc43b0a1da406e0f522cd89fca63"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=integration#c046f0d439d612fc9365deb2e91bb696d148df34"
 dependencies = [
  "algebra",
  "bench-utils",
@@ -537,7 +568,7 @@ dependencies = [
 [[package]]
 name = "proof-systems"
 version = "0.3.1"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#b4a2e8cd851ddc43b0a1da406e0f522cd89fca63"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=integration#c046f0d439d612fc9365deb2e91bb696d148df34"
 dependencies = [
  "algebra",
  "bench-utils",
@@ -566,16 +597,18 @@ dependencies = [
 [[package]]
 name = "r1cs-core"
 version = "0.3.1"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#b4a2e8cd851ddc43b0a1da406e0f522cd89fca63"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=integration#c046f0d439d612fc9365deb2e91bb696d148df34"
 dependencies = [
  "algebra",
+ "radix_trie",
+ "rand",
  "smallvec",
 ]
 
 [[package]]
 name = "r1cs-crypto"
 version = "0.3.1"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#b4a2e8cd851ddc43b0a1da406e0f522cd89fca63"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=integration#c046f0d439d612fc9365deb2e91bb696d148df34"
 dependencies = [
  "algebra",
  "bench-utils",
@@ -591,7 +624,7 @@ dependencies = [
 [[package]]
 name = "r1cs-std"
 version = "0.3.1"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#b4a2e8cd851ddc43b0a1da406e0f522cd89fca63"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=integration#c046f0d439d612fc9365deb2e91bb696d148df34"
 dependencies = [
  "algebra",
  "derivative",

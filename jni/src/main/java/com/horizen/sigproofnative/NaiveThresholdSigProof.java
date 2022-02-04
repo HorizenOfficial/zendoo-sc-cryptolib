@@ -5,7 +5,6 @@ import com.horizen.librustsidechains.FieldElement;
 import com.horizen.schnorrnative.SchnorrPublicKey;
 import com.horizen.schnorrnative.SchnorrSignature;
 import com.horizen.provingsystemnative.ProvingSystemType;
-import com.horizen.provingsystemnative.ProvingSystem;
 
 import java.util.List;
 
