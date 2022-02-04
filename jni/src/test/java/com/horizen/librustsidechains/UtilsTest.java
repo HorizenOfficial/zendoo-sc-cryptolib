@@ -67,10 +67,8 @@ public class UtilsTest {
             Utils.compressedBitvectorMerkleRoot(TestUtils.fromHexString(compressedBitvectorHex), decompressedSize);
         } catch (Exception e) {
             exceptionOccurred = true;
-            assertEquals("Different exception expected", e.getMessage(),
-                    "Cannot compute merkle root with size check.");
+            assertTrue("Different exception expected", e.getMessage().contains("Cannot compute merkle root with size check"));
         }
         assertTrue("Excecption expected.", exceptionOccurred);
     }
-
 }

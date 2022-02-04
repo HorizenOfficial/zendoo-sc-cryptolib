@@ -17,8 +17,8 @@ edition = "2018"
 algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
 primitives = {features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "sync_ginger_mht" }
-
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "integration" }
+r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
 #ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
 
@@ -29,6 +29,9 @@ radix_trie = "=0.2.1"
 rand = { version = "=0.8.4" }
 rand_xorshift = { version = "=0.3.0" }
 blake2 = { version = "=0.8.1", default-features = false }
+
+[dev-dependencies]
+serial_test = "=0.5.1"
 
 [lib]
 name = "zendoo_sc"

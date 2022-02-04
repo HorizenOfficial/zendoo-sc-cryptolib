@@ -119,6 +119,43 @@ public class MerkleTreeTest {
     }
 
     @Test
+    public void testMerkleTreeReset() throws Exception {
+        //Get InMemoryAppendOnlyMerkleTree
+        InMemoryAppendOnlyMerkleTree mht = InMemoryAppendOnlyMerkleTree.init(height, numLeaves);
+        assertNotNull("Merkle Tree initialization must succeed", mht);
+
+        // Must place the leaves at the same positions of the previous trees
+        List<FieldElement> mhtLeaves = new ArrayList<>();
+        //Initialize all leaves to zero
+        FieldElement zero = FieldElement.createFromLong(0L);
+        for(int j = 0; j < 1024; j++)
+            mhtLeaves.add(zero);
+        //Substitute at positions the correct leaves
+        for (int j = 1; j < numLeaves - 1; j++) {
+            // Warning: Conversion from long to int is not to be used for production.
+            mhtLeaves.set((int)positions[j], leaves.get(j));
+        }
+
+        for (int i = 0; i < 100; i++) {
+            //Append all the leaves to mht
+            for (FieldElement leaf: mhtLeaves)
+                assertTrue("Leaf append must be successfull", mht.append(leaf));
+
+            //Finalize the tree
+            assertTrue("Merkle Tree finalization must succeed", mht.finalizeTreeInPlace());
+
+            //Compute root and assert equality with the expected one
+            FieldElement mhtRoot = mht.root();
+            assertNotNull("Root must not be NULL", mhtRoot);
+            assertEquals("InMemoryAppendOnlyMerkleTree root is not as expected", mhtRoot, expectedRoot);
+
+            mhtRoot.close();
+            mht.reset();
+        }
+        mht.close();
+    }
+
+    @Test
     public void testMerklePaths() throws Exception {
         List<FieldElement> testLeaves = new ArrayList<>();
         Map<Long, FieldElement> testPositionLeaves = new HashMap<>();
