@@ -1,13 +1,13 @@
 [package]
 name = "ouroboros"
-version = "0.4.1"
+version = "0.5.0"
 authors = ["DanieleDiBenedetto <daniele@horizenlabs.io>"]
 edition = "2018"
 
 [dependencies]
-algebra = {version = "0.1.0", features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
-primitives = {version = "0.1.0", features = ["tweedle", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
-rand = { version = "0.7" }
+algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+primitives = {features = ["tweedle", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+rand = { version = "=0.8.4" }
 
 [features]
 default = [ "asm" ]

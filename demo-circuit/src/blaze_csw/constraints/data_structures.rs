@@ -31,7 +31,7 @@ use crate::{
 pub struct WithdrawalCertificateDataGadget {
     pub ledger_id_g: FieldElementGadget,
     pub epoch_id_g: UInt32,
-    /// Merkle root hash of all BTs from the certificate 
+    /// Merkle root hash of all BTs from the certificate
     pub bt_list_root_g: FieldElementGadget,
     pub quality_g: UInt64,
     /// Reference to the state of the mainchain-to-sidechain transaction history.
@@ -39,7 +39,7 @@ pub struct WithdrawalCertificateDataGadget {
     pub mcb_sc_txs_com_g: FieldElementGadget,
     pub ft_min_amount_g: UInt64,
     pub btr_min_fee_g: UInt64,
-    /// Carries the reference to the sidechain state. (Currently the reference is 
+    /// Carries the reference to the sidechain state. (Currently the reference is
     /// split over two field elements)
     pub custom_fields_g: Vec<FieldElementGadget>,
 }
@@ -214,7 +214,7 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget>
     }
 }
 
-/// The gadget for an ordinary sidechain transaction output. 
+/// The gadget for an ordinary sidechain transaction output.
 pub struct CswUtxoOutputDataGadget {
     pub spending_pub_key_g: [Boolean; SC_PUBLIC_KEY_LENGTH * 8],
     pub amount_g: UInt64,
@@ -361,7 +361,7 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswUtxoOutp
     }
 }
 
-/// The utxo gadget used for a ceased sidechain withdrawal. 
+/// The utxo gadget used for a ceased sidechain withdrawal.
 /// Consists of the relavant utxo data plus the corresponding secret key.
 pub struct CswUtxoInputDataGadget {
     pub output_g: CswUtxoOutputDataGadget,
@@ -420,28 +420,30 @@ impl AllocGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
     }
 }
 
-/// The witness data needed for a utxo withdrawal proof. 
+/// The witness data needed for a utxo withdrawal proof.
 /// Contains the utxo and secret key, and the witnesses for proving membership
 /// to the last sidechain state accepted by the mainchain.
 pub struct CswUtxoProverDataGadget {
     /// unspent output we are trying to withdraw
-    pub input_g: CswUtxoInputDataGadget, 
-    /// Merkle path to last state accepted sidechain state, which 
+    pub input_g: CswUtxoInputDataGadget,
+    /// Merkle path to last state accepted sidechain state, which
     /// is extracted from the `custom_fields` of the `WithdrawalCertificateGadget`
-    pub mst_path_to_output_g: GingerMHTBinaryGadget, 
+    pub mst_path_to_output_g: GingerMHTBinaryGadget,
 }
 
 impl CswUtxoProverDataGadget {
     /// Enforce that:
     /// 1) H(self.input_g.output_g) belongs to merkle tree with root 'scb_new_mst_root_g';
-    /// 2) H(self.input_g.output_g) == 'nullifier_g'
-    /// 3) self.input_g.output_g.amount_g == 'amount_g'
+    /// 2) H(last_wcert_g) == 'expected_sc_last_wcert_hash_g'
+    /// 3) H(self.input_g.output_g) == 'nullifier_g'
+    /// 4) self.input_g.output_g.amount_g == 'amount_g'
     pub(crate) fn conditionally_enforce_utxo_withdrawal<
         CS: ConstraintSystemAbstract<FieldElement>,
     >(
         &self,
         mut cs: CS,
-        scb_new_mst_root_g: &FieldElementGadget,
+        last_wcert_g: &WithdrawalCertificateDataGadget,
+        expected_sc_last_wcert_hash_g: &FieldElementGadget,
         nullifier_g: &FieldElementGadget,
         amount_g: &FieldElementGadget,
         should_enforce: &Boolean,
@@ -457,7 +459,32 @@ impl CswUtxoProverDataGadget {
             .output_g
             .enforce_hash(cs.ns(|| "H(input.output)"), Some(personalization))?;
 
-        // 1 Check output presence in the known state
+        // 1. Check output presence in the known state
+
+        // Reconstruct scb_new_mst_root from first 2 custom fields
+        // We use two custom fields (with half of the bits set) to store a single Field Element
+        assert!(last_wcert_g.custom_fields_g.len() >= 2);
+
+        let scb_new_mst_root_g = {
+            // Compute 2^128 in the field
+            let pow = FieldElement::one().double().pow(&[128u64]);
+
+            // Combine the two custom fields as custom_fields[0] + (2^128) * custom_fields[1]
+            // We assume here that the 2 FieldElements were originally truncated at the 128th bit .
+            // Note that the prover is able to find multiple custom_fields[0], custom_fields[1]
+            // leading to the same result but this will change the certificate hash, binded to
+            // the sys_data_hash public input, for which he would need to find a collision,
+            // and this is unfeasible.
+            let first_half = &last_wcert_g.custom_fields_g[0];
+            let second_half = last_wcert_g.custom_fields_g[1]
+                .mul_by_constant(cs.ns(|| "2^128 * custom_fields[1]"), &pow)?;
+
+            first_half.add(
+                cs.ns(|| "custom_fields[0] + (2^128) * custom_fields[1]"),
+                &second_half,
+            )
+        }?;
+
         // mst_root = reconstruct_merkle_root_hash(outputHash, mst_path_to_output)
         let mst_root_g = self.mst_path_to_output_g.enforce_root_from_leaf(
             cs.ns(|| "reconstruct_merkle_root_hash(outputHash, mst_path_to_output)"),
@@ -467,18 +494,28 @@ impl CswUtxoProverDataGadget {
         // require(last_wcert.proof_data.scb_new_mst_root == mst_root)
         mst_root_g.conditional_enforce_equal(
             cs.ns(|| "last_wcert.proof_data.scb_new_mst_root == mst_root"),
-            scb_new_mst_root_g,
+            &scb_new_mst_root_g,
             should_enforce,
         )?;
 
-        // 2 Enforce nullifier
+        // 2. enforce cert hash
+        let last_wcert_hash_g =
+            last_wcert_g.enforce_hash(cs.ns(|| "enforce last_wcert_hash"), None)?;
+
+        last_wcert_hash_g.conditional_enforce_equal(
+            cs.ns(|| "enforce sc_last_wcert_hash == last_wcert_hash"),
+            expected_sc_last_wcert_hash_g,
+            should_enforce,
+        )?;
+
+        // 3. Enforce nullifier
         output_hash_g.conditional_enforce_equal(
             cs.ns(|| "require(nullifier == outputHash)"),
             nullifier_g,
             should_enforce,
         )?;
 
-        // 3. Enforce amount
+        // 4. Enforce amount
         let mut utxo_amount_big_endian_bits_g = self.input_g.output_g.amount_g.to_bits_le();
         utxo_amount_big_endian_bits_g.reverse();
 
@@ -718,10 +755,10 @@ pub struct CswFtProverDataGadget {
     /// The Sc_Txs_Commitment at the start of the time window the withdrawal proof refers to.
     /// (The end is provided via public inputs)
     pub mcb_sc_txs_com_start_g: FieldElementGadget,
-    /// The complete hash chain of the Sc_Txs_Commitments 
+    /// The complete hash chain of the Sc_Txs_Commitments
     pub sc_txs_com_hashes_g: Vec<FieldElementGadget>,
-    //   
-    //  Witness data for proving the ft being member of an Sc_Txs_Commitment. 
+    //
+    //  Witness data for proving the ft being member of an Sc_Txs_Commitment.
     //
     /// The Merkle path for the sidechain-specific root within the Sc_Txs_Commitment.
     pub merkle_path_to_sc_hash_g: GingerMHTBinaryGadget,
@@ -736,7 +773,6 @@ pub struct CswFtProverDataGadget {
     /// for completing the Merkle Path from the ft_tree root to the sidechain-specific root:
     /// The withdrawal certificate commitment.
     pub wcert_tree_root_g: FieldElementGadget,
-
 }
 
 impl CswFtProverDataGadget {
@@ -820,7 +856,7 @@ impl CswFtProverDataGadget {
                 FieldElement::one(),
             )?;
 
-            // sc_txs_com_cumulative = H(sc_txs_com_cumulative, sc_txs_com_hashes[i]) as 
+            // sc_txs_com_cumulative = H(sc_txs_com_cumulative, sc_txs_com_hashes[i]) as
             // long as `i < actual_range_size`.
             let temp_sc_txs_com_cumulative = FieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| format!("H(sc_txs_com_cumulative, sc_txs_com_hashes[{}])", i)),
@@ -1005,7 +1041,7 @@ impl AllocGadget<CswFtProverData, FieldElement> for CswFtProverDataGadget {
 pub struct CswSysDataGadget {
     /// The last hash of the history of Sc_Tx_Commitments
     pub mcb_sc_txs_com_end_g: FieldElementGadget,
-    /// The hash of the last accepted withdrawal certificate 
+    /// The hash of the last accepted withdrawal certificate
     pub sc_last_wcert_hash_g: FieldElementGadget,
     /// amount of the csw
     pub amount_g: FieldElementGadget,
@@ -1092,7 +1128,7 @@ pub struct CswProverDataGadget {
     /// public inputs
     pub sys_data_g: CswSysDataGadget,
     /// the last accepted withdrawal certificate in full length
-    pub last_wcert_g: WithdrawalCertificateDataGadget, 
+    pub last_wcert_g: WithdrawalCertificateDataGadget,
     /// private witnesses for a utxo withdrawal proof
     pub utxo_data_g: CswUtxoProverDataGadget,
     /// private witnesses for a ft withdrawal proof
