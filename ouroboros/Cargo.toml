@@ -5,8 +5,8 @@ authors = ["DanieleDiBenedetto <daniele@horizenlabs.io>"]
 edition = "2018"
 
 [dependencies]
-algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-primitives = {features = ["tweedle", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
+primitives = {features = ["tweedle", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "integration"}
 rand = { version = "=0.8.4" }
 
 [features]
