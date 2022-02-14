@@ -1,6 +1,6 @@
 [package]
 name = "api"
-version = "0.4.1"
+version = "0.5.0"
 authors = [
     "DanieleDiBenedetto <daniele@horizenlabs.io>",
     "Oleksandr Iozhytsia <oleksandr@zensystem.io>",
@@ -8,17 +8,18 @@ authors = [
     "Maksym Vereshchak <phoinic@gmail.com>",
     "Luigi Varriale <luigi@horizenlabs.io>",
     "cronicc <cronic@horizenlabs.io>",
+    "Paolo Tagliaferri <paolotagliaferri@horizenlabs.io>"
 ]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.1"}
-primitives = {features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.3.1"}
+algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+primitives = {features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", tag = "0.1.1" }
-
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "dev" }
+r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
 #ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
 
@@ -30,6 +31,9 @@ rand = { version = "=0.8.4" }
 rand_xorshift = { version = "=0.3.0" }
 blake2 = { version = "=0.8.1", default-features = false }
 
+[dev-dependencies]
+serial_test = "=0.5.1"
+
 [lib]
 name = "zendoo_sc"
 path = "src/lib.rs"
@@ -37,4 +41,4 @@ crate_type = ["cdylib"]
 
 [features]
 default = [ "asm" ]
-asm = [ "algebra/llvm_asm", "cctp_primitives/asm", "demo-circuit/asm" ]
+asm = [ "algebra/llvm_asm", "primitives/llvm_asm", "cctp_primitives/asm", "demo-circuit/asm" ]

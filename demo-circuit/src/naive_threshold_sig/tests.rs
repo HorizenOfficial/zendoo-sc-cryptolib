@@ -25,7 +25,7 @@ use r1cs_core::ConstraintSystem;
 
 use rand::{rngs::OsRng, Rng};
 
-use cctp_primitives::utils::commitment_tree::ByteAccumulator;
+use cctp_primitives::utils::commitment_tree::DataAccumulator;
 use lazy_static::*;
 use r1cs_std::bits::uint64::UInt64;
 
@@ -73,7 +73,7 @@ fn generate_inputs(
     let btr_fee: u64 = rng.gen();
     let ft_min_amount: u64 = rng.gen();
     let fees_field_elements = {
-        let fes = ByteAccumulator::init()
+        let fes = DataAccumulator::init()
             .update(btr_fee)
             .unwrap()
             .update(ft_min_amount)

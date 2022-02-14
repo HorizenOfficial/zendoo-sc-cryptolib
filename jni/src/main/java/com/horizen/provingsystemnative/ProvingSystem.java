@@ -1,7 +1,6 @@
 package com.horizen.provingsystemnative;
 
 import com.horizen.librustsidechains.Library;
-import java.util.Optional;
 
 public class ProvingSystem {
 
@@ -11,28 +10,21 @@ public class ProvingSystem {
 
     private static native boolean nativeGenerateDLogKeys(
         ProvingSystemType psType,
-        int maxSegmentSize,
-        int supportedSegmentSize
+        int maxSegmentSize
     );
 
-    /*
-    * Generates DLOG keys of specified size and stores them in memory
-    * Returns True if operation was successfull, False otherwise.
-    * NOTE: SC is allowed to arbitrarly choose a segment size (via the parameter
-    *       `supportedSegmentSize`), regardless of the size of the MC ones;
-    *       However, we need to enforce SC keys being derived from MC keys,
-    *       and this internally requires to specify also the segment size chosen
-    *       by the MC (via the parameter maxSegmentSize).
-    *       Also, if supportedSegmentSize > maxSegmentSize, this function will
-    *       return False.
-    * */
+    /**
+     * Generates DLOG keys of specified size and stores them in memory
+     * @param psType - the proving system for which generating the keys
+     * @param segmentSize - the size of the keys
+     * @return True if operation was successfull, False otherwise.
+     */
     public static boolean generateDLogKeys(
         ProvingSystemType psType,
-        int maxSegmentSize,
-        int supportedSegmentSize
+        int segmentSize
     )
     {
-        return nativeGenerateDLogKeys(psType, maxSegmentSize, supportedSegmentSize);
+        return nativeGenerateDLogKeys(psType, segmentSize);
     }
 
     private static native boolean nativeCheckProofVkSize(

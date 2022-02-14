@@ -61,7 +61,7 @@ gosu zenbuilder rustc --version
 chown -RH zenbuilder:zenbuilder /build
 
 # Set JAVA_HOME
-export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
 echo $JAVA_HOME
 export PATH=$PATH:$JAVA_HOME/bin
 java -version

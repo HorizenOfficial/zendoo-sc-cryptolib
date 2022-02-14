@@ -1,10 +1,8 @@
-#[cfg(test)]
-pub mod tests;
+use algebra::{Field, PrimeField, ProjectiveCurve, ToBits};
 
-use algebra::{Field, PrimeField, ToBits};
-
-use primitives::signature::schnorr::field_based_schnorr::{
-    FieldBasedSchnorrPk, FieldBasedSchnorrSignature,
+use primitives::{
+    crh::FieldBasedHash,
+    signature::schnorr::field_based_schnorr::{FieldBasedSchnorrPk, FieldBasedSchnorrSignature},
 };
 use r1cs_crypto::{
     crh::{FieldBasedHashGadget, TweedleFrPoseidonHashGadget as PoseidonHashGadget},
@@ -23,15 +21,14 @@ use r1cs_std::{
     eq::EqGadget,
     fields::{fp::FpGadget, FieldGadget},
     instantiated::tweedle::TweedleDumGadget as CurveGadget,
-    Assignment,
 };
 
-use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
+use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 
 use crate::{constants::NaiveThresholdSigParams, type_mapping::*};
+use cctp_primitives::utils::commitment_tree::DataAccumulator;
 
 use lazy_static::*;
-use std::marker::PhantomData;
 
 lazy_static! {
     pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
@@ -53,7 +50,7 @@ pub(crate) type SchnorrPkGadget =
 pub(crate) type FrGadget = FpGadget<FieldElement>;
 
 #[derive(Clone)]
-pub struct NaiveTresholdSignature<F: PrimeField> {
+pub struct NaiveTresholdSignature {
     //Witnesses
     pks: Vec<Option<FieldBasedSchnorrPk<G2Projective>>>, //pk_n = g^sk_n
     //sig_n = sign(sk_n, H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount))
@@ -66,13 +63,44 @@ pub struct NaiveTresholdSignature<F: PrimeField> {
     mr_bt: Option<FieldElement>,
     ft_min_amount: Option<u64>,
     btr_fee: Option<u64>,
+    custom_fields: Option<Vec<FieldElement>>,
+
+    // Public inputs
+    pks_threshold_hash: Option<FieldElement>,
+    cert_data_hash: Option<FieldElement>,
 
     //Other
     max_pks: usize,
-    _field: PhantomData<F>,
 }
 
-impl<F: PrimeField> NaiveTresholdSignature<F> {
+impl NaiveTresholdSignature {
+    pub fn get_instance_for_setup(max_pks: usize, custom_fields_len: usize) -> Self {
+        //Istantiating supported number of pks and sigs
+        let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
+
+        // Create parameters for our circuit
+        NaiveTresholdSignature {
+            pks: vec![None; max_pks],
+            sigs: vec![None; max_pks],
+            threshold: None,
+            b: vec![None; log_max_pks + 1],
+            sc_id: None,
+            epoch_number: None,
+            end_cumulative_sc_tx_comm_tree_root: None,
+            mr_bt: None,
+            ft_min_amount: None,
+            btr_fee: None,
+            pks_threshold_hash: None,
+            cert_data_hash: None,
+            max_pks,
+            custom_fields: if custom_fields_len == 0 {
+                None
+            } else {
+                Some(vec![FieldElement::zero(); custom_fields_len])
+            },
+        }
+    }
+
     pub fn new(
         pks: Vec<FieldBasedSchnorrPk<G2Projective>>,
         sigs: Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>>,
@@ -85,7 +113,67 @@ impl<F: PrimeField> NaiveTresholdSignature<F> {
         ft_min_amount: u64,
         btr_fee: u64,
         max_pks: usize,
+        valid_signatures: u64,
+        custom_fields: Option<Vec<FieldElement>>,
     ) -> Self {
+        //Convert needed variables into field elements
+        let fees_field_elements = {
+            let fes = DataAccumulator::init()
+                .update(btr_fee)
+                .unwrap()
+                .update(ft_min_amount)
+                .unwrap()
+                .get_field_elements()
+                .unwrap();
+            assert_eq!(fes.len(), 1);
+            fes[0]
+        };
+        let quality = FieldElement::from(valid_signatures);
+
+        //Compute pks_threshold_hash
+        let mut h = FieldHash::init_constant_length(pks.len(), None);
+        pks.iter().for_each(|pk| {
+            h.update(pk.0.into_affine().x);
+        });
+        let pks_hash = h.finalize().unwrap();
+        let pks_threshold_hash = FieldHash::init_constant_length(2, None)
+            .update(pks_hash)
+            .update(threshold)
+            .finalize()
+            .unwrap();
+
+        //Compute cert_data_hash
+        let cert_data_hash = {
+            // Compute wcert_sysdata_hash
+            let wcert_sysdata_hash = FieldHash::init_constant_length(6, None)
+                .update(sc_id)
+                .update(epoch_number)
+                .update(mr_bt)
+                .update(quality)
+                .update(end_cumulative_sc_tx_comm_tree_root)
+                .update(fees_field_elements)
+                .finalize()
+                .unwrap();
+
+            // Compute custom_fields hash taking into account the presence, or not, of custom_fields
+            let to_hash = if let Some(custom_fields) = custom_fields.clone() {
+                let mut h = FieldHash::init_constant_length(custom_fields.len(), None);
+                custom_fields.into_iter().for_each(|custom_field| {
+                    h.update(custom_field);
+                });
+                let custom_fields_hash = h.finalize().unwrap();
+                vec![custom_fields_hash, wcert_sysdata_hash]
+            } else {
+                vec![wcert_sysdata_hash]
+            };
+
+            let mut h = FieldHash::init_constant_length(to_hash.len(), None);
+            to_hash.into_iter().for_each(|custom_field| {
+                h.update(custom_field);
+            });
+            h.finalize().unwrap()
+        };
+
         //Convert b to the needed bool vector
         let b_bool = {
             let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
@@ -109,13 +197,15 @@ impl<F: PrimeField> NaiveTresholdSignature<F> {
             ft_min_amount: Some(ft_min_amount),
             btr_fee: Some(btr_fee),
             max_pks,
-            _field: PhantomData,
+            pks_threshold_hash: Some(pks_threshold_hash),
+            cert_data_hash: Some(cert_data_hash),
+            custom_fields,
         }
     }
 }
 
-impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature<F> {
-    fn generate_constraints<CS: ConstraintSystem<FieldElement>>(
+impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
+    fn generate_constraints<CS: ConstraintSystemAbstract<FieldElement>>(
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
@@ -186,11 +276,24 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
             },
         )?;
 
+        // Alloc custom_fields and enforce their hash, if they are present
+        let custom_fields_hash_g = if let Some(custom_fields) = self.custom_fields.clone() {
+            let custom_fields_g = Vec::<FrGadget>::alloc(cs.ns(|| "alloc custom fields"), || {
+                Ok(custom_fields.as_slice())
+            })?;
+            let custom_fields_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
+                cs.ns(|| "H(custom_fields)"),
+                custom_fields_g.as_slice(),
+            )?;
+            Some(custom_fields_hash_g)
+        } else {
+            None
+        };
+
         // Alloc btr_fee and ft_min_amount
         let btr_fee_g = UInt64::alloc(cs.ns(|| "alloc btr_fee"), self.btr_fee)?;
 
-        let ft_min_amount_g =
-            UInt64::alloc(cs.ns(|| "alloc ft_min_amount"), self.ft_min_amount)?;
+        let ft_min_amount_g = UInt64::alloc(cs.ns(|| "alloc ft_min_amount"), self.ft_min_amount)?;
 
         // Pack them into a single field element
         let fees_bits = {
@@ -209,10 +312,22 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
             fees_bits.as_slice(),
         )?;
 
-        let message_g = PoseidonHashGadget::enforce_hash_constant_length(
-            cs.ns(|| "H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)"),
-            &[sc_id_g.clone(), epoch_number_g.clone(), mr_bt_g.clone(), end_cumulative_sc_tx_comm_tree_root_g.clone(), fees_g.clone()],
-        )?;
+        let message_g = {
+            let mut preimage = vec![
+                sc_id_g.clone(),
+                epoch_number_g.clone(),
+                mr_bt_g.clone(),
+                end_cumulative_sc_tx_comm_tree_root_g.clone(),
+                fees_g.clone(),
+            ];
+            if custom_fields_hash_g.is_some() {
+                preimage.push(custom_fields_hash_g.clone().unwrap())
+            }; // Add custom_fields_hash if present
+            PoseidonHashGadget::enforce_hash_constant_length(
+                cs.ns(|| "H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount, [H(custom_fields)])"),
+                preimage.as_slice(),
+            )
+        }?;
 
         let mut sigs_g = Vec::with_capacity(self.max_pks);
 
@@ -253,17 +368,24 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
                 cs.ns(|| "H(sc_id, epoch_number, bt_root, valid_sigs, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)"),
                 &[sc_id_g, epoch_number_g, mr_bt_g, valid_signatures.clone(), end_cumulative_sc_tx_comm_tree_root_g, fees_g],
             )?;
+
+            let preimage = if custom_fields_hash_g.is_some() {
+                vec![custom_fields_hash_g.unwrap(), wcert_sysdata_hash_g]
+            } else {
+                vec![wcert_sysdata_hash_g]
+            };
+
             PoseidonHashGadget::enforce_hash_constant_length(
-                cs.ns(|| "H(proof_data (not present), cert_data_hash)"),
-                &[wcert_sysdata_hash_g],
+                cs.ns(|| "H([custom_fields], cert_data_hash)"),
+                preimage.as_slice(),
             )
         }?;
 
         //Check pks_threshold_hash (constant)
         let expected_pks_threshold_hash_g =
             FrGadget::alloc_input(cs.ns(|| "alloc constant as input"), || {
-                let pks_threshold_hash_val = pks_threshold_hash_g.get_value().get()?;
-                Ok(pks_threshold_hash_val)
+                self.pks_threshold_hash
+                    .ok_or(SynthesisError::AssignmentMissing)
             })?;
 
         pks_threshold_hash_g.enforce_equal(
@@ -274,8 +396,7 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
         // Check cert_data_hash
         let expected_cert_data_hash_g =
             FrGadget::alloc_input(cs.ns(|| "alloc input cert_data_hash_g"), || {
-                let cert_data_hash_val = cert_data_hash_g.get_value().get()?;
-                Ok(cert_data_hash_val)
+                self.cert_data_hash.ok_or(SynthesisError::AssignmentMissing)
             })?;
 
         cert_data_hash_g.enforce_equal(
@@ -307,35 +428,14 @@ impl<F: PrimeField> ConstraintSynthesizer<FieldElement> for NaiveTresholdSignatu
     }
 }
 
-#[allow(dead_code)]
-pub fn get_instance_for_setup(max_pks: usize) -> NaiveTresholdSignature<FieldElement> {
-    //Istantiating supported number of pks and sigs
-    let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
-
-    // Create parameters for our circuit
-    NaiveTresholdSignature::<FieldElement> {
-        pks: vec![None; max_pks],
-        sigs: vec![None; max_pks],
-        threshold: None,
-        b: vec![None; log_max_pks + 1],
-        sc_id: None,
-        epoch_number: None,
-        end_cumulative_sc_tx_comm_tree_root: None,
-        mr_bt: None,
-        ft_min_amount: None,
-        btr_fee: None,
-        max_pks,
-        _field: PhantomData,
-    }
-}
-
 #[cfg(test)]
 mod test {
+    use crate::{MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE};
+
     use super::*;
-    use algebra::ProjectiveCurve;
     use cctp_primitives::{
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
-        utils::commitment_tree::ByteAccumulator,
+        utils::commitment_tree::DataAccumulator,
     };
     use primitives::{
         crh::FieldBasedHash,
@@ -344,22 +444,25 @@ mod test {
             FieldBasedSignatureScheme,
         },
     };
+    use r1cs_core::debug_circuit;
     use rand::{rngs::OsRng, Rng};
+
+    use serial_test::*;
 
     type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, G2Projective, FieldHash>;
 
-    fn generate_test_proof(
+    fn get_test_circuit_instance(
         max_pks: usize,
+        num_custom_fields: usize,
         valid_sigs: usize,
         threshold: usize,
         wrong_pks_threshold_hash: bool,
         wrong_cert_data_hash: bool,
-        index_pk: CoboundaryMarlinProverKey,
-        zk: bool,
-    ) -> Result<(CoboundaryMarlinProof, Vec<FieldElement>), Error> {
+    ) -> NaiveTresholdSignature {
         //Istantiate rng
         let mut rng = OsRng::default();
-        let mut h = FieldHash::init_constant_length(5, None);
+        let mut h =
+            FieldHash::init_constant_length(5 + if num_custom_fields > 0 { 1 } else { 0 }, None);
 
         //Generate message to sign
         let sc_id: FieldElement = rng.gen();
@@ -368,22 +471,51 @@ mod test {
         let end_cumulative_sc_tx_comm_tree_root: FieldElement = rng.gen();
         let btr_fee: u64 = rng.gen();
         let ft_min_amount: u64 = rng.gen();
+        let custom_fields = if num_custom_fields > 0 {
+            Some(
+                (0..num_custom_fields)
+                    .map(|_| rng.gen())
+                    .collect::<Vec<FieldElement>>(),
+            )
+        } else {
+            None
+        };
+        let custom_fields_hash = if num_custom_fields > 0 {
+            let mut h = FieldHash::init_constant_length(num_custom_fields, None);
+            custom_fields
+                .clone()
+                .unwrap()
+                .into_iter()
+                .for_each(|custom_field| {
+                    h.update(custom_field);
+                });
+            Some(h.finalize().unwrap())
+        } else {
+            None
+        };
+
         let fees_field_elements = {
-            let fes = ByteAccumulator::init()
-                .update(btr_fee)?
-                .update(ft_min_amount)?
-                .get_field_elements()?;
+            let fes = DataAccumulator::init()
+                .update(btr_fee)
+                .unwrap()
+                .update(ft_min_amount)
+                .unwrap()
+                .get_field_elements()
+                .unwrap();
             assert_eq!(fes.len(), 1);
             fes[0]
         };
-        let message = h
-            .update(sc_id)
+        h.update(sc_id)
             .update(epoch_number)
             .update(mr_bt)
             .update(end_cumulative_sc_tx_comm_tree_root)
-            .update(fees_field_elements)
-            .finalize()
-            .unwrap();
+            .update(fees_field_elements);
+
+        if let Some(custom_fields_hash) = custom_fields_hash {
+            h.update(custom_fields_hash);
+        }
+
+        let message = h.finalize().unwrap();
 
         //Generate another random message used to simulate a non-valid signature
         let invalid_message: FieldElement = rng.gen();
@@ -415,45 +547,10 @@ mod test {
         //Generate b
         let t_field = FieldElement::from_repr(FieldBigInteger::from(threshold as u64));
         let valid_field = FieldElement::from_repr(FieldBigInteger::from(valid_sigs as u64));
-        let b_field = valid_field - &t_field;
+        let b_field = valid_field - t_field;
 
-        //Compute pks_threshold_hash
-        let mut h = FieldHash::init_constant_length(pks.len(), None);
-        pks.iter().for_each(|pk| {
-            h.update(pk.0.into_affine().x);
-        });
-        let pks_hash = h.finalize().unwrap();
-        let pks_threshold_hash = if !wrong_pks_threshold_hash {
-            FieldHash::init_constant_length(2, None)
-                .update(pks_hash)
-                .update(t_field)
-                .finalize()
-                .unwrap()
-        } else {
-            rng.gen()
-        };
-
-        //Compute cert_data_hash
-        let cert_data_hash = if !wrong_cert_data_hash {
-            let wcert_sysdata_hash = FieldHash::init_constant_length(6, None)
-                .update(sc_id)
-                .update(epoch_number)
-                .update(mr_bt)
-                .update(valid_field)
-                .update(end_cumulative_sc_tx_comm_tree_root)
-                .update(fees_field_elements)
-                .finalize()
-                .unwrap();
-            FieldHash::init_constant_length(1, None)
-                .update(wcert_sysdata_hash)
-                .finalize()
-                .unwrap()
-        } else {
-            rng.gen()
-        };
-
-        //Create proof for our circuit
-        let c = NaiveTresholdSignature::<FieldElement>::new(
+        //Return concrete circuit instance
+        let mut c = NaiveTresholdSignature::new(
             pks,
             sigs,
             t_field,
@@ -465,75 +562,168 @@ mod test {
             ft_min_amount,
             btr_fee,
             max_pks,
+            valid_sigs as u64,
+            custom_fields,
+        );
+
+        if wrong_pks_threshold_hash {
+            c.pks_threshold_hash = Some(rng.gen());
+        }
+        if wrong_cert_data_hash {
+            c.cert_data_hash = Some(rng.gen());
+        }
+
+        c
+    }
+    fn generate_test_proof(
+        max_pks: usize,
+        valid_sigs: usize,
+        threshold: usize,
+        num_custom_fields: usize,
+        wrong_pks_threshold_hash: bool,
+        wrong_cert_data_hash: bool,
+        index_pk: CoboundaryMarlinProverKey,
+        zk: bool,
+    ) -> Result<(CoboundaryMarlinProof, Vec<FieldElement>), Error> {
+        // Get concrete and correct circuit instance. We want to test error cases in verification only.
+        let c = get_test_circuit_instance(
+            max_pks,
+            num_custom_fields,
+            valid_sigs,
+            threshold,
+            false,
+            false,
         );
 
         //Return proof and public inputs if success
         let rng = &mut OsRng;
-        let ck_g1 = get_g1_committer_key().unwrap();
+        let ck_g1 = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
+        assert_eq!(ck_g1.comm_key.len(), SUPPORTED_SEGMENT_SIZE);
+
         match CoboundaryMarlin::prove(
             &index_pk,
-            ck_g1.as_ref().unwrap(),
-            c,
+            &ck_g1,
+            c.clone(),
             zk,
             if zk { Some(rng) } else { None },
         ) {
             Ok(proof) => {
-                let public_inputs = vec![pks_threshold_hash, cert_data_hash];
+                let public_inputs = vec![
+                    if !wrong_pks_threshold_hash {
+                        c.pks_threshold_hash.unwrap()
+                    } else {
+                        rng.gen()
+                    },
+                    if !wrong_cert_data_hash {
+                        c.cert_data_hash.unwrap()
+                    } else {
+                        rng.gen()
+                    },
+                ];
                 Ok((MarlinProof(proof), public_inputs))
             }
             Err(e) => Err(Box::new(e)),
         }
     }
 
+    #[serial]
     #[test]
-    fn test_naive_threshold_circuit() {
+    fn test_prove_verify_naive_threshold_circuit() {
         let n = 6;
         let zk = false;
 
-        load_g1_committer_key(1 << 17, 1 << 15).unwrap();
-        let ck = get_g1_committer_key().unwrap();
-        let circ = get_instance_for_setup(n);
+        let _ = load_g1_committer_key(MAX_SEGMENT_SIZE - 1);
+        let ck = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
+        assert_eq!(ck.comm_key.len(), SUPPORTED_SEGMENT_SIZE);
 
-        let params = CoboundaryMarlin::index(ck.as_ref().unwrap(), circ).unwrap();
+        let circ = NaiveTresholdSignature::get_instance_for_setup(n, 1);
+
+        let params = CoboundaryMarlin::index(&ck, circ).unwrap();
 
         //Generate proof with correct witnesses and v > t
         let (proof, public_inputs) =
-            generate_test_proof(n, 5, 4, false, false, params.0.clone(), zk).unwrap();
-        assert!(CoboundaryMarlin::verify(
-            &params.1,
-            ck.as_ref().unwrap(),
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
-
-        //Generate proof with insufficient valid signatures
-        //TODO: Restore after fixing https://github.com/HorizenLabs/marlin/issues/12
-        /*let (proof, public_inputs) =
-            generate_test_proof(n, 4, 5, false, false, params.0.clone(), zk).unwrap();
-        assert!(!CoboundaryMarlin::verify(&params.1, ck.as_ref().unwrap(),public_inputs.as_slice(), &proof).unwrap());
-        */
+            generate_test_proof(n, 5, 4, 1, false, false, params.0.clone(), zk).unwrap();
+        assert!(
+            CoboundaryMarlin::verify(&params.1, &ck, public_inputs.as_slice(), &proof).unwrap()
+        );
 
         //Generate proof with bad pks_threshold_hash
         let (proof, public_inputs) =
-            generate_test_proof(n, 5, 4, true, false, params.0.clone(), zk).unwrap();
-        assert!(!CoboundaryMarlin::verify(
-            &params.1,
-            ck.as_ref().unwrap(),
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
+            generate_test_proof(n, 5, 4, 1, true, false, params.0.clone(), zk).unwrap();
+        assert!(
+            !CoboundaryMarlin::verify(&params.1, &ck, public_inputs.as_slice(), &proof).unwrap()
+        );
 
         //Generate proof with bad cert_data_hash
         let (proof, public_inputs) =
-            generate_test_proof(n, 5, 4, false, true, params.0.clone(), zk).unwrap();
-        assert!(!CoboundaryMarlin::verify(
-            &params.1,
-            ck.as_ref().unwrap(),
-            public_inputs.as_slice(),
-            &proof
-        )
-        .unwrap());
+            generate_test_proof(n, 5, 4, 1, false, true, params.0.clone(), zk).unwrap();
+        assert!(
+            !CoboundaryMarlin::verify(&params.1, &ck, public_inputs.as_slice(), &proof).unwrap()
+        );
+    }
+
+    #[serial]
+    #[test]
+    fn test_naive_threshold_circuit_is_satisfied() {
+        let mut rng = OsRng::default();
+        let n = 6;
+        let num_custom_fields = rng.gen_range(1..10);
+
+        for &i in &[0, num_custom_fields] {
+            println!("Test success case with v > t");
+            let v = rng.gen_range(1..n);
+            let t = rng.gen_range(0..v);
+            let c = get_test_circuit_instance(n, i, v, t, false, false);
+            assert!(debug_circuit(c).unwrap().is_none());
+            println!("Ok !");
+
+            println!("Test success case with v == t");
+            let v = rng.gen_range(1..n);
+            let t = v;
+            let c = get_test_circuit_instance(n, i, v, t, false, false);
+            assert!(debug_circuit(c).unwrap().is_none());
+            println!("Ok !");
+
+            println!("Test negative case with v < t");
+            let t = rng.gen_range(1..n);
+            let v = rng.gen_range(0..t);
+            let c = get_test_circuit_instance(n, i, v, t, false, false);
+            assert!(debug_circuit(c).unwrap().is_some());
+            println!("Ok !");
+
+            println!("Test case v = t = 0");
+            let c = get_test_circuit_instance(n, i, 0, 0, false, false);
+            assert!(debug_circuit(c).unwrap().is_none());
+            println!("Ok !");
+
+            println!("Test case v = t = n");
+            let c = get_test_circuit_instance(n, i, n, n, false, false);
+            assert!(debug_circuit(c).unwrap().is_none());
+            println!("Ok !");
+
+            println!("Test case v = n and t = 0");
+            let c = get_test_circuit_instance(n, i, n, 0, false, false);
+            assert!(debug_circuit(c).unwrap().is_none());
+            println!("Ok !");
+
+            println!("Test negative case v = 0 and t = n");
+            let c = get_test_circuit_instance(n, i, 0, n, false, false);
+            assert!(debug_circuit(c).unwrap().is_some());
+            println!("Ok !");
+
+            println!("Test negative case wrong pks_threshold_hash");
+            let v = rng.gen_range(1..n);
+            let t = rng.gen_range(0..v);
+            let c = get_test_circuit_instance(n, i, v, t, true, false);
+            assert!(debug_circuit(c).unwrap().is_some());
+            println!("Ok !");
+
+            println!("Test negative case wrong wcert_sysdata_hash");
+            let v = rng.gen_range(1..n);
+            let t = rng.gen_range(0..v);
+            let c = get_test_circuit_instance(n, i, v, t, false, true);
+            assert!(debug_circuit(c).unwrap().is_some());
+            println!("Ok !");
+        }
     }
 }

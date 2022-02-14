@@ -1,8 +1,10 @@
 package com.horizen.poseidonnative;
 
+import com.horizen.TestUtils;
 import com.horizen.librustsidechains.FieldElement;
 
 import java.util.List;
+import java.util.Random;
 import java.util.ArrayList;
 
 import org.junit.Test;
@@ -12,6 +14,9 @@ import static org.junit.Assert.*;
 
 public class PoseidonHashTest {
 
+    static long seed = 4123352525293977497L;
+    static String expectedHashForReset =
+        "e9908b5f42f8670e64fcde81517449304c7aa3a9aada4bc590329283405c8202";
     static List<FieldElement> hashInput = new ArrayList<>();
 
     @BeforeClass
@@ -19,6 +24,30 @@ public class PoseidonHashTest {
         for(long i = 0L; i < 100L; i++) {
             hashInput.add(FieldElement.createFromLong(i));
         }
+    }
+
+    @Test
+    public void testReset() throws Exception {
+
+        Random r = new Random(seed);
+        FieldElement expectedHash = FieldElement.deserialize(TestUtils.fromHexString(expectedHashForReset));
+        PoseidonHash h = PoseidonHash.getInstanceConstantLength(2);
+
+        // Generate random FieldElement
+        FieldElement input1 = FieldElement.createRandom(r);
+        FieldElement input2 = FieldElement.createRandom(r);
+
+        for (int i = 0; i < 100; i++) {
+            // Update acc
+            h.update(input1);
+            h.update(input2);
+            FieldElement hash = h.finalizeHash();
+            h.reset();
+
+            assertEquals("hash must be equal to expected hash", hash, expectedHash);
+            hash.close();
+        }
+        h.close();
     }
 
     @Test

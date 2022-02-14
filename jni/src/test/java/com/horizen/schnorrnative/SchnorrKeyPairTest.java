@@ -3,8 +3,6 @@ package com.horizen.schnorrnative;
 import com.horizen.librustsidechains.FieldElement;
 import org.junit.Test;
 
-import java.util.Arrays;
-
 import static org.junit.Assert.*;
 
 public class SchnorrKeyPairTest {
