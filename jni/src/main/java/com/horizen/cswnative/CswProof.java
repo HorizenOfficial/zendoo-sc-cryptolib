@@ -3,7 +3,7 @@ package com.horizen.cswnative;
 import java.util.Optional;
 
 import com.horizen.certnative.WithdrawalCertificate;
-import com.horizen.librustsidechains.FieldElement;
+import io.horizen.common.librustsidechains.FieldElement;
 import com.horizen.provingsystemnative.ProvingSystemType;
 
 public class CswProof {

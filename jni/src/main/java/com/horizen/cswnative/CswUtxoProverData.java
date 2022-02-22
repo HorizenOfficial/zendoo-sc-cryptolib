@@ -1,15 +1,15 @@
 package com.horizen.cswnative;
 
 import com.horizen.librustsidechains.Constants;
-import com.horizen.merkletreenative.MerklePath;
 import com.horizen.scutxonative.ScUtxoOutput;
+import io.horizen.common.merkletreenative.FieldBasedMerklePath;
 
 public class CswUtxoProverData implements AutoCloseable {
     private final ScUtxoOutput output;
     private final byte[] utxoInputSecretKey;
-	private final MerklePath mstPathToOutput;
+	private final FieldBasedMerklePath mstPathToOutput;
 
-    public CswUtxoProverData(ScUtxoOutput output, byte[] utxoInputSecretKey, MerklePath mstPathToOutput) {
+    public CswUtxoProverData(ScUtxoOutput output, byte[] utxoInputSecretKey, FieldBasedMerklePath mstPathToOutput) {
         this.output = output;
 
         if (utxoInputSecretKey.length != Constants.SC_SK_SIZE())
@@ -33,7 +33,7 @@ public class CswUtxoProverData implements AutoCloseable {
         return utxoInputSecretKey;
     }
 
-    public MerklePath getMstPathToOutput() {
+    public FieldBasedMerklePath getMstPathToOutput() {
         return mstPathToOutput;
     }
 

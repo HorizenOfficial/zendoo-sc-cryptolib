@@ -1,12 +1,12 @@
 package com.horizen.commitmenttreenative;
 
-import com.horizen.merkletreenative.MerklePath;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
 import com.horizen.certnative.BackwardTransfer;
 import com.horizen.librustsidechains.Constants;
-import com.horizen.librustsidechains.FieldElement;
+import io.horizen.common.librustsidechains.FieldElement;
+import io.horizen.common.merkletreenative.FieldBasedMerklePath;
 
 import java.util.List;
 import java.util.Optional;
@@ -111,7 +111,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void addForwardTransfer() {
+    public void addForwardTransfer() throws Exception {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -128,7 +128,7 @@ public class CommitmentTreeTest {
         Optional<FieldElement> commitmentOpt = commTree.getFwtCommitment(scId);
         assertTrue("Forward transfer expected to be present.", commitmentOpt.isPresent());
 
-        Optional<MerklePath> fwtMerklePathOpt = commTree.getFwtMerklePath(scId, 0);
+        Optional<FieldBasedMerklePath> fwtMerklePathOpt = commTree.getFwtMerklePath(scId, 0);
         assertTrue("Forward transfer merkle path expected to be present.", fwtMerklePathOpt.isPresent());
 
         Optional<List<FieldElement>> fwtLeavesOpt = commTree.getFwtLeaves(scId);
@@ -143,7 +143,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void addBackwardTransfer() {
+    public void addBackwardTransfer() throws Exception {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -160,7 +160,7 @@ public class CommitmentTreeTest {
         Optional<FieldElement> commitmentOpt = commTree.getBtrCommitment(scId);
         assertTrue("Backward transfer expected to be present.", commitmentOpt.isPresent());
 
-        Optional<MerklePath> btrMerklePathOpt = commTree.getBtrMerklePath(scId, 0);
+        Optional<FieldBasedMerklePath> btrMerklePathOpt = commTree.getBtrMerklePath(scId, 0);
         assertTrue("Backward transfer merkle path expected to be present.", btrMerklePathOpt.isPresent());
 
         Optional<List<FieldElement>> btrLeavesOpt = commTree.getBtrLeaves(scId);
@@ -212,7 +212,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void addCertificate() {
+    public void addCertificate() throws Exception {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -261,7 +261,7 @@ public class CommitmentTreeTest {
         assertEquals("Commitment Tree contains different number of leaves for given sc id.", 2, certLeaves.size());
 
         for(int i = 0; i < certLeaves.size(); i++) {
-            Optional<MerklePath> certMerklePathOpt = commTree.getCertMerklePath(scId, i);
+            Optional<FieldBasedMerklePath> certMerklePathOpt = commTree.getCertMerklePath(scId, i);
             assertTrue("Certificate merkle path expected to be present.", certMerklePathOpt.isPresent());
 
             assertTrue("Invalid merkle path for Certificate " + i, certMerklePathOpt.get().verify(certLeaves.get(i), commitmentOpt.get()));
@@ -299,7 +299,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void scCommitmentTest() {
+    public void scCommitmentTest() throws Exception {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();
 
@@ -315,7 +315,7 @@ public class CommitmentTreeTest {
         Optional<FieldElement> scCommitmentOpt = commTree.getScCommitment(scId);
         assertTrue("SC commitment expected to be found for given sc id.", scCommitmentOpt.isPresent());
 
-        Optional<MerklePath> scCommitmentMerklePathOpt = commTree.getScCommitmentMerklePath(scId);
+        Optional<FieldBasedMerklePath> scCommitmentMerklePathOpt = commTree.getScCommitmentMerklePath(scId);
         assertTrue("SC commitment merkle path expected to be found for given sc id.", scCommitmentMerklePathOpt.isPresent());
 
         Optional<FieldElement> commitmentOpt = commTree.getCommitment();

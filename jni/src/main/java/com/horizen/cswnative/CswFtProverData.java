@@ -4,22 +4,22 @@ import java.util.List;
 
 import com.horizen.fwtnative.ForwardTransferOutput;
 import com.horizen.librustsidechains.Constants;
-import com.horizen.librustsidechains.FieldElement;
-import com.horizen.merkletreenative.MerklePath;
+import io.horizen.common.librustsidechains.FieldElement;
+import io.horizen.common.merkletreenative.FieldBasedMerklePath;
 
 public class CswFtProverData implements AutoCloseable {
     private final ForwardTransferOutput output;
     private final byte[] ftInputSecretKey;
     private final FieldElement mcbScTxsComStart;
-    private final MerklePath merklePathToScHash;
-    private final MerklePath ftTreePath;
+    private final FieldBasedMerklePath merklePathToScHash;
+    private final FieldBasedMerklePath ftTreePath;
     private final FieldElement scCreationCommitment;
     private final FieldElement scbBtrTreeRoot;
     private final FieldElement wCertTreeRoot;
     private final FieldElement[] scTxsComHashes;
 
     public CswFtProverData(ForwardTransferOutput output, byte[] ftInputSecretKey, FieldElement mcbScTxsComStart,
-                           MerklePath merklePathToScHash, MerklePath ftTreePath, FieldElement scCreationCommitment,
+                           FieldBasedMerklePath merklePathToScHash, FieldBasedMerklePath ftTreePath, FieldElement scCreationCommitment,
                            FieldElement scbBtrTreeRoot, FieldElement wCertTreeRoot, List<FieldElement> scTxsComHashes) {
         this.output = output;
 
@@ -61,11 +61,11 @@ public class CswFtProverData implements AutoCloseable {
         return mcbScTxsComStart;
     }
 
-    public MerklePath getMerklePathToScHash() {
+    public FieldBasedMerklePath getMerklePathToScHash() {
         return merklePathToScHash;
     }
 
-    public MerklePath getFtTreePath() {
+    public FieldBasedMerklePath getFtTreePath() {
         return ftTreePath;
     }
 

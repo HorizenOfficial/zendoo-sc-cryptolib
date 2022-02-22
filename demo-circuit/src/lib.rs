@@ -65,10 +65,11 @@ use cctp_primitives::{
         compute_proof_vk_size, error::ProvingSystemError, init::get_g1_committer_key,
         ProvingSystem, ZendooProverKey, ZendooVerifierKey,
     },
-    utils::serialization::write_to_file,
 };
 use r1cs_core::ConstraintSynthesizer;
 use std::path::Path;
+
+use type_mappings::instantiated::tweedle::*;
 
 #[cfg(test)]
 pub const MAX_SEGMENT_SIZE: usize = 1 << 18;

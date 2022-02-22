@@ -1,10 +1,10 @@
 package com.horizen.certnative;
 
 import com.horizen.TestUtils;
-import com.horizen.librustsidechains.FieldElement;
-import com.horizen.schnorrnative.SchnorrKeyPair;
-import com.horizen.schnorrnative.SchnorrPublicKey;
-import com.horizen.schnorrnative.SchnorrSignature;
+import io.horizen.common.librustsidechains.FieldElement;
+import io.horizen.common.schnorrnative.SchnorrKeyPair;
+import io.horizen.common.schnorrnative.SchnorrPublicKey;
+import io.horizen.common.schnorrnative.SchnorrSignature;
 import com.horizen.provingsystemnative.ProvingSystem;
 import com.horizen.provingsystemnative.ProvingSystemType;
 import org.junit.BeforeClass;

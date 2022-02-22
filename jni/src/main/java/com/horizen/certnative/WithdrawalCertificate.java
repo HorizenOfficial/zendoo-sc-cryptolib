@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import com.horizen.librustsidechains.FieldElement;
+import io.horizen.common.librustsidechains.FieldElement;
+import io.horizen.common.poseidonnative.PoseidonHashable;
 import com.horizen.librustsidechains.Library;
-import com.horizen.poseidonnative.PoseidonHashable;
 
 // TODO: Use this class also in NaiveThresholdSigProof and CommitmentTree (re use stuff also Rust side)
 public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {

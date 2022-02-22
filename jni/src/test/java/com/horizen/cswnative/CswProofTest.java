@@ -4,13 +4,13 @@ import com.horizen.TestUtils;
 import com.horizen.certnative.WithdrawalCertificate;
 import com.horizen.fwtnative.ForwardTransferOutput;
 import com.horizen.librustsidechains.Constants;
-import com.horizen.librustsidechains.FieldElement;
-import com.horizen.merkletreenative.InMemoryAppendOnlyMerkleTree;
-import com.horizen.merkletreenative.MerklePath;
-import com.horizen.poseidonnative.PoseidonHash;
 import com.horizen.scutxonative.ScUtxoOutput;
 import com.horizen.provingsystemnative.ProvingSystem;
 import com.horizen.provingsystemnative.ProvingSystemType;
+import io.horizen.common.librustsidechains.FieldElement;
+import io.horizen.common.merkletreenative.BaseAppendOnlyMerkleTree;
+import io.horizen.common.merkletreenative.FieldBasedMerklePath;
+import io.horizen.common.poseidonnative.PoseidonHash;
 import org.junit.BeforeClass;
 import org.junit.AfterClass;
 import org.junit.Test;
@@ -79,12 +79,12 @@ public class CswProofTest {
 
         // Put ScUtxo in MerkleTree just to generate valid root
         // and path that will be used to update the data
-        InMemoryAppendOnlyMerkleTree mht = InMemoryAppendOnlyMerkleTree.init(Constants.SC_MST_HEIGHT(), 1);
+        BaseAppendOnlyMerkleTree mht = BaseAppendOnlyMerkleTree.init(Constants.SC_MST_HEIGHT(), 1);
         mht.append(nullifier);
         mht.finalizeTreeInPlace();
         
         FieldElement mstRoot = mht.root();
-        MerklePath mstPathToOutput = mht.getMerklePath(0);
+        FieldBasedMerklePath mstPathToOutput = mht.getMerklePath(0);
         mht.close(); // Free tree as we don't need it anymore
 
         // Split the mstRoot into 2 FieldElements to be declared as custom fields and put them inside wCert
@@ -168,12 +168,12 @@ public class CswProofTest {
         FieldElement nullifier = ftOutput.getNullifier();
 
         // Put ftOutput in MerkleTree just to generate valid root and path
-        InMemoryAppendOnlyMerkleTree mht = InMemoryAppendOnlyMerkleTree.init(Constants.SC_COMM_TREE_FT_SUBTREE_HEIGHT(), 1);
+        BaseAppendOnlyMerkleTree mht = BaseAppendOnlyMerkleTree.init(Constants.SC_COMM_TREE_FT_SUBTREE_HEIGHT(), 1);
         mht.append(nullifier);
         mht.finalizeTreeInPlace();
         
         FieldElement ftTreeRoot = mht.root();
-        MerklePath ftTreePath = mht.getMerklePath(0);
+        FieldBasedMerklePath ftTreePath = mht.getMerklePath(0);
         mht.close(); // Free tree as we don't need it anymore
 
         // Sample random data and compute scHash
@@ -190,12 +190,12 @@ public class CswProofTest {
         h.close(); // We don't need PoseidonHash instance anymroe
 
         // Put scHash in MerkleTree just to generate valid root and path
-        InMemoryAppendOnlyMerkleTree mhtNew = InMemoryAppendOnlyMerkleTree.init(Constants.SC_COMM_TREE_HEIGHT(), 1);
+        BaseAppendOnlyMerkleTree mhtNew = BaseAppendOnlyMerkleTree.init(Constants.SC_COMM_TREE_HEIGHT(), 1);
         mhtNew.append(scHash);
         mhtNew.finalizeTreeInPlace();
         
         FieldElement scTxsComTreeRoot = mhtNew.root();
-        MerklePath merklePathToScHash = mhtNew.getMerklePath(0);
+        FieldBasedMerklePath merklePathToScHash = mhtNew.getMerklePath(0);
         mhtNew.close(); // Free tree as we don't need it anymore
 
         // Now generate scTxsComHashes list, putting scTxsComTreeRoot in one of them

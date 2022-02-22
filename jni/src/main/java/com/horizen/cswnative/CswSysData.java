@@ -2,7 +2,7 @@ package com.horizen.cswnative;
 
 import java.util.Optional;
 
-import com.horizen.librustsidechains.FieldElement;
+import io.horizen.common.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 import com.horizen.librustsidechains.Constants;
 

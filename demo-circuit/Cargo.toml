@@ -15,12 +15,12 @@ include = ["Cargo.toml", "src"]
 
 [dependencies]
 algebra = {features = ["tweedle", "ed25519"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "feat/concrete_instantiations"}
 r1cs-crypto = {features = ["tweedle", "signature", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
 r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
 r1cs-std = {features = ["tweedle", "nonnative"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "dev" }
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "sync_with_ginger/concrete_types_with_macros" }
+type-mappings = {features = ["tweedle", "darlin"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "feat/concrete_instantiations"}
 
 derivative = "=2.2.0"
 lazy_static = "=1.4.0"

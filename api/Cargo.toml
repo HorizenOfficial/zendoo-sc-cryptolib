@@ -16,10 +16,12 @@ edition = "2018"
 
 [dependencies]
 algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-primitives = {features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+primitives = {features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "feat/concrete_instantiations"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "dev" }
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "sync_with_ginger/concrete_types_with_macros" }
 r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+common-api = { features = ["tweedle", "darlin"], git = "https://github.com/HorizenOfficial/sc_cryptolib_common.git", branch = "sync_with_ginger_type_mappings"} 
+
 #ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
 

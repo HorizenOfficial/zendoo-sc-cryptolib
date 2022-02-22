@@ -3,8 +3,8 @@ package com.horizen.scutxonative;
 import java.util.Random;
 
 import com.horizen.librustsidechains.Constants;
-import com.horizen.librustsidechains.FieldElement;
-import com.horizen.poseidonnative.PoseidonHashable;
+import io.horizen.common.librustsidechains.FieldElement;
+import io.horizen.common.poseidonnative.PoseidonHashable;
 
 public class ScUtxoOutput implements PoseidonHashable {
     private byte[] spendingPubKey;

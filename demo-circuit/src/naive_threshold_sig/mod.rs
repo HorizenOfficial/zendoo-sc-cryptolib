@@ -29,6 +29,7 @@ use crate::{constants::NaiveThresholdSigParams, type_mapping::*};
 use cctp_primitives::utils::commitment_tree::DataAccumulator;
 
 use lazy_static::*;
+use super::*;
 
 lazy_static! {
     pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();

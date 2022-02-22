@@ -1,10 +1,10 @@
 package com.horizen.certnative;
 
 import com.horizen.librustsidechains.Library;
-import com.horizen.librustsidechains.FieldElement;
-import com.horizen.schnorrnative.SchnorrPublicKey;
-import com.horizen.schnorrnative.SchnorrSignature;
 import com.horizen.provingsystemnative.ProvingSystemType;
+import io.horizen.common.librustsidechains.FieldElement;
+import io.horizen.common.schnorrnative.SchnorrPublicKey;
+import io.horizen.common.schnorrnative.SchnorrSignature;
 
 import java.util.List;
 import java.util.Optional;

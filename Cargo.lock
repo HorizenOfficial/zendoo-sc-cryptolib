@@ -40,11 +40,12 @@ dependencies = [
  "algebra",
  "blake2",
  "cctp_primitives",
+ "common-api",
  "demo-circuit",
  "derivative",
  "jni",
  "lazy_static",
- "primitives",
+ "primitives 0.4.0",
  "r1cs-core",
  "radix_trie",
  "rand",
@@ -74,6 +75,11 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 name = "bench-utils"
 version = "0.3.1"
 source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#3b237bdcba2f69bcc8db874b7dc58a0a5463f2db"
+
+[[package]]
+name = "bench-utils"
+version = "0.4.0"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=feat/concrete_instantiations#b18c0be6728759819aec912e3d5fdf1fa4071862"
 
 [[package]]
 name = "bit-vec"
@@ -167,7 +173,7 @@ checksum = "22a9137b95ea06864e018375b72adfb7db6e6f68cfc8df5a04d00288050485ee"
 [[package]]
 name = "cctp_primitives"
 version = "0.1.2"
-source = "git+https://github.com/HorizenOfficial/zendoo-cctp-lib.git?branch=dev#c7377db200ca491250b99854634394b9a533bdd0"
+source = "git+https://github.com/HorizenOfficial/zendoo-cctp-lib.git?branch=sync_with_ginger/concrete_types_with_macros#a41adb4f3253e0625ae2d85f5cdd0fb14fbef7af"
 dependencies = [
  "algebra",
  "bit-vec",
@@ -178,10 +184,11 @@ dependencies = [
  "lazy_static",
  "marlin",
  "poly-commit",
- "primitives",
+ "primitives 0.4.0",
  "proof-systems",
  "rand",
  "sha1",
+ "type-mappings",
 ]
 
 [[package]]
@@ -204,6 +211,23 @@ checksum = "50b727aacc797f9fc28e355d21f34709ac4fc9adecfe470ad07b8f4464f53062"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "common-api"
+version = "0.1.0"
+source = "git+https://github.com/HorizenOfficial/sc_cryptolib_common.git?branch=sync_with_ginger_type_mappings#3344a54a3864fb016834cfccbf82bc03cdba1d00"
+dependencies = [
+ "bit-vec",
+ "blake2",
+ "blake2s_simd",
+ "derivative",
+ "jni",
+ "lazy_static",
+ "radix_trie",
+ "rand",
+ "rand_xorshift",
+ "type-mappings",
 ]
 
 [[package]]
@@ -297,14 +321,15 @@ dependencies = [
  "digest 0.8.1",
  "hex",
  "lazy_static",
- "primitives",
+ "primitives 0.4.0",
  "r1cs-core",
  "r1cs-crypto",
- "r1cs-std",
+ "r1cs-std 0.3.1",
  "radix_trie",
  "rand",
  "serial_test",
  "sha2",
+ "type-mappings",
 ]
 
 [[package]]
@@ -478,12 +503,12 @@ version = "0.2.1"
 source = "git+https://github.com/HorizenLabs/marlin?branch=dev#57e3c2d10ecd9df314c84e53a012929dc5172a6f"
 dependencies = [
  "algebra",
- "bench-utils",
+ "bench-utils 0.3.1",
  "derivative",
  "digest 0.8.1",
  "poly-commit",
  "r1cs-core",
- "r1cs-std",
+ "r1cs-std 0.3.1",
  "rand",
  "rand_chacha",
  "rand_core",
@@ -622,7 +647,7 @@ version = "0.2.0"
 source = "git+https://github.com/HorizenLabs/poly-commit?branch=dev#c99a265d74869ac747fa82df4215b7ad30a94d38"
 dependencies = [
  "algebra",
- "bench-utils",
+ "bench-utils 0.3.1",
  "derivative",
  "digest 0.8.1",
  "rand",
@@ -643,7 +668,23 @@ version = "0.3.1"
 source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#3b237bdcba2f69bcc8db874b7dc58a0a5463f2db"
 dependencies = [
  "algebra",
- "bench-utils",
+ "bench-utils 0.3.1",
+ "blake2",
+ "derivative",
+ "digest 0.8.1",
+ "hex",
+ "rand",
+ "rayon",
+ "serde",
+]
+
+[[package]]
+name = "primitives"
+version = "0.4.0"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=feat/concrete_instantiations#b18c0be6728759819aec912e3d5fdf1fa4071862"
+dependencies = [
+ "algebra",
+ "bench-utils 0.4.0",
  "blake2",
  "derivative",
  "digest 0.8.1",
@@ -664,18 +705,18 @@ dependencies = [
 
 [[package]]
 name = "proof-systems"
-version = "0.3.1"
-source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#3b237bdcba2f69bcc8db874b7dc58a0a5463f2db"
+version = "0.4.0"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=feat/concrete_instantiations#b18c0be6728759819aec912e3d5fdf1fa4071862"
 dependencies = [
  "algebra",
- "bench-utils",
+ "bench-utils 0.4.0",
  "byteorder",
  "derivative",
  "digest 0.8.1",
  "marlin",
  "poly-commit",
  "r1cs-core",
- "r1cs-std",
+ "r1cs-std 0.4.0",
  "rand",
  "rayon",
  "serde",
@@ -708,12 +749,12 @@ version = "0.3.1"
 source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=development#3b237bdcba2f69bcc8db874b7dc58a0a5463f2db"
 dependencies = [
  "algebra",
- "bench-utils",
+ "bench-utils 0.3.1",
  "derivative",
  "digest 0.8.1",
- "primitives",
+ "primitives 0.3.1",
  "r1cs-core",
- "r1cs-std",
+ "r1cs-std 0.3.1",
  "rand",
  "rayon",
 ]
@@ -729,6 +770,19 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
+ "r1cs-core",
+ "radix_trie",
+ "rand",
+]
+
+[[package]]
+name = "r1cs-std"
+version = "0.4.0"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=feat/concrete_instantiations#b18c0be6728759819aec912e3d5fdf1fa4071862"
+dependencies = [
+ "algebra",
+ "derivative",
+ "hex",
  "r1cs-core",
  "radix_trie",
  "rand",
@@ -959,6 +1013,24 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "type-mappings"
+version = "0.1.0"
+source = "git+https://github.com/HorizenOfficial/ginger-lib.git?branch=feat/concrete_instantiations#b18c0be6728759819aec912e3d5fdf1fa4071862"
+dependencies = [
+ "algebra",
+ "bit-vec",
+ "blake2",
+ "blake2s_simd",
+ "lazy_static",
+ "marlin",
+ "poly-commit",
+ "primitives 0.4.0",
+ "proof-systems",
+ "rand",
+ "rand_xorshift",
 ]
 
 [[package]]

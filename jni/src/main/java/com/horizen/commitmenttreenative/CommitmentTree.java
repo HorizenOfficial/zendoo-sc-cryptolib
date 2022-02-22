@@ -1,9 +1,9 @@
 package com.horizen.commitmenttreenative;
 
 import com.horizen.certnative.BackwardTransfer;
-import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
-import com.horizen.merkletreenative.MerklePath;
+import io.horizen.common.librustsidechains.FieldElement;
+import io.horizen.common.merkletreenative.FieldBasedMerklePath;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -217,27 +217,27 @@ public class CommitmentTree implements AutoCloseable {
         return nativeVerifyScAbsence(scId, absenceProof, commitment);
     }
 
-    private native Optional<MerklePath> nativeGetScCommitmentMerklePath(byte[] scId);
+    private native Optional<FieldBasedMerklePath> nativeGetScCommitmentMerklePath(byte[] scId);
 
-    public Optional<MerklePath> getScCommitmentMerklePath(byte[] scId) {
+    public Optional<FieldBasedMerklePath> getScCommitmentMerklePath(byte[] scId) {
         return nativeGetScCommitmentMerklePath(scId);
     }
 
-    private native Optional<MerklePath> nativeGetFwtMerklePath(byte[] scId, int leafIndex);
+    private native Optional<FieldBasedMerklePath> nativeGetFwtMerklePath(byte[] scId, int leafIndex);
 
-    public Optional<MerklePath> getFwtMerklePath(byte[] scId, int leafIndex) {
+    public Optional<FieldBasedMerklePath> getFwtMerklePath(byte[] scId, int leafIndex) {
         return nativeGetFwtMerklePath(scId, leafIndex);
     }
 
-    private native Optional<MerklePath> nativeGetBtrMerklePath(byte[] scId, int leafIndex);
+    private native Optional<FieldBasedMerklePath> nativeGetBtrMerklePath(byte[] scId, int leafIndex);
 
-    public Optional<MerklePath> getBtrMerklePath(byte[] scId, int leafIndex) {
+    public Optional<FieldBasedMerklePath> getBtrMerklePath(byte[] scId, int leafIndex) {
         return nativeGetBtrMerklePath(scId, leafIndex);
     }
 
-    private native Optional<MerklePath> nativeGetCertMerklePath(byte[] scId, int leafIndex);
+    private native Optional<FieldBasedMerklePath> nativeGetCertMerklePath(byte[] scId, int leafIndex);
 
-    public Optional<MerklePath> getCertMerklePath(byte[] scId, int leafIndex) {
+    public Optional<FieldBasedMerklePath> getCertMerklePath(byte[] scId, int leafIndex) {
         return nativeGetCertMerklePath(scId, leafIndex);
     }
 }

@@ -5,7 +5,7 @@ import static org.junit.Assert.assertEquals;
 import java.util.Random;
 
 import com.horizen.TestUtils;
-import com.horizen.librustsidechains.FieldElement;
+import io.horizen.common.librustsidechains.FieldElement;
 import org.junit.Test;
 
 public class ForwardTransferOutputTest {
