@@ -1,7 +1,6 @@
 use std::{borrow::Borrow, convert::TryInto};
 
 use algebra::{AffineCurve, Field, MontgomeryModelParameters, SquareRootField, TEModelParameters};
-use cctp_primitives::type_mapping::{FieldElement, FieldHash, FIELD_CAPACITY, FIELD_SIZE};
 use primitives::bytes_to_bits;
 use r1cs_core::{ConstraintSystemAbstract, SynthesisError};
 use r1cs_crypto::{FieldBasedHashGadget, FieldBasedMerkleTreePathGadget, FieldHasherGadget};
@@ -18,13 +17,14 @@ use r1cs_std::{
 };
 
 use crate::{
-    constants::personalizations::BoxType, CswFtOutputData, CswFtProverData, CswProverData,
-    CswSysData, CswUtxoInputData, CswUtxoOutputData, CswUtxoProverData, ECPointSimulationGadget,
+    constants::personalizations::BoxType, FtOutput, CswFtProverData, CswProverData,
+    CswSysData, CswUtxoInputData, UtxoOutput, CswUtxoProverData, ECPointSimulationGadget,
     FieldElementGadget, FieldHashGadget, GingerMHTBinaryGadget, SimulatedCurveParameters,
     SimulatedFieldElement, SimulatedSWGroup, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
     SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, SIMULATED_FIELD_BYTE_SIZE,
     SIMULATED_SCALAR_FIELD_MODULUS_BITS,
 };
+use super::*;
 
 #[derive(Clone)]
 /// The gadget for a withdrawal certificate of a sidechain
@@ -215,21 +215,21 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget>
 }
 
 /// The gadget for an ordinary sidechain transaction output.
-pub struct CswUtxoOutputDataGadget {
+pub struct UtxoOutputGadget {
     pub spending_pub_key_g: [Boolean; SC_PUBLIC_KEY_LENGTH * 8],
     pub amount_g: UInt64,
     pub nonce_g: UInt64,
     pub custom_hash_g: [Boolean; SC_TX_HASH_LENGTH * 8],
 }
 
-impl AllocGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
+impl AllocGadget<UtxoOutput, FieldElement> for UtxoOutputGadget {
     fn alloc<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
         mut cs: CS,
         f: F,
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswUtxoOutputData>,
+        T: Borrow<UtxoOutput>,
     {
         let (spending_pub_key, amount, nonce, custom_hash) = match f() {
             Ok(csw_utxo_output_data) => {
@@ -291,13 +291,13 @@ impl AllocGadget<CswUtxoOutputData, FieldElement> for CswUtxoOutputDataGadget {
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswUtxoOutputData>,
+        T: Borrow<UtxoOutput>,
     {
         unimplemented!()
     }
 }
 
-impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
+impl ToConstraintFieldGadget<FieldElement> for UtxoOutputGadget {
     type FieldGadget = FieldElementGadget;
 
     fn to_field_gadget_elements<CS: ConstraintSystemAbstract<FieldElement>>(
@@ -332,7 +332,7 @@ impl ToConstraintFieldGadget<FieldElement> for CswUtxoOutputDataGadget {
     }
 }
 
-impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswUtxoOutputDataGadget {
+impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for UtxoOutputGadget {
     fn enforce_hash<CS: ConstraintSystemAbstract<FieldElement>>(
         &self,
         mut cs: CS,
@@ -364,7 +364,7 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswUtxoOutp
 /// The utxo gadget used for a ceased sidechain withdrawal.
 /// Consists of the relavant utxo data plus the corresponding secret key.
 pub struct CswUtxoInputDataGadget {
-    pub output_g: CswUtxoOutputDataGadget,
+    pub output_g: UtxoOutputGadget,
     pub secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
 }
 
@@ -391,7 +391,7 @@ impl AllocGadget<CswUtxoInputData, FieldElement> for CswUtxoInputDataGadget {
             ),
         };
 
-        let output_g = CswUtxoOutputDataGadget::alloc(cs.ns(|| "alloc output"), || output)?;
+        let output_g = UtxoOutputGadget::alloc(cs.ns(|| "alloc output"), || output)?;
 
         let secret_key_g = Vec::<Boolean>::alloc(cs.ns(|| "alloc secret key"), || secret_key)?
             .try_into()
@@ -583,7 +583,7 @@ impl AllocGadget<CswUtxoProverData, FieldElement> for CswUtxoProverDataGadget {
 }
 
 /// The relevant public data of a forward transaction
-pub struct CswFtOutputDataGadget {
+pub struct FtOutputGadget {
     pub amount_g: UInt64,
     pub receiver_pub_key_g: [UInt8; SC_PUBLIC_KEY_LENGTH],
     pub payback_addr_data_hash_g: [Boolean; MC_RETURN_ADDRESS_BYTES * 8],
@@ -591,14 +591,14 @@ pub struct CswFtOutputDataGadget {
     pub out_idx_g: UInt32,
 }
 
-impl AllocGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
+impl AllocGadget<FtOutput, FieldElement> for FtOutputGadget {
     fn alloc<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
         mut cs: CS,
         f: F,
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswFtOutputData>,
+        T: Borrow<FtOutput>,
     {
         let (amount, receiver_pub_key, payback_addr_data_hash, tx_hash, out_idx) = match f() {
             Ok(csw_ft_input_data) => {
@@ -673,13 +673,13 @@ impl AllocGadget<CswFtOutputData, FieldElement> for CswFtOutputDataGadget {
     ) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<CswFtOutputData>,
+        T: Borrow<FtOutput>,
     {
         unimplemented!()
     }
 }
 
-impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
+impl ToConstraintFieldGadget<FieldElement> for FtOutputGadget {
     type FieldGadget = FieldElementGadget;
 
     fn to_field_gadget_elements<CS: ConstraintSystemAbstract<FieldElement>>(
@@ -727,7 +727,7 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
     }
 }
 
-impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswFtOutputDataGadget {
+impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for FtOutputGadget {
     fn enforce_hash<CS: ConstraintSystemAbstract<FieldElement>>(
         &self,
         mut cs: CS,
@@ -749,7 +749,7 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswFtOutput
 /// history maintained by the mainchain (by means of the Sc_Txs_Commitments).
 pub struct CswFtProverDataGadget {
     /// The forward transaction output
-    pub ft_output_g: CswFtOutputDataGadget,
+    pub ft_output_g: FtOutputGadget,
     /// and its secret key.
     pub ft_input_secret_key_g: [Boolean; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
     /// The Sc_Txs_Commitment at the start of the time window the withdrawal proof refers to.
@@ -969,7 +969,7 @@ impl AllocGadget<CswFtProverData, FieldElement> for CswFtProverDataGadget {
             ),
         };
 
-        let ft_output_g = CswFtOutputDataGadget::alloc(cs.ns(|| "alloc ft input"), || ft_output)?;
+        let ft_output_g = FtOutputGadget::alloc(cs.ns(|| "alloc ft input"), || ft_output)?;
 
         let ft_input_secret_key_g =
             Vec::<Boolean>::alloc(cs.ns(|| "alloc ft input secret key"), || {

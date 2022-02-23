@@ -2,10 +2,9 @@ use algebra::ToConstraintField;
 use cctp_primitives::{
     commitment_tree::{sidechain_tree_alive::FWT_MT_HEIGHT, CMT_MT_HEIGHT},
     proving_system::verifier::ceased_sidechain_withdrawal::PHANTOM_CERT_DATA_HASH,
-    type_mapping::FieldElement,
     utils::{
         commitment_tree::DataAccumulator, data_structures::BackwardTransfer, get_bt_merkle_root,
-    },
+    }, MC_PK_SIZE,
 };
 use primitives::{FieldBasedHash, FieldBasedMerkleTreePath, FieldHasher};
 
@@ -13,6 +12,7 @@ use crate::{
     type_mapping::*, GingerMHTBinaryPath, MST_MERKLE_TREE_HEIGHT, SC_CUSTOM_HASH_LENGTH,
     SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
 };
+use super::*;
 
 #[derive(Clone, Debug)]
 /// The content of a withdrawal certificate
@@ -76,14 +76,14 @@ impl WithdrawalCertificateData {
 
 #[derive(Clone, Default)]
 /// The relevant public data on a utxo
-pub struct CswUtxoOutputData {
+pub struct UtxoOutput {
     pub spending_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
     pub amount: u64,
     pub nonce: u64,
     pub custom_hash: [u8; SC_CUSTOM_HASH_LENGTH],
 }
 
-impl ToConstraintField<FieldElement> for CswUtxoOutputData {
+impl ToConstraintField<FieldElement> for UtxoOutput {
     fn to_field_elements(&self) -> Result<Vec<FieldElement>, Error> {
         DataAccumulator::init()
             .update(&self.spending_pub_key[..])
@@ -103,11 +103,11 @@ impl ToConstraintField<FieldElement> for CswUtxoOutputData {
     }
 }
 
-impl FieldHasher<FieldElement, FieldHash> for CswUtxoOutputData {
+impl FieldHasher<FieldElement, FieldHash> for UtxoOutput {
     fn hash(&self, personalization: Option<&[FieldElement]>) -> Result<FieldElement, Error> {
         let self_fes = self.to_field_elements().map_err(|e| {
             format!(
-                "Unable to convert CswUtxoOutputData into FieldElements: {:?}",
+                "Unable to convert UtxoOutput into FieldElements: {:?}",
                 e
             )
         })?;
@@ -122,14 +122,14 @@ impl FieldHasher<FieldElement, FieldHash> for CswUtxoOutputData {
 // The relevant witness data for proving ownership of a utxo
 #[derive(Clone)]
 pub struct CswUtxoInputData {
-    pub output: CswUtxoOutputData,
+    pub output: UtxoOutput,
     pub secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
 }
 
 impl Default for CswUtxoInputData {
     fn default() -> Self {
         Self {
-            output: CswUtxoOutputData::default(),
+            output: UtxoOutput::default(),
             secret_key: [false; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
         }
     }
@@ -137,7 +137,7 @@ impl Default for CswUtxoInputData {
 
 /// The relevant public data of a forward transaction
 #[derive(Clone, Default)]
-pub struct CswFtOutputData {
+pub struct FtOutput {
     pub amount: u64,
     pub receiver_pub_key: [u8; SC_PUBLIC_KEY_LENGTH],
     pub payback_addr_data_hash: [u8; MC_PK_SIZE],
@@ -209,7 +209,7 @@ impl Default for CswUtxoProverData {
 #[derive(Clone)]
 pub struct CswFtProverData {
     /// The forward transaction output
-    pub ft_output: CswFtOutputData,
+    pub ft_output: FtOutput,
     /// The secret key for the ft's recipient address
     pub ft_input_secret_key: [bool; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
     /// The Sc_Txs_Commitment at the start of the time window the withdrawal proof refers to.
@@ -238,7 +238,7 @@ pub struct CswFtProverData {
 impl CswFtProverData {
     pub(crate) fn get_default(commitment_hashes_number: u32) -> Self {
         Self {
-            ft_output: CswFtOutputData::default(),
+            ft_output: FtOutput::default(),
             ft_input_secret_key: [false; SIMULATED_SCALAR_FIELD_MODULUS_BITS],
             mcb_sc_txs_com_start: FieldElement::default(),
             merkle_path_to_sc_hash: GingerMHTBinaryPath::new(vec![

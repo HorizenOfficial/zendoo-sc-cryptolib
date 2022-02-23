@@ -2,29 +2,31 @@ package com.horizen.provingsystemnative;
 
 import com.horizen.librustsidechains.Library;
 
+import io.horizen.common.librustsidechains.DeserializationException;
+
 public class ProvingSystem {
 
     static {
         Library.load();
     }
 
-    private static native boolean nativeGenerateDLogKeys(
+    private static native void nativeGenerateDLogKeys(
         ProvingSystemType psType,
         int maxSegmentSize
-    );
+    ) throws ProvingSystemException;
 
     /**
      * Generates DLOG keys of specified size and stores them in memory
      * @param psType - the proving system for which generating the keys
      * @param segmentSize - the size of the keys
-     * @return True if operation was successfull, False otherwise.
+     * @throws ProvingSystemException if operation failed
      */
-    public static boolean generateDLogKeys(
+    public static void generateDLogKeys(
         ProvingSystemType psType,
         int segmentSize
-    )
+    ) throws ProvingSystemException
     {
-        return nativeGenerateDLogKeys(psType, segmentSize);
+        nativeGenerateDLogKeys(psType, segmentSize);
     }
 
     private static native boolean nativeCheckProofVkSize(
@@ -33,7 +35,7 @@ public class ProvingSystem {
         int maxProofSize,
         int maxVkSize,
         String verificationKeyPath
-    );
+    ) throws DeserializationException;
 
     /*
      * Given zk, supportedSegmentSize and vk, this function:
@@ -48,26 +50,26 @@ public class ProvingSystem {
         int maxProofSize,
         int maxVkSize,
         String verificationKeyPath
-    )
+    ) throws DeserializationException
     {
         return nativeCheckProofVkSize(zk, supportedSegmentSize, maxProofSize, maxVkSize, verificationKeyPath);
     }
 
-    private static native int nativeGetProverKeyProvingSystemType(String provingKeyPath);
+    private static native int nativeGetProverKeyProvingSystemType(String provingKeyPath) throws DeserializationException;
 
-    public static ProvingSystemType getProverKeyProvingSystemType(String provingKeyPath) {
+    public static ProvingSystemType getProverKeyProvingSystemType(String provingKeyPath) throws DeserializationException {
         return ProvingSystemType.intToProvingSystemType(nativeGetProverKeyProvingSystemType(provingKeyPath));
     }
 
-    private static native int nativeGetVerifierKeyProvingSystemType(String verifierKeyPath);
+    private static native int nativeGetVerifierKeyProvingSystemType(String verifierKeyPath) throws DeserializationException;
 
-    public static ProvingSystemType getVerifierKeyProvingSystemType(String verifierKeyPath) {
+    public static ProvingSystemType getVerifierKeyProvingSystemType(String verifierKeyPath) throws DeserializationException {
         return ProvingSystemType.intToProvingSystemType(nativeGetVerifierKeyProvingSystemType(verifierKeyPath));
     }
 
-    private static native int nativeGetProofProvingSystemType(byte[] proof);
+    private static native int nativeGetProofProvingSystemType(byte[] proof) throws DeserializationException;
 
-    public static ProvingSystemType getProofProvingSystemType(byte[] proof) {
+    public static ProvingSystemType getProofProvingSystemType(byte[] proof) throws DeserializationException {
         return ProvingSystemType.intToProvingSystemType(nativeGetProofProvingSystemType(proof));
     }
 }

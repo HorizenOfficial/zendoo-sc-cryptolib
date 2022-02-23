@@ -3,7 +3,10 @@ package com.horizen.scutxonative;
 import java.util.Random;
 
 import com.horizen.librustsidechains.Constants;
+
+import io.horizen.common.librustsidechains.NativeParsingException;
 import io.horizen.common.librustsidechains.FieldElement;
+import io.horizen.common.librustsidechains.FinalizationException;
 import io.horizen.common.poseidonnative.PoseidonHashable;
 
 public class ScUtxoOutput implements PoseidonHashable {
@@ -72,14 +75,14 @@ public class ScUtxoOutput implements PoseidonHashable {
         return new ScUtxoOutput(spendingPubKey, r.nextLong(), r.nextLong(), customHash);
     }
 
-    private native FieldElement nativeGetHash();
+    private native FieldElement nativeGetHash() throws NativeParsingException, FinalizationException;
 
     @Override
-    public FieldElement getHash() {
+    public FieldElement getHash() throws NativeParsingException, FinalizationException {
         return nativeGetHash();
     }
 
-    public FieldElement getNullifier() {
+    public FieldElement getNullifier() throws NativeParsingException, FinalizationException{
         return this.getHash();
     }
 }

@@ -4,6 +4,9 @@ import java.util.Optional;
 
 import com.horizen.certnative.WithdrawalCertificate;
 import io.horizen.common.librustsidechains.FieldElement;
+import io.horizen.common.librustsidechains.NativeParsingException;
+
+import com.horizen.provingsystemnative.ProvingSystemException;
 import com.horizen.provingsystemnative.ProvingSystemType;
 
 public class CswProof {
@@ -20,7 +23,7 @@ public class CswProof {
         int maxProofPlusVkSize,
         boolean compressPk,
         boolean compressVk
-    );
+    ) throws ProvingSystemException;
 
     /**
      * Generate (provingKey, verificationKey) pair for this circuit.
@@ -38,6 +41,7 @@ public class CswProof {
      * @param compressPk - if the proving key must be saved to provingKeyPath in compressed form
      * @param compressVk - if the verification key must be saved to verificationKeyPath in compressed form
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise
+     * @throws ProvingSystemException - if it was not possible to generate (pk, vk) pair
      */
     public static boolean setup(
         ProvingSystemType psType,
@@ -51,7 +55,7 @@ public class CswProof {
         int maxProofPlusVkSize,
         boolean compressPk,
         boolean compressVk
-    )
+    ) throws ProvingSystemException
     {
         return nativeSetup(
             psType, rangeSize, numCustomFields, isConstantPresent, segmentSize,
@@ -75,6 +79,7 @@ public class CswProof {
      * @param zk - used to estimate the proof and vk size, tells if the proof will be created using zk or not
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise
+     * @throws ProvingSystemException - if it was not possible to generate (pk, vk) pair
      */
     public static boolean setup(
         ProvingSystemType psType,
@@ -86,7 +91,7 @@ public class CswProof {
         String verificationKeyPath,
         boolean zk,
         int maxProofPlusVkSize
-    )
+    ) throws ProvingSystemException
     {
         return nativeSetup(
             psType, rangeSize, numCustomFields, isConstantPresent, segmentSize,
@@ -108,6 +113,7 @@ public class CswProof {
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk, estimated assuming not to use zk property
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise.
+     * @throws ProvingSystemException - if it was not possible to generate (pk, vk) pair
      */
     public static boolean setup(
         ProvingSystemType psType,
@@ -118,7 +124,7 @@ public class CswProof {
         String provingKeyPath,
         String verificationKeyPath,
         int maxProofPlusVkSize
-    )
+    ) throws ProvingSystemException
     {
         return nativeSetup(
             psType, rangeSize, numCustomFields, isConstantPresent, segmentSize,
@@ -136,6 +142,7 @@ public class CswProof {
      * @param verificationKeyPath - file path to which saving the verification key. Verification key will be saved in compressed form.
      * @param maxProofPlusVkSize - maximum allowed size for proof + vk, estimated assuming not to use zk property
      * @return true if (pk, vk) generation and saving to file was successfull, false otherwise.
+     * @throws ProvingSystemException - if it was not possible to generate (pk, vk) pair
      */
     public static boolean setup(
         ProvingSystemType psType,
@@ -145,7 +152,7 @@ public class CswProof {
         String provingKeyPath,
         String verificationKeyPath,
         int maxProofPlusVkSize
-    )
+    ) throws ProvingSystemException
     {
         return nativeSetup(
             psType, rangeSize, numCustomFields, isConstantPresent, Optional.empty(),
@@ -161,7 +168,7 @@ public class CswProof {
         WithdrawalCertificate lastWcert,
         CswUtxoProverData utxoData,
         CswFtProverData ftData
-    );
+    ) throws NativeParsingException, ProvingSystemException;
 
     /**
      * Checks if possible to create a valid proof with the supplied data. Useful to understand
@@ -180,6 +187,8 @@ public class CswProof {
      * @return an Optional containing the name of the first failing constraint if the supplied data don't satisfy
      *         all the circuit's constraints, and nothing if all constraints are satisfied.
      * @throws IllegalArgumentException - if inputs are not consistent
+     * @throws NativeParsingException - if some error occurs during data parsing native side
+     * @throws ProvingSystemException - if some error occurs while performing circuit debugging
      */
     public static Optional<String> debugCircuit(
         int rangeSize,
@@ -189,7 +198,7 @@ public class CswProof {
         Optional<WithdrawalCertificate> lastWcert,
         Optional<CswUtxoProverData> utxoData,
         Optional<CswFtProverData> ftData
-    ) throws IllegalArgumentException 
+    ) throws IllegalArgumentException, NativeParsingException, ProvingSystemException
     {
         checkProofDataConsistency(sysData, lastWcert, utxoData, ftData);
 
@@ -213,7 +222,7 @@ public class CswProof {
         boolean zk,
         boolean compressed_pk,
         boolean compress_proof
-    );
+    ) throws NativeParsingException, ProvingSystemException;
 
     /**
      * Checks consistency, in terms of data that must or must not be present, of the inputs supplied to the
@@ -227,6 +236,8 @@ public class CswProof {
      * @param ftData - data required to prove withdraw of a FT. Must be empty if the prover wants to prove
      *                 withdraw of a SC utxo instead. If present, then sysData.mcbScTxsComEnd must be present too.
      * @throws IllegalArgumentException - if inputs are not consistent
+     * @throws NativeParsingException - if some error occurs during data parsing native side
+     * @throws ProvingSystemException - if some error occurs during proof creation
      */
     private static void checkProofDataConsistency(
         CswSysData sysData,
@@ -272,6 +283,8 @@ public class CswProof {
      * @param compress_proof - whether to return the proof bytes in compressed form or not
      * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
+     * @throws NativeParsingException - if some error occurs during data parsing native side
+     * @throws ProvingSystemException - if some error occurs during proof creation
      */
     public static byte[] createProof(
         int rangeSize,
@@ -287,7 +300,7 @@ public class CswProof {
         boolean zk,
         boolean compressed_pk,
         boolean compress_proof
-    ) throws IllegalArgumentException 
+    )  throws NativeParsingException, ProvingSystemException, IllegalArgumentException 
     {
         checkProofDataConsistency(sysData, lastWcert, utxoData, ftData);
 
@@ -320,6 +333,8 @@ public class CswProof {
      * @param zk - if proof must be created using zk property or not
      * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
+     * @throws NativeParsingException - if some error occurs during data parsing native side
+     * @throws ProvingSystemException - if some error occurs during proof creation
      */
     public static byte[] createProof(
         int rangeSize,
@@ -333,7 +348,7 @@ public class CswProof {
         String provingKeyPath,
         boolean checkProvingKey,
         boolean zk
-    ) throws IllegalArgumentException 
+    )  throws NativeParsingException, ProvingSystemException, IllegalArgumentException 
     {
         checkProofDataConsistency(sysData, lastWcert, utxoData, ftData);
 
@@ -365,6 +380,8 @@ public class CswProof {
      * @param zk - if proof must be created using zk property or not
      * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
+     * @throws NativeParsingException - if some error occurs during data parsing native side
+     * @throws ProvingSystemException - if some error occurs during proof creation
      */
     public static byte[] createProof(
         int rangeSize,
@@ -377,7 +394,7 @@ public class CswProof {
         Optional<Integer> segmentSize,
         String provingKeyPath,
         boolean zk
-    ) throws IllegalArgumentException 
+    )  throws NativeParsingException, ProvingSystemException, IllegalArgumentException 
     {
         checkProofDataConsistency(sysData, lastWcert, utxoData, ftData);
 
@@ -408,6 +425,8 @@ public class CswProof {
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
      * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
+     * @throws NativeParsingException - if some error occurs during data parsing native side
+     * @throws ProvingSystemException - if some error occurs during proof creation
      */
     public static byte[] createProof(
         int rangeSize,
@@ -419,7 +438,7 @@ public class CswProof {
         Optional<CswFtProverData> ftData,
         Optional<Integer> segmentSize,
         String provingKeyPath
-    ) throws IllegalArgumentException 
+    )  throws NativeParsingException, ProvingSystemException, IllegalArgumentException 
     {
         checkProofDataConsistency(sysData, lastWcert, utxoData, ftData);
 
@@ -446,6 +465,8 @@ public class CswProof {
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
      * @return the proof bytes
      * @throws IllegalArgumentException if utxoData is present but lastWcert is empty, or if utxoData and ftData are both present
+     * @throws NativeParsingException - if some error occurs during data parsing native side
+     * @throws ProvingSystemException - if some error occurs during proof creation
      */
     public static byte[] createProof(
         int rangeSize,
@@ -456,7 +477,7 @@ public class CswProof {
         Optional<CswUtxoProverData> utxoData,
         Optional<CswFtProverData> ftData,
         String provingKeyPath
-    ) throws IllegalArgumentException 
+    )  throws NativeParsingException, ProvingSystemException, IllegalArgumentException 
     {
         checkProofDataConsistency(sysData, lastWcert, utxoData, ftData);
 
@@ -476,7 +497,7 @@ public class CswProof {
         String verificationKeyPath,
         boolean checkVerificationKey,
         boolean compressedVk
-    );
+    ) throws NativeParsingException, ProvingSystemException;
 
     /**
      * Verify proof using the supplied parameters
@@ -487,6 +508,8 @@ public class CswProof {
      * @param verificationKeyPath - file path from which loading the verification key, expected to be in compressed form
      * @param checkVerificationKey - enable semantic checks on the verification key
      * @return true, if proof verification was successfull, false if proof verification failed or if some errors occured during verification
+     * @throws NativeParsingException - if some error occurs during data parsing native side
+     * @throws ProvingSystemException - if some error occurs during proof verification
      */
     public static boolean verifyProof(
         CswSysData sysData,
@@ -495,7 +518,7 @@ public class CswProof {
         boolean checkProof,
         String verificationKeyPath,
         boolean checkVerificationKey
-    )
+    ) throws NativeParsingException, ProvingSystemException
     {
         return nativeVerifyProof(
             sysData, scId, proof, checkProof, true, verificationKeyPath, checkVerificationKey, true
@@ -509,13 +532,15 @@ public class CswProof {
      * @param proof - the bytes of the proof to be verified, expected to be in compressed form
      * @param verificationKeyPath - file path from which loading the verification key, expected to be in compressed form
      * @return true, if proof verification was successfull, false if proof verification failed or if some errors occured during verification
+     * @throws NativeParsingException - if some error occurs during data parsing native side
+     * @throws ProvingSystemException - if some error occurs during proof verification
      */
     public static boolean verifyProof(
         CswSysData sysData,
         FieldElement scId,
         byte[] proof,
         String verificationKeyPath
-    )
+    ) throws NativeParsingException, ProvingSystemException
     {
         return nativeVerifyProof(
             sysData, scId, proof, true, true, verificationKeyPath, false, true

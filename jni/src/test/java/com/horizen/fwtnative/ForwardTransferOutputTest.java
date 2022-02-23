@@ -14,7 +14,7 @@ public class ForwardTransferOutputTest {
     static String expectedFwtOutputNullifierHex = "04198752f7382281ca6b90f7900fcae807ba56e6de2bd7e2e398a1eb8f9c7139";
 
     @Test
-    public void testFwtOutputNullifier() {
+    public void testFwtOutputNullifier() throws Exception {
 
         // Generate random ForwardTransferOutput and get its nullifier
         Random r = new Random(seed);

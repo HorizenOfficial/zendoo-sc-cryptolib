@@ -15,7 +15,7 @@ public class ScUtxoOutputTest {
         "9ef7685672544e69591a2b5f1b09e708c40582ac1378417acc821a3c8681870d";
 
     @Test
-    public void testScUtxoOutputNullifier() {
+    public void testScUtxoOutputNullifier() throws Exception {
 
         // Generate random ForwardTransferOutput and get its nullifier
         Random r = new Random(seed);

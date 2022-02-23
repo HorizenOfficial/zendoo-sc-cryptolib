@@ -67,9 +67,10 @@ use cctp_primitives::{
     },
 };
 use r1cs_core::ConstraintSynthesizer;
-use std::path::Path;
 
-use type_mappings::instantiated::tweedle::*;
+pub use type_mappings::instantiated::tweedle::*;
+pub use type_mappings::Error;
+
 
 #[cfg(test)]
 pub const MAX_SEGMENT_SIZE: usize = 1 << 18;
@@ -101,8 +102,8 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
     circ: C,
     proving_system: ProvingSystem,
     supported_degree: Option<usize>,
-    pk_path: &Path,
-    vk_path: &Path,
+    pk_path: &str,
+    vk_path: &str,
     max_proof_plus_vk_size: usize,
     zk: bool,
     compress_pk: Option<bool>,

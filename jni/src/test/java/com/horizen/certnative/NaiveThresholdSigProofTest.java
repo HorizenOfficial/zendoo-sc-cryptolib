@@ -52,7 +52,7 @@ public class NaiveThresholdSigProofTest {
     static ProvingSystemType psType = ProvingSystemType.COBOUNDARY_MARLIN;
     
     @BeforeClass
-    public static void initKeys() {
+    public static void initKeys() throws Exception {
         ProvingSystem.generateDLogKeys(psType, TestUtils.DLOG_KEYS_SIZE);
         assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, 0, Optional.of(TestUtils.CERT_SEGMENT_SIZE), snarkPkPathNoCustomFields, snarkVkPathNoCustomFields, zk, maxProofPlusVkSize));
         assertTrue(NaiveThresholdSigProof.setup(psType, keyCount, customFieldsNum, Optional.of(TestUtils.CERT_SEGMENT_SIZE), snarkPkPathCustomFields, snarkVkPathCustomFields, zk, maxProofPlusVkSize));

@@ -10,7 +10,7 @@ import static org.junit.Assert.*;
 
 public class UtilsTest {
     @Test
-    public void calculateSidechainId() {
+    public void calculateSidechainId() throws Exception {
         long seed = 123L;
         Random r = new Random(seed);
 
@@ -36,7 +36,7 @@ public class UtilsTest {
     }
 
     @Test
-    public void calculateSidechainIdRegression() {
+    public void calculateSidechainIdRegression() throws Exception {
         byte[] txHash = new byte[32];
         Arrays.fill(txHash, (byte)0);
 
@@ -49,7 +49,7 @@ public class UtilsTest {
     }
 
     @Test
-    public void compressedBitvectorRegression() {
+    public void compressedBitvectorRegression() throws Exception {
         // Compressed with gzip
         String compressedBitvectorHex = "021f8b08000000000002ff017f0080ff44c7e21ba1c7c0a29de006cb8074e2ba39f15abfef2525a4cbb3f235734410bda21cdab6624de769ceec818ac6c2d3a01e382e357dce1f6e9a0ff281f0fedae0efe274351db37599af457984dcf8e3ae4479e0561341adfff4746fbe274d90f6f76b8a2552a6ebb98aee918c7ceac058f4c1ae0131249546ef5e22f4187a07da02ca5b7f000000";
         int decompressedSize = 128;

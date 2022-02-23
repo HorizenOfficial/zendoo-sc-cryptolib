@@ -1,6 +1,5 @@
 use algebra::PrimeField;
 use cctp_primitives::{
-    type_mapping::FieldElement,
     utils::commitment_tree::{hash_vec, DataAccumulator},
 };
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
@@ -13,6 +12,7 @@ use crate::{
 };
 
 use self::data_structures::{CswProverDataGadget, ScPublicKeyGadget};
+use super::*;
 
 pub mod data_structures;
 
@@ -298,11 +298,7 @@ mod test {
             CMT_MT_HEIGHT,
         },
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
-        type_mapping::{CoboundaryMarlin, FieldElement, GingerMHT, MC_PK_SIZE},
-        utils::{
-            get_bt_merkle_root, poseidon_hash::get_poseidon_hash_constant_length,
-            serialization::serialize_to_buffer,
-        },
+        utils::get_bt_merkle_root, MC_PK_SIZE,
     };
     use primitives::{FieldBasedHash, FieldBasedMerkleTree, FieldHasher};
     use r1cs_core::debug_circuit;
@@ -311,7 +307,7 @@ mod test {
 
     use crate::{
         constants::personalizations::BoxType, deserialize_fe_unchecked,
-        split_field_element_at_index, CswFtOutputData, CswUtxoInputData, CswUtxoOutputData,
+        split_field_element_at_index, FtOutput, CswUtxoInputData, UtxoOutput,
         GingerMHTBinaryPath, WithdrawalCertificateData, MAX_SEGMENT_SIZE, MC_RETURN_ADDRESS_BYTES,
         MST_MERKLE_TREE_HEIGHT, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, SUPPORTED_SEGMENT_SIZE,
     };
@@ -382,7 +378,7 @@ mod test {
     }
 
     fn compute_mst_tree_data(
-        utxo_output_data: CswUtxoOutputData,
+        utxo_output_data: UtxoOutput,
     ) -> (FieldElement, FieldElement, GingerMHTBinaryPath) {
         let mut mst = GingerMHT::init(MST_MERKLE_TREE_HEIGHT, 1 << MST_MERKLE_TREE_HEIGHT).unwrap();
 
@@ -455,7 +451,7 @@ mod test {
     ) {
         let rng = &mut thread_rng();
         let utxo_input_data = CswUtxoInputData {
-            output: CswUtxoOutputData {
+            output: UtxoOutput {
                 spending_pub_key,
                 amount: rng.gen(),
                 nonce: rng.gen(),
@@ -510,7 +506,7 @@ mod test {
     }
 
     fn generate_ft_tree_data(
-        ft_output_data: CswFtOutputData,
+        ft_output_data: FtOutput,
     ) -> (FieldElement, GingerMHTBinaryPath, FieldElement) {
         let mut receiver_pub_key = ft_output_data.receiver_pub_key;
         receiver_pub_key.reverse();
@@ -547,7 +543,7 @@ mod test {
     ) {
         let rng = &mut thread_rng();
 
-        let ft_output_data = CswFtOutputData {
+        let ft_output_data = FtOutput {
             amount: rng.gen(),
             receiver_pub_key,
             payback_addr_data_hash: (0..MC_RETURN_ADDRESS_BYTES)

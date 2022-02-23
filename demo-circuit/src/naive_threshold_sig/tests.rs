@@ -1,12 +1,4 @@
 use algebra::{Field, PrimeField, ProjectiveCurve, ToBits};
-
-use primitives::{
-    crh::FieldBasedHash,
-    signature::{
-        schnorr::field_based_schnorr::{FieldBasedSchnorrPk, FieldBasedSchnorrSignature},
-        FieldBasedSignatureScheme,
-    },
-};
 use r1cs_crypto::{
     crh::{FieldBasedHashGadget, TweedleFrPoseidonHashGadget as PoseidonHashGadget},
     signature::FieldBasedSigGadget,

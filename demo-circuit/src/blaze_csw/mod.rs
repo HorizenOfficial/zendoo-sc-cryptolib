@@ -16,10 +16,7 @@ use crate::{
     SIMULATED_SCALAR_FIELD_BYTE_SIZE,
 };
 use algebra::{AffineCurve, Field, MontgomeryModelParameters, SquareRootField, TEModelParameters};
-use cctp_primitives::{
-    type_mapping::{Error, FieldElement, FIELD_SIZE},
-    utils::serialization::{deserialize_from_buffer, serialize_to_buffer},
-};
+use super::*;
 
 /// Split this FieldElement into two FieldElements.
 /// Split will happen at the specified index: one FieldElement will be read from

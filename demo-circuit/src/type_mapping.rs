@@ -2,7 +2,6 @@ use algebra::{
     fields::ed25519::{fq::Fq as ed25519Fq, fr::Fr as ed25519Fr},
     FpParameters, PrimeField,
 };
-use primitives::FieldBasedBinaryMHTPath;
 use r1cs_crypto::{
     field_based_mht::FieldBasedBinaryMerkleTreePathGadget,
     TweedleFrDensityOptimizedPoseidonHashGadget,
@@ -12,7 +11,7 @@ use super::*;
 
 pub type FieldElementGadget = FpGadget<FieldElement>;
 pub type FieldHashGadget = TweedleFrDensityOptimizedPoseidonHashGadget;
-pub type GingerMHTBinaryPath = FieldBasedBinaryMHTPath<GingerMHTParams>;
+pub type GingerMHTBinaryPath = GingerMHTPath;
 pub type GingerMHTBinaryGadget =
     FieldBasedBinaryMerkleTreePathGadget<GingerMHTParams, FieldHashGadget, FieldElement>;
 

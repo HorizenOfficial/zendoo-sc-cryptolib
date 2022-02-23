@@ -5,6 +5,8 @@ import java.util.Random;
 import com.horizen.librustsidechains.Constants;
 import com.horizen.librustsidechains.Library;
 import io.horizen.common.librustsidechains.FieldElement;
+import io.horizen.common.librustsidechains.FinalizationException;
+import io.horizen.common.librustsidechains.NativeParsingException;
 import io.horizen.common.poseidonnative.PoseidonHashable;
 
 public class ForwardTransferOutput implements PoseidonHashable {
@@ -97,14 +99,14 @@ public class ForwardTransferOutput implements PoseidonHashable {
         return new ForwardTransferOutput(r.nextLong(), receiverPubKey, paybackAddrDataHash, txHash, r.nextInt());
     }
 
-    private native FieldElement nativeGetHash();
+    private native FieldElement nativeGetHash() throws NativeParsingException, FinalizationException;
 
     @Override
-    public FieldElement getHash() {
+    public FieldElement getHash() throws NativeParsingException, FinalizationException {
         return nativeGetHash();
     }
 
-    public FieldElement getNullifier() {
+    public FieldElement getNullifier() throws NativeParsingException, FinalizationException {
         return this.getHash();
     }
 }

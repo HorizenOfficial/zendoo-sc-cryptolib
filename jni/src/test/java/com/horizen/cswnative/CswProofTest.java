@@ -45,7 +45,7 @@ public class CswProofTest {
     static ProvingSystemType psType = ProvingSystemType.COBOUNDARY_MARLIN;
     
     @BeforeClass
-    public static void initKeys() {
+    public static void initKeys() throws Exception {
         // Generate keys
         ProvingSystem.generateDLogKeys(psType, TestUtils.DLOG_KEYS_SIZE);
         assertTrue(CswProof.setup(psType, rangeSize, 2, false, Optional.of(TestUtils.CSW_SEGMENT_SIZE), snarkPkPath, snarkVkPath, zk, maxProofPlusVkSize));

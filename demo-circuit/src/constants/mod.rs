@@ -4,13 +4,13 @@ use primitives::{
     crh::pedersen::PedersenWindow, signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk,
 };
 
-use crate::type_mapping::*;
+use super::*;
 
 pub mod personalizations;
 
 pub struct NaiveThresholdSigParams {
     pub null_sig: SchnorrSig,
-    pub null_pk: FieldBasedSchnorrPk<G2Projective>,
+    pub null_pk: FieldBasedSchnorrPk<GroupProjective>,
 }
 
 impl NaiveThresholdSigParams {
@@ -49,7 +49,7 @@ impl NaiveThresholdSigParams {
             ],)
         );
 
-        let null_pk = FieldBasedSchnorrPk(G2Projective::new(x, y, z));
+        let null_pk = FieldBasedSchnorrPk(GroupProjective::new(x, y, z));
 
         Self { null_sig, null_pk }
     }
@@ -63,12 +63,12 @@ impl PedersenWindow for VRFWindow {
 }
 
 pub struct VRFParams {
-    pub group_hash_generators: Vec<Vec<G2Projective>>,
+    pub group_hash_generators: Vec<Vec<GroupProjective>>,
 }
 
 impl VRFParams {
     pub fn new() -> Self {
-        let gen_1 = G2Projective::new(
+        let gen_1 = GroupProjective::new(
             field_new!(
                 FieldElement,
                 BigInteger([
@@ -98,7 +98,7 @@ impl VRFParams {
             ),
         );
 
-        let gen_2 = G2Projective::new(
+        let gen_2 = GroupProjective::new(
             field_new!(
                 FieldElement,
                 BigInteger([
@@ -136,8 +136,8 @@ impl VRFParams {
     }
 
     pub(crate) fn compute_group_hash_table(
-        generators: Vec<G2Projective>,
-    ) -> Vec<Vec<G2Projective>> {
+        generators: Vec<GroupProjective>,
+    ) -> Vec<Vec<GroupProjective>> {
         let mut gen_table = Vec::new();
         for generator in generators.iter().take(VRFWindow::NUM_WINDOWS) {
             let mut generators_for_segment = Vec::new();
@@ -270,7 +270,7 @@ mod test {
     fn test_pk_null_gen() {
         let tag = b"Strontium Sr 90";
         let personalization = personalizations::CERT_NULL_PK_PERSONALIZATION;
-        let htc_out = hash_to_curve::<FieldElement, G2>(tag, personalization)
+        let htc_out = hash_to_curve::<FieldElement, Group>(tag, personalization)
             .unwrap()
             .into_projective();
         println!("{:#?}", htc_out);
@@ -285,13 +285,13 @@ mod test {
 
         //Gen1
         let tag = b"Magnesium Mg 12";
-        let htc_g1_out = hash_to_curve::<FieldElement, G2>(tag, personalization)
+        let htc_g1_out = hash_to_curve::<FieldElement, Group>(tag, personalization)
             .unwrap()
             .into_projective();
 
         //Gen2
         let tag = b"Gold Au 79";
-        let htc_g2_out = hash_to_curve::<FieldElement, G2>(tag, personalization)
+        let htc_g2_out = hash_to_curve::<FieldElement, Group>(tag, personalization)
             .unwrap()
             .into_projective();
 

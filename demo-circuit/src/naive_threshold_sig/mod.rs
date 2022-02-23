@@ -1,9 +1,6 @@
-use algebra::{Field, PrimeField, ProjectiveCurve, ToBits};
+use algebra::{Field, PrimeField, ToBits, AffineCurve};
 
-use primitives::{
-    crh::FieldBasedHash,
-    signature::schnorr::field_based_schnorr::{FieldBasedSchnorrPk, FieldBasedSchnorrSignature},
-};
+use primitives::{crh::FieldBasedHash, signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk};
 use r1cs_crypto::{
     crh::{FieldBasedHashGadget, TweedleFrPoseidonHashGadget as PoseidonHashGadget},
     signature::{
@@ -25,7 +22,7 @@ use r1cs_std::{
 
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 
-use crate::{constants::NaiveThresholdSigParams, type_mapping::*};
+use crate::constants::NaiveThresholdSigParams;
 use cctp_primitives::utils::commitment_tree::DataAccumulator;
 
 use lazy_static::*;
@@ -36,16 +33,16 @@ lazy_static! {
 }
 
 //Sig types
-pub(crate) type SchnorrSigGadget = FieldBasedSchnorrSigGadget<FieldElement, G2Projective>;
+pub(crate) type SchnorrSigGadget = FieldBasedSchnorrSigGadget<FieldElement, GroupProjective>;
 pub(crate) type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
     FieldElement,
-    G2Projective,
+    GroupProjective,
     CurveGadget,
     FieldHash,
     PoseidonHashGadget,
 >;
 pub(crate) type SchnorrPkGadget =
-    FieldBasedSchnorrPkGadget<FieldElement, G2Projective, CurveGadget>;
+    FieldBasedSchnorrPkGadget<FieldElement, GroupProjective, CurveGadget>;
 
 //Field types
 pub(crate) type FrGadget = FpGadget<FieldElement>;
@@ -53,9 +50,9 @@ pub(crate) type FrGadget = FpGadget<FieldElement>;
 #[derive(Clone)]
 pub struct NaiveTresholdSignature {
     //Witnesses
-    pks: Vec<Option<FieldBasedSchnorrPk<G2Projective>>>, //pk_n = g^sk_n
+    pks: Vec<Option<SchnorrPk>>, //pk_n = g^sk_n
     //sig_n = sign(sk_n, H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount))
-    sigs: Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>>,
+    sigs: Vec<Option<SchnorrSig>>,
     threshold: Option<FieldElement>,
     b: Vec<Option<bool>>,
     sc_id: Option<FieldElement>,
@@ -103,8 +100,8 @@ impl NaiveTresholdSignature {
     }
 
     pub fn new(
-        pks: Vec<FieldBasedSchnorrPk<G2Projective>>,
-        sigs: Vec<Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>>,
+        pks: Vec<SchnorrPk>,
+        sigs: Vec<Option<SchnorrSig>>,
         threshold: FieldElement,
         b: FieldElement,
         sc_id: FieldElement,
@@ -134,7 +131,7 @@ impl NaiveTresholdSignature {
         //Compute pks_threshold_hash
         let mut h = FieldHash::init_constant_length(pks.len(), None);
         pks.iter().for_each(|pk| {
-            h.update(pk.0.into_affine().x);
+            h.update(pk.x);
         });
         let pks_hash = h.finalize().unwrap();
         let pks_threshold_hash = FieldHash::init_constant_length(2, None)
@@ -227,7 +224,8 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
             // at some point, therefore verifiable by everyone.
             let pk_g =
                 SchnorrPkGadget::alloc_without_check(cs.ns(|| format!("alloc_pk_{}", i)), || {
-                    pk.ok_or(SynthesisError::AssignmentMissing)
+                    let pk = pk.ok_or(SynthesisError::AssignmentMissing)?;
+                    Ok(FieldBasedSchnorrPk(pk.into_projective()))
                 })?;
             pks_g.push(pk_g);
         }
@@ -432,7 +430,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
 #[cfg(test)]
 mod test {
     use crate::{MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE};
-
+    use algebra::ProjectiveCurve;
     use super::*;
     use cctp_primitives::{
         proving_system::init::{get_g1_committer_key, load_g1_committer_key},
@@ -440,17 +438,13 @@ mod test {
     };
     use primitives::{
         crh::FieldBasedHash,
-        signature::{
-            schnorr::field_based_schnorr::FieldBasedSchnorrSignatureScheme,
-            FieldBasedSignatureScheme,
-        },
+        signature::FieldBasedSignatureScheme,
     };
     use r1cs_core::debug_circuit;
     use rand::{rngs::OsRng, Rng};
 
     use serial_test::*;
 
-    type SchnorrSigScheme = FieldBasedSchnorrSignatureScheme<FieldElement, G2Projective, FieldHash>;
 
     fn get_test_circuit_instance(
         max_pks: usize,
@@ -527,7 +521,7 @@ mod test {
         for _ in 0..valid_sigs {
             let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
             let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, message).unwrap();
-            pks.push(pk);
+            pks.push(pk.0.into_affine());
             sigs.push(Some(sig));
         }
 
@@ -541,13 +535,13 @@ mod test {
                 let sig = SchnorrSigScheme::sign(&mut rng, &pk, &sk, invalid_message).unwrap();
                 (pk, sig)
             };
-            pks.push(pk);
+            pks.push(pk.0.into_affine());
             sigs.push(Some(sig));
         }
 
         //Generate b
-        let t_field = FieldElement::from_repr(FieldBigInteger::from(threshold as u64));
-        let valid_field = FieldElement::from_repr(FieldBigInteger::from(valid_sigs as u64));
+        let t_field = FieldElement::from_repr(BigInteger::from(threshold as u64));
+        let valid_field = FieldElement::from_repr(BigInteger::from(valid_sigs as u64));
         let b_field = valid_field - t_field;
 
         //Return concrete circuit instance
