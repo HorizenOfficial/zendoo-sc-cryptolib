@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>io.horizen</groupId>
   <artifactId>zendoo-sc-cryptolib</artifactId>
-  <version>0.5.0</version>
+  <version>0.5.1-SNAPSHOT</version>
   <inceptionYear>2020</inceptionYear>
   <packaging>jar</packaging>
   <name>${project.groupId}:${project.artifactId}</name>
