@@ -12,21 +12,20 @@ services:
 
 env:
   global:
-    - CONTAINER_JAVA_VER="openjdk-11-jdk"
-jobs:
-    #- name: rust_1.51
-    #  env: CONTAINER_RUST_VER='1.51.0'
-    #- name: rust_1.51_asm
-    #  env: CONTAINER_RUST_VER='1.51.0' RUSTFLAGS='--emit=asm'
-    - name: rust_1.51_asm_target-feature
-      env: CONTAINER_RUST_VER='1.51.0' RUSTFLAGS='-C target-feature=+bmi2,+adx --emit=asm'
-    #- name: rust_nightly
-    #  env: CONTAINER_RUST_VER='nightly-2021-04-25' RUSTFLAGS='-C target-feature=+bmi2,+adx --emit=asm'
+    - DOCKER_ORG=zencash
+    - IMAGE_NAME=sc-ci-base
 
-script: >-
-  source ci/setup_env.sh &&
-  docker build --pull --no-cache -t zencash/zendoo-sc-cryptolib-builder ./ci &&
-  bash -c "docker run --rm -v $(pwd):/build -v ${HOME}/key.asc:/key.asc --tmpfs /tmp:uid=$(id -u),gid=$(id -g),exec,mode=1777 \
-    --tmpfs /run:uid=$(id -u),gid=$(id -g),exec,mode=1777 -e RUSTFLAGS -e LOCAL_USER_ID=$(id -u) -e LOCAL_GRP_ID=$(id -g) -e CARGO_AUDIT_EXIT_ON_ERROR \
-    $(env | grep -E '^CONTAINER_' | sed -n '/^[^\t]/s/=.*//p' | sed '/^$/d' | sed 's/^/-e /g' | tr '\n' ' ') \
-    zencash/zendoo-sc-cryptolib-builder /build/ci/start_ci.sh"
+script:
+  - source ci/setup_env.sh
+  - ci/travis_keep_alive.sh
+  - ci/script.sh
+
+jobs:
+  include:
+    - name: rust_1.51_asm_target-feature_cargo_test
+      env: IMAGE_TAG='bionic_rust-1.51.0_jdk-11_latest' RUSTFLAGS='-C target-feature=+bmi2,+adx --emit=asm' TESTS='000,002'
+    - name: rust_1.51_asm_target-feature_mvn_test
+      env: IMAGE_TAG='bionic_rust-1.51.0_jdk-11_latest' RUSTFLAGS='-C target-feature=+bmi2,+adx --emit=asm' TESTS='001,003'
+    - name: rust_1.51_asm_target-feature_mvn_release
+      if: tag IS present
+      env: IMAGE_TAG='bionic_rust-1.51.0_jdk-11_latest' RUSTFLAGS='-C target-feature=+bmi2,+adx --emit=asm' TESTS='000,001,002,003'
