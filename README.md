@@ -49,4 +49,8 @@ This library comes with unit tests for each of the provided crates. Run the test
 ```bash
 cargo test
 ``` 
-More detailed build guide, as well as instructions to build the .jar, can be found in in our [build guide](BUILD.md).
+More detailed build guide, as well as instructions to build the .jar, can be found in our [build guide](BUILD.md).
+
+## Extras
+
+In order to build and use `SNAPSHOT.jar` package version refer to the following [documentation](./ci/README.md)
