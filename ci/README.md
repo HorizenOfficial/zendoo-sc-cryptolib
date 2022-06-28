@@ -52,7 +52,7 @@ Before starting the build process use `set_version.sh` script if needed by provi
 ```
 <dependency>
     <groupId>io.horizen</groupId>
-    <artifactId>sidechains-sdk</artifactId>
+    <artifactId>zendoo-sc-cryptolib</artifactId>
     <version>0.5.1-20220623.010409-1</version>
 </dependency>
 ```
