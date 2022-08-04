@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -uo pipefail
+set -x
 
 echo "" && echo "=== Running cargo audit ===" && echo ""
 cargo audit --json > /tmp/audit.json
