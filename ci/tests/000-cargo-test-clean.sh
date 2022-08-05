@@ -1,6 +1,5 @@
 #!/bin/bash
 # shellcheck disable=SC2086
-
 set -eo pipefail
 retval=0
 
