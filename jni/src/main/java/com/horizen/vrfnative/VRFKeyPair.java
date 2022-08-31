@@ -28,6 +28,12 @@ public class VRFKeyPair implements AutoCloseable {
         return nativeGenerate();
     }
 
+    private static native VRFKeyPair nativeDeriveFromSeed(byte[] seed);
+
+    public static VRFKeyPair deriveFromSeed(byte[] seed) {
+        return nativeDeriveFromSeed(seed);
+    }
+
     private native VRFProveResult nativeProve(FieldElement message);
 
     public VRFProveResult prove(FieldElement message) {

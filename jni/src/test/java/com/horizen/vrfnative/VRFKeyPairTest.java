@@ -22,6 +22,22 @@ public class VRFKeyPairTest {
     }
 
     @Test
+    public void testDeriveFromSeed() throws Exception {
+        byte[] seed = { 1, 2, 3, 4, 5, 6, 7, 8 };
+        try(VRFKeyPair keyPair = VRFKeyPair.deriveFromSeed(seed))
+        {
+            assertNotNull("Key pair derive from seed was unsuccessful", keyPair);
+            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
+        }
+        byte[] emptySeed = {};
+        try(VRFKeyPair keyPair = VRFKeyPair.deriveFromSeed(seed))
+        {
+            assertNotNull("Key pair derive from empty seed was unsuccessful", keyPair);
+            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
+        }
+    }
+
+    @Test
     public void testProveVerify() throws Exception {
 
         byte[] skBytes = {

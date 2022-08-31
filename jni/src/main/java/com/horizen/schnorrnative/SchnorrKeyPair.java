@@ -21,6 +21,12 @@ public class SchnorrKeyPair implements AutoCloseable {
         this.publicKey = secretKey.getPublicKey();
     }
 
+    private static native SchnorrKeyPair nativeDeriveFromSeed(byte[] seed);
+
+    public static SchnorrKeyPair deriveFromSeed(byte[] seed) {
+        return nativeDeriveFromSeed(seed);
+    }
+
     private static native SchnorrKeyPair nativeGenerate();
 
     public static SchnorrKeyPair generate() {

@@ -1,4 +1,5 @@
 use algebra::{AffineCurve, ProjectiveCurve, ToConstraintField, UniformRand};
+use blake2::digest::{FixedOutput, Input};
 use demo_circuit::{
     constants::VRFParams, constraints::CeasedSidechainWithdrawalCircuit, naive_threshold_sig::*,
     type_mapping::*, CswFtProverData, CswSysData, CswUtxoProverData, WithdrawalCertificateData,
@@ -10,7 +11,8 @@ use primitives::{
     vrf::{ecvrf::FieldBasedEcVrfPk, FieldBasedVrf},
 };
 use r1cs_core::debug_circuit;
-use rand::{rngs::OsRng, SeedableRng};
+use rand::{rngs::OsRng, CryptoRng, RngCore, SeedableRng};
+use rand_chacha::ChaChaRng;
 use rand_xorshift::XorShiftRng;
 
 use cctp_primitives::{
@@ -29,6 +31,7 @@ use cctp_primitives::{
     },
 };
 
+use std::convert::TryFrom;
 use std::path::Path;
 
 //*******************************Generic functions**********************************************
@@ -44,8 +47,7 @@ pub fn get_random_field_element(seed: u64) -> FieldElement {
 
 pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
     let mut rng = OsRng;
-    let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
-    (pk.0.into_affine(), sk)
+    schnorr_generate_key_from_rng(&mut rng)
 }
 
 pub fn schnorr_get_public_key(sk: &SchnorrSk) -> SchnorrPk {
@@ -76,6 +78,32 @@ pub fn schnorr_verify_signature(
     signature: &SchnorrSig,
 ) -> Result<bool, Error> {
     SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), *msg, signature)
+}
+
+pub fn schnorr_derive_key_from_seed(seed: &[u8]) -> (SchnorrPk, SchnorrSk) {
+    // zero just default to random,
+    // however, is there a minimum length that should be required?
+    if seed.len() == 0 {
+        return schnorr_generate_key();
+    }
+
+    // Domain separation tag
+    const DST: &[u8] = &[0xFFu8; 32];
+
+    // Hash first to ensure size an eliminate any bias
+    // that may exist in `seed`
+    let mut hasher = blake2::Blake2b::default();
+    hasher.input(DST);
+    hasher.input(seed);
+    let digest = hasher.fixed_result();
+    let rng_seed = <[u8; 32]>::try_from(&digest[..32]).unwrap();
+    let mut rng = ChaChaRng::from_seed(rng_seed);
+    schnorr_generate_key_from_rng(&mut rng)
+}
+
+fn schnorr_generate_key_from_rng<R: RngCore + CryptoRng>(rng: &mut R) -> (SchnorrPk, SchnorrSk) {
+    let (pk, sk) = SchnorrSigScheme::keygen(rng);
+    (pk.0.into_affine(), sk)
 }
 
 //*****************************Naive threshold sig circuit related functions************************
@@ -626,8 +654,7 @@ lazy_static! {
 
 pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
     let mut rng = OsRng;
-    let (pk, sk) = VRFScheme::keygen(&mut rng);
-    (pk.0.into_affine(), sk)
+    vrf_generate_key_from_rng(&mut rng)
 }
 
 pub fn vrf_get_public_key(sk: &VRFSk) -> VRFPk {
@@ -681,6 +708,32 @@ pub fn vrf_proof_to_hash(
         *msg,
         proof,
     )
+}
+
+pub fn vrf_derive_key_from_seed(seed: &[u8]) -> (VRFPk, VRFSk) {
+    // zero just default to random,
+    // however, is there a minimum length that should be required?
+    if seed.len() == 0 {
+        return vrf_generate_key();
+    }
+
+    // Domain separation tag
+    const DST: &[u8] = &[0xFEu8; 32];
+
+    // Hash first to ensure size an eliminate any bias
+    // that may exist in `seed`
+    let mut hasher = blake2::Blake2b::default();
+    hasher.input(DST);
+    hasher.input(seed);
+    let digest = hasher.fixed_result();
+    let rng_seed = <[u8; 32]>::try_from(&digest[..32]).unwrap();
+    let mut rng = ChaChaRng::from_seed(rng_seed);
+    vrf_generate_key_from_rng(&mut rng)
+}
+
+fn vrf_generate_key_from_rng<R: RngCore + CryptoRng>(rng: &mut R) -> (VRFPk, VRFSk) {
+    let (pk, sk) = VRFScheme::keygen(rng);
+    (pk.0.into_affine(), sk)
 }
 
 // Test functions
@@ -753,6 +806,18 @@ mod test {
 
     #[serial]
     #[test]
+    fn sample_calls_schnorr_derive_from_seed() {
+        let (pk, sk) = schnorr_derive_key_from_seed(&[1u8; 32]); //Keygen
+        assert_eq!(schnorr_get_public_key(&sk), pk); //Get pk
+        assert!(schnorr_verify_public_key(&pk)); //Verify pk
+
+        let (pk, sk) = schnorr_derive_key_from_seed(&[]); //Keygen
+        assert_eq!(schnorr_get_public_key(&sk), pk); //Get pk
+        assert!(schnorr_verify_public_key(&pk)); //Verify pk
+    }
+
+    #[serial]
+    #[test]
     fn sample_calls_vrf_prove_verify() {
         let mut rng = OsRng;
         let msg = FieldElement::rand(&mut rng);
@@ -803,6 +868,29 @@ mod test {
         //Negative case
         let wrong_msg = FieldElement::rand(&mut rng);
         assert!(vrf_proof_to_hash(&wrong_msg, &pk, &vrf_proof).is_err());
+    }
+
+    #[serial]
+    #[test]
+    fn sample_calls_vrf_derive_from_seed() {
+        let (pk, sk) = vrf_derive_key_from_seed(&[1u8; 32]); //Keygen
+        assert_eq!(vrf_get_public_key(&sk), pk); //Get pk
+        assert!(vrf_verify_public_key(&pk)); //Verify pk
+
+        let (pk, sk) = vrf_derive_key_from_seed(&[]); //Keygen
+        assert_eq!(vrf_get_public_key(&sk), pk); //Get pk
+        assert!(vrf_verify_public_key(&pk)); //Verify pk
+    }
+
+    #[serial]
+    #[test]
+    fn sample_calls_schnorr_vrf_derive_different_keys_from_same_seed() {
+        const SEED: [u8; 32] = [7u8; 32];
+        let (spk, ssk) = schnorr_derive_key_from_seed(&SEED); //Keygen
+        let (vpk, vsk) = vrf_derive_key_from_seed(&SEED); //Keygen
+
+        assert_ne!(vpk, spk);
+        assert_ne!(vsk, ssk);
     }
 
     #[serial]

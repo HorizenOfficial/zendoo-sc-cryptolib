@@ -48,6 +48,7 @@ dependencies = [
  "r1cs-core",
  "radix_trie",
  "rand",
+ "rand_chacha",
  "rand_xorshift",
  "serial_test",
 ]
