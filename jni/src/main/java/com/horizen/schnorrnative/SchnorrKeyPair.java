@@ -23,7 +23,7 @@ public class SchnorrKeyPair implements AutoCloseable {
 
     private static native SchnorrKeyPair nativeDeriveFromSeed(byte[] seed);
 
-    public static SchnorrKeyPair deriveFromSeed(byte[] seed) {
+    public static SchnorrKeyPair generate(byte[] seed) {
         return nativeDeriveFromSeed(seed);
     }
 

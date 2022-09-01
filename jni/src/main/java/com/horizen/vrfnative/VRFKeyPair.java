@@ -30,7 +30,7 @@ public class VRFKeyPair implements AutoCloseable {
 
     private static native VRFKeyPair nativeDeriveFromSeed(byte[] seed);
 
-    public static VRFKeyPair deriveFromSeed(byte[] seed) {
+    public static VRFKeyPair generate(byte[] seed) {
         return nativeDeriveFromSeed(seed);
     }
 

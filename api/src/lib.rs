@@ -1431,7 +1431,7 @@ ffi_export!(
         _class: JClass,
     ) -> jobject {
         let (pk, sk) = vrf_generate_key();
-        convert_vrfnative_vrf_key_pair(pk, sk)
+        convert_vrfnative_vrf_key_pair(_env, pk, sk)
     }
 );
 
@@ -1442,7 +1442,7 @@ ffi_export!(
         _seed: jbyteArray,
     ) -> jobject {
         let ikm = _env.convert_byte_array(_seed).expect("Cannot read bytes");
-        let (pk, sk) = schnorr_derive_key_from_seed(ikm.as_slice());
+        let (pk, sk) = vrf_derive_key_from_seed(ikm.as_slice());
         convert_vrfnative_vrf_key_pair(_env, pk, sk)
     }
 );

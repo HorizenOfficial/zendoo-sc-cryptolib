@@ -83,7 +83,7 @@ pub fn schnorr_verify_signature(
 pub fn schnorr_derive_key_from_seed(seed: &[u8]) -> (SchnorrPk, SchnorrSk) {
     // zero just default to random,
     // however, is there a minimum length that should be required?
-    if seed.len() == 0 {
+    if seed.is_empty() {
         return schnorr_generate_key();
     }
 
@@ -713,7 +713,7 @@ pub fn vrf_proof_to_hash(
 pub fn vrf_derive_key_from_seed(seed: &[u8]) -> (VRFPk, VRFSk) {
     // zero just default to random,
     // however, is there a minimum length that should be required?
-    if seed.len() == 0 {
+    if seed.is_empty() {
         return vrf_generate_key();
     }
 
@@ -811,6 +811,23 @@ mod test {
         assert_eq!(schnorr_get_public_key(&sk), pk); //Get pk
         assert!(schnorr_verify_public_key(&pk)); //Verify pk
 
+        let buffer = serialize_to_buffer(&pk, Some(true)).unwrap();
+        assert_eq!(
+            vec![
+                94, 177, 202, 201, 84, 192, 33, 180, 36, 187, 196, 225, 147, 79, 190, 169, 94, 160,
+                22, 160, 98, 217, 221, 51, 44, 229, 124, 204, 2, 227, 154, 5, 0
+            ],
+            buffer
+        );
+        let buffer = serialize_to_buffer(&sk, Some(true)).unwrap();
+        assert_eq!(
+            vec![
+                176, 141, 47, 233, 14, 73, 90, 250, 133, 0, 245, 33, 57, 188, 1, 150, 172, 209,
+                144, 240, 138, 181, 98, 64, 52, 77, 171, 39, 8, 30, 154, 45
+            ],
+            buffer
+        );
+
         let (pk, sk) = schnorr_derive_key_from_seed(&[]); //Keygen
         assert_eq!(schnorr_get_public_key(&sk), pk); //Get pk
         assert!(schnorr_verify_public_key(&pk)); //Verify pk
@@ -876,6 +893,23 @@ mod test {
         let (pk, sk) = vrf_derive_key_from_seed(&[1u8; 32]); //Keygen
         assert_eq!(vrf_get_public_key(&sk), pk); //Get pk
         assert!(vrf_verify_public_key(&pk)); //Verify pk
+
+        let buffer = serialize_to_buffer(&pk, Some(true)).unwrap();
+        assert_eq!(
+            vec![
+                128, 191, 74, 210, 117, 186, 140, 139, 78, 124, 85, 185, 120, 198, 208, 89, 243,
+                56, 108, 213, 212, 1, 108, 240, 55, 216, 253, 186, 130, 88, 235, 25, 128
+            ],
+            buffer
+        );
+        let buffer = serialize_to_buffer(&sk, Some(true)).unwrap();
+        assert_eq!(
+            vec![
+                205, 235, 16, 65, 216, 239, 34, 146, 88, 211, 151, 125, 255, 226, 16, 87, 91, 125,
+                179, 203, 231, 249, 219, 236, 121, 48, 63, 117, 137, 14, 167, 37
+            ],
+            buffer
+        );
 
         let (pk, sk) = vrf_derive_key_from_seed(&[]); //Keygen
         assert_eq!(vrf_get_public_key(&sk), pk); //Get pk
