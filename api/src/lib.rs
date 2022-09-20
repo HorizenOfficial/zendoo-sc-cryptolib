@@ -511,25 +511,38 @@ ffi_export!(
         _class: JClass,
     ) -> jobject {
         let (pk, sk) = schnorr_generate_key();
+        convert_schnorrnative_schnorr_key_pair(_env, pk, sk)
+    }
+);
 
-        let secret_key_object =
-            return_jobject(&_env, sk, "com/horizen/schnorrnative/SchnorrSecretKey");
-        let public_key_object =
-            return_jobject(&_env, pk, "com/horizen/schnorrnative/SchnorrPublicKey");
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeDeriveFromSeed(
+        _env: JNIEnv,
+        _class: JClass,
+        _seed: jbyteArray,
+    ) -> jobject {
+        let ikm = _env.convert_byte_array(_seed).expect("Cannot read bytes");
+        let (pk, sk) = schnorr_derive_key_from_seed(ikm.as_slice());
+        convert_schnorrnative_schnorr_key_pair(_env, pk, sk)
+    }
+);
 
-        let class = _env
-            .find_class("com/horizen/schnorrnative/SchnorrKeyPair")
-            .expect("Should be able to find SchnorrKeyPair class");
+fn convert_schnorrnative_schnorr_key_pair(_env: JNIEnv, pk: SchnorrPk, sk: SchnorrSk) -> jobject {
+    let secret_key_object = return_jobject(&_env, sk, "com/horizen/schnorrnative/SchnorrSecretKey");
+    let public_key_object = return_jobject(&_env, pk, "com/horizen/schnorrnative/SchnorrPublicKey");
 
-        let result = _env.new_object(
+    let class = _env
+        .find_class("com/horizen/schnorrnative/SchnorrKeyPair")
+        .expect("Should be able to find SchnorrKeyPair class");
+
+    let result = _env.new_object(
         class,
         "(Lcom/horizen/schnorrnative/SchnorrSecretKey;Lcom/horizen/schnorrnative/SchnorrPublicKey;)V",
         &[JValue::Object(secret_key_object), JValue::Object(public_key_object)]
     ).expect("Should be able to create new (SchnorrSecretKey, SchnorrPublicKey) object");
 
-        *result
-    }
-);
+    *result
+}
 
 ffi_export!(
     fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignMessage(
@@ -1418,28 +1431,43 @@ ffi_export!(
         _class: JClass,
     ) -> jobject {
         let (pk, sk) = vrf_generate_key();
-
-        let secret_key_object = return_jobject(&_env, sk, "com/horizen/vrfnative/VRFSecretKey");
-        let public_key_object = return_jobject(&_env, pk, "com/horizen/vrfnative/VRFPublicKey");
-
-        let class = _env
-            .find_class("com/horizen/vrfnative/VRFKeyPair")
-            .expect("Should be able to find VRFKeyPair class");
-
-        let result = _env
-            .new_object(
-                class,
-                "(Lcom/horizen/vrfnative/VRFSecretKey;Lcom/horizen/vrfnative/VRFPublicKey;)V",
-                &[
-                    JValue::Object(secret_key_object),
-                    JValue::Object(public_key_object),
-                ],
-            )
-            .expect("Should be able to create new (VRFSecretKey, VRFPublicKey) object");
-
-        *result
+        convert_vrfnative_vrf_key_pair(_env, pk, sk)
     }
 );
+
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFKeyPair_nativeDeriveFromSeed(
+        _env: JNIEnv,
+        _class: JClass,
+        _seed: jbyteArray,
+    ) -> jobject {
+        let ikm = _env.convert_byte_array(_seed).expect("Cannot read bytes");
+        let (pk, sk) = vrf_derive_key_from_seed(ikm.as_slice());
+        convert_vrfnative_vrf_key_pair(_env, pk, sk)
+    }
+);
+
+fn convert_vrfnative_vrf_key_pair(_env: JNIEnv, pk: VRFPk, sk: VRFSk) -> jobject {
+    let secret_key_object = return_jobject(&_env, sk, "com/horizen/vrfnative/VRFSecretKey");
+    let public_key_object = return_jobject(&_env, pk, "com/horizen/vrfnative/VRFPublicKey");
+
+    let class = _env
+        .find_class("com/horizen/vrfnative/VRFKeyPair")
+        .expect("Should be able to find VRFKeyPair class");
+
+    let result = _env
+        .new_object(
+            class,
+            "(Lcom/horizen/vrfnative/VRFSecretKey;Lcom/horizen/vrfnative/VRFPublicKey;)V",
+            &[
+                JValue::Object(secret_key_object),
+                JValue::Object(public_key_object),
+            ],
+        )
+        .expect("Should be able to create new (VRFSecretKey, VRFPublicKey) object");
+
+    *result
+}
 
 ffi_export!(
     fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(

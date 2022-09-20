@@ -3,10 +3,7 @@ package com.horizen.vrfnative;
 import com.horizen.librustsidechains.FieldElement;
 import org.junit.Test;
 
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 public class VRFKeyPairTest {
 
@@ -17,6 +14,26 @@ public class VRFKeyPairTest {
         {
             assertNotNull("Key pair generation was unsuccessful.", keyPair);
 
+            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
+        }
+    }
+
+    @Test
+    public void testDeriveFromSeed() throws Exception {
+        byte[] seed = { 1, 2, 3, 4, 5, 6, 7, 8 };
+        byte[] expectedPubKeyBytes = {-41, 6, 40, 40, 18, 36, 100, -72, -107, 103, 60, -47, 40, -5, -119, 103, 89, 31, 82, 66, -98, 103, -128, 57, -116, -108, 81, -33, -8, -101, -95, 14, 0};
+        byte[] expectedSecretKeyBytes = {-104, -120, -125, 121, 24, -25, -109, -49, -98, 17, -91, 15, 27, 14, 16, -54, 123, 57, 79, -88, 0, -82, -17, 72, -74, -109, 77, 66, 7, 113, 104, 62};
+        try(VRFKeyPair keyPair = VRFKeyPair.generate(seed))
+        {
+            assertNotNull("Key pair derive from seed was unsuccessful", keyPair);
+            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
+            assertArrayEquals("Derive from seed didn't produce the expected public key", expectedPubKeyBytes, keyPair.getPublicKey().serializePublicKey());
+            assertArrayEquals("Derive from seed didn't produce the expected secret key", expectedSecretKeyBytes, keyPair.getSecretKey().serializeSecretKey());
+        }
+        byte[] emptySeed = {};
+        try(VRFKeyPair keyPair = VRFKeyPair.generate(seed))
+        {
+            assertNotNull("Key pair derive from empty seed was unsuccessful", keyPair);
             assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
         }
     }
