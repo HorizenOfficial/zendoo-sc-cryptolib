@@ -3,76 +3,14 @@ use cctp_primitives::{
     commitment_tree::{sidechain_tree_alive::FWT_MT_HEIGHT, CMT_MT_HEIGHT},
     proving_system::verifier::ceased_sidechain_withdrawal::PHANTOM_CERT_DATA_HASH,
     type_mapping::FieldElement,
-    utils::{
-        commitment_tree::DataAccumulator, data_structures::BackwardTransfer, get_bt_merkle_root,
-    },
+    utils::commitment_tree::DataAccumulator,
 };
 use primitives::{FieldBasedHash, FieldBasedMerkleTreePath, FieldHasher};
 
 use crate::{
-    type_mapping::*, GingerMHTBinaryPath, MST_MERKLE_TREE_HEIGHT, SC_CUSTOM_HASH_LENGTH,
-    SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
+    common::data_structures::WithdrawalCertificateData, type_mapping::*, GingerMHTBinaryPath,
+    MST_MERKLE_TREE_HEIGHT, SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH,
 };
-
-#[derive(Clone, Debug)]
-/// The content of a withdrawal certificate
-pub struct WithdrawalCertificateData {
-    pub ledger_id: FieldElement,
-    pub epoch_id: u32,
-    /// Merkle root hash of all BTs from the certificate
-    pub bt_root: FieldElement,
-    pub quality: u64,
-    /// Reference to the state of the mainchain-to-sidechain transaction history.
-    /// Declares to which extent the sidechain processed forward transactions.
-    pub mcb_sc_txs_com: FieldElement,
-    pub ft_min_amount: u64,
-    pub btr_min_fee: u64,
-    /// Carries the reference to the sidechain state. (Currently the reference is
-    /// split over two field elements)
-    pub custom_fields: Vec<FieldElement>,
-}
-
-impl WithdrawalCertificateData {
-    pub fn new(
-        ledger_id: FieldElement,
-        epoch_id: u32,
-        bt_list: Vec<BackwardTransfer>,
-        quality: u64,
-        mcb_sc_txs_com: FieldElement,
-        ft_min_amount: u64,
-        btr_min_fee: u64,
-        custom_fields: Vec<FieldElement>,
-    ) -> Self {
-        Self {
-            ledger_id,
-            epoch_id,
-            bt_root: get_bt_merkle_root(if bt_list.is_empty() {
-                None
-            } else {
-                Some(&bt_list)
-            })
-            .unwrap(),
-            quality,
-            mcb_sc_txs_com,
-            ft_min_amount,
-            btr_min_fee,
-            custom_fields,
-        }
-    }
-
-    pub(crate) fn get_default(num_custom_fields: u32) -> Self {
-        Self {
-            ledger_id: FieldElement::default(),
-            epoch_id: 0,
-            bt_root: get_bt_merkle_root(None).unwrap(),
-            quality: 0,
-            mcb_sc_txs_com: FieldElement::default(),
-            ft_min_amount: 0,
-            btr_min_fee: 0,
-            custom_fields: vec![FieldElement::default(); num_custom_fields as usize],
-        }
-    }
-}
 
 #[derive(Clone, Default)]
 /// The relevant public data on a utxo

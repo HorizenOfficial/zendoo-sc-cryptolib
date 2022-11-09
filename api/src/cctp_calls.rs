@@ -1,8 +1,13 @@
 use algebra::{AffineCurve, ProjectiveCurve, ToConstraintField, UniformRand};
 use blake2::digest::{FixedOutput, Input};
 use demo_circuit::{
-    constants::VRFParams, constraints::CeasedSidechainWithdrawalCircuit, naive_threshold_sig::*,
-    type_mapping::*, CswFtProverData, CswSysData, CswUtxoProverData, WithdrawalCertificateData,
+    blaze_csw::{
+        constraints::CeasedSidechainWithdrawalCircuit, 
+        data_structures::{CswFtProverData, CswSysData, CswUtxoProverData}
+    },
+    constants::VRFParams,
+    create_msg_to_sign, naive_threshold_sig::*, naive_threshold_sig_w_key_rotation::{*, data_structures::ValidatorKeysUpdates},
+    type_mapping::*, common::{NULL_CONST, WithdrawalCertificateData}, 
 };
 use lazy_static::*;
 use primitives::{
@@ -14,6 +19,7 @@ use r1cs_core::debug_circuit;
 use rand::{rngs::OsRng, CryptoRng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rand_xorshift::XorShiftRng;
+use std::convert::TryFrom;
 
 use cctp_primitives::{
     proving_system::{
@@ -26,12 +32,13 @@ use cctp_primitives::{
         ProvingSystem, ZendooProof, ZendooProverKey, ZendooVerifierKey,
     },
     utils::{
-        commitment_tree::DataAccumulator, data_structures::BackwardTransfer, get_bt_merkle_root,
+        commitment_tree::hash_vec, data_structures::BackwardTransfer, get_bt_merkle_root,
         serialization::*,
     },
 };
 
-use std::convert::TryFrom;
+use cctp_primitives::proving_system::verifier::ceased_sidechain_withdrawal::PHANTOM_CERT_DATA_HASH;
+use cctp_primitives::utils::get_cert_data_hash_from_bt_root_and_custom_fields_hash;
 use std::path::Path;
 
 //*******************************Generic functions**********************************************
@@ -144,8 +151,6 @@ pub fn compute_msg_to_sign(
     bt_list: Vec<BackwardTransfer>,
     custom_fields: Option<Vec<FieldElement>>,
 ) -> Result<(FieldElement, FieldElement), Error> {
-    let epoch_number = FieldElement::from(epoch_number);
-
     //Compute bt_list merkle_root
     let bt_list_opt = if !bt_list.is_empty() {
         Some(bt_list.as_slice())
@@ -155,54 +160,15 @@ pub fn compute_msg_to_sign(
     let mr_bt = get_bt_merkle_root(bt_list_opt)
         .map_err(|e| format!("Backward transfer Merkle Root computation failed: {:?}", e))?;
 
-    let fees_field_element = {
-        let fes = DataAccumulator::init()
-            .update(btr_fee)
-            .map_err(|e| format!("Unable to update DataAccumulator with btr_fee: {:?}", e))?
-            .update(ft_min_amount)
-            .map_err(|e| {
-                format!(
-                    "Unable to update DataAccumulator with ft_min_amount: {:?}",
-                    e
-                )
-            })?
-            .get_field_elements()
-            .map_err(|e| format!("Unable to finalize DataAccumulator {:?}", e))?;
-        assert_eq!(fes.len(), 1);
-        fes[0]
-    };
-
-    // Compute custom_fields_hash if they are present
-    let custom_fields_hash = if let Some(custom_fields) = custom_fields {
-        let mut h = FieldHash::init_constant_length(custom_fields.len(), None);
-        custom_fields.into_iter().for_each(|custom_field| {
-            h.update(custom_field);
-        });
-        Some(
-            h.finalize()
-                .map_err(|e| format!("Unable to compute custom_fields_hash: {:?}", e))?,
-        )
-    } else {
-        None
-    };
-
-    //Compute message to be verified
-    let mut h =
-        FieldHash::init_constant_length(5 + if custom_fields_hash.is_some() { 1 } else { 0 }, None);
-
-    h.update(*sc_id)
-        .update(epoch_number)
-        .update(mr_bt)
-        .update(*end_cumulative_sc_tx_comm_tree_root)
-        .update(fees_field_element);
-
-    if let Some(custom_fields_hash) = custom_fields_hash {
-        h.update(custom_fields_hash);
-    }
-
-    let msg = h
-        .finalize()
-        .map_err(|e| format!("Unable to compute final hash: {:?}", e))?;
+    let msg = create_msg_to_sign(
+        sc_id,
+        epoch_number,
+        end_cumulative_sc_tx_comm_tree_root,
+        btr_fee,
+        ft_min_amount,
+        &mr_bt,
+        custom_fields,
+    )?;
 
     Ok((mr_bt, msg))
 }
@@ -218,7 +184,7 @@ fn get_naive_threshold_sig_circuit_prover_data(
     bt_list: Vec<BackwardTransfer>,
     threshold: u64,
     custom_fields: Option<Vec<FieldElement>>,
-) -> Result<(NaiveTresholdSignature, u64), Error> {
+) -> Result<(NaiveThresholdSignature, u64), Error> {
     //Get max pks
     let max_pks = pks.len();
     assert_eq!(sigs.len(), max_pks);
@@ -262,7 +228,7 @@ fn get_naive_threshold_sig_circuit_prover_data(
     //Convert needed variables into field elements
     let threshold = FieldElement::from(threshold);
 
-    let c = NaiveTresholdSignature::new(
+    let c = NaiveThresholdSignature::new(
         pks,
         sigs,
         threshold,
@@ -314,6 +280,35 @@ pub fn debug_naive_threshold_sig_circuit(
 
     let failing_constraint = debug_circuit(c)
         .map_err(|e| format!("Unable to debug received instance of CSW circuit: {:?}", e))?;
+
+    Ok(failing_constraint)
+}
+
+pub fn debug_naive_threshold_sig_w_key_rotation_circuit(
+    validator_keys_updates: ValidatorKeysUpdates,
+    sigs: Vec<Option<SchnorrSig>>,
+    withdrawal_certificate: WithdrawalCertificateData,
+    prev_withdrawal_certificate: Option<WithdrawalCertificateData>,
+    threshold: u64,
+    genesis_key_root_hash: &FieldElement,
+) -> Result<Option<String>, Error> {
+    let c = NaiveThresholdSignatureWKeyRotation::new(
+        validator_keys_updates,
+        sigs,
+        withdrawal_certificate,
+        prev_withdrawal_certificate,
+        threshold,
+        *genesis_key_root_hash,
+    )
+    .map_err(|e| {
+        format!(
+            "Unable to create concrete instance of NaiveThresholdSignatureWKeyRotation circuit: {:?}",
+            e
+        )
+    })?;
+
+    let failing_constraint = debug_circuit(c)
+        .map_err(|e| format!("Unable to debug received instance of NaiveThresholdSignatureWKeyRotation circuit: {:?}", e))?;
 
     Ok(failing_constraint)
 }
@@ -397,6 +392,78 @@ pub fn create_naive_threshold_sig_proof(
     Ok((proof, valid_signatures))
 }
 
+pub fn create_naive_threshold_sig_w_key_rotation_proof(
+    validator_keys_updates: ValidatorKeysUpdates,
+    sigs: Vec<Option<SchnorrSig>>,
+    withdrawal_certificate: WithdrawalCertificateData,
+    prev_withdrawal_certificate: Option<WithdrawalCertificateData>,
+    threshold: u64,
+    genesis_key_root_hash: &FieldElement,
+    supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
+    proving_key_path: &Path,
+    enforce_membership: bool,
+    zk: bool,
+    compressed_pk: bool,
+    compress_proof: bool,
+) -> Result<(Vec<u8>, u64), Error> {
+    let c = NaiveThresholdSignatureWKeyRotation::new(
+        validator_keys_updates,
+        sigs,
+        withdrawal_certificate,
+        prev_withdrawal_certificate,
+        threshold,
+        *genesis_key_root_hash,
+    )
+    .map_err(|e| {
+        format!(
+            "Unable to create concrete instance of NaiveThresholdSignatureWKeyRotation circuit: {:?}",
+            e
+        )
+    })?;
+
+    let pk: ZendooProverKey = read_from_file(
+        proving_key_path,
+        Some(enforce_membership),
+        Some(compressed_pk),
+    )
+    .map_err(|e| {
+        format!(
+            "Unable to read proving key from file {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+            proving_key_path, e, enforce_membership, compressed_pk
+        )
+    })?;
+
+    let g1_ck = get_g1_committer_key(supported_degree).map_err(|e| {
+        format!(
+            "Unable to get DLOG key of degree {:?}: {:?}",
+            supported_degree, e
+        )
+    })?;
+
+    let valid_signatures = c.get_valid_signatures();
+    let proof = match pk {
+        ZendooProverKey::Darlin(_) => unimplemented!(),
+        ZendooProverKey::CoboundaryMarlin(pk) => {
+            // Call prover
+            let rng = &mut OsRng;
+            let proof =
+                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })
+                    .map_err(|e| format!("Error during proof creation: {:?}", e))?;
+            serialize_to_buffer(
+                &ZendooProof::CoboundaryMarlin(MarlinProof(proof)),
+                Some(compress_proof),
+            )
+            .map_err(|e| {
+                format!(
+                    "Proof serialization (compressed: {}) failed: {:?}",
+                    compress_proof, e
+                )
+            })?
+        }
+    };
+    Ok((proof, valid_signatures as u64))
+}
+
 pub fn verify_naive_threshold_sig_proof(
     constant: &FieldElement,
     sc_id: &FieldElement,
@@ -434,6 +501,7 @@ pub fn verify_naive_threshold_sig_proof(
         end_cumulative_sc_tx_commitment_tree_root,
         btr_fee,
         ft_min_amount,
+        sc_prev_wcert_hash: None,
     };
 
     // Check that the proving system type of the vk and proof are the same, before
@@ -469,6 +537,96 @@ pub fn verify_naive_threshold_sig_proof(
                     e, check_proof, compressed_proof
                 )
             })?;
+
+    // Verify proof
+    let rng = &mut OsRng;
+    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))
+        .map_err(|e| format!("Proof verification error: {:?}", e))?;
+
+    Ok(is_verified)
+}
+
+pub fn verify_naive_threshold_sig_w_key_rotation_proof(
+    withdrawal_certificate: WithdrawalCertificateData,
+    prev_withdrawal_certificate: Option<WithdrawalCertificateData>,
+    bt_list: Vec<BackwardTransfer>,
+    constant: &FieldElement,
+    proof: Vec<u8>,
+    check_proof: bool,
+    compressed_proof: bool,
+    vk_path: &Path,
+    check_vk: bool,
+    compressed_vk: bool,
+) -> Result<bool, Error> {
+    let prev_cert_data_hash = if let Some(cert) = prev_withdrawal_certificate {
+        let custom_fields_hash = if !cert.custom_fields.is_empty() {
+            Some(hash_vec(cert.custom_fields)?)
+        } else {
+            None
+        };
+        get_cert_data_hash_from_bt_root_and_custom_fields_hash(
+            &cert.ledger_id,
+            cert.epoch_id,
+            cert.quality,
+            cert.bt_root,
+            custom_fields_hash,
+            &cert.mcb_sc_txs_com,
+            cert.btr_min_fee,
+            cert.ft_min_amount,
+        )?
+    } else {
+        PHANTOM_CERT_DATA_HASH
+    };
+
+    // Check that the proving system type of the vk and proof are the same, before
+    // deserializing them all
+    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None).map_err(|e| {
+        format!(
+            "Unable to read proving system type from vk at {:?}: {:?}",
+            vk_path, e
+        )
+    })?;
+
+    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)
+        .map_err(|e| format!("Unable to read proving system type from proof: {:?}", e))?;
+
+    if vk_ps_type != proof_ps_type {
+        return Err(ProvingSystemError::ProvingSystemMismatch.into());
+    }
+
+    // Deserialize proof and vk
+    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))
+        .map_err(|e| {
+            format!(
+                "Unable to read vk at {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+                vk_path, e, check_vk, compressed_vk
+            )
+        })?;
+
+    let proof: ZendooProof =
+        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))
+            .map_err(|e| {
+                format!(
+                    "Unable to read proof: {:?}. Semantic checks: {}, Compressed: {}",
+                    e, check_proof, compressed_proof
+                )
+            })?;
+
+    let custom_fields: Option<Vec<&FieldElement>> =
+        Some(withdrawal_certificate.custom_fields.iter().collect());
+
+    let ins = CertificateProofUserInputs {
+        constant: Some(constant),
+        sc_id: &withdrawal_certificate.ledger_id,
+        epoch_number: withdrawal_certificate.epoch_id,
+        quality: withdrawal_certificate.quality,
+        bt_list: Some(&bt_list),
+        custom_fields,
+        end_cumulative_sc_tx_commitment_tree_root: &withdrawal_certificate.mcb_sc_txs_com,
+        btr_fee: withdrawal_certificate.btr_min_fee,
+        ft_min_amount: withdrawal_certificate.ft_min_amount,
+        sc_prev_wcert_hash: Some(&prev_cert_data_hash),
+    };
 
     // Verify proof
     let rng = &mut OsRng;

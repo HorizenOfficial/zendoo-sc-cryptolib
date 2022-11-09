@@ -276,3 +276,159 @@ pub(crate) fn parse_jobject_array_from_jobject(
         .unwrap()
         .cast()
 }
+
+pub(crate) fn extract_custom_fields(
+    _env: &JNIEnv,
+    _custom_fields_list: jobjectArray,
+) -> Option<Vec<FieldElement>> {
+    // Read custom fields if they are present
+    let mut custom_fields_list = None;
+
+    let custom_fields_list_size = _env
+        .get_array_length(_custom_fields_list)
+        .expect("Should be able to get custom_fields_list size");
+
+    if custom_fields_list_size > 0 {
+        let cfl_iter = JObjectArrayIter::new(_env, _custom_fields_list);
+        let custom_fields: Vec<FieldElement> =
+            cfl_iter.map(|c| *convert_field_element(_env, c)).collect();
+        custom_fields_list = Some(custom_fields);
+    }
+    custom_fields_list
+}
+
+pub(crate) fn extract_public_key(
+    _env: &JNIEnv,
+    _key_list: jobjectArray,
+) -> Vec<FieldBasedSchnorrPk<G2Projective>> {
+    JObjectArrayIter::new(&_env, _key_list)
+        .map(|s| {
+            let pk = *convert_public_key(_env, s);
+            FieldBasedSchnorrPk(pk.into_projective())
+        })
+        .collect()
+}
+
+pub(crate) fn extract_backward_transfers(
+    _env: &JNIEnv,
+    _bt_list: jobjectArray,
+) -> Vec<BackwardTransfer> {
+    // Extract backward transfers
+    let mut bt_list = vec![];
+
+    let bt_list_size = _env
+        .get_array_length(_bt_list)
+        .expect("Should be able to get bt_list size");
+
+    if bt_list_size > 0 {
+        for i in 0..bt_list_size {
+            let o = _env
+                .get_object_array_element(_bt_list, i)
+                .unwrap_or_else(|_| panic!("Should be able to get elem {} of bt_list array", i));
+
+            let p = _env
+                .call_method(o, "getPublicKeyHash", "()[B", &[])
+                .expect("Should be able to call getPublicKeyHash method")
+                .l()
+                .unwrap()
+                .cast();
+
+            let pk: [u8; 20] = _env
+                .convert_byte_array(p)
+                .expect("Should be able to convert to Rust byte array")
+                .try_into()
+                .expect("Should be able to write into fixed buffer of size 20");
+
+            let a = _env
+                .call_method(o, "getAmount", "()J", &[])
+                .expect("Should be able to call getAmount method")
+                .j()
+                .unwrap() as u64;
+
+            bt_list.push((a, pk));
+        }
+    }
+
+    bt_list
+        .into_iter()
+        .map(|bt_raw| BackwardTransfer {
+            pk_dest: bt_raw.1,
+            amount: bt_raw.0,
+        })
+        .collect::<Vec<_>>()
+}
+
+pub(crate) struct JObjectArrayIter<'a> {
+    env: &'a JNIEnv<'a>,
+    object_array: jobjectArray,
+    index: jsize,
+    length: jsize,
+}
+
+impl<'a> Iterator for JObjectArrayIter<'a> {
+    type Item = JObject<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.length {
+            None
+        } else {
+            let res = self
+                .env
+                .get_object_array_element(self.object_array, self.index)
+                .unwrap_or_else(|_| panic!("Should be able to get list item at {}", self.index));
+            self.index += 1;
+            Some(res)
+        }
+    }
+}
+
+impl<'a> JObjectArrayIter<'a> {
+    pub fn new(env: &'a JNIEnv, object_array: jobjectArray) -> Self {
+        let length = env
+            .get_array_length(object_array)
+            .expect("Should be able to get list size");
+        Self {
+            env,
+            object_array,
+            index: 0,
+            length,
+        }
+    }
+}
+
+pub(crate) fn convert_field_element<'a>(_env: &'a JNIEnv, _from: JObject) -> &'a FieldElement {
+    convert_jobject(_env, _from, "fieldElementPointer")
+}
+
+pub(crate) fn convert_public_key<'a>(_env: &'a JNIEnv, _from: JObject) -> &'a SchnorrPk {
+    convert_jobject(_env, _from, "publicKeyPointer")
+}
+
+#[allow(dead_code)]
+pub(crate) fn convert_signature<'a>(_env: &'a JNIEnv, _from: JObject) -> &'a SchnorrSig {
+    convert_jobject(_env, _from, "signaturePointer")
+}
+
+pub(crate) fn convert_option_signature(_env: &JNIEnv, _from: JObject) -> Option<SchnorrSig> {
+    convert_option_jobject(_env, _from, "signaturePointer")
+}
+
+pub(crate) fn convert_jobject<'a, T>(_env: &'a JNIEnv, _from: JObject, name: &str) -> &'a T {
+    let f = _env
+        .get_field(_from, name, "J")
+        .unwrap_or_else(|_| panic!("Should be able to get field {}", name));
+
+    read_raw_pointer(&_env, f.j().unwrap() as *const T)
+}
+
+pub(crate) fn convert_option_jobject<T: Copy>(
+    _env: &JNIEnv,
+    _from: JObject,
+    name: &str,
+) -> Option<T> {
+    let s = _env
+        .get_field(_from, name, "J")
+        .unwrap_or_else(|_| panic!("Should be able to get field {}", name));
+
+    read_nullable_raw_pointer(s.j().unwrap() as *const T).copied()
+}
