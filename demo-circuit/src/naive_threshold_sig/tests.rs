@@ -33,7 +33,7 @@ lazy_static! {
     pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
 }
 
-struct NaiveTresholdSignatureTest {
+struct NaiveThresholdSignatureTest {
     //Witnesses
     pks: Vec<FieldBasedSchnorrPk<G2Projective>>,
     sigs: Vec<FieldBasedSchnorrSignature<FieldElement, G2Projective>>,
@@ -60,7 +60,7 @@ fn generate_inputs(
     threshold: usize,
     wrong_pks_threshold_hash: bool,
     wrong_cert_data_hash: bool,
-) -> NaiveTresholdSignatureTest {
+) -> NaiveThresholdSignatureTest {
     //Istantiate rng
     let mut rng = OsRng::default();
     let mut h = FieldHash::init_constant_length(5, None);
@@ -165,7 +165,7 @@ fn generate_inputs(
     };
 
     //Create instance of the circuit
-    NaiveTresholdSignatureTest {
+    NaiveThresholdSignatureTest {
         pks,
         sigs,
         threshold: t_field,
@@ -183,7 +183,7 @@ fn generate_inputs(
 }
 
 fn generate_constraints(
-    c: NaiveTresholdSignatureTest,
+    c: NaiveThresholdSignatureTest,
     mut cs: TestConstraintSystem<FieldElement>,
 ) -> bool {
     //Internal checks

@@ -8,11 +8,11 @@ use r1cs_crypto::FieldBasedHashGadget;
 use r1cs_std::{alloc::AllocGadget, boolean::Boolean, eq::EqGadget, FromBitsGadget};
 
 use crate::{
-    type_mapping::*, CswFtProverData, CswProverData, CswSysData, CswUtxoProverData,
-    FieldElementGadget, WithdrawalCertificateData,
+    common::data_structures::WithdrawalCertificateData, type_mapping::*, FieldElementGadget,
 };
 
 use self::data_structures::{CswProverDataGadget, ScPublicKeyGadget};
+use super::data_structures::{CswFtProverData, CswProverData, CswSysData, CswUtxoProverData};
 
 pub mod data_structures;
 
@@ -310,10 +310,14 @@ mod test {
     use std::{convert::TryInto, ops::AddAssign};
 
     use crate::{
-        constants::personalizations::BoxType, deserialize_fe_unchecked,
-        split_field_element_at_index, CswFtOutputData, CswUtxoInputData, CswUtxoOutputData,
-        GingerMHTBinaryPath, WithdrawalCertificateData, MAX_SEGMENT_SIZE, MC_RETURN_ADDRESS_BYTES,
-        MST_MERKLE_TREE_HEIGHT, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, SUPPORTED_SEGMENT_SIZE,
+        blaze_csw::{
+            data_structures::{CswFtOutputData, CswUtxoInputData, CswUtxoOutputData},
+            deserialize_fe_unchecked, split_field_element_at_index,
+        },
+        common::data_structures::WithdrawalCertificateData,
+        constants::personalizations::BoxType,
+        GingerMHTBinaryPath, MAX_SEGMENT_SIZE, MC_RETURN_ADDRESS_BYTES, MST_MERKLE_TREE_HEIGHT,
+        SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, SUPPORTED_SEGMENT_SIZE,
     };
 
     use super::*;

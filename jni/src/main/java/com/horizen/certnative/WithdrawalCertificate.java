@@ -23,6 +23,18 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
         Library.load();
     }
 
+    public WithdrawalCertificate(FieldElement scId, int epochNumber, List<BackwardTransfer> btList, FieldElement mcbScTxsCom,
+            long ftMinAmount, long btrMinFee, List<FieldElement> customFields) {
+        this.scId = scId;
+        this.epochNumber = epochNumber;
+        this.btList = btList.toArray(new BackwardTransfer[0]);
+        this.quality = 0;
+        this.mcbScTxsCom = mcbScTxsCom;
+        this.ftMinAmount = ftMinAmount;
+        this.btrMinFee = btrMinFee;
+        this.customFields = customFields.toArray(new FieldElement[0]);
+    }
+
     public WithdrawalCertificate(FieldElement scId, int epochNumber, List<BackwardTransfer> btList, long quality, FieldElement mcbScTxsCom,
             long ftMinAmount, long btrMinFee, List<FieldElement> customFields) {
         this.scId = scId;
