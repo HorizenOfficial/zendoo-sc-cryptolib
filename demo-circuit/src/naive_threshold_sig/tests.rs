@@ -219,7 +219,7 @@ fn generate_constraints(
     .unwrap();
 
     //Allocate threshold as witness
-    let t_g = FrGadget::alloc(cs.ns(|| "alloc threshold"), || Ok(c.threshold)).unwrap();
+    let t_g = FieldElementGadget::alloc(cs.ns(|| "alloc threshold"), || Ok(c.threshold)).unwrap();
 
     //Check hash commitment
     pks_threshold_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
@@ -232,14 +232,14 @@ fn generate_constraints(
     //Reconstruct message as H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)
 
     // Alloc field elements
-    let sc_id_g = FrGadget::alloc(cs.ns(|| "alloc sc id"), || Ok(c.sc_id)).unwrap();
+    let sc_id_g = FieldElementGadget::alloc(cs.ns(|| "alloc sc id"), || Ok(c.sc_id)).unwrap();
 
     let epoch_number_g =
-        FrGadget::alloc(cs.ns(|| "alloc epoch number"), || Ok(c.epoch_number)).unwrap();
+        FieldElementGadget::alloc(cs.ns(|| "alloc epoch number"), || Ok(c.epoch_number)).unwrap();
 
-    let mr_bt_g = FrGadget::alloc(cs.ns(|| "alloc mr_bt"), || Ok(c.mr_bt)).unwrap();
+    let mr_bt_g = FieldElementGadget::alloc(cs.ns(|| "alloc mr_bt"), || Ok(c.mr_bt)).unwrap();
 
-    let end_cumulative_sc_tx_comm_tree_root_g = FrGadget::alloc(
+    let end_cumulative_sc_tx_comm_tree_root_g = FieldElementGadget::alloc(
         cs.ns(|| "alloc end_cumulative_sc_tx_comm_tree_root"),
         || Ok(c.end_cumulative_sc_tx_comm_tree_root),
     )
@@ -263,7 +263,7 @@ fn generate_constraints(
         bits
     };
 
-    let fees_g = FrGadget::from_bits(
+    let fees_g = FieldElementGadget::from_bits(
         cs.ns(|| "pack(btr_fee, ft_min_amount)"),
         fees_bits.as_slice(),
     )
@@ -298,7 +298,7 @@ fn generate_constraints(
     }
 
     //Count valid signatures
-    let mut valid_signatures = FrGadget::zero(cs.ns(|| "alloc valid signatures count")).unwrap();
+    let mut valid_signatures = FieldElementGadget::zero(cs.ns(|| "alloc valid signatures count")).unwrap();
     for (i, v) in verdicts.iter().enumerate() {
         valid_signatures = valid_signatures
             .conditionally_add_constant(
@@ -323,7 +323,7 @@ fn generate_constraints(
 
     //Check pks_threshold_hash (constant)
     let expected_pks_threshold_hash_g =
-        FrGadget::alloc_input(cs.ns(|| "alloc constant as input"), || {
+        FieldElementGadget::alloc_input(cs.ns(|| "alloc constant as input"), || {
             Ok(c.pks_threshold_hash)
         })
         .unwrap();
@@ -337,7 +337,7 @@ fn generate_constraints(
 
     // Check cert_data_hash
     let expected_cert_data_hash_g =
-        FrGadget::alloc_input(cs.ns(|| "alloc input cert_data_hash_g"), || {
+        FieldElementGadget::alloc_input(cs.ns(|| "alloc input cert_data_hash_g"), || {
             Ok(c.cert_data_hash)
         })
         .unwrap();
@@ -357,7 +357,7 @@ fn generate_constraints(
     }
 
     //Pack the b's into a field element
-    let b_field = FrGadget::from_bits(
+    let b_field = FieldElementGadget::from_bits(
         cs.ns(|| "pack the b's into a field element"),
         bs_g.as_slice(),
     )

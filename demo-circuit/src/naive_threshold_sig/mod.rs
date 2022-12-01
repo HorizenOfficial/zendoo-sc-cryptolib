@@ -316,7 +316,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignature {
 
         //Check signatures verification verdict on message
         for (i, (pk_g, sig_g)) in pks_g.iter().zip(sigs_g.iter()).enumerate() {
-            let v = SchnorrVrfySigGadget::enforce_signature_verdict(
+            let v = UnoptimizedSchnorrVrfySigGadget::enforce_signature_verdict(
                 cs.ns(|| format!("check_sig_verdict_{}", i)),
                 pk_g,
                 sig_g,
