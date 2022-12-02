@@ -35,6 +35,8 @@ bit-vec = "=0.6.3"
 sha2 = "=0.9.5"
 hex = "=0.4.3"
 serial_test = "=0.5.1"
+strum = "=0.24.1"
+strum_macros = "=0.24.3"
 
 [features]
 default = [ "asm" ]

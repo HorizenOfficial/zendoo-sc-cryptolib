@@ -8,6 +8,9 @@ use crate::type_mapping::*;
 
 pub mod personalizations;
 
+#[cfg(test)]
+pub mod old_circuit_keys;
+
 pub struct NaiveThresholdSigParams {
     pub null_sig: SchnorrSig,
     pub null_pk: FieldBasedSchnorrPk<G2Projective>,

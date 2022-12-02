@@ -17,7 +17,7 @@ use r1cs_crypto::schnorr::field_based_schnorr::{
 };
 use r1cs_crypto::{
     field_based_mht::{FieldBasedBinaryMerkleTreePathGadget, FieldBasedMerkleTreeGadget},
-    TweedleFrDensityOptimizedPoseidonHashGadget,
+    TweedleFrPoseidonHashGadget, TweedleFrDensityOptimizedPoseidonHashGadget,
 };
 use r1cs_std::{
     fields::fp::FpGadget, groups::nonnative::GroupAffineNonNativeGadget,
@@ -45,12 +45,17 @@ pub type VRFScheme = FieldBasedEcVrf<FieldElement, G2Projective, FieldHash, Grou
 pub type VRFProof = FieldBasedEcVrfProof<FieldElement, G2Projective>;
 pub type VRFPk = G2;
 pub type VRFSk = ScalarFieldElement;
-pub type FieldElementGadget = FpGadget<FieldElement>;
-pub type FieldHashGadget = TweedleFrDensityOptimizedPoseidonHashGadget;
+pub(crate) type FieldElementGadget = FpGadget<FieldElement>;
+pub(crate) type FieldHashGadget = TweedleFrDensityOptimizedPoseidonHashGadget;
+
+// Kept for backward compatibility of Threshold Circuit V1
+pub(crate) type UnoptimizedFieldHashGadget = TweedleFrPoseidonHashGadget;
+
 pub type GingerMHTBinaryPath = FieldBasedBinaryMHTPath<GingerMHTParams>;
-pub type GingerMHTGagdet =
+#[allow(unused)]
+pub(crate) type GingerMHTGagdet =
     FieldBasedMerkleTreeGadget<GingerMHTParams, FieldHashGadget, FieldElement>;
-pub type GingerMHTBinaryGadget =
+pub(crate) type GingerMHTBinaryGadget =
     FieldBasedBinaryMerkleTreePathGadget<GingerMHTParams, FieldHashGadget, FieldElement>;
 
 // Simulated types
@@ -73,7 +78,7 @@ pub const SIMULATED_FIELD_BYTE_SIZE: usize =
 pub type SimulatedSWGroup = algebra::curves::ed25519::SWEd25519Affine;
 pub type SimulatedTEGroup = algebra::curves::ed25519::TEEd25519Affine;
 pub type SimulatedCurveParameters = algebra::curves::ed25519::Ed25519Parameters;
-pub type ECPointSimulationGadget =
+pub(crate) type ECPointSimulationGadget =
     GroupAffineNonNativeGadget<SimulatedCurveParameters, FieldElement, SimulatedFieldElement>;
 
 //Sig types
@@ -84,6 +89,13 @@ pub(crate) type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
     CurveGadget,
     FieldHash,
     FieldHashGadget,
+>;
+pub(crate) type UnoptimizedSchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
+    FieldElement,
+    G2Projective,
+    CurveGadget,
+    FieldHash,
+    UnoptimizedFieldHashGadget,
 >;
 pub(crate) type SchnorrPkGadget =
     FieldBasedSchnorrPkGadget<FieldElement, G2Projective, CurveGadget>;

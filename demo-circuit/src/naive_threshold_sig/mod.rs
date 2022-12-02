@@ -5,7 +5,7 @@ use primitives::{
     signature::schnorr::field_based_schnorr::{FieldBasedSchnorrPk, FieldBasedSchnorrSignature},
 };
 use r1cs_crypto::{
-    crh::{FieldBasedHashGadget, TweedleFrPoseidonHashGadget as PoseidonHashGadget},
+    crh::FieldBasedHashGadget,
     signature::FieldBasedSigGadget,
 };
 
@@ -204,7 +204,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignature {
         }
 
         //Enforce pks_threshold_hash
-        let mut pks_threshold_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
+        let mut pks_threshold_hash_g = UnoptimizedFieldHashGadget::enforce_hash_constant_length(
             cs.ns(|| "hash public keys"),
             pks_g
                 .iter()
@@ -218,7 +218,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignature {
             self.threshold.ok_or(SynthesisError::AssignmentMissing)
         })?;
 
-        pks_threshold_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
+        pks_threshold_hash_g = UnoptimizedFieldHashGadget::enforce_hash_constant_length(
             cs.ns(|| "H(H(pks), threshold)"),
             &[pks_threshold_hash_g, t_g.clone()],
         )?;
@@ -254,7 +254,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignature {
                 Vec::<FieldElementGadget>::alloc(cs.ns(|| "alloc custom fields"), || {
                     Ok(custom_fields.as_slice())
                 })?;
-            let custom_fields_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
+            let custom_fields_hash_g = UnoptimizedFieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| "H(custom_fields)"),
                 custom_fields_g.as_slice(),
             )?;
@@ -296,7 +296,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignature {
             if custom_fields_hash_g.is_some() {
                 preimage.push(custom_fields_hash_g.clone().unwrap())
             }; // Add custom_fields_hash if present
-            PoseidonHashGadget::enforce_hash_constant_length(
+            UnoptimizedFieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| "H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount, [H(custom_fields)])"),
                 preimage.as_slice(),
             )
@@ -316,7 +316,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignature {
 
         //Check signatures verification verdict on message
         for (i, (pk_g, sig_g)) in pks_g.iter().zip(sigs_g.iter()).enumerate() {
-            let v = SchnorrVrfySigGadget::enforce_signature_verdict(
+            let v = UnoptimizedSchnorrVrfySigGadget::enforce_signature_verdict(
                 cs.ns(|| format!("check_sig_verdict_{}", i)),
                 pk_g,
                 sig_g,
@@ -338,7 +338,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignature {
 
         //Enforce cert_data_hash
         let cert_data_hash_g = {
-            let wcert_sysdata_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
+            let wcert_sysdata_hash_g = UnoptimizedFieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| "H(sc_id, epoch_number, bt_root, valid_sigs, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)"),
                 &[sc_id_g, epoch_number_g, mr_bt_g, valid_signatures.clone(), end_cumulative_sc_tx_comm_tree_root_g, fees_g],
             )?;
@@ -349,7 +349,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignature {
                 vec![wcert_sysdata_hash_g]
             };
 
-            PoseidonHashGadget::enforce_hash_constant_length(
+            UnoptimizedFieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| "H([custom_fields], cert_data_hash)"),
                 preimage.as_slice(),
             )
