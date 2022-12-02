@@ -129,7 +129,7 @@ fn compute_and_compare_circuits_digests(circuit_type: Circuits) {
 
 #[serial]
 #[test]
-fn no_changes_from_previous_version() {
+fn no_changes_in_circuits_from_previous_version() {
     // Create DLOG keys
     let _ = load_g1_committer_key(MAX_SEGMENT_SIZE - 1);
 
