@@ -21,7 +21,8 @@ function import_gpg_keys() {
     gpg -v --batch --keyserver hkps://keys.openpgp.org --recv-keys "${key}" ||
     gpg -v --batch --keyserver hkp://keyserver.ubuntu.com --recv-keys "${key}" ||
     gpg -v --batch --keyserver hkp://pgp.mit.edu:80 --recv-keys "${key}" ||
-    gpg -v --batch --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys "${key}"
+    gpg -v --batch --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys "${key}" ||
+    echo -e "${key} can not be found on GPG key servers. Please upload it to at least one of the following GPG key servers:\nhttps://keys.openpgp.org/\nhttps://keyserver.ubuntu.com/\nhttps://pgp.mit.edu/"
   done
 }
 
