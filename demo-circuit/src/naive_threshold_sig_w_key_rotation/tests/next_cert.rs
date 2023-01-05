@@ -703,6 +703,7 @@ fn test_wrong_quality() {
     // decrease also by 1 the number of valid signatures
     circuit.wcert_signatures[0] = SchnorrSig::new(FieldElement::rand(&mut rng), FieldElement::rand(&mut rng));
     // Update b to ensure that b = valid_signatures - threshold
+    assert!(circuit.valid_signatures > 0); // check to avoid underflow, as the test would be meaningless with 0 valid signatures
     let b_bits = (FieldElement::from(circuit.valid_signatures as u64 - 1) - circuit.threshold).write_bits();
     let to_skip = FieldElement::size_in_bits() - circuit.b.len();
     circuit.b = b_bits[to_skip..].to_vec();

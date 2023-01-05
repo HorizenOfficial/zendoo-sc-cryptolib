@@ -217,7 +217,7 @@ fn get_naive_threshold_sig_circuit_prover_data(
     }
 
     //Compute b as v-t and convert it to field element
-    let b = FieldElement::from(valid_signatures - threshold);
+    let b = FieldElement::from(valid_signatures) - FieldElement::from(threshold);
 
     //Convert affine pks to projective
     let pks = pks

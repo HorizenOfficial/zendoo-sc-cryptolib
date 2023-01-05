@@ -19,6 +19,11 @@ public class FieldElement implements AutoCloseable {
 
     private static native FieldElement nativeCreateFromLong(long value);
 
+    /**
+     * Convert an integer value to a field element
+     * @param value - A positive integer value to be converted to a field element
+     * @return The field element represented with the positive integer value provided as input
+     */
     public static FieldElement createFromLong(long value) {
         return nativeCreateFromLong(value);
     }
