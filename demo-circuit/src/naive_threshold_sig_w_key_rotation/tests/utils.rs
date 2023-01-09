@@ -132,7 +132,7 @@ pub(crate) fn setup_certificate_data(
     let (signing_keys_pks, signing_keys_sks) = generate_keys(max_pks);
     let (master_keys_pks, master_keys_sks) = generate_keys(max_pks);
     let genesis_validator_keys_tree_root =
-        ValidatorKeysUpdates::get_validators_key_root(max_pks, &signing_keys_pks, &master_keys_pks)
+        ValidatorKeysUpdates::get_validators_key_root(max_pks, &signing_keys_pks, &master_keys_pks, &withdrawal_certificate)
             .unwrap();
 
     withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;

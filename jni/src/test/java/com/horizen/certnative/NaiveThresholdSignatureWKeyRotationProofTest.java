@@ -78,7 +78,9 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
 
     private ValidatorKeysUpdatesList setupValidatorKeysUpdatesList(
         List<SchnorrKeyPair> signingKeyPairList,
-        List<SchnorrKeyPair> masterKeyPairList
+        List<SchnorrKeyPair> masterKeyPairList,
+        int epochId,
+        FieldElement ledgerId
     ) {
         List<SchnorrPublicKey> signingPublicKeyList = new ArrayList<>();
         List<SchnorrPublicKey> masterPublicKeyList = new ArrayList<>();
@@ -118,7 +120,9 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
             updatedSigningKeysMkSignaturesList,
             updatedMasterKeysSkSignaturesList,
             updatedMasterKeysMkSignaturesList,
-            keyCount
+            keyCount,
+            epochId,
+            ledgerId
         );
     }
 
@@ -178,7 +182,7 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
         List<SchnorrKeyPair> signingKeyPairList = setupKeyPairList(keyCount);
         List<SchnorrKeyPair> masterKeyPairList = setupKeyPairList(keyCount);
         ValidatorKeysUpdatesList testKeysSignaturesList = setupValidatorKeysUpdatesList(
-            signingKeyPairList, masterKeyPairList
+            signingKeyPairList, masterKeyPairList, epochNumber, scId
         );
 
         FieldElement testPrevValidatorsKeysRoot = testKeysSignaturesList.getKeysRootHash();
@@ -255,7 +259,7 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
         List<SchnorrKeyPair> signingKeyPairList = setupKeyPairList(keyCount);
         List<SchnorrKeyPair> masterKeyPairList = setupKeyPairList(keyCount);
         ValidatorKeysUpdatesList testKeysSignaturesList = setupValidatorKeysUpdatesList(
-            signingKeyPairList, masterKeyPairList
+            signingKeyPairList, masterKeyPairList, epochNumber, scId
         );
 
         FieldElement testPrevValidatorsKeysRoot = testKeysSignaturesList.getKeysRootHash();
@@ -335,7 +339,7 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
         List<SchnorrKeyPair> signingKeyPairList = setupKeyPairList(keyCount);
         List<SchnorrKeyPair> masterKeyPairList = setupKeyPairList(keyCount);
         keysSignaturesList = setupValidatorKeysUpdatesList(
-            signingKeyPairList, masterKeyPairList
+            signingKeyPairList, masterKeyPairList, epochNumber, scId
         );
 
         prevValidatorsKeysRoot = keysSignaturesList.getKeysRootHash();

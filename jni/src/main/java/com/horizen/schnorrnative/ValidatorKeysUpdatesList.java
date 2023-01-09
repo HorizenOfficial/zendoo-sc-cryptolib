@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.horizen.librustsidechains.Library;
 import com.horizen.librustsidechains.FieldElement;
+import com.horizen.certnative.WithdrawalCertificate;
 
 public class ValidatorKeysUpdatesList implements AutoCloseable {
     private SchnorrPublicKey[] signingKeys;
@@ -16,6 +17,8 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     private SchnorrSignature[] updatedMasterKeysSkSignatures;
     private SchnorrSignature[] updatedMasterKeysMkSignatures;
     private long maxPks;
+    private int epochId;
+    private FieldElement ledgerId;
 
     static {
         Library.load();
@@ -24,7 +27,9 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     private static native FieldElement nativeKeysRootHash(
         SchnorrPublicKey[] signingKeys,
         SchnorrPublicKey[] masterKeys,
-        long maxPks
+        long maxPks,
+        int epochId,
+        FieldElement ledgerId
     ) throws Exception;
 
     /**
@@ -49,6 +54,8 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     * @param updatedMasterKeysMkSignaturesList - signatures made with old master keys for new master keys,
     *                                            elements can be empty if there was no update
     * @param maxPks - the maximum number of key validators
+    * @param epochId - The epoch number for this validator set
+    * @param ledgerId - The ledger id for this validator set
     */
     public ValidatorKeysUpdatesList(
         List<SchnorrPublicKey> signingKeysList,
@@ -59,7 +66,9 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
         List<SchnorrSignature> updatedSigningKeysMkSignaturesList,
         List<SchnorrSignature> updatedMasterKeysSkSignaturesList,
         List<SchnorrSignature> updatedMasterKeysMkSignaturesList,
-        long maxPks
+        long maxPks,
+        int epochId,
+        FieldElement ledgerId
     ) {
         this.signingKeys = signingKeysList.toArray(new SchnorrPublicKey[0]);
         this.masterKeys = masterKeysList.toArray(new SchnorrPublicKey[0]);
@@ -70,6 +79,8 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
         this.updatedMasterKeysSkSignatures = updatedMasterKeysSkSignaturesList.toArray(new SchnorrSignature[0]);
         this.updatedMasterKeysMkSignatures = updatedMasterKeysMkSignaturesList.toArray(new SchnorrSignature[0]);
         this.maxPks = maxPks;
+        this.epochId = epochId;
+        this.ledgerId = ledgerId;
     }
 
     public SchnorrPublicKey[] getSigningKeys() {
@@ -80,6 +91,14 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
         return masterKeys;
     }
 
+    public int getEpochId() {
+        return epochId;
+    }
+
+    public FieldElement getLedgerId() {
+        return ledgerId;
+    }
+
     /**
     * Utility: computes the validator keys merkle root given the set of signing keys
     * and master keys passed as input to the function.
@@ -87,6 +106,7 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     * @param signingKeys - The signers' public keys.
     * @param masterKeys - The signers' master public keys.
     * @param maxPks - Maximum number of pks
+    * @param withdrawalCertificate - The withdrawal certificate tied to the root hash
     * @return the merkle root given the set of signing keys and master keys passed as input
     *         to the function
     * @throws Exception - if it was not possible to compute the root
@@ -94,10 +114,12 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     public static FieldElement getInputKeysRootHash(
         SchnorrPublicKey[] signingKeys,
         SchnorrPublicKey[] masterKeys,
-        long maxPks
+        long maxPks,
+        int epochId,
+        FieldElement ledgerId
     ) throws Exception {
         return nativeKeysRootHash(
-            signingKeys, masterKeys, maxPks
+            signingKeys, masterKeys, maxPks, epochId, ledgerId
         );
     }
 
@@ -110,7 +132,7 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     */
     public FieldElement getKeysRootHash() throws Exception {
         return nativeKeysRootHash(
-            signingKeys, masterKeys, maxPks
+            signingKeys, masterKeys, maxPks, epochId, ledgerId
         );
     }
 
@@ -131,7 +153,7 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     */
     public FieldElement getUpdatedKeysRootHash() throws Exception {
         return nativeKeysRootHash(
-            updatedSigningKeys, updatedMasterKeys, maxPks
+            updatedSigningKeys, updatedMasterKeys, maxPks, epochId, ledgerId
         );
     }
 
@@ -183,6 +205,14 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
         this.updatedMasterKeys = updatedMasterKeys;
     }
 
+    public void setEpochId(int epochId) {
+        this.epochId = epochId;
+    }
+
+    public void setLedgerId(FieldElement ledgerId) {
+        this.ledgerId = ledgerId;
+    }
+
     @Override
     public void close() throws Exception {
         for (SchnorrPublicKey pk : signingKeys)
@@ -201,5 +231,6 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
             sig.close();
         for (SchnorrSignature sig : updatedMasterKeysMkSignatures)
             sig.close();
+        ledgerId.close();
     }
 }

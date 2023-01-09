@@ -2287,6 +2287,8 @@ ffi_export!(
         _schnorr_signing_keys_list: jobjectArray,
         _schnorr_master_keys_list: jobjectArray,
         _max_pks: jlong,
+        _epoch_id: jint,
+        _ledger_id: JObject,
     ) -> jobject {
         let signing_keys: Vec<_> = JObjectArrayIter::new(&_env, _schnorr_signing_keys_list)
             .map(|s| {
@@ -2309,6 +2311,17 @@ ffi_export!(
             );
         }
 
+        let epoch_id = _epoch_id as u32;
+
+        // Parse ledgerId
+        let ledger_id = {
+            let f = _env
+                .get_field(_ledger_id, "fieldElementPointer", "J")
+                .expect("Should be able to get field fieldElementPointer");
+
+            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
+        };
+
         let max_pks = _max_pks as usize;
 
         let v = ValidatorKeysUpdates::new(
@@ -2321,6 +2334,8 @@ ffi_export!(
             vec![Some(NULL_CONST.null_sig); max_pks],
             vec![Some(NULL_CONST.null_sig); max_pks],
             max_pks,
+            epoch_id,
+            *ledger_id,
         );
         match v.get_curr_validators_keys_root() {
             Err(e) => throw!(
@@ -2437,6 +2452,8 @@ ffi_export!(
             updated_master_keys_sk_signatures,
             updated_master_keys_mk_signatures,
             _max_pks as usize,
+            withdrawal_certificate.epoch_id,
+            withdrawal_certificate.ledger_id,
         );
 
         //create proof
@@ -2712,6 +2729,8 @@ ffi_export!(
             updated_master_keys_sk_signatures,
             updated_master_keys_mk_signatures,
             _max_pks as usize,
+            withdrawal_certificate.epoch_id,
+            withdrawal_certificate.ledger_id,
         );
 
         //create proof
