@@ -255,6 +255,10 @@ mod test {
         g
     }
 
+    // This method is safe to use only to generate fixed curve elements in a deterministic
+    // fashion. It should not be employed as a method to hash a sequence of bytes to a
+    // curve element, as it does not fulfill all the necessary statistical requirements of a
+    // standard-compliant hash function to curve elements
     fn hash_to_curve<F: PrimeField, G: AffineCurve + FromCompressedBits>(
         tag: &[u8],
         personalization: &[u8],
