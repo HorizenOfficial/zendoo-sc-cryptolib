@@ -77,6 +77,9 @@ fn signing_key_rotation_works() {
         &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_signing_keys[0],
+        's' as u8,
+        withdrawal_certificate.epoch_id,
+        withdrawal_certificate.ledger_id,
     );
 
     let mut prev_withdrawal_certificate = create_withdrawal_certificate();
@@ -154,6 +157,9 @@ fn master_key_rotation_works() {
         &mut validator_key_updates.updated_master_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_master_keys[0],
+        'm' as u8,
+        withdrawal_certificate.epoch_id,
+        withdrawal_certificate.ledger_id,
     );
 
     withdrawal_certificate.custom_fields[0] = validator_key_updates
@@ -295,6 +301,8 @@ fn multiple_certs_with_rotations() {
 
         let sig_key_changes = rng.gen::<usize>() % MAX_PKS + 1;
         withdrawal_certificate = create_withdrawal_certificate();
+        validator_key_updates.ledger_id = withdrawal_certificate.ledger_id;
+        validator_key_updates.epoch_id = withdrawal_certificate.epoch_id;
 
         println!("sig_key_changes = {}", sig_key_changes);
 
@@ -308,6 +316,9 @@ fn multiple_certs_with_rotations() {
                 &mut validator_key_updates.updated_signing_keys_mk_signatures[i],
                 Some(&mut updated_signing_keys_sks[i]),
                 &mut validator_key_updates.updated_signing_keys[i],
+                's' as u8,
+                withdrawal_certificate.epoch_id,
+                withdrawal_certificate.ledger_id,
             );
 
             rotate_key(
@@ -319,6 +330,9 @@ fn multiple_certs_with_rotations() {
                 &mut validator_key_updates.updated_master_keys_mk_signatures[i],
                 Some(&mut updated_master_keys_sks[i]),
                 &mut validator_key_updates.updated_master_keys[i],
+                'm' as u8,
+                withdrawal_certificate.epoch_id,
+                withdrawal_certificate.ledger_id,
             );
         }
 
@@ -369,6 +383,9 @@ fn all_keys_rotated() {
             &mut validator_key_updates.updated_signing_keys_mk_signatures[i],
             Some(&mut updated_signing_sks[i]),
             &mut validator_key_updates.updated_signing_keys[i],
+            's' as u8,
+            withdrawal_certificate.epoch_id,
+            withdrawal_certificate.ledger_id,
         );
         rotate_key(
             &signing_keys_sks[i],
@@ -379,6 +396,9 @@ fn all_keys_rotated() {
             &mut validator_key_updates.updated_master_keys_mk_signatures[i],
             Some(&mut updated_master_sks[i]),
             &mut validator_key_updates.updated_master_keys[i],
+            'm' as u8,
+            withdrawal_certificate.epoch_id,
+            withdrawal_certificate.ledger_id,
         );
     }
 
@@ -446,6 +466,9 @@ fn try_to_use_outdated_keys() {
         &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_signing_keys[0],
+        's' as u8,
+        withdrawal_certificate.epoch_id,
+        withdrawal_certificate.ledger_id,
     );
 
     withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root().unwrap();

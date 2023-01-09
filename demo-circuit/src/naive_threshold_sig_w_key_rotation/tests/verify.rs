@@ -215,7 +215,7 @@ fn malicious_key_rotations() {
 
             let (pk, _sk) = SchnorrSigScheme::keygen(&mut thread_rng());
             let (master_pk, master_sk) = SchnorrSigScheme::keygen(&mut thread_rng());
-            let updated_msg = updated_key_msg(pk);
+            let updated_msg = updated_key_msg(pk, 's' as u8, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id);
             let key_to_be_changed = rng.gen_range(0..MAX_PKS);
             let failing_constraint = match test_type {
                 &MaliciousKeyRotations::SigningKey => {
@@ -317,6 +317,9 @@ fn malicious_key_rotations() {
                 &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
                 None,
                 &mut validator_key_updates.updated_signing_keys[0],
+                's' as u8,
+                withdrawal_certificate.epoch_id,
+                withdrawal_certificate.ledger_id,
             ),
             &MaliciousKeyRotations::MasterKey => rotate_key(
                 &signing_keys_sks[0],
@@ -327,6 +330,9 @@ fn malicious_key_rotations() {
                 &mut validator_key_updates.updated_master_keys_mk_signatures[0],
                 None,
                 &mut validator_key_updates.updated_master_keys[0],
+                'm' as u8,
+                withdrawal_certificate.epoch_id,
+                withdrawal_certificate.ledger_id,
             ),
         }
 

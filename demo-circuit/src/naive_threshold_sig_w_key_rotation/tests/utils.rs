@@ -1,3 +1,4 @@
+use algebra::Field;
 use super::*;
 use cctp_primitives::utils::get_cert_data_hash_from_bt_root_and_custom_fields_hash;
 
@@ -85,12 +86,25 @@ pub(crate) fn cert_to_msg(withdrawal_certificate: &WithdrawalCertificateData) ->
     .unwrap()
 }
 
-pub(crate) fn updated_key_msg(pk: FieldBasedSchnorrPk<G2Projective>) -> FieldElement {
+pub(crate) fn updated_key_msg(
+    pk: FieldBasedSchnorrPk<G2Projective>,
+    domain: u8,
+    epoch_id: u32,
+    ledger_id: FieldElement,
+) -> FieldElement {
     let spk_fe = pk.0.to_field_elements().unwrap();
-    let mut h = FieldHash::init_constant_length(spk_fe.len(), None);
+    let mut h = FieldHash::init_constant_length(spk_fe.len() + 2, None);
     spk_fe.into_iter().for_each(|fe| {
         h.update(fe);
     });
+    let mut bytes = [0u8; 6];
+    bytes[5] = domain;
+    bytes[4] = crate::naive_threshold_sig_w_key_rotation::data_structures::VALIDATOR_HASH_SALT;
+    bytes[..4].copy_from_slice(&epoch_id.to_le_bytes());
+    // Safe to unwrap since it won't overflow
+    let domain_elem = FieldElement::from_random_bytes(&bytes).unwrap();
+    h.update(domain_elem);
+    h.update(ledger_id);
     h.finalize().unwrap()
 }
 
@@ -103,10 +117,13 @@ pub(crate) fn rotate_key(
     updated_mk_signatures: &mut FieldBasedSchnorrSignature<FieldElement, G2Projective>,
     updated_signing_sks: Option<&mut SchnorrSk>,
     updated_signing_pks: &mut FieldBasedSchnorrPk<G2Projective>,
+    domain: u8,
+    epoch_id: u32,
+    ledger_id: FieldElement,
 ) {
     let mut rng = thread_rng();
     let (updated_pk, updated_sk) = SchnorrSigScheme::keygen(&mut rng);
-    let updated_msg = updated_key_msg(updated_pk);
+    let updated_msg = updated_key_msg(updated_pk, domain, epoch_id, ledger_id);
     *updated_sk_signatures =
         SchnorrSigScheme::sign(&mut rng, signing_key_pk, signing_key_sk, updated_msg).unwrap();
     *updated_mk_signatures =
