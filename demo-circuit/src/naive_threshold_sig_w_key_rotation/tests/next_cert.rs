@@ -87,6 +87,8 @@ fn signing_key_rotation_works() {
         MAX_PKS,
         &validator_key_updates.updated_signing_keys,
         &validator_key_updates.updated_master_keys,
+        withdrawal_certificate.epoch_id,
+        withdrawal_certificate.ledger_id
     )
     .unwrap();
 
@@ -166,6 +168,8 @@ fn master_key_rotation_works() {
         MAX_PKS,
         &validator_key_updates.updated_signing_keys,
         &validator_key_updates.updated_master_keys,
+        withdrawal_certificate.epoch_id,
+        withdrawal_certificate.ledger_id,
     )
     .unwrap();
 

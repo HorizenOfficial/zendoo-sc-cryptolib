@@ -9,7 +9,7 @@ use primitives::{
 
 use crate::{common::NULL_CONST, Error};
 
-const VALIDATOR_HASH_SALT: u8 = 0u8;
+pub const VALIDATOR_HASH_SALT: u8 = 0u8;
 
 //TODO: It would be nice using a constant generic here
 #[derive(Clone)]
