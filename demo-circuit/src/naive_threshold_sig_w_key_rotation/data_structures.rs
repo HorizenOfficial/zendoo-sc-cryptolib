@@ -169,13 +169,13 @@ impl ValidatorKeysUpdates {
             h.finalize()
         };
 
-        let mut bytes = [0u8; 32];
-        bytes[0] = 's' as u8;
-        bytes[1] = VALIDATOR_HASH_SALT;
-        bytes[2..6].copy_from_slice(&epoch_id.to_be_bytes());
+        let mut bytes = [0u8; 6];
+        bytes[5] = 's' as u8;
+        bytes[4] = VALIDATOR_HASH_SALT;
+        bytes[..4].copy_from_slice(&epoch_id.to_le_bytes());
         // Safe to unwrap since it won't overflow
         let sk_domain = FieldElement::from_random_bytes(&bytes).unwrap();
-        bytes[0] = 'm' as u8;
+        bytes[5] = 'm' as u8;
         let mk_domain = FieldElement::from_random_bytes(&bytes).unwrap();
 
         for i in 0..max_pks.next_power_of_two() {

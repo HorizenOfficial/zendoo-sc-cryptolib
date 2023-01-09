@@ -182,6 +182,9 @@ pub(crate) fn debug_naive_threshold_circuit(
         assert!(failing_constraint.is_some());
         assert_eq!(failing_constraint.unwrap(), expected_failing_constraint.unwrap());
     } else {
+        if failing_constraint.is_some() {
+            println!("{:?}", failing_constraint);
+        }
         assert!(failing_constraint.is_none());
     }
 
