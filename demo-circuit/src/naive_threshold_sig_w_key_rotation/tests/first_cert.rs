@@ -17,10 +17,11 @@ fn works() {
             _,
             _,
             genesis_validator_keys_tree_root,
+            _,
             withdrawal_certificate,
             wcert_signatures,
             validator_key_updates,
-        ) = setup_certificate_data(MAX_PKS, i);
+        ) = setup_certificate_data(MAX_PKS, i, true);
 
         let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
             validator_key_updates,
@@ -64,10 +65,11 @@ fn with_prev_cert_fails() {
         _,
         _,
         genesis_validator_keys_tree_root,
+        _,
         withdrawal_certificate,
         wcert_signatures,
         validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, num_sigs);
+    ) = setup_certificate_data(MAX_PKS, num_sigs, true);
     let prev_withdrawal_certificate = create_withdrawal_certificate();
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
@@ -98,8 +100,8 @@ fn wrong_genesis_constant() {
     let ck_g1 = init_g1_committer_key();
     let setup_circuit = NaiveThresholdSignatureWKeyRotation::get_instance_for_setup(MAX_PKS, 1);
     let params = CoboundaryMarlin::index(&ck_g1, setup_circuit).unwrap();
-    let (_, _, genesis_validator_keys_tree_root, withdrawal_certificate, wcert_signatures, validator_key_updates) =
-        setup_certificate_data(MAX_PKS, num_sigs);
+    let (_, _, genesis_validator_keys_tree_root, _, withdrawal_certificate, wcert_signatures, validator_key_updates) =
+        setup_certificate_data(MAX_PKS, num_sigs, true);
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
         validator_key_updates,
@@ -130,10 +132,11 @@ fn wrong_cert_signed() {
         _,
         _,
         genesis_validator_keys_tree_root,
+        _,
         _withdrawal_certificate,
         wcert_signatures,
         validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, NUM_SIGS);
+    ) = setup_certificate_data(MAX_PKS, NUM_SIGS, true);
 
     let wrong_withdrawal_cert = create_withdrawal_certificate();
 
@@ -164,10 +167,11 @@ fn signing_key_rotation_works() {
         signing_keys_sks,
         master_keys_sks,
         genesis_validator_keys_tree_root,
+        _,
         mut withdrawal_certificate,
         wcert_signatures,
         mut validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, NUM_SIGS);
+    ) = setup_certificate_data(MAX_PKS, NUM_SIGS, true);
 
     rotate_key(
         &signing_keys_sks[0],
@@ -251,10 +255,11 @@ fn master_key_rotation_works() {
         signing_keys_sks,
         master_keys_sks,
         genesis_validator_keys_tree_root,
+        _,
         mut withdrawal_certificate,
         _wcert_signatures,
         mut validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, NUM_SIGS);
+    ) = setup_certificate_data(MAX_PKS, NUM_SIGS, true);
 
     rotate_key(
         &signing_keys_sks[0],
@@ -320,10 +325,11 @@ fn below_threshold() {
         _,
         _,
         genesis_validator_keys_tree_root,
+        _,
         withdrawal_certificate,
         wcert_signatures,
         validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, NUM_SIGS - 1);
+    ) = setup_certificate_data(MAX_PKS, NUM_SIGS - 1, true);
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
         validator_key_updates,
@@ -348,10 +354,11 @@ fn below_threshold_faulty_signature() {
         _,
         _,
         genesis_validator_keys_tree_root,
+        _,
         withdrawal_certificate,
         wcert_signatures,
         validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, NUM_SIGS);
+    ) = setup_certificate_data(MAX_PKS, NUM_SIGS, true);
 
     //wcert_signatures[0] = Some(SchnorrSig::new(thread_rng().gen(), thread_rng().gen()));
 

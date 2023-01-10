@@ -10,6 +10,7 @@ use primitives::{
 use crate::{common::NULL_CONST, Error};
 
 pub const VALIDATOR_HASH_SALT: u8 = 0u8;
+pub const INITIAL_EPOCH_ID: u32 = 0;
 
 //TODO: It would be nice using a constant generic here
 #[derive(Clone)]
@@ -53,6 +54,8 @@ pub struct ValidatorKeysUpdates {
 
     pub(crate) epoch_id: u32,
 
+    pub(crate) previous_epoch_id: u32,
+
     pub(crate) ledger_id: FieldElement,
 }
 
@@ -68,6 +71,7 @@ impl ValidatorKeysUpdates {
             updated_master_keys_sk_signatures: vec![NULL_CONST.null_sig; max_pks],
             updated_master_keys_mk_signatures: vec![NULL_CONST.null_sig; max_pks],
             max_pks,
+            previous_epoch_id: INITIAL_EPOCH_ID,
             epoch_id,
             ledger_id,
         }
@@ -91,6 +95,7 @@ impl ValidatorKeysUpdates {
             Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>,
         >,
         max_pks: usize,
+        previous_epoch_id: Option<u32>,
         epoch_id: u32,
         ledger_id: FieldElement,
     ) -> Self {
@@ -141,6 +146,7 @@ impl ValidatorKeysUpdates {
             updated_master_keys_sk_signatures: updated_master_keys_sk_signatures_adjusted,
             updated_master_keys_mk_signatures: updated_master_keys_mk_signatures_adjusted,
             max_pks,
+            previous_epoch_id: previous_epoch_id.unwrap_or(INITIAL_EPOCH_ID),
             epoch_id,
             ledger_id,
         }
@@ -205,7 +211,7 @@ impl ValidatorKeysUpdates {
             self.max_pks,
             self.signing_keys.as_slice(),
             self.master_keys.as_slice(),
-            self.epoch_id,
+            self.previous_epoch_id,
             self.ledger_id,
         )
     }

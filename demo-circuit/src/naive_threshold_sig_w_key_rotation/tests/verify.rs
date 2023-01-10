@@ -1,3 +1,4 @@
+use crate::naive_threshold_sig_w_key_rotation::data_structures::INITIAL_EPOCH_ID;
 use super::super::*;
 use super::*;
 
@@ -14,13 +15,13 @@ fn verify_malicious_proof() {
         _signing_keys_sks,
         _master_keys_sks,
         genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
         withdrawal_certificate,
         wcert_signatures,
         validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, THRESHOLD - 1);
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD - 1, false);
 
-    let mut prev_withdrawal_certificate = create_withdrawal_certificate();
-    prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
+    let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
     prev_withdrawal_certificate.quality = (THRESHOLD - 1) as u64;
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
@@ -72,10 +73,11 @@ fn malicious_current_keys() {
         mut signing_keys_sks,
         _,
         genesis_validator_keys_tree_root,
+        _,
         withdrawal_certificate,
         mut wcert_signatures,
         mut validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, THRESHOLD);
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, true);
     let mut rng = thread_rng();
     let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
     let correct_signing_keys = signing_keys_sks.clone();
@@ -136,6 +138,7 @@ fn malicious_current_keys() {
             };
 
             let mut prev_withdrawal_certificate = create_withdrawal_certificate();
+            prev_withdrawal_certificate.epoch_id = INITIAL_EPOCH_ID;
             prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
 
             let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
@@ -192,10 +195,11 @@ fn malicious_key_rotations() {
         signing_keys_sks,
         _master_keys_sks,
         genesis_validator_keys_tree_root,
+        _,
         mut withdrawal_certificate,
         mut wcert_signatures,
         mut validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, THRESHOLD);
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, false);
 
     let mut rng = thread_rng();
     let original_validator_key_updates = validator_key_updates.clone();
@@ -215,12 +219,12 @@ fn malicious_key_rotations() {
 
             let (pk, _sk) = SchnorrSigScheme::keygen(&mut thread_rng());
             let (master_pk, master_sk) = SchnorrSigScheme::keygen(&mut thread_rng());
-            let updated_msg = updated_key_msg(pk, 's' as u8, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id);
             let key_to_be_changed = rng.gen_range(0..MAX_PKS);
             let failing_constraint = match test_type {
                 &MaliciousKeyRotations::SigningKey => {
                     validator_key_updates.updated_signing_keys[key_to_be_changed] = pk;
                     if change_signature {
+                        let updated_msg = updated_key_msg(pk, 's' as u8, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id);
                         validator_key_updates.updated_signing_keys_sk_signatures[key_to_be_changed] =
                             SchnorrSigScheme::sign(&mut rng, &validator_key_updates.signing_keys[key_to_be_changed], &signing_keys_sks[key_to_be_changed], updated_msg).unwrap();
                         validator_key_updates.updated_signing_keys_mk_signatures[key_to_be_changed] =
@@ -238,6 +242,7 @@ fn malicious_key_rotations() {
                 &MaliciousKeyRotations::MasterKey => {
                     validator_key_updates.updated_master_keys[key_to_be_changed] = pk;
                     if change_signature {
+                        let updated_msg = updated_key_msg(pk, 'm' as u8, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id);
                         validator_key_updates.updated_master_keys_sk_signatures[key_to_be_changed] =
                             SchnorrSigScheme::sign(&mut rng, &validator_key_updates.signing_keys[key_to_be_changed], &signing_keys_sks[key_to_be_changed], updated_msg).unwrap();
                         validator_key_updates.updated_master_keys_mk_signatures[key_to_be_changed] =
@@ -270,6 +275,7 @@ fn malicious_key_rotations() {
             }
 
             let mut prev_withdrawal_certificate = create_withdrawal_certificate();
+            prev_withdrawal_certificate.epoch_id = INITIAL_EPOCH_ID;
             prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
 
             let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
@@ -337,6 +343,7 @@ fn malicious_key_rotations() {
         }
 
         let mut prev_withdrawal_certificate = create_withdrawal_certificate();
+        prev_withdrawal_certificate.epoch_id = INITIAL_EPOCH_ID;
         prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
 
         let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
@@ -482,13 +489,13 @@ fn multiple_custom_fields() {
         signing_keys_sks,
         _master_keys_sks,
         genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
         mut withdrawal_certificate,
         _wcert_signatures,
         validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, THRESHOLD);
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, false);
 
-    let mut prev_withdrawal_certificate = create_withdrawal_certificate();
-    prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
+    let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
 
     let mut rng = thread_rng();
     while withdrawal_certificate.custom_fields.len() < CUSTOM_FIELDS {
@@ -528,13 +535,13 @@ fn bad_custom_fields() {
         signing_keys_sks,
         _master_keys_sks,
         genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
         mut withdrawal_certificate,
         _wcert_signatures,
         validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, THRESHOLD);
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, false);
 
-    let mut prev_withdrawal_certificate = create_withdrawal_certificate();
-    prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
+    let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
 
     let mut rng = thread_rng();
     while withdrawal_certificate.custom_fields.len() < CUSTOM_FIELDS {

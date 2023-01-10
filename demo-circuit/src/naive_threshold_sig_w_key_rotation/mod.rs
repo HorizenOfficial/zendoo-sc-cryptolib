@@ -16,6 +16,7 @@ use cctp_primitives::{
     utils::{commitment_tree::hash_vec, get_cert_data_hash_from_bt_root_and_custom_fields_hash},
 };
 use data_structures::ValidatorKeysUpdates;
+use crate::naive_threshold_sig_w_key_rotation::data_structures::INITIAL_EPOCH_ID;
 
 pub mod constraints;
 pub mod data_structures;
@@ -206,9 +207,12 @@ impl NaiveThresholdSignatureWKeyRotation {
 
         let prev_withdrawal_certificate =
             prev_withdrawal_certificate.unwrap_or_else(|| {
-                WithdrawalCertificateData::get_default(
+                let mut certificate = WithdrawalCertificateData::get_default(
                     withdrawal_certificate.custom_fields.len() as u32
-                )
+                );
+                certificate.ledger_id = withdrawal_certificate.ledger_id;
+                certificate.epoch_id = INITIAL_EPOCH_ID;
+                certificate
             });
 
         Ok(Self {

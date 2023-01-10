@@ -2334,6 +2334,7 @@ ffi_export!(
             vec![Some(NULL_CONST.null_sig); max_pks],
             vec![Some(NULL_CONST.null_sig); max_pks],
             max_pks,
+            Some(epoch_id), // ToDo: see if needed to provide previous_epoch_id if available (depends on Java side API)
             epoch_id,
             *ledger_id,
         );
@@ -2452,6 +2453,7 @@ ffi_export!(
             updated_master_keys_sk_signatures,
             updated_master_keys_mk_signatures,
             _max_pks as usize,
+            prev_withdrawal_certificate.clone().map(|cert| cert.epoch_id),
             withdrawal_certificate.epoch_id,
             withdrawal_certificate.ledger_id,
         );
@@ -2729,6 +2731,7 @@ ffi_export!(
             updated_master_keys_sk_signatures,
             updated_master_keys_mk_signatures,
             _max_pks as usize,
+            prev_withdrawal_certificate.clone().map(|cert| cert.epoch_id),
             withdrawal_certificate.epoch_id,
             withdrawal_certificate.ledger_id,
         );

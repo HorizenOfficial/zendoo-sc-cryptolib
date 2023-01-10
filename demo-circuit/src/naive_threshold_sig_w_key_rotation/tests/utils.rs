@@ -1,11 +1,14 @@
 use algebra::Field;
 use super::*;
 use cctp_primitives::utils::get_cert_data_hash_from_bt_root_and_custom_fields_hash;
+use crate::naive_threshold_sig_w_key_rotation::data_structures::INITIAL_EPOCH_ID;
+
+pub(crate) const LEDGER_ID: u64 = 42;
 
 pub(crate) fn create_withdrawal_certificate() -> WithdrawalCertificateData {
     let mut rng = thread_rng();
     WithdrawalCertificateData {
-        ledger_id: rng.gen(),
+        ledger_id: FieldElement::from(LEDGER_ID),
         epoch_id: rng.gen(),
         bt_root: rng.gen(),
         mcb_sc_txs_com: rng.gen(),
@@ -137,10 +140,12 @@ pub(crate) fn rotate_key(
 pub(crate) fn setup_certificate_data(
     max_pks: usize,
     num_sigs: usize,
+    is_first_cert: bool,
 ) -> (
     Vec<SchnorrSk>,
     Vec<SchnorrSk>,
     FieldElement,
+    Option<WithdrawalCertificateData>,
     WithdrawalCertificateData,
     Vec<Option<SchnorrSig>>,
     ValidatorKeysUpdates,
@@ -149,19 +154,18 @@ pub(crate) fn setup_certificate_data(
     let (signing_keys_pks, signing_keys_sks) = generate_keys(max_pks);
     let (master_keys_pks, master_keys_sks) = generate_keys(max_pks);
     let genesis_validator_keys_tree_root =
-        ValidatorKeysUpdates::get_validators_key_root(max_pks, &signing_keys_pks, &master_keys_pks, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id)
+        ValidatorKeysUpdates::get_validators_key_root(max_pks, &signing_keys_pks, &master_keys_pks, INITIAL_EPOCH_ID, withdrawal_certificate.ledger_id)
             .unwrap();
 
-    withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
-    withdrawal_certificate.quality = num_sigs as u64;
-
-    let message = cert_to_msg(&withdrawal_certificate);
-    let wcert_signatures = create_signatures(
-        max_pks,
-        &signing_keys_sks[..num_sigs],
-        &signing_keys_pks[..num_sigs],
-        message,
-    );
+    let prev_withdrawal_certificate = if is_first_cert {
+        None
+    } else {
+        let mut certificate = create_withdrawal_certificate();
+        //certificate.epoch_id = INITIAL_EPOCH_ID;
+        certificate.custom_fields[0] = ValidatorKeysUpdates::get_validators_key_root(max_pks, &signing_keys_pks, &master_keys_pks, certificate.epoch_id, certificate.ledger_id)
+            .unwrap();//genesis_validator_keys_tree_root;
+        Some(certificate)
+    };
 
     let validator_key_updates = ValidatorKeysUpdates::new(
         signing_keys_pks.clone(),
@@ -173,14 +177,27 @@ pub(crate) fn setup_certificate_data(
         vec![Some(NULL_CONST.null_sig); max_pks],
         vec![Some(NULL_CONST.null_sig); max_pks],
         max_pks,
+        prev_withdrawal_certificate.clone().map(|cert| cert.epoch_id),
         withdrawal_certificate.epoch_id,
         withdrawal_certificate.ledger_id,
+    );
+
+    withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root().unwrap();
+    withdrawal_certificate.quality = num_sigs as u64;
+
+    let message = cert_to_msg(&withdrawal_certificate);
+    let wcert_signatures = create_signatures(
+        max_pks,
+        &signing_keys_sks[..num_sigs],
+        &signing_keys_pks[..num_sigs],
+        message,
     );
 
     (
         signing_keys_sks,
         master_keys_sks,
         genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
         withdrawal_certificate,
         wcert_signatures,
         validator_key_updates,
