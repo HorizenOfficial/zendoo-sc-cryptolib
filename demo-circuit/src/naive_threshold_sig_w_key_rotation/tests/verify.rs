@@ -224,7 +224,7 @@ fn malicious_key_rotations() {
                 &MaliciousKeyRotations::SigningKey => {
                     validator_key_updates.updated_signing_keys[key_to_be_changed] = pk;
                     if change_signature {
-                        let updated_msg = updated_key_msg(pk, 's' as u8, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id);
+                        let updated_msg = ValidatorKeysUpdates::get_signing_key_hash(&pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap();
                         validator_key_updates.updated_signing_keys_sk_signatures[key_to_be_changed] =
                             SchnorrSigScheme::sign(&mut rng, &validator_key_updates.signing_keys[key_to_be_changed], &signing_keys_sks[key_to_be_changed], updated_msg).unwrap();
                         validator_key_updates.updated_signing_keys_mk_signatures[key_to_be_changed] =
@@ -242,7 +242,7 @@ fn malicious_key_rotations() {
                 &MaliciousKeyRotations::MasterKey => {
                     validator_key_updates.updated_master_keys[key_to_be_changed] = pk;
                     if change_signature {
-                        let updated_msg = updated_key_msg(pk, 'm' as u8, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id);
+                        let updated_msg = ValidatorKeysUpdates::get_master_key_hash(&pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap();
                         validator_key_updates.updated_master_keys_sk_signatures[key_to_be_changed] =
                             SchnorrSigScheme::sign(&mut rng, &validator_key_updates.signing_keys[key_to_be_changed], &signing_keys_sks[key_to_be_changed], updated_msg).unwrap();
                         validator_key_updates.updated_master_keys_mk_signatures[key_to_be_changed] =
@@ -323,9 +323,7 @@ fn malicious_key_rotations() {
                 &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
                 None,
                 &mut validator_key_updates.updated_signing_keys[0],
-                's' as u8,
-                withdrawal_certificate.epoch_id,
-                withdrawal_certificate.ledger_id,
+                |pk| ValidatorKeysUpdates::get_signing_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap()
             ),
             &MaliciousKeyRotations::MasterKey => rotate_key(
                 &signing_keys_sks[0],
@@ -336,9 +334,7 @@ fn malicious_key_rotations() {
                 &mut validator_key_updates.updated_master_keys_mk_signatures[0],
                 None,
                 &mut validator_key_updates.updated_master_keys[0],
-                'm' as u8,
-                withdrawal_certificate.epoch_id,
-                withdrawal_certificate.ledger_id,
+                |pk| ValidatorKeysUpdates::get_master_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap()
             ),
         }
 

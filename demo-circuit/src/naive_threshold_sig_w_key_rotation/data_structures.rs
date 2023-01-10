@@ -152,6 +152,39 @@ impl ValidatorKeysUpdates {
         }
     }
 
+    pub(crate) fn get_key_hash(
+        pk: &FieldBasedSchnorrPk<G2Projective>,
+        domain: FieldElement,
+        ledger_id: FieldElement,
+    ) -> Result<FieldElement, Error> {
+        let spk_fe = pk.0.to_field_elements().unwrap();
+        let mut h = FieldHash::init_constant_length(spk_fe.len() + 2, None);
+        spk_fe.into_iter().for_each(|fe| {
+            h.update(fe);
+        });
+        h.update(domain);
+        h.update(ledger_id);
+        h.finalize()
+    }
+
+    pub(crate) fn get_key_domain_fe(
+        domain: u8,
+        epoch_id: u32,
+    ) -> FieldElement {
+        let mut bytes = [0u8, 0u8, 0u8, 0u8, VALIDATOR_HASH_SALT, domain];
+        bytes[..4].copy_from_slice(&epoch_id.to_le_bytes());
+        // Safe to unwrap since it won't overflow
+        FieldElement::from_random_bytes(&bytes).unwrap()
+    }
+
+    pub fn get_signing_key_hash(pk: &FieldBasedSchnorrPk<G2Projective>, epoch_id: u32, ledger_id: FieldElement) -> Result<FieldElement, Error> {
+        Self::get_key_hash(pk, Self::get_key_domain_fe('s' as u8, epoch_id), ledger_id)
+    }
+
+    pub fn get_master_key_hash(pk: &FieldBasedSchnorrPk<G2Projective>, epoch_id: u32, ledger_id: FieldElement) -> Result<FieldElement, Error> {
+        Self::get_key_hash(pk, Self::get_key_domain_fe('m' as u8, epoch_id), ledger_id)
+    }
+
     pub(crate) fn get_validators_key_root(
         max_pks: usize,
         sig_keys: &[FieldBasedSchnorrPk<G2Projective>],
@@ -163,32 +196,14 @@ impl ValidatorKeysUpdates {
         let null_leaf: FieldElement = GingerMHTParams::ZERO_NODE_CST.unwrap().nodes[0];
         let mut tree = GingerMHT::init(height, 1 << height)?;
 
-        let get_key_hash = |pk: &FieldBasedSchnorrPk<G2Projective>, domain: FieldElement| -> Result<FieldElement, Error> {
-            let pk_fe = pk.0.to_field_elements()?;
-
-            let mut h = FieldHash::init_constant_length(pk_fe.len() + 2, None);
-            pk_fe.into_iter().for_each(|fe| {
-                h.update(fe);
-            });
-            h.update(domain);
-            h.update(ledger_id);
-            h.finalize()
-        };
-
-        let mut bytes = [0u8; 6];
-        bytes[5] = 's' as u8;
-        bytes[4] = VALIDATOR_HASH_SALT;
-        bytes[..4].copy_from_slice(&epoch_id.to_le_bytes());
-        // Safe to unwrap since it won't overflow
-        let sk_domain = FieldElement::from_random_bytes(&bytes).unwrap();
-        bytes[5] = 'm' as u8;
-        let mk_domain = FieldElement::from_random_bytes(&bytes).unwrap();
+        let sk_domain = Self::get_key_domain_fe('s' as u8, epoch_id);
+        let mk_domain = Self::get_key_domain_fe('m' as u8, epoch_id);
 
         for i in 0..max_pks.next_power_of_two() {
             if i < sig_keys.len() {
                 // Compute curr pks hash and append them to curr tree
-                let signing_key_hash = get_key_hash(&sig_keys[i], sk_domain)?;
-                let master_key_hash = get_key_hash(&master_keys[i], mk_domain)?;
+                let signing_key_hash = Self::get_key_hash(&sig_keys[i], sk_domain, ledger_id)?;
+                let master_key_hash = Self::get_key_hash(&master_keys[i], mk_domain, ledger_id)?;
 
                 tree.append(signing_key_hash)?;
                 tree.append(master_key_hash)?;
