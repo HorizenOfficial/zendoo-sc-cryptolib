@@ -164,15 +164,6 @@ fn master_key_rotation_works() {
     let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
     prev_withdrawal_certificate.quality = ITER as u64;
 
-    withdrawal_certificate.custom_fields[0] = ValidatorKeysUpdates::get_validators_key_root(
-        MAX_PKS,
-        &validator_key_updates.updated_signing_keys,
-        &validator_key_updates.updated_master_keys,
-        withdrawal_certificate.epoch_id,
-        withdrawal_certificate.ledger_id,
-    )
-    .unwrap();
-
     let msg_to_sign = cert_to_msg(&withdrawal_certificate);
     let wcert_signatures = create_signatures(
         MAX_PKS,

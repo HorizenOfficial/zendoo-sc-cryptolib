@@ -375,110 +375,6 @@ fn malicious_key_rotations() {
     }
 }
 
-/*#[serial]
-#[test]
-fn malicious_master_key_rotation() {
-    const THRESHOLD: usize = 4;
-
-    let (
-        signing_keys_sks,
-        _master_keys_sks,
-        genesis_validator_keys_tree_root,
-        withdrawal_certificate,
-        _wcert_signatures,
-        mut validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, THRESHOLD);
-
-    let mut rng = thread_rng();
-    let original_validator_key_updates = validator_key_updates.clone();
-    // Change one signer but use malicious master key
-    let (pk, _sk) = SchnorrSigScheme::keygen(&mut thread_rng());
-    let (master_pk, master_sk) = SchnorrSigScheme::keygen(&mut thread_rng());
-    let updated_msg = updated_key_msg(pk);
-    validator_key_updates.updated_signing_keys[0] = pk;
-    validator_key_updates.updated_signing_keys_sk_signatures[0] =
-        SchnorrSigScheme::sign(&mut rng, &validator_key_updates.signing_keys[0], &signing_keys_sks[0], updated_msg).unwrap();
-    validator_key_updates.updated_signing_keys_mk_signatures[0] =
-        SchnorrSigScheme::sign(&mut rng, &master_pk, &master_sk, updated_msg).unwrap();
-
-    let mut prev_withdrawal_certificate = create_withdrawal_certificate();
-    prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
-    prev_withdrawal_certificate.quality = THRESHOLD as u64;
-
-    let msg_to_sign = cert_to_msg(&withdrawal_certificate);
-
-    let wcert_signatures = create_signatures(
-        MAX_PKS,
-        &signing_keys_sks[..THRESHOLD],
-        &validator_key_updates.signing_keys[..THRESHOLD],
-        msg_to_sign,
-    );
-
-    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
-        wcert_signatures.clone(),
-        withdrawal_certificate.clone(),
-        Some(prev_withdrawal_certificate.clone()),
-        THRESHOLD as u64,
-        genesis_validator_keys_tree_root,
-    );
-    assert!(circuit_res.is_ok());
-    let circuit = circuit_res.unwrap();
-
-    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated signing key should be signed old master key 0/conditional verify signature/conditional_equals"));
-
-    // Now try without previous withdrawal certificate
-    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
-        wcert_signatures.clone(),
-        withdrawal_certificate.clone(),
-        None,
-        THRESHOLD as u64,
-        genesis_validator_keys_tree_root,
-    );
-    assert!(circuit_res.is_ok());
-    let circuit = circuit_res.unwrap();
-
-    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated signing key should be signed old master key 0/conditional verify signature/conditional_equals"));
-
-    validator_key_updates = original_validator_key_updates.clone();
-
-    let updated_msg = updated_key_msg(master_pk);
-    validator_key_updates.updated_master_keys[0] = master_pk;
-    validator_key_updates.updated_master_keys_sk_signatures[0] =
-        SchnorrSigScheme::sign(&mut rng, &validator_key_updates.signing_keys[0], &signing_keys_sks[0], updated_msg).unwrap();
-    validator_key_updates.updated_master_keys_mk_signatures[0] =
-        SchnorrSigScheme::sign(&mut rng, &master_pk, &master_sk, updated_msg).unwrap();
-
-    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
-        wcert_signatures.clone(),
-        withdrawal_certificate.clone(),
-        Some(prev_withdrawal_certificate.clone()),
-        THRESHOLD as u64,
-        genesis_validator_keys_tree_root,
-    );
-    assert!(circuit_res.is_ok());
-    let circuit = circuit_res.unwrap();
-
-    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated master key should be signed old master key 0/conditional verify signature/conditional_equals"));
-
-    // Now try without previous withdrawal certificate
-    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
-        wcert_signatures,
-        withdrawal_certificate.clone(),
-        None,
-        THRESHOLD as u64,
-        genesis_validator_keys_tree_root,
-    );
-    assert!(circuit_res.is_ok());
-    let circuit = circuit_res.unwrap();
-
-    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated master key should be signed old master key 0/conditional verify signature/conditional_equals"));
-}*/
-
-
 #[serial]
 #[test]
 fn multiple_custom_fields() {
@@ -570,4 +466,291 @@ fn bad_custom_fields() {
     let circuit = circuit_res.unwrap();
 
     debug_naive_threshold_circuit(&circuit, true, Some("enforce new root equals the one in curr cert/conditional_equals"));
+}
+
+#[serial]
+#[test]
+fn test_replay_attack() {
+    const THRESHOLD: usize = 4;
+    let (
+        signing_keys_sks,
+        master_keys_sks,
+        genesis_validator_keys_tree_root,
+        _,
+        mut withdrawal_certificate,
+        _wcert_signatures,
+        mut validator_key_updates,
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, true);
+
+    let mut updated_signing_key_sk = signing_keys_sks[0];
+    rotate_key(
+        &signing_keys_sks[0],
+        &validator_key_updates.signing_keys[0],
+        &master_keys_sks[0],
+        &validator_key_updates.master_keys[0],
+        &mut validator_key_updates.updated_signing_keys_sk_signatures[0],
+        &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
+        Some(&mut updated_signing_key_sk),
+        &mut validator_key_updates.updated_signing_keys[0],
+        's' as u8,
+        withdrawal_certificate.epoch_id,
+        withdrawal_certificate.ledger_id,
+    );
+
+    withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root()
+        .unwrap();
+
+    let msg_to_sign = cert_to_msg(&withdrawal_certificate);
+    let wcert_signatures = create_signatures(
+        MAX_PKS,
+        &signing_keys_sks,
+        &validator_key_updates.signing_keys,
+        msg_to_sign,
+    );
+
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates.clone(),
+        wcert_signatures,
+        withdrawal_certificate.clone(),
+        None,
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+
+    debug_naive_threshold_circuit(&circuit, false, None);
+
+    let old_signing_key = validator_key_updates.signing_keys[0];
+    let old_update_signature_with_sk = validator_key_updates.updated_signing_keys_sk_signatures[0];
+    let old_update_signature_with_mk = validator_key_updates.updated_signing_keys_mk_signatures[0];
+    let old_epoch_id = withdrawal_certificate.epoch_id;
+
+    // in the next epoch the validator sets back the signing key to the previous one
+    let prev_withdrawal_certificate = withdrawal_certificate;
+    withdrawal_certificate = create_withdrawal_certificate();
+    validator_key_updates.signing_keys[0] = validator_key_updates.updated_signing_keys[0];
+    validator_key_updates.master_keys[0] = validator_key_updates.updated_master_keys[0];
+    validator_key_updates.updated_signing_keys[0] = old_signing_key;
+    validator_key_updates.previous_epoch_id = prev_withdrawal_certificate.epoch_id;
+    validator_key_updates.epoch_id = withdrawal_certificate.epoch_id;
+    validator_key_updates.ledger_id = withdrawal_certificate.ledger_id;
+    let mut rng = thread_rng();
+    let updated_msg = updated_key_msg(validator_key_updates.updated_signing_keys[0], 's' as u8, validator_key_updates.epoch_id, validator_key_updates.ledger_id);
+    validator_key_updates.updated_signing_keys_sk_signatures[0] =
+        SchnorrSigScheme::sign(&mut rng, &validator_key_updates.signing_keys[0], &updated_signing_key_sk, updated_msg).unwrap();
+    validator_key_updates.updated_signing_keys_mk_signatures[0] =
+        SchnorrSigScheme::sign(&mut rng, &validator_key_updates.master_keys[0], &master_keys_sks[0], updated_msg).unwrap();
+
+    withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root()
+        .unwrap();
+
+    let msg_to_sign = cert_to_msg(&withdrawal_certificate);
+    let wcert_signatures = create_signatures(
+        MAX_PKS,
+        &signing_keys_sks,
+        &validator_key_updates.signing_keys,
+        msg_to_sign,
+    );
+
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates.clone(),
+        wcert_signatures,
+        withdrawal_certificate.clone(),
+        Some(prev_withdrawal_certificate),
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+
+    debug_naive_threshold_circuit(&circuit, false, None);
+
+    // now the attacker can try to mount the replay attack, re-updating the old signing key to the
+    // previous signing key
+    let to_be_restored_signing_key = validator_key_updates.signing_keys[0];
+    let prev_withdrawal_certificate = withdrawal_certificate;
+    withdrawal_certificate = create_withdrawal_certificate();
+    validator_key_updates.signing_keys[0] = validator_key_updates.updated_signing_keys[0];
+    validator_key_updates.master_keys[0] = validator_key_updates.updated_master_keys[0];
+    validator_key_updates.updated_signing_keys[0] = to_be_restored_signing_key;
+    validator_key_updates.updated_signing_keys_sk_signatures[0] = old_update_signature_with_sk;
+    validator_key_updates.updated_signing_keys_mk_signatures[0] = old_update_signature_with_mk;
+    validator_key_updates.previous_epoch_id = prev_withdrawal_certificate.epoch_id;
+    validator_key_updates.epoch_id = withdrawal_certificate.epoch_id;
+    validator_key_updates.ledger_id = withdrawal_certificate.ledger_id;
+
+    withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root()
+        .unwrap();
+
+    let msg_to_sign = cert_to_msg(&withdrawal_certificate);
+    let wcert_signatures = create_signatures(
+        MAX_PKS,
+        &signing_keys_sks,
+        &validator_key_updates.signing_keys,
+        msg_to_sign,
+    );
+
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates.clone(),
+        wcert_signatures,
+        withdrawal_certificate.clone(),
+        Some(prev_withdrawal_certificate.clone()),
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+
+    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated signing key should be signed old signing key 0/conditional verify signature/conditional_equals"));
+println!("ok");
+    // test that if epoch_id is changed, then the attack works
+    validator_key_updates.epoch_id = old_epoch_id;
+    withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root()
+        .unwrap();
+    withdrawal_certificate.epoch_id = old_epoch_id;
+    let msg_to_sign = cert_to_msg(&withdrawal_certificate);
+    let wcert_signatures = create_signatures(
+        MAX_PKS,
+        &signing_keys_sks,
+        &validator_key_updates.signing_keys,
+        msg_to_sign,
+    );
+
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates,
+        wcert_signatures,
+        withdrawal_certificate,
+        Some(prev_withdrawal_certificate),
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+
+    debug_naive_threshold_circuit(&circuit, false, None);
+}
+
+#[serial]
+#[test]
+fn test_key_update_from_other_key_update() {
+    const THRESHOLD: usize = 5;
+    let (
+        signing_keys_sks,
+        master_keys_sks,
+        genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
+        mut withdrawal_certificate,
+        _wcert_signatures,
+        mut validator_key_updates,
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, false);
+
+    // legitimate signing key update
+    rotate_key(
+        &signing_keys_sks[0],
+        &validator_key_updates.signing_keys[0],
+        &master_keys_sks[0],
+        &validator_key_updates.master_keys[0],
+        &mut validator_key_updates.updated_signing_keys_sk_signatures[0],
+        &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
+        None,
+        &mut validator_key_updates.updated_signing_keys[0],
+        's' as u8,
+        withdrawal_certificate.epoch_id,
+        withdrawal_certificate.ledger_id,
+    );
+
+    // attacker tries to update also master key to the same key
+    validator_key_updates.updated_master_keys[0] = validator_key_updates.updated_signing_keys[0];
+    validator_key_updates.updated_master_keys_sk_signatures[0] = validator_key_updates.updated_signing_keys_sk_signatures[0];
+    validator_key_updates.updated_master_keys_mk_signatures[0] = validator_key_updates.updated_signing_keys_mk_signatures[0];
+
+    withdrawal_certificate.custom_fields[0] = validator_key_updates
+        .get_upd_validators_keys_root()
+        .unwrap();
+
+    let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
+    prev_withdrawal_certificate.quality = THRESHOLD as u64;
+
+    let msg_to_sign = cert_to_msg(&withdrawal_certificate);
+    let wcert_signatures = create_signatures(
+        MAX_PKS,
+        &signing_keys_sks,
+        &validator_key_updates.signing_keys,
+        msg_to_sign,
+    );
+
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates,
+        wcert_signatures,
+        withdrawal_certificate,
+        Some(prev_withdrawal_certificate),
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+
+    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated master key should be signed old signing key 0/conditional verify signature/conditional_equals"));
+}
+
+#[serial]
+#[test]
+fn change_ledger_id() {
+    const THRESHOLD: usize = 5;
+    let (
+        signing_keys_sks,
+        _master_keys_sks,
+        genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
+        mut withdrawal_certificate,
+        _wcert_signatures,
+        mut validator_key_updates,
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, false);
+
+    withdrawal_certificate.ledger_id += FieldElement::from(1u8);
+    validator_key_updates.ledger_id = withdrawal_certificate.ledger_id;
+
+    withdrawal_certificate.custom_fields[0] = validator_key_updates
+        .get_upd_validators_keys_root()
+        .unwrap();
+
+    let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
+    prev_withdrawal_certificate.quality = THRESHOLD as u64;
+
+    let msg_to_sign = cert_to_msg(&withdrawal_certificate);
+    let wcert_signatures = create_signatures(
+        MAX_PKS,
+        &signing_keys_sks,
+        &validator_key_updates.signing_keys,
+        msg_to_sign,
+    );
+
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates.clone(),
+        wcert_signatures.clone(),
+        withdrawal_certificate.clone(),
+        Some(prev_withdrawal_certificate),
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+
+    debug_naive_threshold_circuit(&circuit, true, Some("enforce current root equals the one in prev cert if present/conditional_equals"));
+
+    // Now try without previous withdrawal certificate
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates,
+        wcert_signatures,
+        withdrawal_certificate,
+        None,
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+
+    debug_naive_threshold_circuit(&circuit, true, Some("enforce current root equals genesis one if prev cert is not present/conditional_equals"));
+
 }

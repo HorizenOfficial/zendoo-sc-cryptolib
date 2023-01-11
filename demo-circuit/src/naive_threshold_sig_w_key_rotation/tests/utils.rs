@@ -161,9 +161,8 @@ pub(crate) fn setup_certificate_data(
         None
     } else {
         let mut certificate = create_withdrawal_certificate();
-        //certificate.epoch_id = INITIAL_EPOCH_ID;
         certificate.custom_fields[0] = ValidatorKeysUpdates::get_validators_key_root(max_pks, &signing_keys_pks, &master_keys_pks, certificate.epoch_id, certificate.ledger_id)
-            .unwrap();//genesis_validator_keys_tree_root;
+            .unwrap();
         Some(certificate)
     };
 
@@ -216,10 +215,7 @@ pub(crate) fn debug_naive_threshold_circuit(
         assert!(failing_constraint.is_some());
         assert_eq!(failing_constraint.unwrap(), expected_failing_constraint.unwrap());
     } else {
-        if failing_constraint.is_some() {
-            println!("{:?}", failing_constraint);
-        }
-        assert!(failing_constraint.is_none());
+        assert!(failing_constraint.is_none(), "no constraint expected to fail, found {:?}", failing_constraint);
     }
 
 }

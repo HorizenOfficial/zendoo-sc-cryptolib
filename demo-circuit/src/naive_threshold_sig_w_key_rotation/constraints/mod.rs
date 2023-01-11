@@ -271,7 +271,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignatureWKeyRotation
 
         // Enforce actual root
         let (current_validators_keys_root, _) = validators_keys_updates_g
-            .enforce_curr_validators_keys_root(cs.ns(|| "enforce current root"), &prev_withdrawal_certificate_g.epoch_id_g, &prev_withdrawal_certificate_g.ledger_id_g)?;
+            .enforce_curr_validators_keys_root(cs.ns(|| "enforce current root"), &prev_withdrawal_certificate_g.epoch_id_g, &withdrawal_certificate_g.ledger_id_g)?;
 
         // if (sc_prev_wcert_hash != NULL)
         //     require(prev_wcert.custom_fields.scb_validators_keys_root == current_validators_keys_root)
