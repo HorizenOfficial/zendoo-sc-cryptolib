@@ -488,9 +488,7 @@ fn test_replay_attack() {
         &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
         Some(&mut updated_signing_key_sk),
         &mut validator_key_updates.updated_signing_keys[0],
-        's' as u8,
-        withdrawal_certificate.epoch_id,
-        withdrawal_certificate.ledger_id,
+        |pk| ValidatorKeysUpdates::get_signing_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
     );
 
     withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root()
@@ -532,7 +530,7 @@ fn test_replay_attack() {
     validator_key_updates.epoch_id = withdrawal_certificate.epoch_id;
     validator_key_updates.ledger_id = withdrawal_certificate.ledger_id;
     let mut rng = thread_rng();
-    let updated_msg = updated_key_msg(validator_key_updates.updated_signing_keys[0], 's' as u8, validator_key_updates.epoch_id, validator_key_updates.ledger_id);
+    let updated_msg = ValidatorKeysUpdates::get_signing_key_hash(&validator_key_updates.updated_signing_keys[0], validator_key_updates.epoch_id, validator_key_updates.ledger_id).unwrap();
     validator_key_updates.updated_signing_keys_sk_signatures[0] =
         SchnorrSigScheme::sign(&mut rng, &validator_key_updates.signing_keys[0], &updated_signing_key_sk, updated_msg).unwrap();
     validator_key_updates.updated_signing_keys_mk_signatures[0] =
@@ -651,9 +649,7 @@ fn test_key_update_from_other_key_update() {
         &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_signing_keys[0],
-        's' as u8,
-        withdrawal_certificate.epoch_id,
-        withdrawal_certificate.ledger_id,
+        |pk| ValidatorKeysUpdates::get_signing_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
     );
 
     // attacker tries to update also master key to the same key
