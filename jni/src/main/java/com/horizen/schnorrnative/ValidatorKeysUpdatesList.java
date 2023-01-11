@@ -2,6 +2,7 @@ package com.horizen.schnorrnative;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalInt;
 
 import com.horizen.librustsidechains.Library;
 import com.horizen.librustsidechains.FieldElement;
@@ -18,6 +19,7 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     private SchnorrSignature[] updatedMasterKeysMkSignatures;
     private long maxPks;
     private int epochId;
+    private OptionalInt prevEpochId;
     private FieldElement ledgerId;
 
     static {
@@ -28,6 +30,7 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
         SchnorrPublicKey[] signingKeys,
         SchnorrPublicKey[] masterKeys,
         long maxPks,
+        OptionalInt prevEpochId,
         int epochId,
         FieldElement ledgerId
     ) throws Exception;
@@ -54,6 +57,7 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     * @param updatedMasterKeysMkSignaturesList - signatures made with old master keys for new master keys,
     *                                            elements can be empty if there was no update
     * @param maxPks - the maximum number of key validators
+    * @param prevEpochId - The previous epoch number if one exists
     * @param epochId - The epoch number for this validator set
     * @param ledgerId - The ledger id for this validator set
     */
@@ -67,6 +71,7 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
         List<SchnorrSignature> updatedMasterKeysSkSignaturesList,
         List<SchnorrSignature> updatedMasterKeysMkSignaturesList,
         long maxPks,
+        OptionalInt prevEpochId,
         int epochId,
         FieldElement ledgerId
     ) {
@@ -79,6 +84,7 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
         this.updatedMasterKeysSkSignatures = updatedMasterKeysSkSignaturesList.toArray(new SchnorrSignature[0]);
         this.updatedMasterKeysMkSignatures = updatedMasterKeysMkSignaturesList.toArray(new SchnorrSignature[0]);
         this.maxPks = maxPks;
+        this.prevEpochId = prevEpochId;
         this.epochId = epochId;
         this.ledgerId = ledgerId;
     }
@@ -93,6 +99,10 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
 
     public int getEpochId() {
         return epochId;
+    }
+
+    public OptionalInt getPrevEpochId() {
+        return prevEpochId;
     }
 
     public FieldElement getLedgerId() {
@@ -115,11 +125,12 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
         SchnorrPublicKey[] signingKeys,
         SchnorrPublicKey[] masterKeys,
         long maxPks,
+        OptionalInt prevEpochId,
         int epochId,
         FieldElement ledgerId
     ) throws Exception {
         return nativeKeysRootHash(
-            signingKeys, masterKeys, maxPks, epochId, ledgerId
+            signingKeys, masterKeys, maxPks, prevEpochId, epochId, ledgerId
         );
     }
 
@@ -132,7 +143,7 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     */
     public FieldElement getKeysRootHash() throws Exception {
         return nativeKeysRootHash(
-            signingKeys, masterKeys, maxPks, epochId, ledgerId
+            signingKeys, masterKeys, maxPks, prevEpochId, epochId, ledgerId
         );
     }
 
@@ -153,7 +164,7 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     */
     public FieldElement getUpdatedKeysRootHash() throws Exception {
         return nativeKeysRootHash(
-            updatedSigningKeys, updatedMasterKeys, maxPks, epochId, ledgerId
+            updatedSigningKeys, updatedMasterKeys, maxPks, prevEpochId, epochId, ledgerId
         );
     }
 
@@ -207,6 +218,10 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
 
     public void setEpochId(int epochId) {
         this.epochId = epochId;
+    }
+
+    public void setPrevEpochId(OptionalInt prevEpochId) {
+        this.prevEpochId = prevEpochId;
     }
 
     public void setLedgerId(FieldElement ledgerId) {

@@ -2287,6 +2287,7 @@ ffi_export!(
         _schnorr_signing_keys_list: jobjectArray,
         _schnorr_master_keys_list: jobjectArray,
         _max_pks: jlong,
+        _prev_epoch_id: JObject,
         _epoch_id: jint,
         _ledger_id: JObject,
     ) -> jobject {
@@ -2311,6 +2312,7 @@ ffi_export!(
             );
         }
 
+        let prev_epoch_id = cast_joptionint_to_rust_option(&_env, _prev_epoch_id);
         let epoch_id = _epoch_id as u32;
 
         // Parse ledgerId
@@ -2334,7 +2336,7 @@ ffi_export!(
             vec![Some(NULL_CONST.null_sig); max_pks],
             vec![Some(NULL_CONST.null_sig); max_pks],
             max_pks,
-            Some(epoch_id), // ToDo: see if needed to provide previous_epoch_id if available (depends on Java side API)
+            prev_epoch_id,
             epoch_id,
             *ledger_id,
         );
