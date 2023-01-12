@@ -1,13 +1,11 @@
 use super::*;
 use cctp_primitives::utils::get_cert_data_hash_from_bt_root_and_custom_fields_hash;
-use crate::naive_threshold_sig_w_key_rotation::data_structures::INITIAL_EPOCH_ID;
 
-pub(crate) const LEDGER_ID: u64 = 42;
 
 pub(crate) fn create_withdrawal_certificate() -> WithdrawalCertificateData {
     let mut rng = thread_rng();
     WithdrawalCertificateData {
-        ledger_id: FieldElement::from(LEDGER_ID),
+        ledger_id: FieldElement::from(42u64), // use a fixed ledger id to simulate all certificates belong to the same sidechain
         epoch_id: rng.gen(),
         bt_root: rng.gen(),
         mcb_sc_txs_com: rng.gen(),
@@ -129,15 +127,14 @@ pub(crate) fn setup_certificate_data(
     let (signing_keys_pks, signing_keys_sks) = generate_keys(max_pks);
     let (master_keys_pks, master_keys_sks) = generate_keys(max_pks);
     let genesis_validator_keys_tree_root =
-        ValidatorKeysUpdates::get_validators_key_root(max_pks, &signing_keys_pks, &master_keys_pks, INITIAL_EPOCH_ID, withdrawal_certificate.ledger_id)
+        ValidatorKeysUpdates::get_validators_key_root(max_pks, &signing_keys_pks, &master_keys_pks)
             .unwrap();
 
     let prev_withdrawal_certificate = if is_first_cert {
         None
     } else {
         let mut certificate = create_withdrawal_certificate();
-        certificate.custom_fields[0] = ValidatorKeysUpdates::get_validators_key_root(max_pks, &signing_keys_pks, &master_keys_pks, certificate.epoch_id, certificate.ledger_id)
-            .unwrap();
+        certificate.custom_fields[0] = genesis_validator_keys_tree_root;
         Some(certificate)
     };
 
@@ -151,9 +148,6 @@ pub(crate) fn setup_certificate_data(
         vec![Some(NULL_CONST.null_sig); max_pks],
         vec![Some(NULL_CONST.null_sig); max_pks],
         max_pks,
-        prev_withdrawal_certificate.clone().map(|cert| cert.epoch_id),
-        withdrawal_certificate.epoch_id,
-        withdrawal_certificate.ledger_id,
     );
 
     withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root().unwrap();

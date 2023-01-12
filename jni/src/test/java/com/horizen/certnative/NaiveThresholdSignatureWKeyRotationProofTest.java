@@ -17,7 +17,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.Random;
 
 import static org.junit.Assert.assertNotNull;
@@ -79,10 +78,7 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
 
     private ValidatorKeysUpdatesList setupValidatorKeysUpdatesList(
         List<SchnorrKeyPair> signingKeyPairList,
-        List<SchnorrKeyPair> masterKeyPairList,
-        OptionalInt prevEpochId,
-        int epochId,
-        FieldElement ledgerId
+        List<SchnorrKeyPair> masterKeyPairList
     ) {
         List<SchnorrPublicKey> signingPublicKeyList = new ArrayList<>();
         List<SchnorrPublicKey> masterPublicKeyList = new ArrayList<>();
@@ -122,10 +118,7 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
             updatedSigningKeysMkSignaturesList,
             updatedMasterKeysSkSignaturesList,
             updatedMasterKeysMkSignaturesList,
-            keyCount,
-            prevEpochId,
-            epochId,
-            ledgerId
+            keyCount
         );
     }
 
@@ -185,7 +178,7 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
         List<SchnorrKeyPair> signingKeyPairList = setupKeyPairList(keyCount);
         List<SchnorrKeyPair> masterKeyPairList = setupKeyPairList(keyCount);
         ValidatorKeysUpdatesList testKeysSignaturesList = setupValidatorKeysUpdatesList(
-            signingKeyPairList, masterKeyPairList, OptionalInt.of(prevEpochNumber), epochNumber, scId
+            signingKeyPairList, masterKeyPairList
         );
 
         FieldElement testPrevValidatorsKeysRoot = testKeysSignaturesList.getKeysRootHash();
@@ -262,7 +255,7 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
         List<SchnorrKeyPair> signingKeyPairList = setupKeyPairList(keyCount);
         List<SchnorrKeyPair> masterKeyPairList = setupKeyPairList(keyCount);
         ValidatorKeysUpdatesList testKeysSignaturesList = setupValidatorKeysUpdatesList(
-            signingKeyPairList, masterKeyPairList, OptionalInt.of(prevEpochNumber), epochNumber, scId
+            signingKeyPairList, masterKeyPairList
         );
 
         FieldElement testPrevValidatorsKeysRoot = testKeysSignaturesList.getKeysRootHash();
@@ -342,7 +335,7 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
         List<SchnorrKeyPair> signingKeyPairList = setupKeyPairList(keyCount);
         List<SchnorrKeyPair> masterKeyPairList = setupKeyPairList(keyCount);
         keysSignaturesList = setupValidatorKeysUpdatesList(
-            signingKeyPairList, masterKeyPairList, OptionalInt.of(prevEpochNumber), epochNumber, scId
+            signingKeyPairList, masterKeyPairList
         );
 
         prevValidatorsKeysRoot = keysSignaturesList.getKeysRootHash();

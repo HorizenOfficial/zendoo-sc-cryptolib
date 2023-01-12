@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 
 use cctp_primitives::type_mapping::{FieldElement, GingerMHTParams};
 use primitives::FieldBasedMerkleTreeParameters;
-use r1cs_core::{ConstraintSystemAbstract, SynthesisError};
+use r1cs_core::{ConstraintSystemAbstract, Namespace, SynthesisError};
 use r1cs_crypto::{FieldBasedHashGadget, FieldBasedSigGadget};
 use r1cs_std::{FromBitsGadget, prelude::{AllocGadget, ConstantGadget, EqGadget}, to_field_gadget_vec::ToConstraintFieldGadget};
 use r1cs_std::uint32::UInt32;
@@ -94,8 +94,6 @@ impl ValidatorKeysUpdatesGadget {
         max_pks: usize,
         sig_keys_g: &[SchnorrPkGadget],
         master_keys_g: &[SchnorrPkGadget],
-        epoch_id: &UInt32,
-        ledger_id: &FieldElementGadget,
     ) -> Result<(FieldElementGadget, Vec<FieldElementGadget>), SynthesisError> {
         let height = ((max_pks.next_power_of_two() * 2) as f64).log2() as usize;
         let null_leaf_g: FieldElementGadget = ConstantGadget::from_value(
@@ -105,31 +103,11 @@ impl ValidatorKeysUpdatesGadget {
 
         let mut validator_mktree_leaves_g = Vec::with_capacity(max_pks);
 
-        let secret_key_tag = UInt8::constant('s' as u8);
-        let master_key_tag = UInt8::constant('m' as u8);
-        let salt = UInt8::constant(VALIDATOR_HASH_SALT);
-
-        let salt_bits = salt.into_bits_be();
-        let epoch_bits = epoch_id.clone().into_bits_be();
-        let mut secret_key_domain_bits = secret_key_tag.into_bits_be();
-        secret_key_domain_bits.extend_from_slice(&salt_bits);
-        secret_key_domain_bits.extend_from_slice(&epoch_bits);
-
-        let secret_key_domain = FieldElementGadget::from_bits(cs.ns(|| "secret key domain value"), &secret_key_domain_bits)?;
-
-        let mut master_key_domain_bits = master_key_tag.into_bits_be();
-        master_key_domain_bits.extend_from_slice(&salt_bits);
-        master_key_domain_bits.extend_from_slice(&epoch_bits);
-
-        let master_key_domain = FieldElementGadget::from_bits(cs.ns(|| "master key domain value"), &master_key_domain_bits)?;
-
         for (i, (signing_key_g, master_key_g)) in sig_keys_g.iter().zip(master_keys_g).enumerate() {
             // Enforce signing key hash
-            let mut signing_key_fe_g = signing_key_g.to_field_gadget_elements(
+            let signing_key_fe_g = signing_key_g.to_field_gadget_elements(
                 cs.ns(|| format!("alloc_fe gadget elems for skey_{}", i)),
             )?;
-            signing_key_fe_g.push(secret_key_domain.clone());
-            signing_key_fe_g.push(ledger_id.clone());
             let signing_key_fe_hash_g = FieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| format!("H(skey_{}||'s'||CONST_SALT||epoch_id||ledger_id)", i)),
                 signing_key_fe_g.as_slice(),
@@ -139,11 +117,9 @@ impl ValidatorKeysUpdatesGadget {
             validator_mktree_leaves_g.push(signing_key_fe_hash_g);
 
             // Enforce master key hash
-            let mut master_key_fe_g = master_key_g.to_field_gadget_elements(
+            let master_key_fe_g = master_key_g.to_field_gadget_elements(
                 cs.ns(|| format!("alloc_fe gadget elems for mkey_{}", i)),
             )?;
-            master_key_fe_g.push(master_key_domain.clone());
-            master_key_fe_g.push(ledger_id.clone());
             let master_key_fe_hash_g = FieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| format!("H(mkey_{}||'m'||CONST_SALT||epoch_id||ledger_id)", i)),
                 master_key_fe_g.as_slice(),
@@ -172,16 +148,12 @@ impl ValidatorKeysUpdatesGadget {
     pub fn enforce_curr_validators_keys_root<CS: ConstraintSystemAbstract<FieldElement>>(
         &self,
         cs: CS,
-        epoch_id_g: &UInt32,
-        ledger_id_g: &FieldElementGadget,
     ) -> Result<(FieldElementGadget, Vec<FieldElementGadget>), SynthesisError> {
         Self::enforce_validators_key_root(
             cs,
             self.max_pks,
             self.signing_keys_g.as_slice(),
             self.master_keys_g.as_slice(),
-            epoch_id_g,
-            ledger_id_g,
         )
     }
 
@@ -189,16 +161,12 @@ impl ValidatorKeysUpdatesGadget {
     pub fn enforce_upd_validators_keys_root<CS: ConstraintSystemAbstract<FieldElement>>(
         &self,
         cs: CS,
-        epoch_id_g: &UInt32,
-        ledger_id_g: &FieldElementGadget,
     ) -> Result<(FieldElementGadget, Vec<FieldElementGadget>), SynthesisError> {
         Self::enforce_validators_key_root(
             cs,
             self.max_pks,
             self.updated_signing_keys_g.as_slice(),
             self.updated_master_keys_g.as_slice(),
-            epoch_id_g,
-            ledger_id_g,
         )
     }
 
@@ -207,12 +175,44 @@ impl ValidatorKeysUpdatesGadget {
         &self,
         mut cs: CS,
         new_validators_keys_leaves: &[FieldElementGadget],
+        epoch_id: &UInt32,
+        ledger_id: &FieldElementGadget,
     ) -> Result<(), SynthesisError> {
+
+        let secret_key_tag = UInt8::constant('s' as u8);
+        let master_key_tag = UInt8::constant('m' as u8);
+        let salt = UInt8::constant(VALIDATOR_HASH_SALT);
+
+        let salt_bits = salt.into_bits_be();
+        let epoch_bits = epoch_id.clone().into_bits_be();
+        let get_key_domain_fe = |mut cs: Namespace<FieldElement, CS::Root>, domain: UInt8| {
+            let mut domain_bits = domain.into_bits_be();
+            domain_bits.extend_from_slice(&salt_bits);
+            domain_bits.extend_from_slice(&epoch_bits);
+            FieldElementGadget::from_bits(cs.ns(|| "domain to field element value"), &domain_bits)
+        };
+
+        let mut secret_key_domain_bits = secret_key_tag.into_bits_be();
+        secret_key_domain_bits.extend_from_slice(&salt_bits);
+        secret_key_domain_bits.extend_from_slice(&epoch_bits);
+
+        let secret_key_domain = get_key_domain_fe(cs.ns(|| "secret key domain"), secret_key_tag)?;
+        let master_key_domain = get_key_domain_fe(cs.ns(|| "master key domain"), master_key_tag)?;
+
         for i in 0..self.max_pks {
             // ******* check signing keys updates *********
 
-            // msg_to_sign = updated_signing_keys[i];
-            let upd_sig_msg_to_sign_g = new_validators_keys_leaves[2 * i].clone();
+            // msg_to_sign = H(H(updated_signing_keys[i])||'s'||CONST_SALT||epoch_id||ledger_id);
+            let hash_payload_g = vec![
+                new_validators_keys_leaves[2 * i].clone(),
+                secret_key_domain.clone(),
+                ledger_id.clone(),
+            ];
+
+            let upd_sig_msg_to_sign_g = FieldHashGadget::enforce_hash_constant_length(
+                cs.ns(|| format!("H(H(skey_{})||'s'||CONST_SALT||epoch_id||ledger_id)", i)),
+                hash_payload_g.as_slice(),
+            )?;
 
             // if (updated_signing_keys[i] != signing_keys[i])
             let should_enforce_s = self.updated_signing_keys_g[i]
@@ -252,8 +252,17 @@ impl ValidatorKeysUpdatesGadget {
 
             // ******* check master keys updates *********
 
-            // msg_to_sign = updated_master_keys[i];
-            let upd_master_msg_to_sign_g = new_validators_keys_leaves[(2 * i) + 1].clone();
+            // msg_to_sign = H(H(updated_master_keys[i])||'m'||CONST_SALT||epoch_id||ledger_id);
+            let hash_payload_g = vec![
+                new_validators_keys_leaves[(2 * i) + 1].clone(),
+                master_key_domain.clone(),
+                ledger_id.clone(),
+            ];
+
+            let upd_master_msg_to_sign_g = FieldHashGadget::enforce_hash_constant_length(
+                cs.ns(|| format!("H(H(mkey_{})||'m'||CONST_SALT||epoch_id||ledger_id)", i)),
+                hash_payload_g.as_slice(),
+            )?;
 
             // if (updated_master_keys[i] != master_keys[i])
             let should_enforce_s = self.updated_master_keys_g[i]

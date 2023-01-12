@@ -227,27 +227,6 @@ pub(crate) fn parse_merkle_path_from_jobject<'a>(
     read_raw_pointer(&_env, t.j().unwrap() as *const GingerMHTPath)
 }
 
-pub(crate) fn cast_joptionint_to_rust_option<'a>(
-    _env: &'a JNIEnv,
-    opt_int: JObject<'a>,
-) -> Option<u32> {
-    if !_env
-        .call_method(opt_int, "isPresent", "()Z", &[])
-        .expect("Should be able to call isPresent method on OptionalInt object")
-        .z()
-        .unwrap()
-    {
-        None
-    } else {
-        Some(
-            _env.call_method(opt_int, "getAsInt", "()I", &[])
-                .expect("Should be able to unwrap a non empty Optional")
-                .i()
-                .unwrap() as u32,
-        )
-    }
-}
-
 pub(crate) fn parse_joption_from_jobject<'a>(
     _env: &'a JNIEnv,
     obj: JObject<'a>,

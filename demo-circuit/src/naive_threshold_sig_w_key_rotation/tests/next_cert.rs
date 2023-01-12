@@ -78,7 +78,7 @@ fn signing_key_rotation_works() {
         &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_signing_keys[0],
-        |pk| ValidatorKeysUpdates::get_signing_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
     );
 
     let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
@@ -150,7 +150,7 @@ fn master_key_rotation_works() {
         &mut validator_key_updates.updated_master_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_master_keys[0],
-        |pk| ValidatorKeysUpdates::get_master_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
     );
 
     withdrawal_certificate.custom_fields[0] = validator_key_updates
@@ -282,12 +282,8 @@ fn multiple_certs_with_rotations() {
             .for_each(|s| *s = NULL_CONST.null_sig);
 
         let sig_key_changes = rng.gen::<usize>() % MAX_PKS + 1;
-        validator_key_updates.previous_epoch_id = withdrawal_certificate.epoch_id;
         prev_withdrawal_certificate = Some(withdrawal_certificate.clone());
         withdrawal_certificate = create_withdrawal_certificate();
-        validator_key_updates.epoch_id = withdrawal_certificate.epoch_id;
-        validator_key_updates.ledger_id = withdrawal_certificate.ledger_id;
-
 
         println!("sig_key_changes = {}", sig_key_changes);
 
@@ -301,7 +297,7 @@ fn multiple_certs_with_rotations() {
                 &mut validator_key_updates.updated_signing_keys_mk_signatures[i],
                 Some(&mut updated_signing_keys_sks[i]),
                 &mut validator_key_updates.updated_signing_keys[i],
-                |pk| ValidatorKeysUpdates::get_signing_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
+                |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
             );
 
             rotate_key(
@@ -313,7 +309,7 @@ fn multiple_certs_with_rotations() {
                 &mut validator_key_updates.updated_master_keys_mk_signatures[i],
                 Some(&mut updated_master_keys_sks[i]),
                 &mut validator_key_updates.updated_master_keys[i],
-                |pk| ValidatorKeysUpdates::get_master_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
+                |pk| ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
             );
         }
 
@@ -364,7 +360,7 @@ fn all_keys_rotated() {
             &mut validator_key_updates.updated_signing_keys_mk_signatures[i],
             Some(&mut updated_signing_sks[i]),
             &mut validator_key_updates.updated_signing_keys[i],
-            |pk| ValidatorKeysUpdates::get_signing_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
+            |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
         );
         rotate_key(
             &signing_keys_sks[i],
@@ -375,7 +371,7 @@ fn all_keys_rotated() {
             &mut validator_key_updates.updated_master_keys_mk_signatures[i],
             Some(&mut updated_master_sks[i]),
             &mut validator_key_updates.updated_master_keys[i],
-            |pk| ValidatorKeysUpdates::get_master_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
+            |pk| ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
         );
     }
 
@@ -443,7 +439,7 @@ fn try_to_use_outdated_keys() {
         &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_signing_keys[0],
-        |pk| ValidatorKeysUpdates::get_signing_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
     );
 
     withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root().unwrap();
@@ -488,7 +484,7 @@ fn try_to_use_outdated_keys() {
         &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_signing_keys[0],
-        |pk| ValidatorKeysUpdates::get_signing_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
     );
     withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root().unwrap();
     let msg_to_sign = cert_to_msg(&withdrawal_certificate);
@@ -625,8 +621,7 @@ fn test_wrong_first_certificate_flag() {
     debug_naive_threshold_circuit(&circuit, true,
                                   Some("require(sc_prev_wcert_hash == H(prev_wcert)/conditional_equals"));
 
-    let mut prev_withdrawal_certificate = create_withdrawal_certificate();
-    prev_withdrawal_certificate.epoch_id = validator_key_updates.previous_epoch_id;
+    let prev_withdrawal_certificate = create_withdrawal_certificate();
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
         validator_key_updates,
         wcert_signatures,

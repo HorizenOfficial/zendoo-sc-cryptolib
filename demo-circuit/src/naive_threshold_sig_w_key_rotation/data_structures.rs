@@ -10,7 +10,6 @@ use primitives::{
 use crate::{common::NULL_CONST, Error};
 
 pub const VALIDATOR_HASH_SALT: u8 = 0u8;
-pub const INITIAL_EPOCH_ID: u32 = 0;
 
 //TODO: It would be nice using a constant generic here
 #[derive(Clone)]
@@ -51,16 +50,10 @@ pub struct ValidatorKeysUpdates {
 
     /// Maximum number of pks
     pub(crate) max_pks: usize,
-
-    pub(crate) epoch_id: u32,
-
-    pub(crate) previous_epoch_id: u32,
-
-    pub(crate) ledger_id: FieldElement,
 }
 
 impl ValidatorKeysUpdates {
-    pub fn get_instance_for_setup(max_pks: usize, epoch_id: u32, ledger_id: FieldElement) -> Self {
+    pub fn get_instance_for_setup(max_pks: usize) -> Self {
         Self {
             signing_keys: vec![NULL_CONST.null_pk; max_pks],
             master_keys: vec![NULL_CONST.null_pk; max_pks],
@@ -71,9 +64,6 @@ impl ValidatorKeysUpdates {
             updated_master_keys_sk_signatures: vec![NULL_CONST.null_sig; max_pks],
             updated_master_keys_mk_signatures: vec![NULL_CONST.null_sig; max_pks],
             max_pks,
-            previous_epoch_id: INITIAL_EPOCH_ID,
-            epoch_id,
-            ledger_id,
         }
     }
 
@@ -95,9 +85,6 @@ impl ValidatorKeysUpdates {
             Option<FieldBasedSchnorrSignature<FieldElement, G2Projective>>,
         >,
         max_pks: usize,
-        previous_epoch_id: Option<u32>,
-        epoch_id: u32,
-        ledger_id: FieldElement,
     ) -> Self {
         assert_eq!(
             signing_keys.len(),
@@ -146,24 +133,30 @@ impl ValidatorKeysUpdates {
             updated_master_keys_sk_signatures: updated_master_keys_sk_signatures_adjusted,
             updated_master_keys_mk_signatures: updated_master_keys_mk_signatures_adjusted,
             max_pks,
-            previous_epoch_id: previous_epoch_id.unwrap_or(INITIAL_EPOCH_ID),
-            epoch_id,
-            ledger_id,
         }
     }
 
-    pub(crate) fn get_key_hash(
+    pub(crate) fn get_msg_to_sign_for_key_update(
         pk: &FieldBasedSchnorrPk<G2Projective>,
         domain: FieldElement,
         ledger_id: FieldElement,
     ) -> Result<FieldElement, Error> {
+        let key_hash = Self::get_key_hash(pk)?;
+        let mut h = FieldHash::init_constant_length(3, None);
+        h.update(key_hash);
+        h.update(domain);
+        h.update(ledger_id);
+        h.finalize()
+    }
+
+    pub(crate) fn get_key_hash(
+        pk: &FieldBasedSchnorrPk<G2Projective>,
+    ) -> Result<FieldElement, Error> {
         let spk_fe = pk.0.to_field_elements().unwrap();
-        let mut h = FieldHash::init_constant_length(spk_fe.len() + 2, None);
+        let mut h = FieldHash::init_constant_length(spk_fe.len(), None);
         spk_fe.into_iter().for_each(|fe| {
             h.update(fe);
         });
-        h.update(domain);
-        h.update(ledger_id);
         h.finalize()
     }
 
@@ -177,33 +170,28 @@ impl ValidatorKeysUpdates {
         FieldElement::from_random_bytes(&bytes).unwrap()
     }
 
-    pub fn get_signing_key_hash(pk: &FieldBasedSchnorrPk<G2Projective>, epoch_id: u32, ledger_id: FieldElement) -> Result<FieldElement, Error> {
-        Self::get_key_hash(pk, Self::get_key_domain_fe('s' as u8, epoch_id), ledger_id)
+    pub fn get_msg_to_sign_for_signing_key_update(pk: &FieldBasedSchnorrPk<G2Projective>, epoch_id: u32, ledger_id: FieldElement) -> Result<FieldElement, Error> {
+        Self::get_msg_to_sign_for_key_update(pk, Self::get_key_domain_fe('s' as u8, epoch_id), ledger_id)
     }
 
-    pub fn get_master_key_hash(pk: &FieldBasedSchnorrPk<G2Projective>, epoch_id: u32, ledger_id: FieldElement) -> Result<FieldElement, Error> {
-        Self::get_key_hash(pk, Self::get_key_domain_fe('m' as u8, epoch_id), ledger_id)
+    pub fn get_msg_to_sign_for_master_key_update(pk: &FieldBasedSchnorrPk<G2Projective>, epoch_id: u32, ledger_id: FieldElement) -> Result<FieldElement, Error> {
+        Self::get_msg_to_sign_for_key_update(pk, Self::get_key_domain_fe('m' as u8, epoch_id), ledger_id)
     }
 
     pub(crate) fn get_validators_key_root(
         max_pks: usize,
         sig_keys: &[FieldBasedSchnorrPk<G2Projective>],
         master_keys: &[FieldBasedSchnorrPk<G2Projective>],
-        epoch_id: u32,
-        ledger_id: FieldElement,
     ) -> Result<FieldElement, Error> {
         let height = ((max_pks.next_power_of_two() * 2) as f64).log2() as usize;
         let null_leaf: FieldElement = GingerMHTParams::ZERO_NODE_CST.unwrap().nodes[0];
         let mut tree = GingerMHT::init(height, 1 << height)?;
 
-        let sk_domain = Self::get_key_domain_fe('s' as u8, epoch_id);
-        let mk_domain = Self::get_key_domain_fe('m' as u8, epoch_id);
-
         for i in 0..max_pks.next_power_of_two() {
             if i < sig_keys.len() {
                 // Compute curr pks hash and append them to curr tree
-                let signing_key_hash = Self::get_key_hash(&sig_keys[i], sk_domain, ledger_id)?;
-                let master_key_hash = Self::get_key_hash(&master_keys[i], mk_domain, ledger_id)?;
+                let signing_key_hash = Self::get_key_hash(&sig_keys[i])?;
+                let master_key_hash = Self::get_key_hash(&master_keys[i])?;
 
                 tree.append(signing_key_hash)?;
                 tree.append(master_key_hash)?;
@@ -226,8 +214,6 @@ impl ValidatorKeysUpdates {
             self.max_pks,
             self.signing_keys.as_slice(),
             self.master_keys.as_slice(),
-            self.previous_epoch_id,
-            self.ledger_id,
         )
     }
 
@@ -237,20 +223,10 @@ impl ValidatorKeysUpdates {
             self.max_pks,
             self.updated_signing_keys.as_slice(),
             self.updated_master_keys.as_slice(),
-            self.epoch_id,
-            self.ledger_id,
         )
     }
 
     pub fn get_max_pks(&self) -> usize {
         self.max_pks
-    }
-
-    pub fn get_epoch_id(&self) -> u32 {
-        self.epoch_id
-    }
-
-    pub fn get_ledger_id(&self) -> FieldElement {
-        self.ledger_id
     }
 }

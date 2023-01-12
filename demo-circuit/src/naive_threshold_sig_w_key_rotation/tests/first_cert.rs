@@ -182,7 +182,7 @@ fn signing_key_rotation_works() {
         &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_signing_keys[0],
-        |pk| ValidatorKeysUpdates::get_signing_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
     );
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
@@ -268,7 +268,7 @@ fn master_key_rotation_works() {
         &mut validator_key_updates.updated_master_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_master_keys[0],
-        |pk| ValidatorKeysUpdates::get_master_key_hash(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
     );
 
     withdrawal_certificate.custom_fields[0] = validator_key_updates
