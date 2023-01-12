@@ -11,7 +11,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Arrays;
 
+
 public class NaiveThresholdSignatureWKeyRotation {
+    public static final int SIGNING_KEY = 0;
+    public static final int MASTER_KEY = 1;
 
     static {
         Library.load();
@@ -29,6 +32,22 @@ public class NaiveThresholdSignatureWKeyRotation {
             withdrawalCertificate.getFtMinAmount(),
             Arrays.asList(withdrawalCertificate.getCustomFields())
         );
+    }
+
+    private static native FieldElement nativeGenerateKeyRotationMessageToSign(
+        SchnorrPublicKey newKey,
+        int keyType,
+        int epochNumber,
+        FieldElement scId
+    ) throws Exception;
+
+    public static FieldElement generateKeyRotationMessageToSign(
+        SchnorrPublicKey newKey,
+        int keyType,
+        int epochNumber,
+        FieldElement scId
+    ) throws Exception {
+        return nativeGenerateKeyRotationMessageToSign(newKey, keyType, epochNumber, scId);
     }
 
     private static native FieldElement nativeGetConstant(
