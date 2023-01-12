@@ -660,6 +660,49 @@ fn test_key_update_from_other_key_update() {
     );
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates.clone(),
+        wcert_signatures,
+        withdrawal_certificate.clone(),
+        Some(prev_withdrawal_certificate.clone()),
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+
+    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated master key should be signed old signing key 0/conditional verify signature/conditional_equals"));
+
+    // we also try the other way round: attacker tries to update the signing key from a legitimate update to the master key
+    rotate_key(
+        &signing_keys_sks[0],
+        &validator_key_updates.signing_keys[0],
+        &master_keys_sks[0],
+        &validator_key_updates.master_keys[0],
+        &mut validator_key_updates.updated_master_keys_sk_signatures[0],
+        &mut validator_key_updates.updated_master_keys_mk_signatures[0],
+        None,
+        &mut validator_key_updates.updated_master_keys[0],
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
+    );
+
+    // attacker tries to update also signing key to the same key
+    validator_key_updates.updated_signing_keys[0] = validator_key_updates.updated_master_keys[0];
+    validator_key_updates.updated_signing_keys_sk_signatures[0] = validator_key_updates.updated_master_keys_sk_signatures[0];
+    validator_key_updates.updated_signing_keys_mk_signatures[0] = validator_key_updates.updated_master_keys_mk_signatures[0];
+
+    withdrawal_certificate.custom_fields[0] = validator_key_updates
+        .get_upd_validators_keys_root()
+        .unwrap();
+
+    let msg_to_sign = cert_to_msg(&withdrawal_certificate);
+    let wcert_signatures = create_signatures(
+        MAX_PKS,
+        &signing_keys_sks,
+        &validator_key_updates.signing_keys,
+        msg_to_sign,
+    );
+
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
         validator_key_updates,
         wcert_signatures,
         withdrawal_certificate,
@@ -670,5 +713,5 @@ fn test_key_update_from_other_key_update() {
     assert!(circuit_res.is_ok());
     let circuit = circuit_res.unwrap();
 
-    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated master key should be signed old signing key 0/conditional verify signature/conditional_equals"));
+    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated signing key should be signed old signing key 0/conditional verify signature/conditional_equals"));
 }
