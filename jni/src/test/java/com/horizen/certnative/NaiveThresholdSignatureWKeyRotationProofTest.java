@@ -207,7 +207,7 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
 
         // Rotate a signing key
         SchnorrKeyPair newSigningKeyPair = SchnorrKeyPair.generate();
-        FieldElement newSigningKeyHash = NaiveThresholdSignatureWKeyRotation.generateKeyRotationMessageToSign(newSigningKeyPair.getPublicKey(), NaiveThresholdSignatureWKeyRotation.SIGNING_KEY, epochNumber, scId);
+        FieldElement newSigningKeyHash = NaiveThresholdSignatureWKeyRotation.getMsgToSignForSigningKeyUpdate(newSigningKeyPair.getPublicKey(), epochNumber, scId);
         testKeysSignaturesList.getUpdatedSigningKeysSkSignatures()[0] = signingKeyPairList.get(0).signMessage(newSigningKeyHash);
         testKeysSignaturesList.getUpdatedSigningKeysMkSignatures()[0] = masterKeyPairList.get(0).signMessage(newSigningKeyHash);
         testKeysSignaturesList.getUpdatedSigningKeys()[0] = newSigningKeyPair.getPublicKey();
@@ -283,7 +283,7 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
 
         // Rotate a master key
         SchnorrKeyPair newMasterKeyPair = SchnorrKeyPair.generate();
-        FieldElement newMasterKeyHash = NaiveThresholdSignatureWKeyRotation.generateKeyRotationMessageToSign(newMasterKeyPair.getPublicKey(), NaiveThresholdSignatureWKeyRotation.MASTER_KEY, epochNumber, scId);
+        FieldElement newMasterKeyHash = NaiveThresholdSignatureWKeyRotation.getMsgToSignForMasterKeyUpdate(newMasterKeyPair.getPublicKey(), epochNumber, scId);
         testKeysSignaturesList.getUpdatedMasterKeysSkSignatures()[0] = signingKeyPairList.get(0).signMessage(newMasterKeyHash);
         testKeysSignaturesList.getUpdatedMasterKeysMkSignatures()[0] = masterKeyPairList.get(0).signMessage(newMasterKeyHash);
         testKeysSignaturesList.getUpdatedMasterKeys()[0] = newMasterKeyPair.getPublicKey();

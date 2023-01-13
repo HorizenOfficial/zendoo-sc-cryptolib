@@ -50,7 +50,7 @@ use demo_circuit::{
     type_mapping::*,
 };
 
-use primitives::{bytes_to_bits, signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk, FieldBasedHash, FieldBasedMerkleTree, FieldBasedMerkleTreePath, FieldBasedSparseMerkleTree, FieldHasher, CryptoError};
+use primitives::{bytes_to_bits, signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk, FieldBasedHash, FieldBasedMerkleTree, FieldBasedMerkleTreePath, FieldBasedSparseMerkleTree, FieldHasher};
 use std::{
     any::type_name,
     collections::{HashMap, HashSet},
@@ -2105,23 +2105,17 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_certnative_NaiveThresholdSignatureWKeyRotation_nativeGenerateKeyRotationMessageToSign(
+    fn Java_com_horizen_certnative_NaiveThresholdSignatureWKeyRotation_nativeGetMsgToSignForSigningKeyUpdate(
         _env: JNIEnv,
         _class: JClass,
         _new_key: JObject,
-        _key_type: jint,
         _epoch_number: jint,
         _sc_id: JObject,
     ) -> jobject {
         let ledger_id = *convert_field_element(&_env, _sc_id);
         let new_key = FieldBasedSchnorrPk(convert_public_key(&_env, _new_key).into_projective());
         let epoch_number = _epoch_number as u32;
-        let res = match _key_type {
-            0 => ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(&new_key, epoch_number, ledger_id),
-            1 => ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(&new_key, epoch_number, ledger_id),
-            _ => Err(get_error("invalid key type")),
-        };
-        match res {
+        match ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(&new_key, epoch_number, ledger_id) {
             Err(e) => {
                 throw!(
                 &_env,
@@ -2135,9 +2129,30 @@ ffi_export!(
     }
 );
 
-fn get_error(msg: &str) -> Box<dyn std::error::Error> {
-    Box::new(CryptoError::Other(msg.to_string()))
-}
+ffi_export!(
+    fn Java_com_horizen_certnative_NaiveThresholdSignatureWKeyRotation_nativeGetMsgToSignForMasterKeyUpdate(
+        _env: JNIEnv,
+        _class: JClass,
+        _new_key: JObject,
+        _epoch_number: jint,
+        _sc_id: JObject,
+    ) -> jobject {
+        let ledger_id = *convert_field_element(&_env, _sc_id);
+        let new_key = FieldBasedSchnorrPk(convert_public_key(&_env, _new_key).into_projective());
+        let epoch_number = _epoch_number as u32;
+        match ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(&new_key, epoch_number, ledger_id) {
+            Err(e) => {
+                throw!(
+                &_env,
+                "java/lang/Exception",
+                &format!("{}", e.to_string()),
+                JObject::null().into_inner()
+            )
+            },
+            Ok(elem) => return_field_element(&_env, elem)
+        }
+    }
+);
 
 fn get_proving_system_type_as_jint(_env: &JNIEnv, ps: ProvingSystem) -> jint {
     match ps {

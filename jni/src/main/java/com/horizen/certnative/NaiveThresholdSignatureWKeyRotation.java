@@ -13,9 +13,6 @@ import java.util.Arrays;
 
 
 public class NaiveThresholdSignatureWKeyRotation {
-    public static final int SIGNING_KEY = 0;
-    public static final int MASTER_KEY = 1;
-
     static {
         Library.load();
     }
@@ -34,20 +31,32 @@ public class NaiveThresholdSignatureWKeyRotation {
         );
     }
 
-    private static native FieldElement nativeGenerateKeyRotationMessageToSign(
-        SchnorrPublicKey newKey,
-        int keyType,
+    public static native FieldElement nativeGetMsgToSignForSigningKeyUpdate(
+        SchnorrPublicKey newSigningKey,
         int epochNumber,
         FieldElement scId
     ) throws Exception;
 
-    public static FieldElement generateKeyRotationMessageToSign(
-        SchnorrPublicKey newKey,
-        int keyType,
+    public static FieldElement getMsgToSignForSigningKeyUpdate(
+        SchnorrPublicKey newSigningKey,
         int epochNumber,
         FieldElement scId
     ) throws Exception {
-        return nativeGenerateKeyRotationMessageToSign(newKey, keyType, epochNumber, scId);
+        return nativeGetMsgToSignForSigningKeyUpdate(newSigningKey, epochNumber, scId);
+    }
+
+    public static native FieldElement nativeGetMsgToSignForMasterKeyUpdate(
+        SchnorrPublicKey newMasterKey,
+        int epochNumber,
+        FieldElement scId
+    ) throws Exception;
+
+    public static FieldElement getMsgToSignForMasterKeyUpdate(
+        SchnorrPublicKey newMasterKey,
+        int epochNumber,
+        FieldElement scId
+    ) throws Exception {
+        return nativeGetMsgToSignForMasterKeyUpdate(newMasterKey, epochNumber, scId);
     }
 
     private static native FieldElement nativeGetConstant(
