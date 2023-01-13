@@ -12,7 +12,7 @@ use crate::{
     naive_threshold_sig_w_key_rotation::data_structures::ValidatorKeysUpdates, FieldElementGadget,
     FieldHashGadget, SchnorrPkGadget, SchnorrSigGadget, SchnorrVrfySigGadget,
 };
-use crate::naive_threshold_sig_w_key_rotation::data_structures::VALIDATOR_HASH_SALT;
+use crate::naive_threshold_sig_w_key_rotation::data_structures::{MASTER_KEY_DOMAIN_TAG, SIGNING_KEY_DOMAIN_TAG};
 
 /// Starting from all the leaves in the Merkle Tree, reconstructs and returns
 /// the Merkle Root. NOTE: This works iff Merkle Tree has been created by passing
@@ -109,7 +109,7 @@ impl ValidatorKeysUpdatesGadget {
                 cs.ns(|| format!("alloc_fe gadget elems for skey_{}", i)),
             )?;
             let signing_key_fe_hash_g = FieldHashGadget::enforce_hash_constant_length(
-                cs.ns(|| format!("H(skey_{}||'s'||CONST_SALT||epoch_id||ledger_id)", i)),
+                cs.ns(|| format!("H(skey_{})", i)),
                 signing_key_fe_g.as_slice(),
             )?;
 
@@ -121,7 +121,7 @@ impl ValidatorKeysUpdatesGadget {
                 cs.ns(|| format!("alloc_fe gadget elems for mkey_{}", i)),
             )?;
             let master_key_fe_hash_g = FieldHashGadget::enforce_hash_constant_length(
-                cs.ns(|| format!("H(mkey_{}||'m'||CONST_SALT||epoch_id||ledger_id)", i)),
+                cs.ns(|| format!("H(mkey_{})", i)),
                 master_key_fe_g.as_slice(),
             )?;
 
@@ -175,13 +175,14 @@ impl ValidatorKeysUpdatesGadget {
         &self,
         mut cs: CS,
         new_validators_keys_leaves: &[FieldElementGadget],
+        salt: u8,
         epoch_id: &UInt32,
         ledger_id: &FieldElementGadget,
     ) -> Result<(), SynthesisError> {
 
-        let secret_key_tag = UInt8::constant('s' as u8);
-        let master_key_tag = UInt8::constant('m' as u8);
-        let salt = UInt8::constant(VALIDATOR_HASH_SALT);
+        let secret_key_tag = UInt8::constant(SIGNING_KEY_DOMAIN_TAG);
+        let master_key_tag = UInt8::constant(MASTER_KEY_DOMAIN_TAG);
+        let salt = UInt8::constant(salt);
 
         let salt_bits = salt.into_bits_be();
         let epoch_bits = epoch_id.clone().into_bits_be();

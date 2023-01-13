@@ -19,6 +19,7 @@ use crate::{
     naive_threshold_sig_w_key_rotation::constraints::data_structures::ValidatorKeysUpdatesGadget,
     type_mapping::*,
 };
+use crate::naive_threshold_sig_w_key_rotation::data_structures::VALIDATOR_HASH_SALT;
 
 pub mod data_structures;
 
@@ -261,6 +262,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignatureWKeyRotation
         validators_keys_updates_g.check_keys_updates(
             cs.ns(|| "check key changes"),
             new_validators_keys_leaves.as_slice(),
+            VALIDATOR_HASH_SALT,
             &withdrawal_certificate_g.epoch_id_g,
             &withdrawal_certificate_g.ledger_id_g
         )?;

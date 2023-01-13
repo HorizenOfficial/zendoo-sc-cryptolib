@@ -367,6 +367,95 @@ fn malicious_key_rotations() {
     }
 }
 
+/*#[serial]
+#[test]
+fn malicious_master_key_rotation() {
+    const THRESHOLD: usize = 4;
+    let (
+        signing_keys_sks,
+        _master_keys_sks,
+        genesis_validator_keys_tree_root,
+        withdrawal_certificate,
+        _wcert_signatures,
+        mut validator_key_updates,
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD);
+    let mut rng = thread_rng();
+    let original_validator_key_updates = validator_key_updates.clone();
+    // Change one signer but use malicious master key
+    let (pk, _sk) = SchnorrSigScheme::keygen(&mut thread_rng());
+    let (master_pk, master_sk) = SchnorrSigScheme::keygen(&mut thread_rng());
+    let updated_msg = updated_key_msg(pk);
+    validator_key_updates.updated_signing_keys[0] = pk;
+    validator_key_updates.updated_signing_keys_sk_signatures[0] =
+        SchnorrSigScheme::sign(&mut rng, &validator_key_updates.signing_keys[0], &signing_keys_sks[0], updated_msg).unwrap();
+    validator_key_updates.updated_signing_keys_mk_signatures[0] =
+        SchnorrSigScheme::sign(&mut rng, &master_pk, &master_sk, updated_msg).unwrap();
+    let mut prev_withdrawal_certificate = create_withdrawal_certificate();
+    prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
+    prev_withdrawal_certificate.quality = THRESHOLD as u64;
+    let msg_to_sign = cert_to_msg(&withdrawal_certificate);
+    let wcert_signatures = create_signatures(
+        MAX_PKS,
+        &signing_keys_sks[..THRESHOLD],
+        &validator_key_updates.signing_keys[..THRESHOLD],
+        msg_to_sign,
+    );
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates.clone(),
+        wcert_signatures.clone(),
+        withdrawal_certificate.clone(),
+        Some(prev_withdrawal_certificate.clone()),
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated signing key should be signed old master key 0/conditional verify signature/conditional_equals"));
+    // Now try without previous withdrawal certificate
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates.clone(),
+        wcert_signatures.clone(),
+        withdrawal_certificate.clone(),
+        None,
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated signing key should be signed old master key 0/conditional verify signature/conditional_equals"));
+    validator_key_updates = original_validator_key_updates.clone();
+    let updated_msg = updated_key_msg(master_pk);
+    validator_key_updates.updated_master_keys[0] = master_pk;
+    validator_key_updates.updated_master_keys_sk_signatures[0] =
+        SchnorrSigScheme::sign(&mut rng, &validator_key_updates.signing_keys[0], &signing_keys_sks[0], updated_msg).unwrap();
+    validator_key_updates.updated_master_keys_mk_signatures[0] =
+        SchnorrSigScheme::sign(&mut rng, &master_pk, &master_sk, updated_msg).unwrap();
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates.clone(),
+        wcert_signatures.clone(),
+        withdrawal_certificate.clone(),
+        Some(prev_withdrawal_certificate.clone()),
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated master key should be signed old master key 0/conditional verify signature/conditional_equals"));
+    // Now try without previous withdrawal certificate
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates.clone(),
+        wcert_signatures,
+        withdrawal_certificate.clone(),
+        None,
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated master key should be signed old master key 0/conditional verify signature/conditional_equals"));
+}*/
+
+
 #[serial]
 #[test]
 fn multiple_custom_fields() {
@@ -460,6 +549,11 @@ fn bad_custom_fields() {
     debug_naive_threshold_circuit(&circuit, true, Some("enforce new root equals the one in curr cert/conditional_equals"));
 }
 
+// check that it is not possible to perform a replay attack even if a validator chooses as a
+// signing/master key a key `k` that was already used in previous epochs.
+// Indeed, in this case, the attacker may try to re-use the signatures computed by the validator in
+// a previous epoch to update key `k` to another key `new_k`, with the extent of changing again
+// key `k` to `new_k` also in the current epoch
 #[serial]
 #[test]
 fn test_replay_attack() {
@@ -587,8 +681,9 @@ fn test_replay_attack() {
     let circuit = circuit_res.unwrap();
 
     debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated signing key should be signed old signing key 0/conditional verify signature/conditional_equals"));
-println!("ok");
-    // test that if epoch_id is changed, then the attack works
+    // test that the attack does not work because of the current `epoch_id` being employed to
+    // compute the signatures for key rotations: this is checked by forcing the `epoch_id` of the
+    // current certificate to be the same as the one being employed to compute the old signatures
     withdrawal_certificate.epoch_id = old_epoch_id;
     let msg_to_sign = cert_to_msg(&withdrawal_certificate);
     let wcert_signatures = create_signatures(
@@ -612,6 +707,12 @@ println!("ok");
     debug_naive_threshold_circuit(&circuit, false, None);
 }
 
+// check that it is not possible for an attacker to employ a legitimate update of the signing key
+// performed by the validator to force a master key update in the same epoch (and vice versa).
+// In other words, these test verifies that the `SIGNING_KEY_TAG`/`MASTER_KEY_TAG`, which are
+// employed to compute signatures to rotate signing/master keys, respectively, makes signatures
+// computed to update a signing key to a new key `k` not re-usable to also update the master key
+// to the same key `k` (and vice versa)
 #[serial]
 #[test]
 fn test_key_update_from_other_key_update() {

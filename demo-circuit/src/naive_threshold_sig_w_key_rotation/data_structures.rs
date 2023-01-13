@@ -1,4 +1,4 @@
-use algebra::{Field, ToConstraintField};
+use algebra::ToConstraintField;
 use cctp_primitives::type_mapping::{
     FieldElement, FieldHash, G2Projective, GingerMHT, GingerMHTParams,
 };
@@ -9,6 +9,8 @@ use primitives::{
 
 use crate::{common::NULL_CONST, Error};
 
+pub const SIGNING_KEY_DOMAIN_TAG: u8 = 's' as u8;
+pub const MASTER_KEY_DOMAIN_TAG: u8 = 'm' as u8;
 pub const VALIDATOR_HASH_SALT: u8 = 0u8;
 
 //TODO: It would be nice using a constant generic here
@@ -162,20 +164,24 @@ impl ValidatorKeysUpdates {
 
     pub(crate) fn get_key_domain_fe(
         domain: u8,
+        salt: u8,
         epoch_id: u32,
-    ) -> FieldElement {
-        let mut bytes = [0u8, 0u8, 0u8, 0u8, VALIDATOR_HASH_SALT, domain];
+    ) -> Result<FieldElement, Error> {
+        let mut bytes = [0u8, 0u8, 0u8, 0u8, salt, domain];
         bytes[..4].copy_from_slice(&epoch_id.to_le_bytes());
         // Safe to unwrap since it won't overflow
-        FieldElement::from_random_bytes(&bytes).unwrap()
+        let fe = bytes.to_field_elements()?;
+        // check that the bytes can fit in a single field element
+        assert_eq!(fe.len(), 1);
+        Ok(fe[0])
     }
 
     pub fn get_msg_to_sign_for_signing_key_update(pk: &FieldBasedSchnorrPk<G2Projective>, epoch_id: u32, ledger_id: FieldElement) -> Result<FieldElement, Error> {
-        Self::get_msg_to_sign_for_key_update(pk, Self::get_key_domain_fe('s' as u8, epoch_id), ledger_id)
+        Self::get_msg_to_sign_for_key_update(pk, Self::get_key_domain_fe(SIGNING_KEY_DOMAIN_TAG, VALIDATOR_HASH_SALT, epoch_id)?, ledger_id)
     }
 
     pub fn get_msg_to_sign_for_master_key_update(pk: &FieldBasedSchnorrPk<G2Projective>, epoch_id: u32, ledger_id: FieldElement) -> Result<FieldElement, Error> {
-        Self::get_msg_to_sign_for_key_update(pk, Self::get_key_domain_fe('m' as u8, epoch_id), ledger_id)
+        Self::get_msg_to_sign_for_key_update(pk, Self::get_key_domain_fe(MASTER_KEY_DOMAIN_TAG, VALIDATOR_HASH_SALT, epoch_id)?, ledger_id)
     }
 
     pub(crate) fn get_validators_key_root(
