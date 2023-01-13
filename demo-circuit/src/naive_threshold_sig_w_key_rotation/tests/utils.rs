@@ -1,11 +1,13 @@
 use super::*;
 use cctp_primitives::utils::get_cert_data_hash_from_bt_root_and_custom_fields_hash;
 
+const LEDGER_ID: u64 = 42; // fixed ledger id to be employed in all the certificates to simulate
+    // they belong to the same sidechain
 
 pub(crate) fn create_withdrawal_certificate() -> WithdrawalCertificateData {
     let mut rng = thread_rng();
     WithdrawalCertificateData {
-        ledger_id: FieldElement::from(42u64), // use a fixed ledger id to simulate all certificates belong to the same sidechain
+        ledger_id: FieldElement::from(LEDGER_ID),
         epoch_id: rng.gen(),
         bt_root: rng.gen(),
         mcb_sc_txs_com: rng.gen(),

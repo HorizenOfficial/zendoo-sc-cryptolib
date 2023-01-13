@@ -34,9 +34,11 @@ const THRESHOLD_V1_VK_DIGEST: &str =
 
 // Base: zendoo-sc-cryptolib v0.6.0
 const THRESHOLD_V2_PK_DIGEST: &str =
-    "8e5987aba3c5a7ec44bc8b666ba2c720b4cbc857336dbbb052a7fe84b78119e2";
+    "d3a70ab2990ae2b625b632d684049c19cd019237f49c419d9feb013b7cd5a373";
+//"8e5987aba3c5a7ec44bc8b666ba2c720b4cbc857336dbbb052a7fe84b78119e2";
 const THRESHOLD_V2_VK_DIGEST: &str =
-    "43478bf7f66e2e64f5d55e00ba8352a627bfafb9eebdb475501d4837d43734a9";
+    "0792d70d039a46dd6a29b2f87897e39c0ffc31c1f5d19b5db01a50a72a3f94db";
+//    "43478bf7f66e2e64f5d55e00ba8352a627bfafb9eebdb475501d4837d43734a9";
 
 // Common parameters to be used for regression
 const NUM_KEYS: usize = 6;
