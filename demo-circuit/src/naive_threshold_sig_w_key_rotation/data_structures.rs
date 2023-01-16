@@ -9,8 +9,8 @@ use primitives::{
 
 use crate::{common::NULL_CONST, Error};
 
-pub const SIGNING_KEY_DOMAIN_TAG: u8 = 's' as u8;
-pub const MASTER_KEY_DOMAIN_TAG: u8 = 'm' as u8;
+pub const SIGNING_KEY_DOMAIN_TAG: u8 = b's';
+pub const MASTER_KEY_DOMAIN_TAG: u8 = b'm';
 pub const VALIDATOR_HASH_SALT: u8 = 0u8;
 
 //TODO: It would be nice using a constant generic here
@@ -107,22 +107,22 @@ impl ValidatorKeysUpdates {
 
         let updated_signing_keys_sk_signatures_adjusted = updated_signing_keys_sk_signatures
             .into_iter()
-            .map(|opt_sig| opt_sig.unwrap_or_else(|| NULL_CONST.null_sig))
+            .map(|opt_sig| opt_sig.unwrap_or(NULL_CONST.null_sig))
             .collect();
 
         let updated_signing_keys_mk_signatures_adjusted = updated_signing_keys_mk_signatures
             .into_iter()
-            .map(|opt_sig| opt_sig.unwrap_or_else(|| NULL_CONST.null_sig))
+            .map(|opt_sig| opt_sig.unwrap_or(NULL_CONST.null_sig))
             .collect();
 
         let updated_master_keys_sk_signatures_adjusted = updated_master_keys_sk_signatures
             .into_iter()
-            .map(|opt_sig| opt_sig.unwrap_or_else(|| NULL_CONST.null_sig))
+            .map(|opt_sig| opt_sig.unwrap_or(NULL_CONST.null_sig))
             .collect();
 
         let updated_master_keys_mk_signatures_adjusted = updated_master_keys_mk_signatures
             .into_iter()
-            .map(|opt_sig| opt_sig.unwrap_or_else(|| NULL_CONST.null_sig))
+            .map(|opt_sig| opt_sig.unwrap_or(NULL_CONST.null_sig))
             .collect();
 
         Self {

@@ -136,5 +136,5 @@ fn no_changes_in_circuits_from_previous_version() {
     let _ = load_g1_committer_key(MAX_SEGMENT_SIZE - 1);
 
     // Assert no changes for each circuit compared to the previous version
-    Circuits::iter().for_each(|circ_type| compute_and_compare_circuits_digests(circ_type))
+    Circuits::iter().for_each(compute_and_compare_circuits_digests)
 }

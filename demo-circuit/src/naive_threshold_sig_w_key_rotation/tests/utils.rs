@@ -144,7 +144,7 @@ pub(crate) fn setup_certificate_data(
         signing_keys_pks.clone(),
         master_keys_pks.clone(),
         signing_keys_pks.clone(),
-        master_keys_pks.clone(),
+        master_keys_pks,
         vec![Some(NULL_CONST.null_sig); max_pks],
         vec![Some(NULL_CONST.null_sig); max_pks],
         vec![Some(NULL_CONST.null_sig); max_pks],

@@ -2120,7 +2120,7 @@ ffi_export!(
                 throw!(
                 &_env,
                 "java/lang/Exception",
-                &format!("{}", e.to_string()),
+                &e.to_string(),
                 JObject::null().into_inner()
             )
             },
@@ -2145,7 +2145,7 @@ ffi_export!(
                 throw!(
                 &_env,
                 "java/lang/Exception",
-                &format!("{}", e.to_string()),
+                &e.to_string(),
                 JObject::null().into_inner()
             )
             },

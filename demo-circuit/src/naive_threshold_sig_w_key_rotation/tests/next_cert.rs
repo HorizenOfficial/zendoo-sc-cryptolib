@@ -39,7 +39,7 @@ fn no_key_rotation_works() {
     debug_naive_threshold_circuit(&circuit, false, None);
 
     let proof =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None).unwrap();
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit.clone(), false, None).unwrap();
 
     let public_inputs = [
         circuit.genesis_constant,
@@ -47,7 +47,7 @@ fn no_key_rotation_works() {
         get_cert_data_hash(&prev_withdrawal_certificate),
     ];
 
-    assert!(CoboundaryMarlin::verify(&params.1.clone(), &ck_g1, &public_inputs, &proof).unwrap());
+    assert!(CoboundaryMarlin::verify(&params.1, &ck_g1, &public_inputs, &proof).unwrap());
 }
 
 #[serial]
@@ -109,7 +109,7 @@ fn signing_key_rotation_works() {
     debug_naive_threshold_circuit(&circuit, false, None);
 
     let proof =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None).unwrap();
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit.clone(), false, None).unwrap();
 
     withdrawal_certificate.quality = MAX_PKS as u64;
 
@@ -119,7 +119,7 @@ fn signing_key_rotation_works() {
         get_cert_data_hash(&prev_withdrawal_certificate),
     ];
 
-    assert!(CoboundaryMarlin::verify(&params.1.clone(), &ck_g1, &public_inputs, &proof).unwrap());
+    assert!(CoboundaryMarlin::verify(&params.1, &ck_g1, &public_inputs, &proof).unwrap());
 }
 
 #[serial]
@@ -182,7 +182,7 @@ fn master_key_rotation_works() {
     debug_naive_threshold_circuit(&circuit, false, None);
 
     let proof =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None).unwrap();
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit.clone(), false, None).unwrap();
 
     withdrawal_certificate.quality = MAX_PKS as u64;
 
@@ -192,7 +192,7 @@ fn master_key_rotation_works() {
         get_cert_data_hash(&prev_withdrawal_certificate),
     ];
 
-    assert!(CoboundaryMarlin::verify(&params.1.clone(), &ck_g1, &public_inputs, &proof).unwrap());
+    assert!(CoboundaryMarlin::verify(&params.1, &ck_g1, &public_inputs, &proof).unwrap());
 }
 
 #[serial]
@@ -388,7 +388,7 @@ fn all_keys_rotated() {
     );
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
+        validator_key_updates,
         wcert_signatures,
         withdrawal_certificate.clone(),
         Some(prev_withdrawal_certificate.clone()),
@@ -401,7 +401,7 @@ fn all_keys_rotated() {
     debug_naive_threshold_circuit(&circuit, false, None);
 
     let proof =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None).unwrap();
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit.clone(), false, None).unwrap();
 
     let public_inputs = [
         circuit.genesis_constant,
@@ -409,7 +409,7 @@ fn all_keys_rotated() {
         get_cert_data_hash(&prev_withdrawal_certificate),
     ];
 
-    assert!(CoboundaryMarlin::verify(&params.1.clone(), &ck_g1, &public_inputs, &proof).unwrap());
+    assert!(CoboundaryMarlin::verify(&params.1, &ck_g1, &public_inputs, &proof).unwrap());
 }
 
 #[serial]
@@ -523,10 +523,10 @@ fn try_to_use_outdated_keys() {
     );
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
+        validator_key_updates,
         wcert_signatures,
-        withdrawal_certificate.clone(),
-        Some(prev_withdrawal_certificate.clone()),
+        withdrawal_certificate,
+        Some(prev_withdrawal_certificate),
         THRESHOLD as u64,
         genesis_validator_keys_tree_root,
     );
@@ -556,10 +556,10 @@ fn bad_cert_hashes() {
     prev_withdrawal_certificate.quality = THRESHOLD as u64;
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
+        validator_key_updates,
         wcert_signatures,
-        withdrawal_certificate.clone(),
-        Some(prev_withdrawal_certificate.clone()),
+        withdrawal_certificate,
+        Some(prev_withdrawal_certificate),
         THRESHOLD as u64,
         genesis_validator_keys_tree_root,
     );
@@ -650,9 +650,9 @@ fn test_wrong_threshold() {
 
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
-        wcert_signatures.clone(),
-        withdrawal_certificate.clone(),
+        validator_key_updates,
+        wcert_signatures,
+        withdrawal_certificate,
         None,
         THRESHOLD as u64,
         genesis_validator_keys_tree_root,
@@ -688,9 +688,9 @@ fn test_wrong_quality() {
 
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
-        wcert_signatures.clone(),
-        withdrawal_certificate.clone(),
+        validator_key_updates,
+        wcert_signatures,
+        withdrawal_certificate,
         None,
         THRESHOLD as u64,
         genesis_validator_keys_tree_root,

@@ -75,7 +75,7 @@ fn with_prev_cert_fails() {
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
         validator_key_updates,
         wcert_signatures,
-        withdrawal_certificate.clone(),
+        withdrawal_certificate,
         Some(prev_withdrawal_certificate),
         num_sigs as u64,
         genesis_validator_keys_tree_root,
@@ -87,7 +87,7 @@ fn with_prev_cert_fails() {
     debug_naive_threshold_circuit(&circuit, true, Some("enforce current root equals the one in prev cert if present/conditional_equals"));
 
     let proof_res =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None);
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit, false, None);
     assert!(proof_res.is_err());
 }
 
@@ -106,7 +106,7 @@ fn wrong_genesis_constant() {
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
         validator_key_updates,
         wcert_signatures,
-        withdrawal_certificate.clone(),
+        withdrawal_certificate,
         None,
         num_sigs as u64,
         genesis_validator_keys_tree_root,
@@ -119,7 +119,7 @@ fn wrong_genesis_constant() {
     debug_naive_threshold_circuit(&circuit, true, Some("genesis_constant: expected == actual/conditional_equals"));
 
     let proof_res =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None);
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit, false, None);
     assert!(proof_res.is_err());
 }
 
@@ -199,7 +199,7 @@ fn signing_key_rotation_works() {
     debug_naive_threshold_circuit(&circuit, true, Some("enforce new root equals the one in curr cert/conditional_equals"));
 
     let proof_res =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None);
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit, false, None);
     assert!(proof_res.is_err());
 
     withdrawal_certificate.custom_fields[0] = validator_key_updates
@@ -228,7 +228,7 @@ fn signing_key_rotation_works() {
     debug_naive_threshold_circuit(&circuit, false, None);
 
     let proof_res =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None);
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit.clone(), false, None);
 
     let proof = proof_res.unwrap();
 
@@ -238,7 +238,7 @@ fn signing_key_rotation_works() {
         PHANTOM_CERT_DATA_HASH,
     ];
 
-    assert!(CoboundaryMarlin::verify(&params.1.clone(), &ck_g1, &public_inputs, &proof).unwrap());
+    assert!(CoboundaryMarlin::verify(&params.1, &ck_g1, &public_inputs, &proof).unwrap());
 }
 
 #[serial]
@@ -284,7 +284,7 @@ fn master_key_rotation_works() {
     );
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
+        validator_key_updates,
         wcert_signatures,
         withdrawal_certificate.clone(),
         None,
@@ -297,7 +297,7 @@ fn master_key_rotation_works() {
     debug_naive_threshold_circuit(&circuit, false, None);
 
     let proof_res =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None);
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit.clone(), false, None);
     assert!(proof_res.is_ok());
 
     let proof = proof_res.unwrap();
@@ -309,7 +309,7 @@ fn master_key_rotation_works() {
         PHANTOM_CERT_DATA_HASH,
     ];
 
-    assert!(CoboundaryMarlin::verify(&params.1.clone(), &ck_g1, &public_inputs, &proof).unwrap());
+    assert!(CoboundaryMarlin::verify(&params.1, &ck_g1, &public_inputs, &proof).unwrap());
 }
 
 #[serial]

@@ -24,7 +24,7 @@ fn verify_malicious_proof() {
     prev_withdrawal_certificate.quality = (THRESHOLD - 1) as u64;
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
+        validator_key_updates,
         wcert_signatures,
         withdrawal_certificate.clone(),
         Some(prev_withdrawal_certificate.clone()),
@@ -35,7 +35,7 @@ fn verify_malicious_proof() {
     let circuit = circuit_res.unwrap();
 
     let proof =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None).unwrap();
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit, false, None).unwrap();
 
     // verifier genesis constant
     let verifier_genesis_constant = FieldHash::init_constant_length(2, None)
@@ -50,7 +50,7 @@ fn verify_malicious_proof() {
         get_cert_data_hash(&prev_withdrawal_certificate),
     ];
 
-    assert!(!CoboundaryMarlin::verify(&params.1.clone(), &ck_g1, &public_inputs, &proof).unwrap());
+    assert!(!CoboundaryMarlin::verify(&params.1, &ck_g1, &public_inputs, &proof).unwrap());
 }
 #[derive(Debug)]
 enum MaliciousKeyRotations {
@@ -99,8 +99,8 @@ fn malicious_current_keys() {
             let key_to_be_changed = rng.gen_range(0..MAX_PKS);
             // `should_signature_fail` is true if the circuit is expected to be unsatisfied because
             // there are not enough valid signatures, false otherwise
-            let should_signature_fail = match test_type {
-                &MaliciousKeyRotations::SigningKey => {
+            let should_signature_fail = match *test_type {
+                MaliciousKeyRotations::SigningKey => {
                     signing_keys_sks[key_to_be_changed] = sk;
                     validator_key_updates.signing_keys[key_to_be_changed] = pk;
                     validator_key_updates.updated_signing_keys[key_to_be_changed] = pk;
@@ -125,7 +125,7 @@ fn malicious_current_keys() {
                         }
                     }
                 },
-                &MaliciousKeyRotations::MasterKey => {
+                MaliciousKeyRotations::MasterKey => {
                     validator_key_updates.master_keys[key_to_be_changed] = pk;
                     validator_key_updates.updated_master_keys[key_to_be_changed] = pk;
                     if resign_certificate {
@@ -218,8 +218,8 @@ fn malicious_key_rotations() {
             let (pk, _sk) = SchnorrSigScheme::keygen(&mut thread_rng());
             let (master_pk, master_sk) = SchnorrSigScheme::keygen(&mut thread_rng());
             let key_to_be_changed = rng.gen_range(0..MAX_PKS);
-            let failing_constraint = match test_type {
-                &MaliciousKeyRotations::SigningKey => {
+            let failing_constraint = match *test_type {
+                MaliciousKeyRotations::SigningKey => {
                     validator_key_updates.updated_signing_keys[key_to_be_changed] = pk;
                     if change_signature {
                         let updated_msg = ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(&pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap();
@@ -237,7 +237,7 @@ fn malicious_key_rotations() {
                         format!("check key changes/check updated signing key should be signed old signing key {}/conditional verify signature/conditional_equals", key_to_be_changed)
                     }
                 },
-                &MaliciousKeyRotations::MasterKey => {
+                MaliciousKeyRotations::MasterKey => {
                     validator_key_updates.updated_master_keys[key_to_be_changed] = pk;
                     if change_signature {
                         let updated_msg = ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(&pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap();
@@ -310,8 +310,8 @@ fn malicious_key_rotations() {
     for test_type in VARIANTS.iter() {
         validator_key_updates = original_validator_key_updates.clone();
 
-        match test_type {
-            &MaliciousKeyRotations::SigningKey => rotate_key(
+        match *test_type {
+            MaliciousKeyRotations::SigningKey => rotate_key(
                 &signing_keys_sks[0],
                 &validator_key_updates.signing_keys[0],
                 &_master_keys_sks[0],
@@ -322,7 +322,7 @@ fn malicious_key_rotations() {
                 &mut validator_key_updates.updated_signing_keys[0],
                 |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap()
             ),
-            &MaliciousKeyRotations::MasterKey => rotate_key(
+            MaliciousKeyRotations::MasterKey => rotate_key(
                 &signing_keys_sks[0],
                 &validator_key_updates.signing_keys[0],
                 &_master_keys_sks[0],
@@ -489,10 +489,10 @@ fn multiple_custom_fields() {
     );
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
+        validator_key_updates,
         wcert_signatures,
-        withdrawal_certificate.clone(),
-        Some(prev_withdrawal_certificate.clone()),
+        withdrawal_certificate,
+        Some(prev_withdrawal_certificate),
         THRESHOLD as u64,
         genesis_validator_keys_tree_root,
     );
@@ -536,10 +536,10 @@ fn bad_custom_fields() {
     );
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
+        validator_key_updates,
         wcert_signatures,
-        withdrawal_certificate.clone(),
-        Some(prev_withdrawal_certificate.clone()),
+        withdrawal_certificate,
+        Some(prev_withdrawal_certificate),
         THRESHOLD as u64,
         genesis_validator_keys_tree_root,
     );

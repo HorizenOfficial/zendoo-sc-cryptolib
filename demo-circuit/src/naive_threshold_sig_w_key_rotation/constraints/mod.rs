@@ -195,7 +195,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignatureWKeyRotation
             cs.ns(|| "H(MR(genesis_pks), threshold)"),
             &[
                 genesis_validator_keys_tree_root_g.clone(),
-                threshold_g.clone(),
+                threshold_g,
             ],
         )?;
 

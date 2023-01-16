@@ -130,7 +130,7 @@ impl ValidatorKeysUpdatesGadget {
         }
 
         // pad the vector up to the length 2^height, to use in the enforce_root_from_leaves function
-        validator_mktree_leaves_g.resize(2_usize.pow(height as u32), null_leaf_g.clone());
+        validator_mktree_leaves_g.resize(2_usize.pow(height as u32), null_leaf_g);
 
         // Starting from all the leaves in the Merkle Tree, reconstructs and returns
         // the Merkle Root. NOTE: This works iff Merkle Tree has been created by passing
