@@ -1,10 +1,13 @@
 use super::*;
 use cctp_primitives::utils::get_cert_data_hash_from_bt_root_and_custom_fields_hash;
 
+const LEDGER_ID: u64 = 42; // fixed ledger id to be employed in all the certificates to simulate
+    // they belong to the same sidechain
+
 pub(crate) fn create_withdrawal_certificate() -> WithdrawalCertificateData {
     let mut rng = thread_rng();
     WithdrawalCertificateData {
-        ledger_id: rng.gen(),
+        ledger_id: FieldElement::from(LEDGER_ID),
         epoch_id: rng.gen(),
         bt_root: rng.gen(),
         mcb_sc_txs_com: rng.gen(),
@@ -85,16 +88,7 @@ pub(crate) fn cert_to_msg(withdrawal_certificate: &WithdrawalCertificateData) ->
     .unwrap()
 }
 
-pub(crate) fn updated_key_msg(pk: FieldBasedSchnorrPk<G2Projective>) -> FieldElement {
-    let spk_fe = pk.0.to_field_elements().unwrap();
-    let mut h = FieldHash::init_constant_length(spk_fe.len(), None);
-    spk_fe.into_iter().for_each(|fe| {
-        h.update(fe);
-    });
-    h.finalize().unwrap()
-}
-
-pub(crate) fn rotate_key(
+pub(crate) fn rotate_key<F: Fn(&FieldBasedSchnorrPk<G2Projective>) -> FieldElement>(
     signing_key_sk: &SchnorrSk,
     signing_key_pk: &FieldBasedSchnorrPk<G2Projective>,
     master_key_sk: &SchnorrSk,
@@ -103,10 +97,11 @@ pub(crate) fn rotate_key(
     updated_mk_signatures: &mut FieldBasedSchnorrSignature<FieldElement, G2Projective>,
     updated_signing_sks: Option<&mut SchnorrSk>,
     updated_signing_pks: &mut FieldBasedSchnorrPk<G2Projective>,
+    updated_key_msg: F,
 ) {
     let mut rng = thread_rng();
     let (updated_pk, updated_sk) = SchnorrSigScheme::keygen(&mut rng);
-    let updated_msg = updated_key_msg(updated_pk);
+    let updated_msg =  updated_key_msg(&updated_pk);
     *updated_sk_signatures =
         SchnorrSigScheme::sign(&mut rng, signing_key_pk, signing_key_sk, updated_msg).unwrap();
     *updated_mk_signatures =
@@ -120,10 +115,12 @@ pub(crate) fn rotate_key(
 pub(crate) fn setup_certificate_data(
     max_pks: usize,
     num_sigs: usize,
+    is_first_cert: bool,
 ) -> (
     Vec<SchnorrSk>,
     Vec<SchnorrSk>,
     FieldElement,
+    Option<WithdrawalCertificateData>,
     WithdrawalCertificateData,
     Vec<Option<SchnorrSig>>,
     ValidatorKeysUpdates,
@@ -135,7 +132,27 @@ pub(crate) fn setup_certificate_data(
         ValidatorKeysUpdates::get_validators_key_root(max_pks, &signing_keys_pks, &master_keys_pks)
             .unwrap();
 
-    withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
+    let prev_withdrawal_certificate = if is_first_cert {
+        None
+    } else {
+        let mut certificate = create_withdrawal_certificate();
+        certificate.custom_fields[0] = genesis_validator_keys_tree_root;
+        Some(certificate)
+    };
+
+    let validator_key_updates = ValidatorKeysUpdates::new(
+        signing_keys_pks.clone(),
+        master_keys_pks.clone(),
+        signing_keys_pks.clone(),
+        master_keys_pks,
+        vec![Some(NULL_CONST.null_sig); max_pks],
+        vec![Some(NULL_CONST.null_sig); max_pks],
+        vec![Some(NULL_CONST.null_sig); max_pks],
+        vec![Some(NULL_CONST.null_sig); max_pks],
+        max_pks,
+    );
+
+    withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root().unwrap();
     withdrawal_certificate.quality = num_sigs as u64;
 
     let message = cert_to_msg(&withdrawal_certificate);
@@ -146,22 +163,11 @@ pub(crate) fn setup_certificate_data(
         message,
     );
 
-    let validator_key_updates = ValidatorKeysUpdates::new(
-        signing_keys_pks.clone(),
-        master_keys_pks.clone(),
-        signing_keys_pks.clone(),
-        master_keys_pks.clone(),
-        vec![Some(NULL_CONST.null_sig); max_pks],
-        vec![Some(NULL_CONST.null_sig); max_pks],
-        vec![Some(NULL_CONST.null_sig); max_pks],
-        vec![Some(NULL_CONST.null_sig); max_pks],
-        max_pks,
-    );
-
     (
         signing_keys_sks,
         master_keys_sks,
         genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
         withdrawal_certificate,
         wcert_signatures,
         validator_key_updates,
@@ -180,7 +186,7 @@ pub(crate) fn debug_naive_threshold_circuit(
         assert!(failing_constraint.is_some());
         assert_eq!(failing_constraint.unwrap(), expected_failing_constraint.unwrap());
     } else {
-        assert!(failing_constraint.is_none());
+        assert!(failing_constraint.is_none(), "no constraint expected to fail, found {:?}", failing_constraint);
     }
 
 }

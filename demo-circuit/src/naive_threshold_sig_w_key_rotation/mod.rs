@@ -69,13 +69,14 @@ impl NaiveThresholdSignatureWKeyRotation {
     pub fn get_instance_for_setup(max_pks: usize, custom_fields_len: u32) -> Self {
         //Instantiating supported number of pks and sigs
         let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
+        let withdrawal_certificate = WithdrawalCertificateData::get_default(custom_fields_len);
 
         // Create parameters for our circuit
         NaiveThresholdSignatureWKeyRotation {
             validator_keys_updates: ValidatorKeysUpdates::get_instance_for_setup(max_pks),
             wcert_signatures: vec![NULL_CONST.null_sig; max_pks],
-            withdrawal_certificate: WithdrawalCertificateData::get_default(custom_fields_len),
-            prev_withdrawal_certificate: WithdrawalCertificateData::get_default(custom_fields_len),
+            withdrawal_certificate: withdrawal_certificate.clone(),
+            prev_withdrawal_certificate: withdrawal_certificate,
             threshold: FieldElement::zero(),
             b: vec![false; log_max_pks + 1],
             genesis_validator_keys_tree_root: FieldElement::zero(),

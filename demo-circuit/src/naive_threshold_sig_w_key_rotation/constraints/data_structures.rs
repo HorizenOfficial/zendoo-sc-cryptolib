@@ -2,17 +2,17 @@ use std::borrow::Borrow;
 
 use cctp_primitives::type_mapping::{FieldElement, GingerMHTParams};
 use primitives::FieldBasedMerkleTreeParameters;
-use r1cs_core::{ConstraintSystemAbstract, SynthesisError};
+use r1cs_core::{ConstraintSystemAbstract, Namespace, SynthesisError};
 use r1cs_crypto::{FieldBasedHashGadget, FieldBasedSigGadget};
-use r1cs_std::{
-    prelude::{AllocGadget, ConstantGadget, EqGadget},
-    to_field_gadget_vec::ToConstraintFieldGadget,
-};
+use r1cs_std::{FromBitsGadget, prelude::{AllocGadget, ConstantGadget, EqGadget}, to_field_gadget_vec::ToConstraintFieldGadget};
+use r1cs_std::uint32::UInt32;
+use r1cs_std::uint8::UInt8;
 
 use crate::{
     naive_threshold_sig_w_key_rotation::data_structures::ValidatorKeysUpdates, FieldElementGadget,
     FieldHashGadget, SchnorrPkGadget, SchnorrSigGadget, SchnorrVrfySigGadget,
 };
+use crate::naive_threshold_sig_w_key_rotation::data_structures::{MASTER_KEY_DOMAIN_TAG, SIGNING_KEY_DOMAIN_TAG};
 
 /// Starting from all the leaves in the Merkle Tree, reconstructs and returns
 /// the Merkle Root. NOTE: This works iff Merkle Tree has been created by passing
@@ -130,7 +130,7 @@ impl ValidatorKeysUpdatesGadget {
         }
 
         // pad the vector up to the length 2^height, to use in the enforce_root_from_leaves function
-        validator_mktree_leaves_g.resize(2_usize.pow(height as u32), null_leaf_g.clone());
+        validator_mktree_leaves_g.resize(2_usize.pow(height as u32), null_leaf_g);
 
         // Starting from all the leaves in the Merkle Tree, reconstructs and returns
         // the Merkle Root. NOTE: This works iff Merkle Tree has been created by passing
@@ -175,12 +175,45 @@ impl ValidatorKeysUpdatesGadget {
         &self,
         mut cs: CS,
         new_validators_keys_leaves: &[FieldElementGadget],
+        salt: u8,
+        epoch_id: &UInt32,
+        ledger_id: &FieldElementGadget,
     ) -> Result<(), SynthesisError> {
+
+        let secret_key_tag = UInt8::constant(SIGNING_KEY_DOMAIN_TAG);
+        let master_key_tag = UInt8::constant(MASTER_KEY_DOMAIN_TAG);
+        let salt = UInt8::constant(salt);
+
+        let salt_bits = salt.into_bits_be();
+        let epoch_bits = epoch_id.clone().into_bits_be();
+        let get_key_domain_fe = |mut cs: Namespace<FieldElement, CS::Root>, domain: UInt8| {
+            let mut domain_bits = domain.into_bits_be();
+            domain_bits.extend_from_slice(&salt_bits);
+            domain_bits.extend_from_slice(&epoch_bits);
+            FieldElementGadget::from_bits(cs.ns(|| "domain to field element value"), &domain_bits)
+        };
+
+        let mut secret_key_domain_bits = secret_key_tag.into_bits_be();
+        secret_key_domain_bits.extend_from_slice(&salt_bits);
+        secret_key_domain_bits.extend_from_slice(&epoch_bits);
+
+        let secret_key_domain = get_key_domain_fe(cs.ns(|| "secret key domain"), secret_key_tag)?;
+        let master_key_domain = get_key_domain_fe(cs.ns(|| "master key domain"), master_key_tag)?;
+
         for i in 0..self.max_pks {
             // ******* check signing keys updates *********
 
-            // msg_to_sign = updated_signing_keys[i];
-            let upd_sig_msg_to_sign_g = new_validators_keys_leaves[2 * i].clone();
+            // msg_to_sign = H(H(updated_signing_keys[i])||'s'||CONST_SALT||epoch_id||ledger_id);
+            let hash_payload_g = vec![
+                new_validators_keys_leaves[2 * i].clone(),
+                secret_key_domain.clone(),
+                ledger_id.clone(),
+            ];
+
+            let upd_sig_msg_to_sign_g = FieldHashGadget::enforce_hash_constant_length(
+                cs.ns(|| format!("H(H(skey_{})||'s'||CONST_SALT||epoch_id||ledger_id)", i)),
+                hash_payload_g.as_slice(),
+            )?;
 
             // if (updated_signing_keys[i] != signing_keys[i])
             let should_enforce_s = self.updated_signing_keys_g[i]
@@ -220,8 +253,17 @@ impl ValidatorKeysUpdatesGadget {
 
             // ******* check master keys updates *********
 
-            // msg_to_sign = updated_master_keys[i];
-            let upd_master_msg_to_sign_g = new_validators_keys_leaves[(2 * i) + 1].clone();
+            // msg_to_sign = H(H(updated_master_keys[i])||'m'||CONST_SALT||epoch_id||ledger_id);
+            let hash_payload_g = vec![
+                new_validators_keys_leaves[(2 * i) + 1].clone(),
+                master_key_domain.clone(),
+                ledger_id.clone(),
+            ];
+
+            let upd_master_msg_to_sign_g = FieldHashGadget::enforce_hash_constant_length(
+                cs.ns(|| format!("H(H(mkey_{})||'m'||CONST_SALT||epoch_id||ledger_id)", i)),
+                hash_payload_g.as_slice(),
+            )?;
 
             // if (updated_master_keys[i] != master_keys[i])
             let should_enforce_s = self.updated_master_keys_g[i]

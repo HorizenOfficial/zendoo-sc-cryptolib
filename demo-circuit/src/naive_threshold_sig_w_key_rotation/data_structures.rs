@@ -9,6 +9,10 @@ use primitives::{
 
 use crate::{common::NULL_CONST, Error};
 
+pub const SIGNING_KEY_DOMAIN_TAG: u8 = b's';
+pub const MASTER_KEY_DOMAIN_TAG: u8 = b'm';
+pub const VALIDATOR_HASH_SALT: u8 = 0u8;
+
 //TODO: It would be nice using a constant generic here
 #[derive(Clone)]
 pub struct ValidatorKeysUpdates {
@@ -103,22 +107,22 @@ impl ValidatorKeysUpdates {
 
         let updated_signing_keys_sk_signatures_adjusted = updated_signing_keys_sk_signatures
             .into_iter()
-            .map(|opt_sig| opt_sig.unwrap_or_else(|| NULL_CONST.null_sig))
+            .map(|opt_sig| opt_sig.unwrap_or(NULL_CONST.null_sig))
             .collect();
 
         let updated_signing_keys_mk_signatures_adjusted = updated_signing_keys_mk_signatures
             .into_iter()
-            .map(|opt_sig| opt_sig.unwrap_or_else(|| NULL_CONST.null_sig))
+            .map(|opt_sig| opt_sig.unwrap_or(NULL_CONST.null_sig))
             .collect();
 
         let updated_master_keys_sk_signatures_adjusted = updated_master_keys_sk_signatures
             .into_iter()
-            .map(|opt_sig| opt_sig.unwrap_or_else(|| NULL_CONST.null_sig))
+            .map(|opt_sig| opt_sig.unwrap_or(NULL_CONST.null_sig))
             .collect();
 
         let updated_master_keys_mk_signatures_adjusted = updated_master_keys_mk_signatures
             .into_iter()
-            .map(|opt_sig| opt_sig.unwrap_or_else(|| NULL_CONST.null_sig))
+            .map(|opt_sig| opt_sig.unwrap_or(NULL_CONST.null_sig))
             .collect();
 
         Self {
@@ -134,6 +138,52 @@ impl ValidatorKeysUpdates {
         }
     }
 
+    pub(crate) fn get_msg_to_sign_for_key_update(
+        pk: &FieldBasedSchnorrPk<G2Projective>,
+        domain: FieldElement,
+        ledger_id: FieldElement,
+    ) -> Result<FieldElement, Error> {
+        let key_hash = Self::get_key_hash(pk)?;
+        let mut h = FieldHash::init_constant_length(3, None);
+        h.update(key_hash);
+        h.update(domain);
+        h.update(ledger_id);
+        h.finalize()
+    }
+
+    pub(crate) fn get_key_hash(
+        pk: &FieldBasedSchnorrPk<G2Projective>,
+    ) -> Result<FieldElement, Error> {
+        let spk_fe = pk.0.to_field_elements().unwrap();
+        let mut h = FieldHash::init_constant_length(spk_fe.len(), None);
+        spk_fe.into_iter().for_each(|fe| {
+            h.update(fe);
+        });
+        h.finalize()
+    }
+
+    pub(crate) fn get_key_domain_fe(
+        domain: u8,
+        salt: u8,
+        epoch_id: u32,
+    ) -> Result<FieldElement, Error> {
+        let mut bytes = [0u8, 0u8, 0u8, 0u8, salt, domain];
+        bytes[..4].copy_from_slice(&epoch_id.to_le_bytes());
+        // Safe to unwrap since it won't overflow
+        let fe = bytes.to_field_elements()?;
+        // check that the bytes can fit in a single field element
+        assert_eq!(fe.len(), 1);
+        Ok(fe[0])
+    }
+
+    pub fn get_msg_to_sign_for_signing_key_update(pk: &FieldBasedSchnorrPk<G2Projective>, epoch_id: u32, ledger_id: FieldElement) -> Result<FieldElement, Error> {
+        Self::get_msg_to_sign_for_key_update(pk, Self::get_key_domain_fe(SIGNING_KEY_DOMAIN_TAG, VALIDATOR_HASH_SALT, epoch_id)?, ledger_id)
+    }
+
+    pub fn get_msg_to_sign_for_master_key_update(pk: &FieldBasedSchnorrPk<G2Projective>, epoch_id: u32, ledger_id: FieldElement) -> Result<FieldElement, Error> {
+        Self::get_msg_to_sign_for_key_update(pk, Self::get_key_domain_fe(MASTER_KEY_DOMAIN_TAG, VALIDATOR_HASH_SALT, epoch_id)?, ledger_id)
+    }
+
     pub(crate) fn get_validators_key_root(
         max_pks: usize,
         sig_keys: &[FieldBasedSchnorrPk<G2Projective>],
@@ -143,21 +193,11 @@ impl ValidatorKeysUpdates {
         let null_leaf: FieldElement = GingerMHTParams::ZERO_NODE_CST.unwrap().nodes[0];
         let mut tree = GingerMHT::init(height, 1 << height)?;
 
-        let get_key_hash = |pk: &FieldBasedSchnorrPk<G2Projective>| -> Result<FieldElement, Error> {
-            let pk_fe = pk.0.to_field_elements()?;
-
-            let mut h = FieldHash::init_constant_length(pk_fe.len(), None);
-            pk_fe.into_iter().for_each(|fe| {
-                h.update(fe);
-            });
-            h.finalize()
-        };
-
         for i in 0..max_pks.next_power_of_two() {
             if i < sig_keys.len() {
                 // Compute curr pks hash and append them to curr tree
-                let signing_key_hash = get_key_hash(&sig_keys[i])?;
-                let master_key_hash = get_key_hash(&master_keys[i])?;
+                let signing_key_hash = Self::get_key_hash(&sig_keys[i])?;
+                let master_key_hash = Self::get_key_hash(&master_keys[i])?;
 
                 tree.append(signing_key_hash)?;
                 tree.append(master_key_hash)?;
