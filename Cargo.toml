@@ -33,9 +33,3 @@ panic = "unwind"
 
 # [patch.'https://github.com/HorizenOfficial/zendoo-cctp-lib.git']
 # cctp_primitives = { path = '../zendoo-cctp-lib/cctp_primitives' }
-
-# [patch.'https://github.com/HorizenLabs/marlin']
-# marlin = { path = '../marlin' }
-
-# [patch.'https://github.com/HorizenLabs/poly-commit']
-# poly-commit = { path = '../poly-commit' }
