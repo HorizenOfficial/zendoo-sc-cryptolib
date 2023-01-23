@@ -1,0 +1,8 @@
+[advisories]
+ignore = [
+]
+informational_warnings = ["unmaintained", "unsound"]
+
+[output]
+deny = ["warnings", "unsound", "yanked"]
+quiet = false
