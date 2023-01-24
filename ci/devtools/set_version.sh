@@ -93,14 +93,14 @@ fi
 if ! command -v \${HOME}/.cargo/bin/cargo-get >/dev/null; then
   echo "Cargo cargo-get crate needs to be installed."
   echo "" && echo "=== Installing cargo-get ===" && echo ""
-  cargo install cargo-get --version 0.3.3
+  cargo install --locked cargo-get --version 0.3.3
 fi
 
 # Checking if set-cargo-version crate is installed
 if ! command -v \${HOME}/.cargo/bin/set-cargo-version >/dev/null; then
   echo "Cargo set-cargo-version crate needs to be installed."
   echo "" && echo "=== Installing set-cargo-version ===" && echo ""
-  cargo install set-cargo-version --version 1.0.0
+  cargo install --locked set-cargo-version --version 1.0.0
 fi
 
 ## Changing version numbers under pom.xml file(s)
