@@ -37,7 +37,10 @@ hex = "=0.4.3"
 serial_test = "=0.5.1"
 strum = "=0.24.1"
 strum_macros = "=0.24.3"
+# We cannot use a newer version till we stuck on Rust 1.51.0 because 0.13.0 use a new version of once_cell
+# and 0.14.0 use the new "deb:..." Cargo.tonl syntax
+rstest = "0.12.0"
 
 [features]
-default = [ "asm" ]
-asm = [ "algebra/llvm_asm", "cctp_primitives/asm", "primitives/llvm_asm" ]
+default = ["asm"]
+asm = ["algebra/llvm_asm", "cctp_primitives/asm", "primitives/llvm_asm"]
