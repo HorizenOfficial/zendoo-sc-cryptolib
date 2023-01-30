@@ -32,7 +32,6 @@ impl ScCommitmentCertPath {
             .get_cert_leaves(&sc_id)
             .and_then(|certs| certs.iter().position(|h| h == &cert_hash))?;
         Self::new(
-            cmt.get_cert_commitment(&sc_id)?,
             cmt.get_fwt_commitment(&sc_id)?,
             cmt.get_bwtr_commitment(&sc_id)?,
             cmt.get_scc(&sc_id)?,
@@ -268,7 +267,6 @@ mod should_fail {
         ScTxCommitmentRoot,
         FTRootHash,
         BTRootHash,
-        WCertRoot,
         SSC,
         CertPath,
         ScCommitmentPath,
@@ -276,30 +274,15 @@ mod should_fail {
 
     #[rstest]
     #[serial]
-    #[should_panic(
-        expected = "(curr_sc_tx_commitment, curr_sc_tx_commitments_path) == curr_sc_tx_commitments_root"
-    )]
     #[case::sc_tx_commitment_root(TestChangeTxPathAction::ScTxCommitmentRoot)]
-    #[should_panic(expected = "Current epoch sc_tx_commitment_root recostruction")]
-    #[case::widthdrawal_certificate_root(TestChangeTxPathAction::WCertRoot)]
-    #[should_panic(
-        expected = "(curr_sc_tx_commitment, curr_sc_tx_commitments_path) == curr_sc_tx_commitments_root"
-    )]
     #[case::forward_transfert_root(TestChangeTxPathAction::FTRootHash)]
-    #[should_panic(
-        expected = "(curr_sc_tx_commitment, curr_sc_tx_commitments_path) == curr_sc_tx_commitments_root"
-    )]
     #[case::backward_transfert_root(TestChangeTxPathAction::BTRootHash)]
-    #[should_panic(
-        expected = "(curr_sc_tx_commitment, curr_sc_tx_commitments_path) == curr_sc_tx_commitments_root"
-    )]
     #[case::start_side_chain(TestChangeTxPathAction::SSC)]
-    #[should_panic(expected = "Current epoch sc_tx_commitment_root recostruction")]
     #[case::widthdrawal_certificate_path(TestChangeTxPathAction::CertPath)]
+    #[case::sidechain_commitment_path(TestChangeTxPathAction::ScCommitmentPath)]
     #[should_panic(
         expected = "(curr_sc_tx_commitment, curr_sc_tx_commitments_path) == curr_sc_tx_commitments_root"
     )]
-    #[case::sidechain_commitment_path(TestChangeTxPathAction::ScCommitmentPath)]
     fn if_invalid_current_sc_commitment_path(
         mut rng: ThreadRng,
         base_commitments: CommitmentPair,
@@ -328,9 +311,6 @@ mod should_fail {
         match action {
             ScTxCommitmentRoot => {
                 curr_sc_tx_commitment += FieldElement::one();
-            }
-            WCertRoot => {
-                curr_cert_path.cert_root += FieldElement::one();
             }
             FTRootHash => {
                 curr_cert_path.fwt_root += FieldElement::one();
@@ -369,30 +349,15 @@ mod should_fail {
 
     #[rstest]
     #[serial]
-    #[should_panic(
-        expected = "(next_sc_tx_commitment, next_sc_tx_commitments_path) == next_sc_tx_commitments_root"
-    )]
     #[case::sc_tx_commitment_root(TestChangeTxPathAction::ScTxCommitmentRoot)]
-    #[should_panic(expected = "Next epoch sc_tx_commitment_root recostruction")]
-    #[case::widthdrawal_certificate_root(TestChangeTxPathAction::WCertRoot)]
-    #[should_panic(
-        expected = "(next_sc_tx_commitment, next_sc_tx_commitments_path) == next_sc_tx_commitments_root"
-    )]
     #[case::forward_transfert_root(TestChangeTxPathAction::FTRootHash)]
-    #[should_panic(
-        expected = "(next_sc_tx_commitment, next_sc_tx_commitments_path) == next_sc_tx_commitments_root"
-    )]
     #[case::backward_transfert_root(TestChangeTxPathAction::BTRootHash)]
-    #[should_panic(
-        expected = "(next_sc_tx_commitment, next_sc_tx_commitments_path) == next_sc_tx_commitments_root"
-    )]
     #[case::start_side_chain(TestChangeTxPathAction::SSC)]
-    #[should_panic(expected = "Next epoch sc_tx_commitment_root recostruction")]
     #[case::widthdrawal_certificate_path(TestChangeTxPathAction::CertPath)]
+    #[case::sidechain_commitment_path(TestChangeTxPathAction::ScCommitmentPath)]
     #[should_panic(
         expected = "(next_sc_tx_commitment, next_sc_tx_commitments_path) == next_sc_tx_commitments_root"
     )]
-    #[case::sidechain_commitment_path(TestChangeTxPathAction::ScCommitmentPath)]
     fn if_invalid_next_sc_commitment_path(
         mut rng: ThreadRng,
         base_commitments: CommitmentPair,
@@ -421,9 +386,6 @@ mod should_fail {
         match action {
             ScTxCommitmentRoot => {
                 next_sc_tx_commitment += FieldElement::one();
-            }
-            WCertRoot => {
-                next_cert_path.cert_root += FieldElement::one();
             }
             FTRootHash => {
                 next_cert_path.fwt_root += FieldElement::one();
