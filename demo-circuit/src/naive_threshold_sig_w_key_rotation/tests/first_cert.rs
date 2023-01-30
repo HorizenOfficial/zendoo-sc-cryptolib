@@ -1,3 +1,5 @@
+use crate::test_utils::init_g1_committer_key;
+
 use super::utils::*;
 use super::*;
 use cctp_primitives::proving_system::verifier::ceased_sidechain_withdrawal::PHANTOM_CERT_DATA_HASH;
