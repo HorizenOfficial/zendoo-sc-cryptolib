@@ -1,7 +1,10 @@
 use crate::constants::NaiveThresholdSigParams;
 use cctp_primitives::{
-    type_mapping::FieldElement,
-    utils::{data_structures::BackwardTransfer, get_bt_merkle_root},
+    type_mapping::{Error, FieldElement},
+    utils::{
+        commitment_tree::hash_vec, data_structures::BackwardTransfer, get_bt_merkle_root,
+        get_cert_data_hash_from_bt_root_and_custom_fields_hash,
+    },
 };
 
 use lazy_static::*;
@@ -23,8 +26,6 @@ pub struct WithdrawalCertificateData {
     pub mcb_sc_txs_com: FieldElement,
     pub ft_min_amount: u64,
     pub btr_min_fee: u64,
-    /// Carries the reference to the sidechain state. (Currently the reference is
-    /// split over two field elements)
     pub custom_fields: Vec<FieldElement>,
 }
 
@@ -55,6 +56,24 @@ impl WithdrawalCertificateData {
             btr_min_fee,
             custom_fields,
         }
+    }
+
+    pub fn hash(&self) -> Result<FieldElement, Error> {
+        let custom_fields_hash = if self.custom_fields.len() > 0 {
+            Some(hash_vec(self.custom_fields.clone())?)
+        } else {
+            None
+        };
+        get_cert_data_hash_from_bt_root_and_custom_fields_hash(
+            &self.ledger_id,
+            self.epoch_id,
+            self.quality,
+            self.bt_root,
+            custom_fields_hash,
+            &self.mcb_sc_txs_com,
+            self.btr_min_fee,
+            self.ft_min_amount,
+        )
     }
 
     pub(crate) fn get_default(num_custom_fields: u32) -> Self {

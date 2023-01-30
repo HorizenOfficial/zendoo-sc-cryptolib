@@ -50,7 +50,10 @@ pub mod blaze_csw;
 pub mod common;
 pub mod naive_threshold_sig;
 pub mod naive_threshold_sig_w_key_rotation;
+pub mod sc2sc;
 
+#[cfg(test)]
+pub(crate) mod test_utils;
 pub mod utils;
 
 pub mod constants;

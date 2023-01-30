@@ -3,10 +3,7 @@ mod next_cert;
 mod utils;
 mod verify;
 
-use cctp_primitives::{
-    proving_system::init::{get_g1_committer_key, load_g1_committer_key},
-    utils::commitment_tree::hash_vec,
-};
+use cctp_primitives::utils::commitment_tree::hash_vec;
 use primitives::schnorr::field_based_schnorr::FieldBasedSchnorrPk;
 use primitives::{
     schnorr::field_based_schnorr::FieldBasedSchnorrSignature, FieldBasedHash,
@@ -23,8 +20,6 @@ use crate::{
     type_mapping::*,
 };
 use rand::Rng;
-
-use crate::{MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE};
 
 use super::{data_structures::ValidatorKeysUpdates, NaiveThresholdSignatureWKeyRotation};
 
