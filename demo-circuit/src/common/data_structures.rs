@@ -9,6 +9,13 @@ use cctp_primitives::{
 
 use lazy_static::*;
 
+/// Minumum number of custom fields
+pub const MIN_CUSTOM_FIELDS: usize = 3;
+/// The position of Message Root Hash in the custom fields: See ZenIP-42205
+pub const MSG_ROOT_HASH_CUSTOM_FIELDS_POS: usize = 1;
+/// The position of Max Quality Cert Hash in the custom fields: See ZenIP-42205
+pub const MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS: usize = 2;
+
 lazy_static! {
     pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
 }
