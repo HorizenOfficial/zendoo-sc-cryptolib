@@ -9,11 +9,9 @@ use primitives::FieldBasedMerkleTree;
 use rand::{rngs::ThreadRng, thread_rng, Rng};
 
 use crate::{
-    sc2sc::{
-        ScCommitmentCertPath, MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS, MSG_MT_HEIGHT,
-        MSG_ROOT_HASH_CUSTOM_FIELDS_POS,
-    },
-    GingerMHTBinaryPath, MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE, common::WithdrawalCertificateData,
+    common::{WithdrawalCertificateData, MSG_ROOT_HASH_CUSTOM_FIELDS_POS, MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS},
+    sc2sc::{ScCommitmentCertPath, MSG_MT_HEIGHT},
+    GingerMHTBinaryPath, MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE,
 };
 
 pub(crate) fn init_g1_committer_key() -> CommitterKeyG1 {

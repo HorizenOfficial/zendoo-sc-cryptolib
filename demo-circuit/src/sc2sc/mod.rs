@@ -13,15 +13,13 @@ use r1cs_std::{
 };
 
 use crate::{
-    common::{constraints::WithdrawalCertificateDataGadget, WithdrawalCertificateData},
+    common::{constraints::WithdrawalCertificateDataGadget, WithdrawalCertificateData, MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS, MSG_ROOT_HASH_CUSTOM_FIELDS_POS, MIN_CUSTOM_FIELDS},
     FieldElementGadget, FieldHashGadget, GingerMHTBinaryGadget, GingerMHTBinaryPath,
 };
 
 /// The height of the Messages Merkle Tree in the current epoch
+/// TODO: move it in cctp-lib
 pub const MSG_MT_HEIGHT: usize = 12;
-pub const MIN_CUSTOM_FIELDS: usize = 3;
-pub const MSG_ROOT_HASH_CUSTOM_FIELDS_POS: usize = 1;
-pub const MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS: usize = 2;
 
 #[derive(Clone)]
 pub struct Sc2Sc {
@@ -65,7 +63,7 @@ impl Sc2Sc {
             curr_cert.custom_fields.len(),
             "Certificates should contains the same custom fields"
         );
-        assert!(next_cert.custom_fields.len() >= 3, "We need at least 3 custom fields: see 
+        assert!(next_cert.custom_fields.len() >= MIN_CUSTOM_FIELDS, "We need at least 3 custom fields: see 
             https://github.com/HorizenOfficial/ZenIPs/blob/57fe28cb13202550ed29512f913de2508877dc0b/zenip-42205.md#zenip-42205
             for more detteils");
 
