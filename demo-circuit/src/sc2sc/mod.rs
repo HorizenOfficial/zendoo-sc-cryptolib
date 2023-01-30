@@ -13,7 +13,11 @@ use r1cs_std::{
 };
 
 use crate::{
-    common::{constraints::WithdrawalCertificateDataGadget, WithdrawalCertificateData, MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS, MSG_ROOT_HASH_CUSTOM_FIELDS_POS, MIN_CUSTOM_FIELDS},
+    common::{
+        constraints::WithdrawalCertificateDataGadget, WithdrawalCertificateData,
+        MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS, MIN_CUSTOM_FIELDS,
+        MSG_ROOT_HASH_CUSTOM_FIELDS_POS,
+    },
     FieldElementGadget, FieldHashGadget, GingerMHTBinaryGadget, GingerMHTBinaryPath,
 };
 
@@ -65,7 +69,7 @@ impl Sc2Sc {
         );
         assert!(next_cert.custom_fields.len() >= MIN_CUSTOM_FIELDS, "We need at least 3 custom fields: see 
             https://github.com/HorizenOfficial/ZenIPs/blob/57fe28cb13202550ed29512f913de2508877dc0b/zenip-42205.md#zenip-42205
-            for more detteils");
+            for more details");
 
         Self {
             next_sc_tx_commitments_root,
@@ -223,9 +227,9 @@ impl ConstraintSynthesizer<FieldElement> for Sc2Sc {
 ///
 /// The method `enforce_sc_tx_commitment_root` take the certificate hash and
 /// sidechain id gadgets to enforce all the path.
+// TODO: Maybe is better to move it in zendoo-cctp-cryptolib
 #[derive(Clone)]
 pub struct ScCommitmentCertPath {
-    cert_root: FieldElement,
     fwt_root: FieldElement,
     bwt_root: FieldElement,
     ssc: FieldElement,
@@ -236,7 +240,6 @@ pub struct ScCommitmentCertPath {
 impl Default for ScCommitmentCertPath {
     fn default() -> Self {
         Self {
-            cert_root: FieldElement::zero(),
             fwt_root: FieldElement::zero(),
             bwt_root: FieldElement::zero(),
             ssc: FieldElement::zero(),
@@ -249,7 +252,6 @@ impl Default for ScCommitmentCertPath {
 impl ScCommitmentCertPath {
     /// Create a new path
     pub fn new(
-        cert_root: FieldElement,
         fwt_root: FieldElement,
         bwt_root: FieldElement,
         ssc: FieldElement,
@@ -257,7 +259,6 @@ impl ScCommitmentCertPath {
         sc_commitment_path: GingerMHTBinaryPath,
     ) -> Self {
         Self {
-            cert_root,
             fwt_root,
             bwt_root,
             ssc,
@@ -275,23 +276,18 @@ impl ScCommitmentCertPath {
         cert_hash_g: FpGadget<FieldElement>,
         sc_id_g: FpGadget<FieldElement>,
     ) -> Result<FpGadget<FieldElement>, r1cs_core::SynthesisError> {
-        let cert_root_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc wcert root gadget"), || Ok(self.cert_root))?;
         let fwt_root_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc fwt root gadget"), || Ok(self.fwt_root))?;
         let bwt_root_g =
             FieldElementGadget::alloc(cs.ns(|| "alloc bwt root gadget"), || Ok(self.bwt_root))?;
         let ssc_g = FieldElementGadget::alloc(cs.ns(|| "alloc start sc gadget"), || Ok(self.ssc))?;
-        GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc cert tree path"), || {
+        // Rebuild the certificate root from hash leaf and merkle path.
+        let cert_root_g = GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc cert tree path"), || {
             Ok(self.cert_path.clone())
         })?
         .enforce_root_from_leaf(
             cs.ns(|| "reconstruct_merkle_root_hash(cert_hash, cert_path)"),
             &cert_hash_g,
-        )?
-        .enforce_equal(
-            cs.ns(|| "Verify merkle root of (cert_hash, cert_path) == cert_root"),
-            &cert_root_g,
         )?;
 
         let sc_tx_commitment_g = FieldHashGadget::enforce_hash_constant_length(
