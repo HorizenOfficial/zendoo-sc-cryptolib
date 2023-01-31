@@ -190,7 +190,7 @@ impl ConstraintSynthesizer<FieldElement> for CeasedSidechainWithdrawalCircuit {
             )
         };
 
-        // Enforce UTXO widthdrawal if required
+        // Enforce UTXO withdrawal if required
         csw_data_g
             .utxo_data_g
             .conditionally_enforce_utxo_withdrawal(
