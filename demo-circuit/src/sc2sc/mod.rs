@@ -69,9 +69,9 @@ impl Sc2Sc {
             curr_cert.custom_fields.len(),
             "Certificates should contains the same custom fields"
         );
-        assert!(next_cert.custom_fields.len() >= MIN_CUSTOM_FIELDS, "We need at least 3 custom fields: see 
+        assert!(next_cert.custom_fields.len() >= MIN_CUSTOM_FIELDS, "We need at least {} custom fields: see 
             https://github.com/HorizenOfficial/ZenIPs/blob/57fe28cb13202550ed29512f913de2508877dc0b/zenip-42205.md#zenip-42205
-            for more details");
+            for more details", MIN_CUSTOM_FIELDS);
 
         Self {
             next_sc_tx_commitments_root,
@@ -87,19 +87,16 @@ impl Sc2Sc {
 
     /// Return a default instance that can be used for setup
     pub fn get_instance_for_setup(num_custom_fields: u32) -> Self {
-        Self {
-            next_sc_tx_commitments_root: FieldElement::zero(),
-            curr_sc_tx_commitments_root: FieldElement::zero(),
-            msg_hash: FieldElement::zero(),
-            next_cert: WithdrawalCertificateData::get_default(num_custom_fields),
-            curr_cert: WithdrawalCertificateData::get_default(num_custom_fields),
-            next_cert_path: ScCommitmentCertPath::default(),
-            curr_cert_path: ScCommitmentCertPath::default(),
-            msg_path: GingerMHTBinaryPath::new(vec![
-                (FieldElement::default(), false);
-                MSG_MT_HEIGHT
-            ]),
-        }
+        Self::new(
+            FieldElement::zero(),
+            FieldElement::zero(),
+            FieldElement::zero(),
+            WithdrawalCertificateData::get_default(num_custom_fields),
+            WithdrawalCertificateData::get_default(num_custom_fields),
+            ScCommitmentCertPath::default(),
+            ScCommitmentCertPath::default(),
+            GingerMHTBinaryPath::new(vec![(FieldElement::default(), false); MSG_MT_HEIGHT]),
+        )
     }
 
     fn enforce_contiguos_epochs<CS>(
@@ -155,7 +152,7 @@ impl ConstraintSynthesizer<FieldElement> for Sc2Sc {
             WithdrawalCertificateDataGadget::alloc(cs.ns(|| "alloc next wcert data"), || {
                 Ok(self.next_cert.clone())
             })?;
-        
+
         // Enforce certificates hashes
         let curr_cert_hash_g =
             curr_cert_g.enforce_hash(cs.ns(|| "enforce current certificate hash"), None)?;

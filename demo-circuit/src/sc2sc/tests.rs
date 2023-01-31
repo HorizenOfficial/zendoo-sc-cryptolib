@@ -179,14 +179,14 @@ fn happy_path(
     assert_circuit(sc2sc, if zk { Some(&mut rng) } else { None });
 }
 
-mod should_not_possible_to_add_a_circuit_if {
+mod should_not_possible_to_create_a_circuit_if {
     use super::*;
 
     #[test]
     #[should_panic(expected = "same custom fields")]
     fn certificates_have_not_the_same_numbers_of_custom_fields() {
-        let curr_cert = RandomWithdrawalCertificateDataBuilder::new(3).build();
-        let next_cert = RandomWithdrawalCertificateDataBuilder::new(4).build();
+        let curr_cert = RandomWithdrawalCertificateDataBuilder::new(MIN_CUSTOM_FIELDS).build();
+        let next_cert = RandomWithdrawalCertificateDataBuilder::new(MIN_CUSTOM_FIELDS + 1).build();
 
         Sc2Sc::new(
             FieldElement::zero(),
@@ -201,10 +201,10 @@ mod should_not_possible_to_add_a_circuit_if {
     }
 
     #[test]
-    #[should_panic(expected = "least 3 custom fields")]
-    fn certificates_have_less_than_3_custom_fields() {
-        let curr_cert = RandomWithdrawalCertificateDataBuilder::new(2).build();
-        let next_cert = RandomWithdrawalCertificateDataBuilder::new(2).build();
+    #[should_panic(expected = "need at least")]
+    fn certificates_have_less_than_minimum_custom_fields() {
+        let curr_cert = RandomWithdrawalCertificateDataBuilder::new(MIN_CUSTOM_FIELDS - 1).build();
+        let next_cert = RandomWithdrawalCertificateDataBuilder::new(MIN_CUSTOM_FIELDS - 1).build();
 
         Sc2Sc::new(
             FieldElement::zero(),
@@ -217,6 +217,15 @@ mod should_not_possible_to_add_a_circuit_if {
             GingerMHTBinaryPath::new(vec![(FieldElement::default(), false); MSG_MT_HEIGHT]),
         );
     }
+}
+
+#[rstest]
+#[case::minimum(MIN_CUSTOM_FIELDS)]
+#[case::lot_of(MIN_CUSTOM_FIELDS + 42)]
+#[should_panic(expected = "need at least")]
+#[case::should_fail_with_less_than_3(MIN_CUSTOM_FIELDS - 1)]
+fn setup_a_circuit_with_some_custom_fields(#[case] n_custom_fields: usize) {
+    Sc2Sc::get_instance_for_setup(n_custom_fields as u32);
 }
 
 mod should_fail {
