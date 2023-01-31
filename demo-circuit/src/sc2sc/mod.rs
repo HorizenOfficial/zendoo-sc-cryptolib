@@ -127,31 +127,6 @@ impl Sc2Sc {
             )?;
         Ok(())
     }
-
-    fn enforce_message_path<CS>(
-        self,
-        cs: &mut CS,
-        msg_hash_g: &FieldElementGadget,
-        msg_root_g: &FieldElementGadget,
-    ) -> Result<(), r1cs_core::SynthesisError>
-    where
-        CS: r1cs_core::ConstraintSystemAbstract<FieldElement>,
-    {
-        GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc messages tree path"), || {
-            Ok(self.msg_path.clone())
-        })?
-        .enforce_root_from_leaf(
-            cs.ns(|| "reconstruct_merkle_root_hash(msg_hash, msg_path)"),
-            msg_hash_g,
-        )?
-        .enforce_equal(
-            cs.ns(|| {
-                "Verify merkle root of (msg_hash, msg_path) == curr_cert.SC2SC_message_tree_root"
-            }),
-            msg_root_g,
-        )?;
-        Ok(())
-    }
 }
 
 impl ConstraintSynthesizer<FieldElement> for Sc2Sc {
@@ -172,14 +147,15 @@ impl ConstraintSynthesizer<FieldElement> for Sc2Sc {
             FieldElementGadget::alloc_input(cs.ns(|| "Alloc msg_hash"), || Ok(self.msg_hash))?;
 
         // Alloc Withdraw certificate gadgets
-        let next_cert_g =
-            WithdrawalCertificateDataGadget::alloc(cs.ns(|| "alloc next wcert data"), || {
-                Ok(self.next_cert.clone())
-            })?;
         let curr_cert_g =
             WithdrawalCertificateDataGadget::alloc(cs.ns(|| "alloc current wcert data"), || {
                 Ok(self.curr_cert.clone())
             })?;
+        let next_cert_g =
+            WithdrawalCertificateDataGadget::alloc(cs.ns(|| "alloc next wcert data"), || {
+                Ok(self.next_cert.clone())
+            })?;
+        
         // Enforce certificates hashes
         let curr_cert_hash_g =
             curr_cert_g.enforce_hash(cs.ns(|| "enforce current certificate hash"), None)?;
@@ -195,29 +171,38 @@ impl ConstraintSynthesizer<FieldElement> for Sc2Sc {
         // Enforce current certificate epoch id + 1 == next certificate epoch id
         self.enforce_contiguos_epochs(cs, &curr_cert_g, &next_cert_g)?;
 
-        // Enforce merkle paths for current certificate, next certificate and message hash
+        // Enforce paths for current certificate, next certificate and message hash
         ScCommitmentCertPathGadget::alloc(
-                cs.ns(|| "Alloc current epoch sc_tx_commitment_root recostruction gadget"), 
-                || Ok(&self.curr_cert_path))?
-            .enforce_sc_tx_commitment_root(cs.ns(|| "Current epoch sc_tx_commitment_root recostruction"), curr_cert_hash_g, curr_cert_g.ledger_id_g)?
-            .enforce_equal(
-                cs.ns(|| "Verify merkle root of (curr_sc_tx_commitment, curr_sc_tx_commitments_path) == curr_sc_tx_commitments_root"),
-                &curr_sc_tx_commitments_root_g,
-            )?;
+            cs.ns(|| "Alloc current epoch sc_tx_commitment_root recostruction gadget"),
+            || Ok(&self.curr_cert_path),
+        )?
+        .check_membership(
+            cs.ns(|| "Check current epoch sc_tx_commitment_root"),
+            &curr_sc_tx_commitments_root_g,
+            &curr_cert_hash_g,
+            &curr_cert_g.ledger_id_g,
+        )?;
 
         ScCommitmentCertPathGadget::alloc(
-                cs.ns(|| "Alloc next epoch sc_tx_commitment_root recostruction gadget"), 
-                || Ok(&self.next_cert_path))?
-            .enforce_sc_tx_commitment_root(cs.ns(|| "Next epoch sc_tx_commitment_root recostruction"), next_cert_hash_g, next_cert_g.ledger_id_g)?
-            .enforce_equal(
-                cs.ns(|| "Verify merkle root of (next_sc_tx_commitment, next_sc_tx_commitments_path) == next_sc_tx_commitments_root"),
-                &next_sc_tx_commitments_root_g,
-            )?;
+            cs.ns(|| "Alloc next epoch sc_tx_commitment_root recostruction gadget"),
+            || Ok(&self.next_cert_path),
+        )?
+        .check_membership(
+            cs.ns(|| "Check next epoch sc_tx_commitment_root"),
+            &next_sc_tx_commitments_root_g,
+            &next_cert_hash_g,
+            &next_cert_g.ledger_id_g,
+        )?;
 
-        self.enforce_message_path(
-            cs,
-            &msg_hash_g,
+        GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc messages tree path"), || {
+            Ok(self.msg_path.clone())
+        })?
+        .check_membership(
+            cs.ns(|| {
+                "Verify merkle root of (msg_hash, msg_path) == curr_cert.SC2SC_message_tree_root"
+            }),
             &curr_cert_g.custom_fields_g[MSG_ROOT_HASH_CUSTOM_FIELDS_POS],
+            &msg_hash_g,
         )?;
 
         Ok(())
@@ -283,19 +268,21 @@ struct ScCommitmentCertPathGadget {
 }
 
 impl ScCommitmentCertPathGadget {
-    /// Recostruct the root of sc tx commitment tree and return a gadget for the enforced
-    /// root. Need the certificate hash leaf gadget in the widthdrawal certificates merkle tree
-    /// and the sidechain id gadget that we can take from the widthdrawal certificate gadget.
-    fn enforce_sc_tx_commitment_root<CS: r1cs_core::ConstraintSystemAbstract<FieldElement>>(
+    /// Recostruct and verify the root of sc tx commitment tree. Need follow gadgets:
+    /// -`sc_tx_commitment_root` the final sc tx commitment root
+    /// -`cert_hash` the certificate hash leaf gadget in the widthdrawal certificates merkle tree
+    /// -`sc_id` the sidechain id gadget that we can take from the widthdrawal certificate gadget
+    fn check_membership<CS: r1cs_core::ConstraintSystemAbstract<FieldElement>>(
         &self,
         mut cs: CS,
-        cert_hash_g: FpGadget<FieldElement>,
-        sc_id_g: FpGadget<FieldElement>,
-    ) -> Result<FpGadget<FieldElement>, r1cs_core::SynthesisError> {
+        sc_tx_commitment_root: &FpGadget<FieldElement>,
+        cert_hash: &FpGadget<FieldElement>,
+        sc_id: &FpGadget<FieldElement>,
+    ) -> Result<(), r1cs_core::SynthesisError> {
         // Rebuild the certificate root from hash leaf and merkle path.
         let cert_root_g = self.cert_path.enforce_root_from_leaf(
             cs.ns(|| "reconstruct_merkle_root_hash(cert_hash, cert_path)"),
-            &cert_hash_g,
+            &cert_hash,
         )?;
         let sc_tx_commitment_g = FieldHashGadget::enforce_hash_constant_length(
             cs.ns(|| "Enforce H(fwt_mr, bwt_mr, cert_mr, scc, sc_id)"),
@@ -304,13 +291,14 @@ impl ScCommitmentCertPathGadget {
                 self.bwt_root.clone(),
                 cert_root_g,
                 self.ssc.clone(),
-                sc_id_g,
+                sc_id.clone(),
             ],
         )?;
-        self.sc_commitment_path.enforce_root_from_leaf(
+        self.sc_commitment_path.check_membership(
             cs.ns(|| {
-                "reconstruct_merkle_root_hash(sc_tx_commitments_root, sc_tx_commitments_path)"
+                "Verify merkle root of (sc_tx_commitment, sc_tx_commitments_path) == sc_tx_commitments_root"
             }),
+            sc_tx_commitment_root,
             &sc_tx_commitment_g,
         )
     }
