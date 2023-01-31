@@ -132,8 +132,8 @@ impl Default for RandomWithdrawalCertificateDataBuilder {
 #[derive(Default)]
 pub(crate) struct CommitmentScBuilder {
     epoch: u32,
-    n_forward_transfert: usize,
-    n_backward_transfert: usize,
+    n_forward_transfer: usize,
+    n_backward_transfer: usize,
     n_withdrawal_certificates: usize,
     certificate_builder: Option<RandomWithdrawalCertificateDataBuilder>,
 }
@@ -144,13 +144,13 @@ impl CommitmentScBuilder {
         self
     }
 
-    pub(crate) fn with_n_forward_transfert(mut self, n_forward_transfert: usize) -> Self {
-        self.n_forward_transfert = n_forward_transfert;
+    pub(crate) fn with_n_forward_transfer(mut self, n_forward_transfer: usize) -> Self {
+        self.n_forward_transfer = n_forward_transfer;
         self
     }
 
-    pub(crate) fn with_n_backward_transfert(mut self, n_backward_transfert: usize) -> Self {
-        self.n_backward_transfert = n_backward_transfert;
+    pub(crate) fn with_n_backward_transfer(mut self, n_backward_transfer: usize) -> Self {
+        self.n_backward_transfer = n_backward_transfer;
         self
     }
 
@@ -192,8 +192,8 @@ impl CommitmentScBuilder {
         let mut cert_builder = self.certificate_builder.clone().unwrap_or_default();
         cert_builder.with_ledger_id(sc_id).with_epoch_id(self.epoch);
 
-        cmt.add_random_forward_transert_to_sc(rng, &sc_id, self.n_forward_transfert);
-        cmt.add_random_backward_transert_to_sc(rng, &sc_id, self.n_backward_transfert);
+        cmt.add_random_forward_transert_to_sc(rng, &sc_id, self.n_forward_transfer);
+        cmt.add_random_backward_transert_to_sc(rng, &sc_id, self.n_backward_transfer);
         cmt.add_random_withdrawal_certificates_to_sc(
             rng,
             &sc_id,
@@ -255,7 +255,7 @@ impl CommitmentHelper {
         self.certs.append(&mut certs);
     }
 
-    pub(crate) fn get_widthdrawal_certificate_info(
+    pub(crate) fn get_withdrawal_certificate_info(
         &mut self,
         pos: usize,
     ) -> (

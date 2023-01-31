@@ -210,10 +210,10 @@ impl ConstraintSynthesizer<FieldElement> for Sc2Sc {
 }
 
 /// Represent the data that we need to rebuild the sc_tx_commitment root
-/// from the widthdrawal certificate. We need
-/// - `cert_path` to recover the widthdrawal certificate root from certificate hash
+/// from the withdrawal certificate. We need
+/// - `cert_path` to recover the withdrawal certificate root from certificate hash
 /// - `fwt_root`, `bwt_root`, `ssc` (start sidechain) to build sc_commitment with
-/// widthdrawal certificate root and passed sidechain id
+/// withdrawal certificate root and passed sidechain id
 /// - sc_commitment_path to rebuild the sidechain tx commitment root
 ///
 /// The method `enforce_sc_tx_commitment_root` take the certificate hash and
@@ -270,8 +270,8 @@ struct ScCommitmentCertPathGadget {
 impl ScCommitmentCertPathGadget {
     /// Recostruct and verify the root of sc tx commitment tree. Need follow gadgets:
     /// -`sc_tx_commitment_root` the final sc tx commitment root
-    /// -`cert_hash` the certificate hash leaf gadget in the widthdrawal certificates merkle tree
-    /// -`sc_id` the sidechain id gadget that we can take from the widthdrawal certificate gadget
+    /// -`cert_hash` the certificate hash leaf gadget in the withdrawal certificates merkle tree
+    /// -`sc_id` the sidechain id gadget that we can take from the withdrawal certificate gadget
     fn check_membership<CS: r1cs_core::ConstraintSystemAbstract<FieldElement>>(
         &self,
         mut cs: CS,
