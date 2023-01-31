@@ -6,10 +6,13 @@ use cctp_primitives::{
     type_mapping::{CommitterKeyG1, FieldElement, GingerMHT},
 };
 use primitives::FieldBasedMerkleTree;
-use rand::{rngs::ThreadRng, thread_rng, Rng};
+use rand::{prelude::Distribution, thread_rng, Rng};
 
 use crate::{
-    common::{WithdrawalCertificateData, MSG_ROOT_HASH_CUSTOM_FIELDS_POS, MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS},
+    common::{
+        WithdrawalCertificateData, MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS,
+        MSG_ROOT_HASH_CUSTOM_FIELDS_POS,
+    },
     sc2sc::{ScCommitmentCertPath, MSG_MT_HEIGHT},
     GingerMHTBinaryPath, MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE,
 };
@@ -33,6 +36,25 @@ pub(crate) struct RandomWithdrawalCertificateDataBuilder {
     custom_fields: Vec<Option<FieldElement>>,
 }
 
+impl Distribution<WithdrawalCertificateData> for RandomWithdrawalCertificateDataBuilder {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> WithdrawalCertificateData {
+        let custom_fields = self.custom_fields.clone();
+        WithdrawalCertificateData {
+            ledger_id: self.ledger_id.unwrap_or_else(|| rng.gen()),
+            epoch_id: self.epoch_id.unwrap_or_else(|| rng.gen()),
+            bt_root: self.bt_root.unwrap_or_else(|| rng.gen()),
+            quality: self.quality.unwrap_or_else(|| rng.gen()),
+            mcb_sc_txs_com: self.mcb_sc_txs_com.unwrap_or_else(|| rng.gen()),
+            ft_min_amount: self.ft_min_amount.unwrap_or_else(|| rng.gen()),
+            btr_min_fee: self.btr_min_fee.unwrap_or_else(|| rng.gen()),
+            custom_fields: custom_fields
+                .iter()
+                .map(|v| v.unwrap_or_else(|| rng.gen()))
+                .collect(),
+        }
+    }
+}
+
 #[allow(unused)]
 impl RandomWithdrawalCertificateDataBuilder {
     pub(crate) fn new(n_custom_field: usize) -> Self {
@@ -50,24 +72,7 @@ impl RandomWithdrawalCertificateDataBuilder {
 
     pub(crate) fn build(&self) -> WithdrawalCertificateData {
         let mut rng = thread_rng();
-        self.build_with_rng(&mut rng)
-    }
-
-    pub(crate) fn build_with_rng(&self, rng: &mut ThreadRng) -> WithdrawalCertificateData {
-        let custom_fields = self.custom_fields.clone();
-        WithdrawalCertificateData {
-            ledger_id: self.ledger_id.unwrap_or_else(|| rng.gen()),
-            epoch_id: self.epoch_id.unwrap_or_else(|| rng.gen()),
-            bt_root: self.bt_root.unwrap_or_else(|| rng.gen()),
-            quality: self.quality.unwrap_or_else(|| rng.gen()),
-            mcb_sc_txs_com: self.mcb_sc_txs_com.unwrap_or_else(|| rng.gen()),
-            ft_min_amount: self.ft_min_amount.unwrap_or_else(|| rng.gen()),
-            btr_min_fee: self.btr_min_fee.unwrap_or_else(|| rng.gen()),
-            custom_fields: custom_fields
-                .iter()
-                .map(|v| v.unwrap_or_else(|| rng.gen()))
-                .collect(),
-        }
+        self.sample(&mut rng)
     }
 
     pub(crate) fn with_ledger_id(&mut self, v: FieldElement) -> &mut Self {
@@ -180,7 +185,7 @@ impl CommitmentScBuilder {
     pub(crate) fn generate_sc_data(
         &self,
         cmt: Option<CommitmentHelper>,
-        rng: &mut ThreadRng,
+        rng: &mut (impl Rng + ?Sized),
         sc_id: FieldElement,
     ) -> CommitmentHelper {
         let mut cmt = cmt.unwrap_or_default();
@@ -216,7 +221,7 @@ pub(crate) struct CommitmentHelper {
 impl CommitmentHelper {
     pub(crate) fn add_random_forward_transert_to_sc(
         &mut self,
-        rng: &mut ThreadRng,
+        rng: &mut (impl Rng + ?Sized),
         sc_id: &FieldElement,
         n: usize,
     ) {
@@ -227,7 +232,7 @@ impl CommitmentHelper {
 
     pub(crate) fn add_random_backward_transert_to_sc(
         &mut self,
-        rng: &mut ThreadRng,
+        rng: &mut (impl Rng + ?Sized),
         sc_id: &FieldElement,
         n: usize,
     ) {
@@ -238,12 +243,12 @@ impl CommitmentHelper {
 
     pub(crate) fn add_random_withdrawal_certificates_to_sc(
         &mut self,
-        rng: &mut ThreadRng,
+        rng: &mut (impl Rng + ?Sized),
         sc_id: &FieldElement,
         builder: RandomWithdrawalCertificateDataBuilder,
         n: usize,
     ) {
-        let mut certs: Vec<_> = (0..n).map(|_| builder.build_with_rng(rng)).collect();
+        let mut certs: Vec<_> = (0..n).map(|_| builder.sample(rng)).collect();
         certs.iter().for_each(|c| {
             self.cmt.add_cert_leaf(&sc_id, &c.hash().unwrap());
         });
@@ -268,7 +273,11 @@ impl CommitmentHelper {
         &self.certs[id]
     }
 
-    pub(crate) fn set_random_start_sc(&mut self, rng: &mut ThreadRng, sc_id: &FieldElement) {
+    pub(crate) fn set_random_start_sc(
+        &mut self,
+        rng: &mut (impl Rng + ?Sized),
+        sc_id: &FieldElement,
+    ) {
         self.cmt.set_scc(&sc_id, &rng.gen());
     }
 
@@ -300,7 +309,7 @@ impl Default for CommitmentHelper {
 /// Generate a messages tree with `n` leafs and return for the `pos`'s the root, msg hash
 /// and merkle path from leaf to root
 pub(crate) fn messages(
-    rng: &mut ThreadRng,
+    rng: &mut (impl Rng + ?Sized),
     n: usize,
     pos: usize,
 ) -> (FieldElement, FieldElement, GingerMHTBinaryPath) {
