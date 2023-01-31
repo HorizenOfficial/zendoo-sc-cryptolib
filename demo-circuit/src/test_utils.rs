@@ -194,8 +194,8 @@ impl CommitmentScBuilder {
         let mut cert_builder = self.certificate_builder.clone().unwrap_or_default();
         cert_builder.with_ledger_id(sc_id).with_epoch_id(self.epoch);
 
-        cmt.add_random_forward_transert_to_sc(rng, &sc_id, self.n_forward_transfer);
-        cmt.add_random_backward_transert_to_sc(rng, &sc_id, self.n_backward_transfer);
+        cmt.add_random_forward_transfer_to_sc(rng, &sc_id, self.n_forward_transfer);
+        cmt.add_random_backward_transfer_to_sc(rng, &sc_id, self.n_backward_transfer);
         cmt.add_random_withdrawal_certificates_to_sc(
             rng,
             &sc_id,
@@ -221,7 +221,7 @@ pub(crate) struct CommitmentHelper {
 }
 
 impl CommitmentHelper {
-    pub(crate) fn add_random_forward_transert_to_sc(
+    pub(crate) fn add_random_forward_transfer_to_sc(
         &mut self,
         rng: &mut (impl Rng + ?Sized),
         sc_id: &FieldElement,
@@ -232,7 +232,7 @@ impl CommitmentHelper {
         });
     }
 
-    pub(crate) fn add_random_backward_transert_to_sc(
+    pub(crate) fn add_random_backward_transfer_to_sc(
         &mut self,
         rng: &mut (impl Rng + ?Sized),
         sc_id: &FieldElement,
