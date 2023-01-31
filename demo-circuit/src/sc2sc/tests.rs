@@ -88,7 +88,7 @@ fn base_commitments(#[default(42)] epoch: u32) -> (CommitmentScBuilder, Commitme
 #[rstest]
 #[serial]
 fn simplest_case(
-    mut rng: ThreadRng,
+    mut rng: impl Rng,
     base_commitments: CommitmentPair,
     #[values(true, false)] zk: bool,
 ) {
@@ -127,7 +127,7 @@ fn simplest_case(
 #[rstest]
 #[serial]
 fn happy_path(
-    mut rng: ThreadRng,
+    mut rng: impl Rng,
     base_commitments: CommitmentPair,
     #[values(true, false)] zk: bool,
 ) {
@@ -226,7 +226,7 @@ mod should_fail {
     #[serial]
     #[should_panic(expected = "curr_cert.epoch + 1 == next_cert.epoch")]
     fn if_not_contiguos_epochs(
-        mut rng: ThreadRng,
+        mut rng: impl Rng,
         base_commitments: CommitmentPair,
         #[values(true, false)] zk: bool,
     ) {
@@ -284,7 +284,7 @@ mod should_fail {
         expected = "Check current epoch sc_tx_commitment_root"
     )]
     fn if_invalid_current_sc_commitment_path(
-        mut rng: ThreadRng,
+        mut rng: impl Rng,
         base_commitments: CommitmentPair,
         #[values(true, false)] zk: bool,
         #[case] action: TestChangeTxPathAction,
@@ -359,7 +359,7 @@ mod should_fail {
         expected = "Check next epoch sc_tx_commitment_root"
     )]
     fn if_invalid_next_sc_commitment_path(
-        mut rng: ThreadRng,
+        mut rng: impl Rng,
         base_commitments: CommitmentPair,
         #[values(true, false)] zk: bool,
         #[case] action: TestChangeTxPathAction,
@@ -437,7 +437,7 @@ mod should_fail {
         expected = "(msg_hash, msg_path) == curr_cert.SC2SC_message_tree_root"
     )]
     fn if_invalid_msg_data(
-        mut rng: ThreadRng,
+        mut rng: impl Rng,
         base_commitments: CommitmentPair,
         #[values(true, false)] zk: bool,
         #[case] action: TestChangeMsgAction,
@@ -487,7 +487,7 @@ mod should_fail {
     #[serial]
     #[should_panic(expected = "next_cert.previous_top_quality_hash == H(curr_cert_hash)")]
     fn if_some_in_curr_cert_change(
-        mut rng: ThreadRng,
+        mut rng: impl Rng,
         base_commitments: CommitmentPair,
         #[values(true, false)] zk: bool,
     ) {
