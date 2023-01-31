@@ -25,7 +25,7 @@ use crate::{
 
 /// The height of the Messages Merkle Tree in the current epoch
 /// TODO: move it in cctp-lib
-pub const MSG_MT_HEIGHT: usize = 12;
+pub const MSG_MT_HEIGHT: usize = 16;
 
 #[derive(Clone)]
 pub struct Sc2Sc {
