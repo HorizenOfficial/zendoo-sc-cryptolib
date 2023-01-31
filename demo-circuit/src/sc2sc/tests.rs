@@ -102,13 +102,13 @@ fn simplest_case(
         .with_certificate_msg_root(msg_root)
         .generate_sc_data(None, &mut rng, sc_id);
     let (curr_cert, curr_cert_path, curr_sc_tx_commitment) =
-        curr.get_widthdrawal_certificate_info(0);
+        curr.get_withdrawal_certificate_info(0);
 
     let mut next = next
         .with_max_quality_certificate_hash(curr_cert.hash().unwrap())
         .generate_sc_data(None, &mut rng, sc_id);
     let (next_cert, next_cert_path, next_sc_tx_commitment) =
-        next.get_widthdrawal_certificate_info(0);
+        next.get_withdrawal_certificate_info(0);
 
     let sc2sc = Sc2Sc::new(
         next_sc_tx_commitment,
@@ -138,19 +138,19 @@ fn happy_path(
     let (curr, next) = base_commitments;
     let curr_helper = curr
         .with_certificate_msg_root(msg_root)
-        .with_n_forward_transfert(24)
-        .with_n_backward_transfert(12)
+        .with_n_forward_transfer(24)
+        .with_n_backward_transfer(12)
         .with_n_withdrawal_certificates(3)
         .generate_sc_data(None, &mut rng, sc_id);
     let other_sc_id = rng.gen();
     // Add another sc
     let mut curr = CommitmentScBuilder::default()
-        .with_n_forward_transfert(1)
-        .with_n_backward_transfert(1)
+        .with_n_forward_transfer(1)
+        .with_n_backward_transfer(1)
         .generate_sc_data(Some(curr_helper), &mut rng, other_sc_id);
 
     let (curr_cert, curr_cert_path, curr_sc_tx_commitment) =
-        curr.get_widthdrawal_certificate_info(2);
+        curr.get_withdrawal_certificate_info(2);
 
     let next_helper = next
         .with_max_quality_certificate_hash(curr_cert.hash().unwrap())
@@ -158,12 +158,12 @@ fn happy_path(
     let other_sc_id = rng.gen();
     // Add another sc
     let mut next = CommitmentScBuilder::default()
-        .with_n_forward_transfert(1)
-        .with_n_backward_transfert(1)
+        .with_n_forward_transfer(1)
+        .with_n_backward_transfer(1)
         .generate_sc_data(Some(next_helper), &mut rng, other_sc_id);
 
     let (next_cert, next_cert_path, next_sc_tx_commitment) =
-        next.get_widthdrawal_certificate_info(0);
+        next.get_withdrawal_certificate_info(0);
 
     let sc2sc = Sc2Sc::new(
         next_sc_tx_commitment,
@@ -240,14 +240,14 @@ mod should_fail {
             .with_certificate_msg_root(msg_root)
             .generate_sc_data(None, &mut rng, sc_id);
         let (curr_cert, curr_cert_path, curr_sc_tx_commitment) =
-            curr.get_widthdrawal_certificate_info(0);
+            curr.get_withdrawal_certificate_info(0);
 
         let mut next = next
             .with_max_quality_certificate_hash(curr_cert.hash().unwrap())
             .with_epoch(1234) // Change next epoch
             .generate_sc_data(None, &mut rng, sc_id);
         let (next_cert, next_cert_path, next_sc_tx_commitment) =
-            next.get_widthdrawal_certificate_info(0);
+            next.get_withdrawal_certificate_info(0);
 
         let sc2sc = Sc2Sc::new(
             next_sc_tx_commitment,
@@ -275,14 +275,12 @@ mod should_fail {
     #[rstest]
     #[serial]
     #[case::sc_tx_commitment_root(TestChangeTxPathAction::ScTxCommitmentRoot)]
-    #[case::forward_transfert_root(TestChangeTxPathAction::FTRootHash)]
-    #[case::backward_transfert_root(TestChangeTxPathAction::BTRootHash)]
+    #[case::forward_transfer_root(TestChangeTxPathAction::FTRootHash)]
+    #[case::backward_transfer_root(TestChangeTxPathAction::BTRootHash)]
     #[case::start_side_chain(TestChangeTxPathAction::SSC)]
-    #[case::widthdrawal_certificate_path(TestChangeTxPathAction::CertPath)]
+    #[case::withdrawal_certificate_path(TestChangeTxPathAction::CertPath)]
     #[case::sidechain_commitment_path(TestChangeTxPathAction::ScCommitmentPath)]
-    #[should_panic(
-        expected = "Check current epoch sc_tx_commitment_root"
-    )]
+    #[should_panic(expected = "Check current epoch sc_tx_commitment_root")]
     fn if_invalid_current_sc_commitment_path(
         mut rng: impl Rng,
         base_commitments: CommitmentPair,
@@ -299,13 +297,13 @@ mod should_fail {
             .with_certificate_msg_root(msg_root)
             .generate_sc_data(None, &mut rng, sc_id);
         let (curr_cert, mut curr_cert_path, mut curr_sc_tx_commitment) =
-            curr.get_widthdrawal_certificate_info(0);
+            curr.get_withdrawal_certificate_info(0);
 
         let mut next = next
             .with_max_quality_certificate_hash(curr_cert.hash().unwrap())
             .generate_sc_data(None, &mut rng, sc_id);
         let (next_cert, next_cert_path, next_sc_tx_commitment) =
-            next.get_widthdrawal_certificate_info(0);
+            next.get_withdrawal_certificate_info(0);
 
         use TestChangeTxPathAction::*;
         match action {
@@ -350,14 +348,12 @@ mod should_fail {
     #[rstest]
     #[serial]
     #[case::sc_tx_commitment_root(TestChangeTxPathAction::ScTxCommitmentRoot)]
-    #[case::forward_transfert_root(TestChangeTxPathAction::FTRootHash)]
-    #[case::backward_transfert_root(TestChangeTxPathAction::BTRootHash)]
+    #[case::forward_transfer_root(TestChangeTxPathAction::FTRootHash)]
+    #[case::backward_transfer_root(TestChangeTxPathAction::BTRootHash)]
     #[case::start_side_chain(TestChangeTxPathAction::SSC)]
-    #[case::widthdrawal_certificate_path(TestChangeTxPathAction::CertPath)]
+    #[case::withdrawal_certificate_path(TestChangeTxPathAction::CertPath)]
     #[case::sidechain_commitment_path(TestChangeTxPathAction::ScCommitmentPath)]
-    #[should_panic(
-        expected = "Check next epoch sc_tx_commitment_root"
-    )]
+    #[should_panic(expected = "Check next epoch sc_tx_commitment_root")]
     fn if_invalid_next_sc_commitment_path(
         mut rng: impl Rng,
         base_commitments: CommitmentPair,
@@ -374,13 +370,13 @@ mod should_fail {
             .with_certificate_msg_root(msg_root)
             .generate_sc_data(None, &mut rng, sc_id);
         let (curr_cert, curr_cert_path, curr_sc_tx_commitment) =
-            curr.get_widthdrawal_certificate_info(0);
+            curr.get_withdrawal_certificate_info(0);
 
         let mut next = next
             .with_max_quality_certificate_hash(curr_cert.hash().unwrap())
             .generate_sc_data(None, &mut rng, sc_id);
         let (next_cert, mut next_cert_path, mut next_sc_tx_commitment) =
-            next.get_widthdrawal_certificate_info(0);
+            next.get_withdrawal_certificate_info(0);
 
         use TestChangeTxPathAction::*;
         match action {
@@ -433,9 +429,7 @@ mod should_fail {
     #[case::hash(TestChangeMsgAction::Hash)]
     #[case::path(TestChangeMsgAction::Path)]
     #[serial]
-    #[should_panic(
-        expected = "(msg_hash, msg_path) == curr_cert.SC2SC_message_tree_root"
-    )]
+    #[should_panic(expected = "(msg_hash, msg_path) == curr_cert.SC2SC_message_tree_root")]
     fn if_invalid_msg_data(
         mut rng: impl Rng,
         base_commitments: CommitmentPair,
@@ -461,13 +455,13 @@ mod should_fail {
             .with_certificate_msg_root(msg_root)
             .generate_sc_data(None, &mut rng, sc_id);
         let (curr_cert, curr_cert_path, curr_sc_tx_commitment) =
-            curr.get_widthdrawal_certificate_info(0);
+            curr.get_withdrawal_certificate_info(0);
 
         let mut next = next
             .with_max_quality_certificate_hash(curr_cert.hash().unwrap())
             .generate_sc_data(None, &mut rng, sc_id);
         let (next_cert, next_cert_path, next_sc_tx_commitment) =
-            next.get_widthdrawal_certificate_info(0);
+            next.get_withdrawal_certificate_info(0);
 
         let sc2sc = Sc2Sc::new(
             next_sc_tx_commitment,
@@ -501,13 +495,13 @@ mod should_fail {
             .with_certificate_msg_root(msg_root)
             .generate_sc_data(None, &mut rng, sc_id);
         let (mut curr_cert, curr_cert_path, curr_sc_tx_commitment) =
-            curr.get_widthdrawal_certificate_info(0);
+            curr.get_withdrawal_certificate_info(0);
 
         let mut next = next
             .with_max_quality_certificate_hash(curr_cert.hash().unwrap())
             .generate_sc_data(None, &mut rng, sc_id);
         let (next_cert, next_cert_path, next_sc_tx_commitment) =
-            next.get_widthdrawal_certificate_info(0);
+            next.get_withdrawal_certificate_info(0);
 
         curr_cert.btr_min_fee += 1;
 
