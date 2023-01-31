@@ -223,7 +223,7 @@ mod should_not_possible_to_create_a_circuit_if {
 #[case::minimum(MIN_CUSTOM_FIELDS)]
 #[case::lot_of(MIN_CUSTOM_FIELDS + 42)]
 #[should_panic(expected = "need at least")]
-#[case::should_fail_with_less_than_3(MIN_CUSTOM_FIELDS - 1)]
+#[case::should_fail_with_less_than_minimum(MIN_CUSTOM_FIELDS - 1)]
 fn setup_a_circuit_with_some_custom_fields(#[case] n_custom_fields: usize) {
     Sc2Sc::get_instance_for_setup(n_custom_fields as u32);
 }
