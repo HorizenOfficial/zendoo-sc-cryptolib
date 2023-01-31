@@ -24,6 +24,8 @@ pub(crate) fn init_g1_committer_key() -> CommitterKeyG1 {
     ck_g1
 }
 
+// TODO: Maybe this file could be moved in zendoo-cctp-lib.
+
 #[derive(Clone)]
 pub(crate) struct RandomWithdrawalCertificateDataBuilder {
     ledger_id: Option<FieldElement>,
