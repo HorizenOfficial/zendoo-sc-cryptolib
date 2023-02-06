@@ -24,11 +24,7 @@ use cctp_primitives::{
         CommitmentTree, CMT_MT_HEIGHT,
     },
     proving_system::{compute_proof_vk_size, init_dlog_keys, ProvingSystem, ZendooVerifierKey},
-    utils::{
-        data_structures::*,
-        mht::*, poseidon_hash::*,
-        serialization::*,
-    },
+    utils::{data_structures::*, mht::*, poseidon_hash::*, serialization::*},
 };
 use demo_circuit::{
     blaze_csw::{
@@ -54,7 +50,7 @@ use demo_circuit::{
     type_mapping::*,
 };
 
-use jni_wrapper::{JNINativeWrapper, JNIMutNativeWrapper};
+use jni_wrapper::{JNIMutNativeWrapper, JNINativeWrapper};
 use primitives::{
     bytes_to_bits, signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk, FieldBasedHash,
     FieldBasedMerkleTree, FieldBasedMerkleTreePath, FieldBasedSparseMerkleTree, FieldHasher,
@@ -78,7 +74,7 @@ mod utils;
 use utils::*;
 
 use cctp_primitives::utils::compute_sc_id;
-use jni::{objects::{JClass, JMap, JObject, JString, JValue}};
+use jni::objects::{JClass, JMap, JObject, JString, JValue};
 use jni::sys::{jboolean, jbyte, jbyteArray, jint, jlong, jobject, jobjectArray, jsize};
 use jni::sys::{JNI_FALSE, JNI_TRUE};
 use jni::{sys::jlongArray, JNIEnv};
@@ -88,8 +84,8 @@ use std::convert::TryInto;
 
 mod jni_wrapper;
 
-//TODO: We should use JNINativeWrapper and JNIMutNativeWrapper traits for every struct 
-// that is wrapped by a raw pointer in Java and replace all old approaches. 
+//TODO: We should use JNINativeWrapper and JNIMutNativeWrapper traits for every struct
+// that is wrapped by a raw pointer in Java and replace all old approaches.
 // See Java_com_horizen_sc2scnative_Sc2Sc_nativeCreateProof as example.
 
 impl JNINativeWrapper for FieldElement {
@@ -5240,8 +5236,7 @@ ffi_export!(
         let cert = parse_wcert(_env, _cert);
 
         // Compute hash
-        match cert.hash()
-        {
+        match cert.hash() {
             Ok(digest) => return_field_element(&_env, digest),
             Err(e) => {
                 log!(format!("Error while computing cert hash: {:?}", e));
@@ -5846,13 +5841,17 @@ ffi_export!(
         compressed_pk: jboolean,
         compress_proof: jboolean,
     ) -> jobject {
-        let next_sc_tx_commitments_root = FieldElement::native_unchecked(env, next_sc_tx_commitments_root);
-        let curr_sc_tx_commitments_root = FieldElement::native_unchecked(env, curr_sc_tx_commitments_root);
+        let next_sc_tx_commitments_root =
+            FieldElement::native_unchecked(env, next_sc_tx_commitments_root);
+        let curr_sc_tx_commitments_root =
+            FieldElement::native_unchecked(env, curr_sc_tx_commitments_root);
         let msg_hash = FieldElement::native_unchecked(env, msg_hash);
         let next_withdrawal_certificate = parse_wcert(env, next_withdrawal_certificate);
         let curr_withdrawal_certificate = parse_wcert(env, curr_withdrawal_certificate);
-        let next_cert_commitment_path = ScCommitmentCertPath::native_unchecked(env, next_cert_commitment_path);
-        let curr_cert_commitment_path = ScCommitmentCertPath::native_unchecked(env, curr_cert_commitment_path);
+        let next_cert_commitment_path =
+            ScCommitmentCertPath::native_unchecked(env, next_cert_commitment_path);
+        let curr_cert_commitment_path =
+            ScCommitmentCertPath::native_unchecked(env, curr_cert_commitment_path);
         let msg_path = GingerMHTPath::native_unchecked(env, msg_path);
         // Get supported degree
         let supported_degree =
@@ -5904,19 +5903,14 @@ ffi_export!(
                     .new_object(
                         proof_result_class,
                         "([B)V",
-                        &[
-                            JValue::Object(JObject::from(proof_serialized)),
-                        ],
+                        &[JValue::Object(JObject::from(proof_serialized))],
                     )
                     .expect("Should be able to create new Sc2ScProof:(byte[]) object");
 
                 *result
             }
             Err(e) => {
-                log!(format!(
-                    "Error creating NaiveThresholdSignature proof {:?}",
-                    e
-                ));
+                log!(format!("Error creating Sc2Sc proof {:?}", e));
                 JObject::null().into_inner()
             }
         }
@@ -5943,8 +5937,10 @@ ffi_export!(
             .convert_byte_array(proof_bytes)
             .expect("Should be able to convert to Rust byte array");
 
-        let next_sc_tx_commitments_root = FieldElement::native_unchecked(env, next_sc_tx_commitments_root);
-        let curr_sc_tx_commitments_root = FieldElement::native_unchecked(env, curr_sc_tx_commitments_root);
+        let next_sc_tx_commitments_root =
+            FieldElement::native_unchecked(env, next_sc_tx_commitments_root);
+        let curr_sc_tx_commitments_root =
+            FieldElement::native_unchecked(env, curr_sc_tx_commitments_root);
         let msg_hash = FieldElement::native_unchecked(env, msg_hash);
 
         let vk_path = env
@@ -5975,10 +5971,7 @@ ffi_export!(
                 }
             }
             Err(e) => {
-                log!(format!(
-                    "Unable to verify Sc2Sc proof: {:?}",
-                    e
-                ));
+                log!(format!("Unable to verify Sc2Sc proof: {:?}", e));
                 JNI_FALSE
             }
         }
@@ -6004,23 +5997,23 @@ ffi_export!(
 
         match path.compute_root(sc_id, hash) {
             Ok(root) => {
-                let inner = return_jobject(&env, root, "com/horizen/librustsidechains/FieldElement");
+                let inner =
+                    return_jobject(&env, root, "com/horizen/librustsidechains/FieldElement");
                 let cls_optional = env.find_class("java/util/Optional").unwrap();
                 let res = env
                     .call_static_method(
-                    cls_optional,
-                    "of",
-                    "(Ljava/lang/Object;)Ljava/util/Optional;",
-                    &[JValue::Object(inner)],
-                )
-                .unwrap();
+                        cls_optional,
+                        "of",
+                        "(Ljava/lang/Object;)Ljava/util/Optional;",
+                        &[JValue::Object(inner)],
+                    )
+                    .unwrap();
                 *res.l().unwrap()
-            },
+            }
             Err(_) => empty,
         }
     }
 );
-
 
 ffi_export!(
     fn Java_com_horizen_commitmenttreenative_ScCommitmentCertPath_nativeVerify(
@@ -6052,7 +6045,12 @@ ffi_export!(
         env: JNIEnv,
         path: JObject,
     ) -> jbyteArray {
-        serialize_from_jobject::<ScCommitmentCertPath>(&env, path, <ScCommitmentCertPath as JNINativeWrapper>::INNER_FIELD, None)
+        serialize_from_jobject::<ScCommitmentCertPath>(
+            &env,
+            path,
+            <ScCommitmentCertPath as JNINativeWrapper>::INNER_FIELD,
+            None,
+        )
     }
 );
 
@@ -6075,12 +6073,11 @@ ffi_export!(
 
 fn optional_empty(env: JNIEnv) -> jobject {
     let cls_optional = env.find_class("java/util/Optional").unwrap();
-    
+
     let empty_res = env
         .call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
         .expect("Should be able to create new value for Optional.empty()");
     *empty_res.l().unwrap()
-
 }
 
 ffi_export!(
@@ -6091,13 +6088,13 @@ ffi_export!(
         cert_hash: jbyteArray,
     ) -> jobject {
         let sc_id = FieldElement::deserialize(
-                parse_jbyte_array_to_vec(&env, &sc_id, FIELD_SIZE).as_slice()
-            )
-            .expect("Can't parse the input sc_id_bytes into FieldElement");
+            parse_jbyte_array_to_vec(&env, &sc_id, FIELD_SIZE).as_slice(),
+        )
+        .expect("Can't parse the input sc_id_bytes into FieldElement");
         let cert_hash = FieldElement::deserialize(
-                parse_jbyte_array_to_vec(&env, &cert_hash, FIELD_SIZE).as_slice()
-            )
-            .expect("Can't parse the input cert_hash_bytes into FieldElement");
+            parse_jbyte_array_to_vec(&env, &cert_hash, FIELD_SIZE).as_slice(),
+        )
+        .expect("Can't parse the input cert_hash_bytes into FieldElement");
 
         let commitment_tree = CommitmentTree::native_mut_unchecked(env, commitment_tree);
 
@@ -6105,14 +6102,19 @@ ffi_export!(
 
         let cert_leaf_index = match commitment_tree
             .get_cert_leaves(&sc_id)
-            .and_then(|certs| certs.iter().position(|h| h == &cert_hash)) {
+            .and_then(|certs| certs.iter().position(|h| h == &cert_hash))
+        {
             Some(index) => index,
             None => return empty,
         };
 
         let cls_optional = env.find_class("java/util/Optional").unwrap();
 
-        match ScCommitmentCertPath::from_commitment_cert_index(commitment_tree, sc_id, cert_leaf_index) {
+        match ScCommitmentCertPath::from_commitment_cert_index(
+            commitment_tree,
+            sc_id,
+            cert_leaf_index,
+        ) {
             Ok(path) => {
                 let jep = path.wrap_unchecked(env);
 
@@ -6125,7 +6127,7 @@ ffi_export!(
                     )
                     .unwrap();
                 *res.l().unwrap()
-            },
+            }
             Err(_) => {
                 // Ignore it and return a generic None
                 empty
