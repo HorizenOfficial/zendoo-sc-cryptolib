@@ -8,7 +8,7 @@ import static org.junit.Assert.*;
 public class VRFKeyPairTest {
 
     @Test
-    public void testGenerate() throws Exception {
+    public void testGenerate() {
 
         try(VRFKeyPair keyPair = VRFKeyPair.generate())
         {
@@ -19,7 +19,7 @@ public class VRFKeyPairTest {
     }
 
     @Test
-    public void testDeriveFromSeed() throws Exception {
+    public void testDeriveFromSeed() {
         byte[] seed = { 1, 2, 3, 4, 5, 6, 7, 8 };
         byte[] expectedPubKeyBytes = {-41, 6, 40, 40, 18, 36, 100, -72, -107, 103, 60, -47, 40, -5, -119, 103, 89, 31, 82, 66, -98, 103, -128, 57, -116, -108, 81, -33, -8, -101, -95, 14, 0};
         byte[] expectedSecretKeyBytes = {-104, -120, -125, 121, 24, -25, -109, -49, -98, 17, -91, 15, 27, 14, 16, -54, 123, 57, 79, -88, 0, -82, -17, 72, -74, -109, 77, 66, 7, 113, 104, 62};
@@ -39,7 +39,7 @@ public class VRFKeyPairTest {
     }
 
     @Test
-    public void testProveVerify() throws Exception {
+    public void testProveVerify() {
 
         byte[] skBytes = {
             46, -9, -92, 88, 17, -102, 67, 58, 29, -128, 59, -63, -127, 27, 104, -39, 95, -77, -17, -108, -90, -95, -81,
@@ -88,7 +88,7 @@ public class VRFKeyPairTest {
     }
 
     @Test
-    public void testRandomProveVerify() throws Exception {
+    public void testRandomProveVerify() {
         int samples = 100;
 
         for(int i = 0; i < samples; i++) {

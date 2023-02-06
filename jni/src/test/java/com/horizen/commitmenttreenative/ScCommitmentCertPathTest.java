@@ -13,8 +13,7 @@ import org.junit.Test;
 import com.horizen.librustsidechains.FieldElement;
 
 public class ScCommitmentCertPathTest {
-    private ScCommitmentCertPath getCertPath(CommitmentTree commTree, FieldElement scId, FieldElement certLeaf)
-            throws Exception {
+    private ScCommitmentCertPath getCertPath(CommitmentTree commTree, FieldElement scId, FieldElement certLeaf) {
         byte[] scIdBytes = scId.serializeFieldElement();
         byte[] certBytes = certLeaf.serializeFieldElement();
         commTree.addCertLeaf(scIdBytes, certBytes);
@@ -23,7 +22,7 @@ public class ScCommitmentCertPathTest {
     }
 
     @Test
-    public void validPath() throws Exception {
+    public void validPath() {
         try (
                 CommitmentTree ct = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();
@@ -35,7 +34,7 @@ public class ScCommitmentCertPathTest {
     }
 
     @Test
-    public void verifyShouldFailIfInvalidRoot() throws Exception {
+    public void verifyShouldFailIfInvalidRoot() {
         try (
                 CommitmentTree ct = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();
@@ -47,7 +46,7 @@ public class ScCommitmentCertPathTest {
     }
 
     @Test
-    public void verifyShouldFailIfInvalidScId() throws Exception {
+    public void verifyShouldFailIfInvalidScId() {
         try (
                 CommitmentTree ct = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();
@@ -60,7 +59,7 @@ public class ScCommitmentCertPathTest {
     }
 
     @Test
-    public void verifyShouldFailIfInvalidCertHash() throws Exception {
+    public void verifyShouldFailIfInvalidCertHash() {
         try (
                 CommitmentTree ct = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();
@@ -73,7 +72,7 @@ public class ScCommitmentCertPathTest {
     }
 
     @Test
-    public void generateScTxCommitmentRoot() throws Exception {
+    public void generateScTxCommitmentRoot() {
         try (
                 CommitmentTree ct = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();
@@ -85,7 +84,7 @@ public class ScCommitmentCertPathTest {
     }
 
     @Test
-    public void shouldSerializeDeserialize() throws Exception {
+    public void shouldSerializeDeserialize() {
         try (
                 CommitmentTree ct = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();
@@ -110,7 +109,7 @@ public class ScCommitmentCertPathTest {
     }
 
     @Test
-    public void completeTest() throws Exception {
+    public void completeTest() {
         try (
                 CommitmentTree commTree = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();

@@ -463,6 +463,16 @@ public class NaiveThresholdSignatureWKeyRotationProofTest {
             genesisKeyRootHash.freeFieldElement();
             genesisKeyRootHash = null;
         }
+        if (withdrawalCertificate != null) {
+            withdrawalCertificate.close();
+        }
+        if (prevValidatorsKeysRoot != null) {
+            withdrawalCertificate.close();
+        }
+        if (keysSignaturesList != null) {
+            keysSignaturesList.close();
+
+        }
     }
 
     @AfterClass

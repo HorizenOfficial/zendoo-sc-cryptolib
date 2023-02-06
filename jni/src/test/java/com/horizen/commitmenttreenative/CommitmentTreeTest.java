@@ -327,7 +327,7 @@ public class CommitmentTreeTest {
     }
 
     @Test
-    public void getScCommitmetCertPath() throws Exception {
+    public void getScCommitmetCertPath() {
         try (
             CommitmentTree commTree = CommitmentTree.init();
             FieldElement scId = FieldElement.createRandom();

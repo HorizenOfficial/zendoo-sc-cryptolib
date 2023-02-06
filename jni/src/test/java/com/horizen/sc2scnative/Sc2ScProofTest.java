@@ -46,6 +46,8 @@ public class Sc2ScProofTest {
     private InMemoryAppendOnlyMerkleTree msgTree;
     private CommitmentTree currentCt = CommitmentTree.init();
     private CommitmentTree nextCt = CommitmentTree.init();
+    private WithdrawalCertificate currWithdrawalCertificate;
+    private WithdrawalCertificate nextWithdrawalCertificate;
 
     @BeforeClass
     public static void initKeys() throws Exception {
@@ -70,12 +72,14 @@ public class Sc2ScProofTest {
 
     @After
     public void tearDown() {
-        try {
-            msgTree.close();
-            currentCt.close();
-            nextCt.close();
-        } catch (Exception e) {
-            e.printStackTrace();
+        msgTree.close();
+        currentCt.close();
+        nextCt.close();
+        if (nextWithdrawalCertificate != null) {
+            nextWithdrawalCertificate.close();
+        }
+        if (currWithdrawalCertificate != null) {
+            currWithdrawalCertificate.close();
         }
     }
 
@@ -164,7 +168,7 @@ public class Sc2ScProofTest {
     }
 
     @Test
-    public void happyPath() throws Exception {
+    public void happyPath() {
         Random r = new Random();
         RandomProofData proofData = generateRandomProof(r, 42);
 
@@ -186,7 +190,7 @@ public class Sc2ScProofTest {
     }
 
     @Test
-    public void shouldNotVerifyInvalidInput() throws Exception {
+    public void shouldNotVerifyInvalidInput() {
         Random r = new Random();
         RandomProofData proofData = generateRandomProof(r, 42);
 
@@ -214,7 +218,7 @@ public class Sc2ScProofTest {
     }
 
     // Generate a RandomProofData with just a a certificate for epoch and epoch + 1.
-    private RandomProofData generateRandomProof(Random r, int epoch) throws Exception {
+    private RandomProofData generateRandomProof(Random r, int epoch) {
         // We'll create tx commitment for a epoch with one certificate and
         // another one for next epoch with another certificate. From this
         // commitments we'll extract the path and then create a circuit.

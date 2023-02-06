@@ -9,7 +9,7 @@ import java.util.List;
 public class FieldElementTest {
 
     @Test
-    public void testRandomSerializeDeserialize() throws Exception {
+    public void testRandomSerializeDeserialize() {
 
         int samples = 100;
         for( int i = 0; i < samples; i++ ) {
@@ -45,7 +45,7 @@ public class FieldElementTest {
     }
 
     @Test
-    public void testSplitPositive() throws Exception {
+    public void testSplitPositive() {
         // Positive case
         for(int i = 1; i < Constants.FIELD_ELEMENT_LENGTH(); i++) {
             // Generate random FieldElement and split it into two FieldElements at index i
@@ -68,7 +68,7 @@ public class FieldElementTest {
     }
 
     @Test
-    public void testSplitNegative() throws Exception {
+    public void testSplitNegative() {
         // Split then rejoin at wrong index and assert we are not able to reconstruct the original FieldElement
         for(int i = 1; i < Constants.FIELD_ELEMENT_LENGTH() - 1; i++) {
             // Generate random FieldElement and split it into two FieldElements at index i
@@ -96,7 +96,7 @@ public class FieldElementTest {
     }
 
     @Test
-    public void testSplitExceptions() throws Exception {
+    public void testSplitExceptions() {
         FieldElement fe1 = FieldElement.createRandom();
         FieldElement fe2 = FieldElement.createRandom();
 
