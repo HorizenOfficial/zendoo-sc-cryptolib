@@ -337,24 +337,24 @@ public class CommitmentTreeTest {
             byte[] certHashBytes = certLeaf.serializeFieldElement();
             commTree.addCertLeaf(scIdBytes, certHashBytes);
 
-            FieldElement scTxCommitmentRoot = commTree.getCommitment().get();
+            try (FieldElement scTxCommitmentRoot = commTree.getCommitment().get()) {
+                Optional<ScCommitmentCertPath> pathOpt = commTree.getScCommitmentCertPath(scIdBytes, certHashBytes);
 
-            Optional<ScCommitmentCertPath> pathOpt = commTree.getScCommitmentCertPath(scIdBytes, certHashBytes);
-
-            assertTrue(pathOpt.isPresent());
-
-            ScCommitmentCertPath path = pathOpt.get(); 
-            assertTrue(path.verify(scTxCommitmentRoot, scId, certLeaf));
-            path.freeScCommitmentCertPath();
-
-            // Sanity check
-            assertFalse(
-                commTree.getScCommitmentCertPath(
-                    scIdBytes, 
-                    FieldElement.createRandom().serializeFieldElement()
-                    )
-                .isPresent()
-            );
+                assertTrue(pathOpt.isPresent());
+    
+                ScCommitmentCertPath path = pathOpt.get(); 
+                assertTrue(path.verify(scTxCommitmentRoot, scId, certLeaf));
+                path.close();
+    
+                // Sanity check
+                assertFalse(
+                    commTree.getScCommitmentCertPath(
+                        scIdBytes, 
+                        FieldElement.createRandom().serializeFieldElement()
+                        )
+                    .isPresent()
+                );
+            }
         }
     }
 
