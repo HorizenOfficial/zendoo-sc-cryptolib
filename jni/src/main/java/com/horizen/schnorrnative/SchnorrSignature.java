@@ -61,7 +61,7 @@ public class SchnorrSignature implements AutoCloseable
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() {
     freeSignature();
   }
 }

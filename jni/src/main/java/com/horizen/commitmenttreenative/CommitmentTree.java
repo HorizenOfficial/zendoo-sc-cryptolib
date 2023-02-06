@@ -39,7 +39,7 @@ public class CommitmentTree implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         freeCommitmentTree();
     }
 

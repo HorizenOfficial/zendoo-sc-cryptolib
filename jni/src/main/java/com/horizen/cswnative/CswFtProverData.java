@@ -86,7 +86,7 @@ public class CswFtProverData implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         this.mcbScTxsComStart.close();
         this.merklePathToScHash.close();
         this.ftTreePath.close();
