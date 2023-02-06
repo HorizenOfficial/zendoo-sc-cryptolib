@@ -126,32 +126,33 @@ public class ScCommitmentCertPathTest {
                 commTree.addCertLeaf(scIdBytes, h);
             }
 
-            FieldElement scTxCommitmentRoot = commTree.getCommitment().get();
+            try (FieldElement scTxCommitmentRoot = commTree.getCommitment().get()) {
+                ArrayList<ScCommitmentCertPath> paths = certsHashBytes.stream().map(
+                        h -> commTree.getScCommitmentCertPath(scIdBytes, h).get())
+                        .collect(Collectors.toCollection(ArrayList::new));
 
-            ArrayList<ScCommitmentCertPath> paths = certsHashBytes.stream().map(
-                    h -> commTree.getScCommitmentCertPath(scIdBytes, h).get())
-                    .collect(Collectors.toCollection(ArrayList::new));
+                assertFalse(
+                        commTree.getScCommitmentCertPath(scIdBytes, FieldElement.createRandom().serializeFieldElement())
+                                .isPresent());
 
-            assertFalse(commTree.getScCommitmentCertPath(scIdBytes, FieldElement.createRandom().serializeFieldElement())
-                    .isPresent());
-
-            for (int i = 0; i < certs.length; i++) {
-                assertTrue(paths.get(i).verify(scTxCommitmentRoot, scId, certs[i]));
-            }
-            assertFalse(paths.get(0).verify(scTxCommitmentRoot, scId, FieldElement.createRandom()));
-            for (int i = 0; i < certs.length; i++) {
-                assertFalse(paths.get(i).verify(FieldElement.createRandom(), scId, certs[i]));
-            }
-            for (int i = 0; i < certs.length; i++) {
-                assertFalse(paths.get(i).verify(scTxCommitmentRoot, FieldElement.createRandom(), certs[i]));
-            }
-            for (int i = 0; i < certs.length; i++) {
-                try (FieldElement root = paths.get(i).apply(scId, certs[i]).get()) {
-                    assertEquals(scTxCommitmentRoot, root);
+                for (int i = 0; i < certs.length; i++) {
+                    assertTrue(paths.get(i).verify(scTxCommitmentRoot, scId, certs[i]));
                 }
-            }
-            for (ScCommitmentCertPath path : paths) {
-                path.freeScCommitmentCertPath();
+                assertFalse(paths.get(0).verify(scTxCommitmentRoot, scId, FieldElement.createRandom()));
+                for (int i = 0; i < certs.length; i++) {
+                    assertFalse(paths.get(i).verify(FieldElement.createRandom(), scId, certs[i]));
+                }
+                for (int i = 0; i < certs.length; i++) {
+                    assertFalse(paths.get(i).verify(scTxCommitmentRoot, FieldElement.createRandom(), certs[i]));
+                }
+                for (int i = 0; i < certs.length; i++) {
+                    try (FieldElement root = paths.get(i).apply(scId, certs[i]).get()) {
+                        assertEquals(scTxCommitmentRoot, root);
+                    }
+                }
+                for (ScCommitmentCertPath path : paths) {
+                    path.freeScCommitmentCertPath();
+                }
             }
         }
     }
