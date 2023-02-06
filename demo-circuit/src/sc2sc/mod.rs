@@ -1,9 +1,14 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, convert::TryInto};
 
-use algebra::Field;
+use algebra::{
+    CanonicalDeserialize, CanonicalSerialize, Error, Field, Read, SemanticallyValid,
+    SerializationError, Write,
+};
 use cctp_primitives::{
-    commitment_tree::{sidechain_tree_alive::CERT_MT_HEIGHT, CMT_MT_HEIGHT},
+    commitment_tree::{sidechain_tree_alive::CERT_MT_HEIGHT, CommitmentTree, CMT_MT_HEIGHT},
+    proving_system::verifier::UserInputs,
     type_mapping::FieldElement,
+    utils::commitment_tree::hash_vec,
 };
 use primitives::FieldBasedMerkleTreePath;
 use r1cs_core::ConstraintSynthesizer;
@@ -30,12 +35,7 @@ pub const MSG_MT_HEIGHT: usize = 16;
 #[derive(Clone)]
 pub struct Sc2Sc {
     // Public Inputs
-    /// Side Chain Tx Commitment  Root of epoch N+1
-    next_sc_tx_commitments_root: FieldElement,
-    /// Side Chain Tx Commitment  Root of epoch N
-    curr_sc_tx_commitments_root: FieldElement,
-    /// Hash of the message to be redeemed
-    msg_hash: FieldElement,
+    public_input: Sc2ScUserInput,
 
     // Witnesses
     /// Certificate of epoch N+1
@@ -74,9 +74,11 @@ impl Sc2Sc {
             for more details", MIN_CUSTOM_FIELDS);
 
         Self {
-            next_sc_tx_commitments_root,
-            curr_sc_tx_commitments_root,
-            msg_hash,
+            public_input: Sc2ScUserInput::new(
+                next_sc_tx_commitments_root,
+                curr_sc_tx_commitments_root,
+                msg_hash,
+            ),
             next_cert,
             curr_cert,
             next_cert_path,
@@ -97,6 +99,10 @@ impl Sc2Sc {
             ScCommitmentCertPath::default(),
             GingerMHTBinaryPath::new(vec![(FieldElement::default(), false); MSG_MT_HEIGHT]),
         )
+    }
+
+    pub fn public_input(&self) -> &Sc2ScUserInput {
+        &self.public_input
     }
 
     fn enforce_contiguos_epochs<CS>(
@@ -134,14 +140,15 @@ impl ConstraintSynthesizer<FieldElement> for Sc2Sc {
         // Expose public inputs
         let next_sc_tx_commitments_root_g =
             FieldElementGadget::alloc_input(cs.ns(|| "Alloc next sc tx commitment root"), || {
-                Ok(self.next_sc_tx_commitments_root)
+                Ok(self.public_input.next_sc_tx_commitments_root)
             })?;
         let curr_sc_tx_commitments_root_g = FieldElementGadget::alloc_input(
             cs.ns(|| "Alloc current sc tx commitment root"),
-            || Ok(self.curr_sc_tx_commitments_root),
+            || Ok(self.public_input.curr_sc_tx_commitments_root),
         )?;
-        let msg_hash_g =
-            FieldElementGadget::alloc_input(cs.ns(|| "Alloc msg_hash"), || Ok(self.msg_hash))?;
+        let msg_hash_g = FieldElementGadget::alloc_input(cs.ns(|| "Alloc msg_hash"), || {
+            Ok(self.public_input.msg_hash)
+        })?;
 
         // Alloc Withdraw certificate gadgets
         let curr_cert_g =
@@ -206,6 +213,43 @@ impl ConstraintSynthesizer<FieldElement> for Sc2Sc {
     }
 }
 
+#[derive(Default, Clone, Debug)]
+pub struct Sc2ScUserInput {
+    // Public Inputs
+    /// Side Chain Tx Commitment  Root of epoch N+1
+    next_sc_tx_commitments_root: FieldElement,
+    /// Side Chain Tx Commitment  Root of epoch N
+    curr_sc_tx_commitments_root: FieldElement,
+    /// Hash of the message to be redeemed
+    msg_hash: FieldElement,
+}
+
+impl Sc2ScUserInput {
+    pub fn new(
+        next_sc_tx_commitments_root: FieldElement,
+        curr_sc_tx_commitments_root: FieldElement,
+        msg_hash: FieldElement,
+    ) -> Self {
+        Self {
+            next_sc_tx_commitments_root,
+            curr_sc_tx_commitments_root,
+            msg_hash,
+        }
+    }
+}
+
+impl UserInputs for Sc2ScUserInput {
+    fn get_circuit_inputs(
+        &self,
+    ) -> Result<Vec<FieldElement>, cctp_primitives::proving_system::error::ProvingSystemError> {
+        Ok(vec![
+            self.next_sc_tx_commitments_root,
+            self.curr_sc_tx_commitments_root,
+            self.msg_hash,
+        ])
+    }
+}
+
 /// Represent the data that we need to rebuild the sc_tx_commitment root
 /// from the withdrawal certificate. We need
 /// - `cert_path` to recover the withdrawal certificate root from certificate hash
@@ -216,7 +260,7 @@ impl ConstraintSynthesizer<FieldElement> for Sc2Sc {
 /// The method `enforce_sc_tx_commitment_root` take the certificate hash and
 /// sidechain id gadgets to enforce all the path.
 // TODO: Maybe is better to move it in zendoo-cctp-cryptolib
-#[derive(Clone)]
+#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct ScCommitmentCertPath {
     fwt_root: FieldElement,
     bwt_root: FieldElement,
@@ -253,6 +297,63 @@ impl ScCommitmentCertPath {
             cert_path,
             sc_commitment_path,
         }
+    }
+
+    pub fn compute_root(
+        &self,
+        sc_id: &FieldElement,
+        cert_hash: &FieldElement,
+    ) -> Result<FieldElement, Error> {
+        let cert_root = self.cert_path.compute_root(&cert_hash);
+        let commitment = hash_vec(vec![
+            self.fwt_root.clone(),
+            self.bwt_root.clone(),
+            cert_root.clone(),
+            self.ssc,
+            sc_id.clone(),
+        ])?;
+        Ok(self.sc_commitment_path.compute_root(&commitment))
+    }
+
+    pub fn valid(
+        &self,
+        sc_tx_commitment_root: &FieldElement,
+        sc_id: &FieldElement,
+        cert_hash: &FieldElement,
+    ) -> bool {
+        self.compute_root(sc_id, cert_hash)
+            .map(|r| &r == sc_tx_commitment_root)
+            .unwrap_or(false)
+    }
+
+    /// Add implementation to simplify the extraction from a commitment
+    pub fn from_commitment_cert_index(
+        cmt: &mut CommitmentTree,
+        sc_id: FieldElement,
+        cert_index: usize,
+    ) -> Result<Self, Error> {
+        Ok(Self::new(
+            cmt.get_fwt_commitment(&sc_id)
+                .ok_or(format!("Cannot retrive the forward transfer root"))?,
+            cmt.get_bwtr_commitment(&sc_id)
+                .ok_or(format!("Cannot retrive the backward transfer root"))?,
+            cmt.get_scc(&sc_id)
+                .ok_or(format!("Cannot retrive the sidechain creation"))?,
+            cmt.get_cert_merkle_path(&sc_id, cert_index)
+                .ok_or(format!("Cannot retrive the certificate merkle path"))?
+                .try_into()?,
+            cmt.get_sc_commitment_merkle_path(&sc_id)
+                .ok_or(format!("Cannot retrive the commitment merkle path"))?
+                .try_into()?,
+        )
+        .into())
+    }
+}
+
+impl SemanticallyValid for ScCommitmentCertPath {
+    fn is_valid(&self) -> bool {
+        self.cert_path.get_length() == CERT_MT_HEIGHT
+            && self.sc_commitment_path.get_length() == CMT_MT_HEIGHT
     }
 }
 
