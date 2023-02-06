@@ -5,6 +5,13 @@ import java.util.Optional;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
 
+/*
+ * This class represent a path from the certificate to the root of side chain
+ * tx commitments root. That is not a simple merkle path because we need use a
+ * merkle path to find the root of the merkle tree of the cerificates, hash it 
+ * with the sidechain id and two other roots (forward transfert and backward 
+ * transfert); Finally use this hash to compute the final root.
+ */
 public class ScCommitmentCertPath implements AutoCloseable {
 
     private long scCommitmentCertPathPointer;
