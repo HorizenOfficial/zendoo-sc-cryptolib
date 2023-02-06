@@ -2,7 +2,6 @@ package com.horizen.certnative;
 
 import com.horizen.librustsidechains.Library;
 import com.horizen.librustsidechains.FieldElement;
-import com.horizen.schnorrnative.SchnorrPublicKey;
 import com.horizen.schnorrnative.SchnorrSignature;
 import com.horizen.schnorrnative.ValidatorKeysUpdatesList;
 import com.horizen.provingsystemnative.ProvingSystemType;
