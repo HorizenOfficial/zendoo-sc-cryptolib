@@ -104,7 +104,7 @@ public class Sc2ScProofTest {
     }
 
     @Test
-    public void shouldThrowExceptionIfWeUseNotEnoughtCustomFields() {
+    public void shouldThrowExceptionIfWeUseNotEnoughCustomFields() {
         Exception ex = assertThrows(Exception.class, () -> {
             Sc2Sc.setup(psType, 1, Optional.of(TestUtils.CERT_SEGMENT_SIZE),
                     pkPath, vkPath, zk, maxProofPlusVkSize);
