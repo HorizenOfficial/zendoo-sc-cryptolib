@@ -183,7 +183,7 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         for (SchnorrPublicKey pk : signingKeys)
             pk.close();
         for (SchnorrPublicKey pk : masterKeys)
