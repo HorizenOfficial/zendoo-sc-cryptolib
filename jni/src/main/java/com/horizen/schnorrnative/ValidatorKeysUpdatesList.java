@@ -1,6 +1,5 @@
 package com.horizen.schnorrnative;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import com.horizen.librustsidechains.Library;
