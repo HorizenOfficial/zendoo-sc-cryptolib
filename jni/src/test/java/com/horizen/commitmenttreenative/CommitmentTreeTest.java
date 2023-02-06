@@ -327,6 +327,38 @@ public class CommitmentTreeTest {
     }
 
     @Test
+    public void getScCommitmetCertPath() throws Exception {
+        try (
+            CommitmentTree commTree = CommitmentTree.init();
+            FieldElement scId = FieldElement.createRandom();
+            FieldElement certLeaf = FieldElement.createRandom();
+        ) {
+            byte[] scIdBytes = scId.serializeFieldElement();
+            byte[] certHashBytes = certLeaf.serializeFieldElement();
+            commTree.addCertLeaf(scIdBytes, certHashBytes);
+
+            FieldElement scTxCommitmentRoot = commTree.getCommitment().get();
+
+            Optional<ScCommitmentCertPath> pathOpt = commTree.getScCommitmentCertPath(scIdBytes, certHashBytes);
+
+            assertTrue(pathOpt.isPresent());
+
+            ScCommitmentCertPath path = pathOpt.get(); 
+            assertTrue(path.verify(scTxCommitmentRoot, scId, certLeaf));
+            path.freeScCommitmentCertPath();
+
+            // Sanity check
+            assertFalse(
+                commTree.getScCommitmentCertPath(
+                    scIdBytes, 
+                    FieldElement.createRandom().serializeFieldElement()
+                    )
+                .isPresent()
+            );
+        }
+    }
+
+    @Test
     public void existenceProofTest() {
         CommitmentTree commTree = CommitmentTree.init();
         byte[] scId = generateFieldElementBytes();

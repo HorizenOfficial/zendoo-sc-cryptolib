@@ -83,6 +83,10 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
         this.scId = scId;
     }
 
+    public void setScId(byte[] scId) {
+        this.scId = FieldElement.deserialize(scId);
+    }
+
     public void setEpochNumber(int epochNumber) {
         this.epochNumber = epochNumber;
     }
@@ -99,6 +103,10 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
         this.mcbScTxsCom = mcbScTxsCom;
     }
 
+    public void setMcbScTxsCom(byte[] mcbScTxsCom) {
+        this.mcbScTxsCom = FieldElement.deserialize(mcbScTxsCom);
+    }
+
     public void setFtMinAmount(long ftMinAmount) {
         this.ftMinAmount = ftMinAmount;
     }
@@ -111,11 +119,25 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
         this.customFields = customFields;
     }
 
+    public void setCustomField(int pos, FieldElement customField) {
+        this.customFields[pos] = customField;
+    }
+
+    public void setCustomField(int pos, byte[] customFieldBytes) {
+        setCustomField(pos, FieldElement.deserialize(customFieldBytes));
+    }
+
     private native FieldElement nativeGetHash();
 
     @Override
     public FieldElement getHash() {
         return nativeGetHash();
+    }
+
+    public byte[] getHashBytes() {
+        try(FieldElement h = getHash()) {
+            return h.serializeFieldElement();
+        }
     }
 
     public static WithdrawalCertificate getRandom(Random r, int numBt, int numCustomFields) {

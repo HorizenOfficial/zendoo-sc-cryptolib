@@ -240,4 +240,10 @@ public class CommitmentTree implements AutoCloseable {
     public Optional<MerklePath> getCertMerklePath(byte[] scId, int leafIndex) {
         return nativeGetCertMerklePath(scId, leafIndex);
     }
+
+    private native Optional<ScCommitmentCertPath> nativeGetScCommitmentCertPath(byte[] scId, byte[] certLeafHash);
+
+    public Optional<ScCommitmentCertPath> getScCommitmentCertPath(byte[] scId, byte[] certLeafHash) {
+        return nativeGetScCommitmentCertPath(scId, certLeafHash);
+    }
 }

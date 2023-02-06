@@ -22,6 +22,10 @@ public final class Constants {
     private static int VRF_PK_LENGTH;
     private static int VRF_SK_LENGTH;
     private static int VRF_PROOF_LENGTH;
+    private static int MSG_ROOT_HASH_CUSTOM_FIELDS_POS;
+    private static int MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS;
+    private static int MIN_CUSTOM_FIELDS;
+    private static int MSG_MT_HEIGHT;
 
     private static native void nativeInitializeAllConstants();
 
@@ -88,5 +92,21 @@ public final class Constants {
 
     public static int VRF_PROOF_LENGTH() {
         return VRF_PROOF_LENGTH;
+    }
+
+    public static int MSG_ROOT_HASH_CUSTOM_FIELDS_POS() {
+        return MSG_ROOT_HASH_CUSTOM_FIELDS_POS;
+    }
+
+    public static int MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS() {
+        return MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS;
+    }
+
+    public static int MIN_CUSTOM_FIELDS() {
+        return MIN_CUSTOM_FIELDS;
+    }
+
+    public static int MSG_MT_HEIGHT() {
+        return MSG_MT_HEIGHT;
     }
 }
