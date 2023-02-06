@@ -94,15 +94,15 @@ public class ScCommitmentCertPathTest {
             /// Sanity Check
             assertTrue(path.verify(root, scId, certLeaf));
 
-            byte[] serilized = path.serialize();
+            byte[] serialized = path.serialize();
 
-            try (ScCommitmentCertPath deserialized = ScCommitmentCertPath.deserialize(serilized, true)) {
+            try (ScCommitmentCertPath deserialized = ScCommitmentCertPath.deserialize(serialized, true)) {
                 assertTrue(deserialized.verify(root, scId, certLeaf));
             }
 
-            serilized[0] = (byte) (serilized[0] + 1);
+            serialized[0] = (byte) (serialized[0] + 1);
 
-            try (ScCommitmentCertPath deserialized = ScCommitmentCertPath.deserialize(serilized, true)) {
+            try (ScCommitmentCertPath deserialized = ScCommitmentCertPath.deserialize(serialized, true)) {
                 assertFalse(deserialized.verify(root, scId, certLeaf));
             }
         }
