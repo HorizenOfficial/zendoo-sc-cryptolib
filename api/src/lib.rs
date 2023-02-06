@@ -6032,7 +6032,7 @@ ffi_export!(
             return JNI_FALSE;
         }
 
-        if path.valid(root, sc_id, hash) {
+        if path.check_membership(root, sc_id, hash) {
             JNI_TRUE
         } else {
             JNI_FALSE

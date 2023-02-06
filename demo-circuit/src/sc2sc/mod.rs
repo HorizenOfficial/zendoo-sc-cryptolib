@@ -315,7 +315,7 @@ impl ScCommitmentCertPath {
         Ok(self.sc_commitment_path.compute_root(&commitment))
     }
 
-    pub fn valid(
+    pub fn check_membership(
         &self,
         sc_tx_commitment_root: &FieldElement,
         sc_id: &FieldElement,

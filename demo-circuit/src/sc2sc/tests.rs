@@ -224,7 +224,7 @@ mod sc_commitment_cert_path {
         
         let (cert, path, root) = cmt.get_withdrawal_certificate_info(0);
 
-        assert!(path.valid(&root, &sc_id, &cert.hash().unwrap()))
+        assert!(path.check_membership(&root, &sc_id, &cert.hash().unwrap()))
     }
 
     #[rstest]
@@ -251,7 +251,7 @@ mod sc_commitment_cert_path {
             
             let (cert, path, _root) = cmt.get_withdrawal_certificate_info(0);
     
-            assert!(!path.valid(&rng.gen(), &sc_id, &cert.hash().unwrap()))
+            assert!(!path.check_membership(&rng.gen(), &sc_id, &cert.hash().unwrap()))
         }
     
         #[rstest]
@@ -263,7 +263,7 @@ mod sc_commitment_cert_path {
             
             let (cert, path, root) = cmt.get_withdrawal_certificate_info(0);
     
-            assert!(!path.valid(&root, &rng.gen(), &cert.hash().unwrap()))
+            assert!(!path.check_membership(&root, &rng.gen(), &cert.hash().unwrap()))
         }
 
         #[rstest]
@@ -275,7 +275,7 @@ mod sc_commitment_cert_path {
             
             let (_cert, path, root) = cmt.get_withdrawal_certificate_info(0);
     
-            assert!(!path.valid(&root, &sc_id, &rng.gen()))
+            assert!(!path.check_membership(&root, &sc_id, &rng.gen()))
         }
     }
 }
