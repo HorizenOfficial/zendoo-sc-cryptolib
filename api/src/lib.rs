@@ -5889,24 +5889,9 @@ ffi_export!(
         ) {
             Ok(proof) => {
                 //Return proof serialized
-                let proof_serialized = env
+                env
                     .byte_array_from_slice(proof.as_slice())
-                    .expect("Should be able to convert Rust slice into jbytearray");
-
-                //Create new CreateProofResult object
-                let proof_result_class = env
-                    .find_class("com/horizen/sc2scnative/Sc2ScProof")
-                    .expect("Should be able to find Sc2ScProof class");
-
-                let result = env
-                    .new_object(
-                        proof_result_class,
-                        "([B)V",
-                        &[JValue::Object(JObject::from(proof_serialized))],
-                    )
-                    .expect("Should be able to create new Sc2ScProof:(byte[]) object");
-
-                *result
+                    .expect("Should be able to convert Rust slice into jbytearray")
             }
             Err(e) => {
                 log!(format!("Error creating Sc2Sc proof {:?}", e));
@@ -5917,30 +5902,30 @@ ffi_export!(
 );
 
 ffi_export!(
-    fn Java_com_horizen_sc2scnative_Sc2ScProof_nativeVerify(
+    fn Java_com_horizen_sc2scnative_Sc2Sc_nativeVerifyProof(
         env: JNIEnv,
         _class: JClass,
-        proof_bytes: jbyteArray,
         next_sc_tx_commitments_root: JObject,
         curr_sc_tx_commitments_root: JObject,
         msg_hash: JObject,
 
+        proof_bytes: jbyteArray,
         vk_path: JString,
         check_proof: jboolean,
         compressed_proof: jboolean,
         check_vk: jboolean,
         compressed_vk: jboolean,
     ) -> jboolean {
-        //Extract proof
-        let proof_bytes = env
-            .convert_byte_array(proof_bytes)
-            .expect("Should be able to convert to Rust byte array");
 
         let next_sc_tx_commitments_root: &FieldElement =
             next_sc_tx_commitments_root.as_native_ref_unchecked(env);
         let curr_sc_tx_commitments_root: &FieldElement =
             curr_sc_tx_commitments_root.as_native_ref_unchecked(env);
         let msg_hash: &FieldElement = msg_hash.as_native_ref_unchecked(env);
+
+        let proof_bytes = env
+            .convert_byte_array(proof_bytes)
+            .expect("Should be able to convert to Rust byte array");
 
         let vk_path = env
             .get_string(vk_path)

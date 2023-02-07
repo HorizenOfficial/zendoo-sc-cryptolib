@@ -28,7 +28,7 @@ import com.horizen.merkletreenative.MerklePath;
 import com.horizen.provingsystemnative.ProvingSystem;
 import com.horizen.provingsystemnative.ProvingSystemType;
 
-public class Sc2ScProofTest {
+public class Sc2ScTest {
     private static int MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS = Constants.MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS();
     private static int MSG_ROOT_HASH_CUSTOM_FIELDS_POS = Constants.MSG_ROOT_HASH_CUSTOM_FIELDS_POS();
     private static int MIN_CUSTOM_FIELDS = Constants.MIN_CUSTOM_FIELDS();
@@ -174,14 +174,14 @@ public class Sc2ScProofTest {
 
         assertNotNull("Proof creation must be successful", proofData.proof);
 
-        assertEquals(psType, proofData.proof.getProofProvingSystemType());
+        assertEquals(psType, ProvingSystem.getProofProvingSystemType(proofData.proof));
 
-        assertTrue(
-                proofData.proof.verify(
-                        proofData.nextScTxCommitmentsRoot,
-                        proofData.currentScTxCommitmentsRoot,
-                        proofData.msgHash,
-                        vkPath));
+        assertTrue(Sc2Sc.verifyProof(
+                proofData.nextScTxCommitmentsRoot,
+                proofData.currentScTxCommitmentsRoot,
+                proofData.msgHash,
+                proofData.proof,
+                vkPath));
     }
 
     private byte[] changeBytes(byte[] data) {
@@ -195,26 +195,27 @@ public class Sc2ScProofTest {
         RandomProofData proofData = generateRandomProof(r, 42);
 
         assertFalse(
-                proofData.proof.verify(
+                Sc2Sc.verifyProof(
                         changeBytes(proofData.nextScTxCommitmentsRoot),
                         proofData.currentScTxCommitmentsRoot,
                         proofData.msgHash,
+                        proofData.proof,
                         vkPath));
 
         assertFalse(
-                proofData.proof.verify(
+                Sc2Sc.verifyProof(
                         proofData.nextScTxCommitmentsRoot,
                         changeBytes(proofData.currentScTxCommitmentsRoot),
                         proofData.msgHash,
+                        proofData.proof,
                         vkPath));
-
         assertFalse(
-                proofData.proof.verify(
+                Sc2Sc.verifyProof(
                         proofData.nextScTxCommitmentsRoot,
                         proofData.currentScTxCommitmentsRoot,
                         changeBytes(proofData.msgHash),
+                        proofData.proof,
                         vkPath));
-
     }
 
     // Generate a RandomProofData with just a a certificate for epoch and epoch + 1.
@@ -255,7 +256,7 @@ public class Sc2ScProofTest {
                 ScCommitmentCertPath currentPath = currentCt.getScCommitmentCertPath(scId, currCertHash).get();
                 ScCommitmentCertPath nextPath = nextCt.getScCommitmentCertPath(scId, nextCertHash).get();
                 MerklePath msgPath = getMsgPath(0);) {
-            Sc2ScProof proof = Sc2Sc.createProof(
+            byte[] proof = Sc2Sc.createProof(
                     nextScTxCommitmentsRoot,
                     currentScTxCommitmentsRoot,
                     msgHash,
@@ -276,10 +277,10 @@ public class Sc2ScProofTest {
         public byte[] currentScTxCommitmentsRoot;
         public byte[] msgHash;
 
-        public Sc2ScProof proof;
+        public byte[] proof;
 
         public RandomProofData(byte[] nextScTxCommitmentsRoot, byte[] currentScTxCommitmentsRoot,
-                byte[] msgHash, Sc2ScProof proof) {
+                byte[] msgHash, byte[] proof) {
             this.nextScTxCommitmentsRoot = nextScTxCommitmentsRoot;
             this.currentScTxCommitmentsRoot = currentScTxCommitmentsRoot;
             this.msgHash = msgHash;

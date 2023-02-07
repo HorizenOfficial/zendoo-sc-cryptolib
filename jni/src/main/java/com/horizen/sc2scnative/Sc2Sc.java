@@ -6,6 +6,7 @@ import com.horizen.certnative.WithdrawalCertificate;
 import com.horizen.commitmenttreenative.ScCommitmentCertPath;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.merkletreenative.MerklePath;
+import com.horizen.provingsystemnative.ProvingSystem;
 import com.horizen.provingsystemnative.ProvingSystemType;
 
 public class Sc2Sc {
@@ -100,7 +101,87 @@ public class Sc2Sc {
 
         }
 
-        private static native Sc2ScProof nativeCreateProof(
+        private static native boolean nativeVerifyProof(
+                        FieldElement nextScTxCommitmentRoot,
+                        FieldElement currentScTxCommitmentRoot,
+                        FieldElement msgHash,
+                        byte[] proof,
+                        String vKPath,
+                        boolean checkProof,
+                        boolean compressedProof,
+                        boolean checkVk,
+                        boolean compressedVk);
+
+        /**
+         * Verify a sidechain to sidechain redeemed message proof.
+         * 
+         * @param nextScTxCommitmentsRoot    - Next epoch sc tx root
+         * @param currentScTxCommitmentsRoot - Current epoch sc tx root for
+         * @param msgHash                    - Message hash
+         * @param proof                      - The serialized proof (see createProof methods)
+         * @param vkPath                     - Verification Key file path
+         * @param checkProof                 - Do or not the proof sematic check
+         * @param compressedProof            - Indicate if the proof is compressed or
+         *                                   not
+         * @param checkVk                    - Check or not check the verification key
+         * @param compressedVk               - Indicate if the verification key is
+         *                                   compressed or not
+         * @return True if the the proof can be verified with the given public input and
+         *         false otherwise.
+         */
+        public static boolean verifyProof(FieldElement nextScTxCommitmentsRoot, FieldElement currentScTxCommitmentsRoot,
+                        FieldElement msgHash, byte[] proof, String vkPath,
+                        boolean checkProof, boolean compressedProof, boolean checkVk, boolean compressedVk) {
+                return nativeVerifyProof(nextScTxCommitmentsRoot, currentScTxCommitmentsRoot, msgHash, proof,
+                                vkPath, checkProof, compressedProof, checkVk, compressedVk);
+        }
+
+        /**
+         * Verify a sidechain to sidechain redeemed message proof. In this case we
+         * assume
+         * that proof and the key are compressed and we check both.
+         * 
+         * @param nextScTxCommitmentsRoot    - Next epoch sc tx root
+         * @param currentScTxCommitmentsRoot - Current epoch sc tx root for
+         * @param msgHash                    - Message hash
+         * @param proof                      - The serialized proof (see createProof methods)
+         * @param vkPath                     - Verification Key file path
+         * @return True if the the proof can be verified with the given public input and
+         *         false otherwise.
+         */
+        public static boolean verifyProof(FieldElement nextScTxCommitmentsRoot, FieldElement currentScTxCommitmentsRoot,
+                        FieldElement msgHash, byte[] proof, String vkPath) {
+                return verifyProof(nextScTxCommitmentsRoot, currentScTxCommitmentsRoot, msgHash,
+                                proof, vkPath, true, true, true, true);
+        }
+
+        /**
+         * Verify a sidechain to sidechain redeemed message proof. In this case we
+         * assume
+         * that proof and the key are compressed and we check both. This varian take
+         * arrays
+         * of bytes instead of FieldElement.
+         * 
+         * @param nextScTxCommitmentsRoot    - Next epoch sc tx root
+         * @param currentScTxCommitmentsRoot - Current epoch sc tx root for
+         * @param msgHash                    - Message hash
+         * @param proof                      - The serialized proof (see createProof methods)
+         * @param vkPath                     - Verification Key file path
+         * @return True if the the proof can be verified with the given public input and
+         *         false otherwise.
+         */
+        public static boolean verifyProof(byte[] nextScTxCommitmentsRootB, byte[] currentScTxCommitmentsRootB,
+                        byte[] msgHashB,
+                        byte[] proof, String vkPath) {
+                try (FieldElement nextScTxCommitmentsRoot = FieldElement.deserialize(nextScTxCommitmentsRootB);
+                                FieldElement currentScTxCommitmentsRoot = FieldElement
+                                                .deserialize(currentScTxCommitmentsRootB);
+                                FieldElement msgHash = FieldElement.deserialize(msgHashB);) {
+                        return verifyProof(nextScTxCommitmentsRoot, currentScTxCommitmentsRoot, msgHash, proof, vkPath);
+                }
+        }
+
+        private static native byte[] nativeCreateProof(
                         FieldElement nextScTxCommitmentsRoot,
                         FieldElement currentScTxCommitmentsRoot,
                         FieldElement msgHash,
@@ -137,9 +218,9 @@ public class Sc2Sc {
          * @param compressedPk               - Indicate if the proving key is compressed
          *                                   or not
          * @param compressProof              - The proof will be compressed or not
-         * @return A Sidechain to sidechain proof.
+         * @return A Sidechain to sidechain serialized proof.
          */
-        public static Sc2ScProof createProof(
+        public static byte[] createProof(
                         FieldElement nextScTxCommitmentsRoot,
                         FieldElement currentScTxCommitmentsRoot,
                         FieldElement msgHash,
@@ -187,9 +268,9 @@ public class Sc2Sc {
          *                                   TO GENERATE THE PROVING KEY FILE
          * @param pkPath                     - Proving Key file path
          * @param zk                         - Use zero knowledge or not
-         * @return A Sidechain to sidechain proof.
+         * @return A Sidechain to sidechain serialized proof.
          */
-        public static Sc2ScProof createProof(
+        public static byte[] createProof(
                         FieldElement nextScTxCommitmentsRoot,
                         FieldElement currentScTxCommitmentsRoot,
                         FieldElement msgHash,
@@ -235,9 +316,9 @@ public class Sc2Sc {
          *                                   TO GENERATE THE PROVING KEY FILE
          * @param pkPath                     - Proving Key file path
          * @param zk                         - Use zero knowledge or not
-         * @return A Sidechain to sidechain proof.
+         * @return A Sidechain to sidechain serialized proof.
          */
-        public static Sc2ScProof createProof(byte[] nextScTxCommitmentsRootB, byte[] currentScTxCommitmentsRootB,
+        public static byte[] createProof(byte[] nextScTxCommitmentsRootB, byte[] currentScTxCommitmentsRootB,
                         byte[] msgHashB,
                         WithdrawalCertificate nextWithdrawalCertificate,
                         WithdrawalCertificate currWithdrawalCertificate,
@@ -268,4 +349,5 @@ public class Sc2Sc {
                                         zk);
                 }
         }
+
 }
