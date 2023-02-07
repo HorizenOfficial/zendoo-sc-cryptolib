@@ -50,7 +50,7 @@ use demo_circuit::{
     type_mapping::*,
 };
 
-use jni_wrapper::{JNIMutNativeWrapper, JNINativeWrapper};
+use jni_wrapper::{AsNativeRefMut, AsNativeRef, JNINativeWrapper};
 use primitives::{
     bytes_to_bits, signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk, FieldBasedHash,
     FieldBasedMerkleTree, FieldBasedMerkleTreePath, FieldBasedSparseMerkleTree, FieldHasher,
@@ -111,7 +111,6 @@ impl JNINativeWrapper for CommitmentTree {
 
     const JAVA_CLASS: &'static str = "CommitmentTree";
 }
-impl JNIMutNativeWrapper for CommitmentTree {}
 
 impl JNINativeWrapper for GingerMHTPath {
     const INNER_FIELD: &'static str = "merklePathPointer";
@@ -5841,18 +5840,18 @@ ffi_export!(
         compressed_pk: jboolean,
         compress_proof: jboolean,
     ) -> jobject {
-        let next_sc_tx_commitments_root =
-            FieldElement::native_unchecked(env, next_sc_tx_commitments_root);
-        let curr_sc_tx_commitments_root =
-            FieldElement::native_unchecked(env, curr_sc_tx_commitments_root);
-        let msg_hash = FieldElement::native_unchecked(env, msg_hash);
+        let next_sc_tx_commitments_root: &FieldElement =
+            next_sc_tx_commitments_root.as_native_ref_unchecked(env);
+        let curr_sc_tx_commitments_root: &FieldElement =
+            curr_sc_tx_commitments_root.as_native_ref_unchecked(env);
+        let msg_hash: &FieldElement = msg_hash.as_native_ref_unchecked(env);
         let next_withdrawal_certificate = parse_wcert(env, next_withdrawal_certificate);
         let curr_withdrawal_certificate = parse_wcert(env, curr_withdrawal_certificate);
-        let next_cert_commitment_path =
-            ScCommitmentCertPath::native_unchecked(env, next_cert_commitment_path);
-        let curr_cert_commitment_path =
-            ScCommitmentCertPath::native_unchecked(env, curr_cert_commitment_path);
-        let msg_path = GingerMHTPath::native_unchecked(env, msg_path);
+        let next_cert_commitment_path: &ScCommitmentCertPath =
+            next_cert_commitment_path.as_native_ref_unchecked(env);
+        let curr_cert_commitment_path: &ScCommitmentCertPath =
+            curr_cert_commitment_path.as_native_ref_unchecked(env);
+        let msg_path: &GingerMHTPath = msg_path.as_native_ref_unchecked(env);
         // Get supported degree
         let supported_degree =
             cast_joption_to_rust_option(&env, segment_size).map(|integer_object| {
@@ -5937,11 +5936,11 @@ ffi_export!(
             .convert_byte_array(proof_bytes)
             .expect("Should be able to convert to Rust byte array");
 
-        let next_sc_tx_commitments_root =
-            FieldElement::native_unchecked(env, next_sc_tx_commitments_root);
-        let curr_sc_tx_commitments_root =
-            FieldElement::native_unchecked(env, curr_sc_tx_commitments_root);
-        let msg_hash = FieldElement::native_unchecked(env, msg_hash);
+        let next_sc_tx_commitments_root: &FieldElement =
+            next_sc_tx_commitments_root.as_native_ref_unchecked(env);
+        let curr_sc_tx_commitments_root: &FieldElement =
+            curr_sc_tx_commitments_root.as_native_ref_unchecked(env);
+        let msg_hash: &FieldElement = msg_hash.as_native_ref_unchecked(env);
 
         let vk_path = env
             .get_string(vk_path)
@@ -5985,9 +5984,9 @@ ffi_export!(
         sc_id: JObject,
         hash: JObject,
     ) -> jobject {
-        let sc_id = FieldElement::native_unchecked(env, sc_id);
-        let hash = FieldElement::native_unchecked(env, hash);
-        let path = ScCommitmentCertPath::native_unchecked(env, path);
+        let sc_id = sc_id.as_native_ref_unchecked(env);
+        let hash = hash.as_native_ref_unchecked(env);
+        let path: &ScCommitmentCertPath = path.as_native_ref_unchecked(env);
 
         let empty = optional_empty(env);
 
@@ -6023,10 +6022,10 @@ ffi_export!(
         sc_id: JObject,
         hash: JObject,
     ) -> jboolean {
-        let root = FieldElement::native_unchecked(env, root);
-        let sc_id = FieldElement::native_unchecked(env, sc_id);
-        let hash = FieldElement::native_unchecked(env, hash);
-        let path = ScCommitmentCertPath::native_unchecked(env, path);
+        let root = root.as_native_ref_unchecked(env);
+        let sc_id = sc_id.as_native_ref_unchecked(env);
+        let hash = hash.as_native_ref_unchecked(env);
+        let path: &ScCommitmentCertPath = path.as_native_ref_unchecked(env);
 
         if !path.is_valid() {
             return JNI_FALSE;
@@ -6096,7 +6095,7 @@ ffi_export!(
         )
         .expect("Can't parse the input cert_hash_bytes into FieldElement");
 
-        let commitment_tree = CommitmentTree::native_mut_unchecked(env, commitment_tree);
+        let commitment_tree: &mut CommitmentTree = commitment_tree.as_native_ref_mut_unchecked(env);
 
         let empty = optional_empty(env);
 
