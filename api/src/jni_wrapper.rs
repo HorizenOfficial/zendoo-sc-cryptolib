@@ -4,52 +4,43 @@ use crate::utils::{read_raw_pointer, read_mut_raw_pointer};
 
 /// Define how to map the entity into a native Rust reference. It is implemented just for
 /// everything that can be converted into a `JObject`.
-pub(crate) trait AsNativeRef<'j, 'e:'j, T>: Sized {
+pub(crate) trait AsNativeRef<'j, 'e:'j, T: JNINativeWrapper>: Sized + Into<JObject<'j>>{
     /// Return a reference to a Rust object that is wrapped on Java (maybe with a raw pointer)
-    fn as_native_ref(self, env: JNIEnv<'e>) -> Result<&'j T, jni::errors::Error>;
-
-    /// Return a reference to a Rust object that is wrapped on Java (maybe with a raw pointer).
-    /// It will panic if something go wrong.
-    fn as_native_ref_unchecked(self, env: JNIEnv<'e>) -> &'j T;
-}
-
-/// Define how to map the entity into a native mutable Rust reference. It is implemented just for
-/// everything that can be converted into a `JObject`.
-pub(crate) trait AsNativeRefMut<'j, 'e:'j, T>: AsNativeRef<'j, 'e, T> {
-    /// Return a mutable reference to a Rust object that is wrapped on Java (maybe with a 
-    /// raw pointer)
-    fn as_native_mut_ref(self, env: JNIEnv<'e>) -> Result<&'j mut T, jni::errors::Error>;
-
-    /// Return a mutable reference to a Rust object that is wrapped on Java (maybe with a raw pointer).
-    /// It will panic if something go wrong.
-    fn as_native_ref_mut_unchecked(self, env: JNIEnv<'e>) -> &'j mut T;
-}
-
-impl<'j, 'e: 'j, J: Into<JObject<'j>>, T: JNINativeWrapper> AsNativeRef<'j, 'e, T> for J {
     fn as_native_ref(self, env: JNIEnv<'e>) -> Result<&'j T, jni::errors::Error> {
         env.get_field(self, T::INNER_FIELD, "J")
             .and_then(|field| field.j())
             .map(|fe| read_raw_pointer(&env, fe as *const T))
     }
 
+    /// Return a reference to a Rust object that is wrapped on Java (maybe with a raw pointer).
+    /// It will panic if something go wrong.
     fn as_native_ref_unchecked(self, env: JNIEnv<'e>) -> &'j T {
         Self::as_native_ref(self, env)
             .expect(&format!("Should be able to get field {}", T::INNER_FIELD))
     }
 }
 
-impl<'j, 'e: 'j, J: Into<JObject<'j>>, T: JNINativeWrapper> AsNativeRefMut<'j, 'e, T> for J {
-    fn as_native_mut_ref(self, env: JNIEnv<'e>) -> Result<&'j mut T, jni::errors::Error> {
+/// Define how to map the entity into a native mutable Rust reference. It is implemented just for
+/// everything that can be converted into a `JObject`.
+pub(crate) trait AsNativeRefMut<'j, 'e:'j, T: JNINativeWrapper>: AsNativeRef<'j, 'e, T> {
+    /// Return a mutable reference to a Rust object that is wrapped on Java (maybe with a 
+    /// raw pointer)
+    fn as_native_mut_ref(self, env: JNIEnv<'e>) -> Result<&'j mut T, jni::errors::Error>{
         env.get_field(self, T::INNER_FIELD, "J")
             .and_then(|field| field.j())
             .map(|fe| read_mut_raw_pointer(&env, fe as *mut T))
     }
 
+    /// Return a mutable reference to a Rust object that is wrapped on Java (maybe with a raw pointer).
+    /// It will panic if something go wrong.
     fn as_native_ref_mut_unchecked(self, env: JNIEnv<'e>) -> &'j mut T {
         Self::as_native_mut_ref(self, env)
             .expect(&format!("Should be able to get field {}", T::INNER_FIELD))
     }
 }
+
+impl<'j, 'e: 'j, T: JNINativeWrapper, J: Into<JObject<'j>>> AsNativeRef<'j, 'e, T> for J {}
+impl<'j, 'e: 'j, T: JNINativeWrapper, J: Into<JObject<'j>>> AsNativeRefMut<'j, 'e, T> for J {}
 
 /// Define a simple java wrapper that hold the rust raw pointer in 
 /// a `long` java value stored in the `INNER_FIELD` field. You should
