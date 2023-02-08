@@ -6,7 +6,6 @@ import com.horizen.certnative.WithdrawalCertificate;
 import com.horizen.commitmenttreenative.ScCommitmentCertPath;
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.merkletreenative.MerklePath;
-import com.horizen.provingsystemnative.ProvingSystem;
 import com.horizen.provingsystemnative.ProvingSystemType;
 
 public class Sc2Sc {
