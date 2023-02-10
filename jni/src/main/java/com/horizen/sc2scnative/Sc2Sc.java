@@ -5,10 +5,15 @@ import java.util.Optional;
 import com.horizen.certnative.WithdrawalCertificate;
 import com.horizen.commitmenttreenative.ScCommitmentCertPath;
 import com.horizen.librustsidechains.FieldElement;
+import com.horizen.librustsidechains.Library;
 import com.horizen.merkletreenative.MerklePath;
 import com.horizen.provingsystemnative.ProvingSystemType;
 
 public class Sc2Sc {
+
+        static {
+                Library.load();
+        }
 
         private static native boolean nativeSetup(
                         ProvingSystemType psType,
@@ -117,7 +122,8 @@ public class Sc2Sc {
          * @param nextScTxCommitmentsRoot    - Next epoch sc tx root
          * @param currentScTxCommitmentsRoot - Current epoch sc tx root for
          * @param msgHash                    - Message hash
-         * @param proof                      - The serialized proof (see createProof methods)
+         * @param proof                      - The serialized proof (see createProof
+         *                                   methods)
          * @param vkPath                     - Verification Key file path
          * @param checkProof                 - Do or not the proof sematic check
          * @param compressedProof            - Indicate if the proof is compressed or
@@ -143,7 +149,8 @@ public class Sc2Sc {
          * @param nextScTxCommitmentsRoot    - Next epoch sc tx root
          * @param currentScTxCommitmentsRoot - Current epoch sc tx root for
          * @param msgHash                    - Message hash
-         * @param proof                      - The serialized proof (see createProof methods)
+         * @param proof                      - The serialized proof (see createProof
+         *                                   methods)
          * @param vkPath                     - Verification Key file path
          * @return True if the the proof can be verified with the given public input and
          *         false otherwise.
@@ -164,7 +171,8 @@ public class Sc2Sc {
          * @param nextScTxCommitmentsRoot    - Next epoch sc tx root
          * @param currentScTxCommitmentsRoot - Current epoch sc tx root for
          * @param msgHash                    - Message hash
-         * @param proof                      - The serialized proof (see createProof methods)
+         * @param proof                      - The serialized proof (see createProof
+         *                                   methods)
          * @param vkPath                     - Verification Key file path
          * @return True if the the proof can be verified with the given public input and
          *         false otherwise.
