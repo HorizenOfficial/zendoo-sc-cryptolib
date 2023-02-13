@@ -9,7 +9,7 @@ import com.horizen.librustsidechains.Constants;
 public class VRFSecretKeyTest {
 
     @Test
-    public void testRandomKey() throws Exception {
+    public void testRandomKey() {
 
         int samples = 100;
 

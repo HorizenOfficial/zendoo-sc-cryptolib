@@ -1,6 +1,5 @@
 package com.horizen.schnorrnative;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import com.horizen.librustsidechains.Library;
@@ -184,7 +183,7 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         for (SchnorrPublicKey pk : signingKeys)
             pk.close();
         for (SchnorrPublicKey pk : masterKeys)

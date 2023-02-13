@@ -79,7 +79,7 @@ public class VRFPublicKey implements AutoCloseable
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() {
     freePublicKey();
   }
 }

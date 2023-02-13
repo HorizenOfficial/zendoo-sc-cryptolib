@@ -24,32 +24,33 @@ use cctp_primitives::{
         CommitmentTree, CMT_MT_HEIGHT,
     },
     proving_system::{compute_proof_vk_size, init_dlog_keys, ProvingSystem, ZendooVerifierKey},
-    utils::{
-        commitment_tree::hash_vec, data_structures::*,
-        get_cert_data_hash_from_bt_root_and_custom_fields_hash, mht::*, poseidon_hash::*,
-        serialization::*,
-    },
+    utils::{data_structures::*, mht::*, poseidon_hash::*, serialization::*},
 };
 use demo_circuit::{
-    naive_threshold_sig::NaiveThresholdSignature,
-    naive_threshold_sig_w_key_rotation::{
-        NaiveThresholdSignatureWKeyRotation,
-        data_structures::ValidatorKeysUpdates,
-    },
     blaze_csw::{
         constraints::CeasedSidechainWithdrawalCircuit,
         data_structures::{
             CswFtOutputData, CswFtProverData, CswSysData, CswUtxoInputData, CswUtxoOutputData,
-            CswUtxoProverData
-        }, deserialize_fe_unchecked,
+            CswUtxoProverData,
+        },
+        deserialize_fe_unchecked,
     },
-    common::{data_structures::WithdrawalCertificateData, NULL_CONST},
+    common::{
+        data_structures::WithdrawalCertificateData, MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS,
+        MIN_CUSTOM_FIELDS, MSG_ROOT_HASH_CUSTOM_FIELDS_POS, NULL_CONST,
+    },
     constants::{personalizations::BoxType, *},
     generate_circuit_keypair,
+    naive_threshold_sig::NaiveThresholdSignature,
+    naive_threshold_sig_w_key_rotation::{
+        data_structures::ValidatorKeysUpdates, NaiveThresholdSignatureWKeyRotation,
+    },
     read_field_element_from_buffer_with_padding,
+    sc2sc::{Sc2Sc, ScCommitmentCertPath, MSG_MT_HEIGHT},
     type_mapping::*,
 };
 
+use jni_wrapper::{AsNativeRefMut, AsNativeRef, JNINativeWrapper};
 use primitives::{
     bytes_to_bits, signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk, FieldBasedHash,
     FieldBasedMerkleTree, FieldBasedMerkleTreePath, FieldBasedSparseMerkleTree, FieldHasher,
@@ -80,6 +81,44 @@ use jni::{sys::jlongArray, JNIEnv};
 use std::convert::TryInto;
 
 //Field element related functions
+
+mod jni_wrapper;
+
+//TODO: We should use JNINativeWrapper and JNIMutNativeWrapper traits for every struct
+// that is wrapped by a raw pointer in Java and replace all old approaches.
+// See Java_com_horizen_sc2scnative_Sc2Sc_nativeCreateProof as example.
+
+impl JNINativeWrapper for FieldElement {
+    const INNER_FIELD: &'static str = "fieldElementPointer";
+
+    const JAVA_PACKAGE: &'static str = "com/horizen/librustsidechains";
+
+    const JAVA_CLASS: &'static str = "FieldElement";
+}
+
+impl JNINativeWrapper for ScCommitmentCertPath {
+    const INNER_FIELD: &'static str = "scCommitmentCertPathPointer";
+
+    const JAVA_PACKAGE: &'static str = "com/horizen/commitmenttreenative";
+
+    const JAVA_CLASS: &'static str = "ScCommitmentCertPath";
+}
+
+impl JNINativeWrapper for CommitmentTree {
+    const INNER_FIELD: &'static str = "commitmentTreePointer";
+
+    const JAVA_PACKAGE: &'static str = "com/horizen/commitmenttreenative";
+
+    const JAVA_CLASS: &'static str = "CommitmentTree";
+}
+
+impl JNINativeWrapper for GingerMHTPath {
+    const INNER_FIELD: &'static str = "merklePathPointer";
+
+    const JAVA_PACKAGE: &'static str = "com/horizen/merkletreenative";
+
+    const JAVA_CLASS: &'static str = "MerklePath";
+}
 
 ffi_export!(
     fn Java_com_horizen_librustsidechains_Library_nativePanickingFunction(
@@ -127,6 +166,16 @@ ffi_export!(
         set_constant!("VRF_PK_LENGTH", VRF_PK_SIZE);
         set_constant!("VRF_SK_LENGTH", VRF_SK_SIZE);
         set_constant!("VRF_PROOF_LENGTH", VRF_PROOF_SIZE);
+        set_constant!(
+            "MSG_ROOT_HASH_CUSTOM_FIELDS_POS",
+            MSG_ROOT_HASH_CUSTOM_FIELDS_POS
+        );
+        set_constant!(
+            "MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS",
+            MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS
+        );
+        set_constant!("MIN_CUSTOM_FIELDS", MIN_CUSTOM_FIELDS);
+        set_constant!("MSG_MT_HEIGHT", MSG_MT_HEIGHT);
     }
 );
 
@@ -5185,24 +5234,8 @@ ffi_export!(
         // Parse cert
         let cert = parse_wcert(_env, _cert);
 
-        // Convert custom fields in the expected form
-        let custom_fields_hash = if cert.custom_fields.is_empty() {
-            None
-        } else {
-            Some(hash_vec(cert.custom_fields).unwrap())
-        };
-
         // Compute hash
-        match get_cert_data_hash_from_bt_root_and_custom_fields_hash(
-            &cert.ledger_id,
-            cert.epoch_id,
-            cert.quality,
-            cert.bt_root,
-            custom_fields_hash,
-            &cert.mcb_sc_txs_com,
-            cert.btr_min_fee,
-            cert.ft_min_amount,
-        ) {
+        match cert.hash() {
             Ok(digest) => return_field_element(&_env, digest),
             Err(e) => {
                 log!(format!("Error while computing cert hash: {:?}", e));
@@ -5707,6 +5740,382 @@ ffi_export!(
                 log!(format!("Unable to verify CSW proof: {:?}", e));
                 JNI_FALSE
             } // CRYPTO_ERROR or IO_ERROR
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttreenative_ScCommitmentCertPath_nativeFreeScCommitmentCertPath(
+        env: JNIEnv,
+        _class: JClass,
+        path: *mut ScCommitmentCertPath,
+    ) {
+        ScCommitmentCertPath::free(path)
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_sc2scnative_Sc2Sc_nativeSetup(
+        env: JNIEnv,
+        _class: JClass,
+        proving_system: JObject,
+        num_custom_fields: jint,
+        segment_size: JObject,
+        proving_key_path: JString,
+        verification_key_path: JString,
+        zk: jboolean,
+        max_proof_plus_vk_size: jint,
+        compress_pk: jboolean,
+        compress_vk: jboolean,
+    ) -> jboolean {
+        // Get proving system type
+        let proving_system = get_proving_system_type(&env, proving_system);
+
+        // Get supported degree
+        let supported_degree =
+            cast_joption_to_rust_option(&env, segment_size).map(|integer_object| {
+                env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
+
+        // Read paths
+        let proving_key_path = env
+            .get_string(proving_key_path)
+            .expect("Should be able to read jstring as Rust String");
+
+        let verification_key_path = env
+            .get_string(verification_key_path)
+            .expect("Should be able to read jstring as Rust String");
+
+        let circ = Sc2Sc::get_instance_for_setup(num_custom_fields as u32);
+
+        // Read zk value
+        let zk = zk == JNI_TRUE;
+
+        // Generate snark keypair
+        match generate_circuit_keypair(
+            circ,
+            proving_system,
+            supported_degree,
+            Path::new(proving_key_path.to_str().unwrap()),
+            Path::new(verification_key_path.to_str().unwrap()),
+            max_proof_plus_vk_size as usize,
+            zk,
+            Some(compress_pk == JNI_TRUE),
+            Some(compress_vk == JNI_TRUE),
+        ) {
+            Ok(_) => JNI_TRUE,
+            Err(e) => {
+                throw!(
+                    &env,
+                    "java/lang/Exception",
+                    format!("(Pk, Vk) generation failed: {:?}", e).as_str(),
+                    JNI_FALSE
+                );
+            }
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_sc2scnative_Sc2Sc_nativeCreateProof(
+        env: JNIEnv,
+        _class: JClass,
+        next_sc_tx_commitments_root: JObject,
+        curr_sc_tx_commitments_root: JObject,
+        msg_hash: JObject,
+        next_withdrawal_certificate: JObject,
+        curr_withdrawal_certificate: JObject,
+        next_cert_commitment_path: JObject,
+        curr_cert_commitment_path: JObject,
+        msg_path: JObject,
+
+        segment_size: JObject,
+        proving_key_path: JString,
+        check_proving_key: jboolean,
+        zk: jboolean,
+        compressed_pk: jboolean,
+        compress_proof: jboolean,
+    ) -> jobject {
+        let next_sc_tx_commitments_root: &FieldElement =
+            next_sc_tx_commitments_root.as_native_ref_unchecked(env);
+        let curr_sc_tx_commitments_root: &FieldElement =
+            curr_sc_tx_commitments_root.as_native_ref_unchecked(env);
+        let msg_hash: &FieldElement = msg_hash.as_native_ref_unchecked(env);
+        let next_withdrawal_certificate = parse_wcert(env, next_withdrawal_certificate);
+        let curr_withdrawal_certificate = parse_wcert(env, curr_withdrawal_certificate);
+        let next_cert_commitment_path: &ScCommitmentCertPath =
+            next_cert_commitment_path.as_native_ref_unchecked(env);
+        let curr_cert_commitment_path: &ScCommitmentCertPath =
+            curr_cert_commitment_path.as_native_ref_unchecked(env);
+        let msg_path: &GingerMHTPath = msg_path.as_native_ref_unchecked(env);
+        // Get supported degree
+        let supported_degree =
+            cast_joption_to_rust_option(&env, segment_size).map(|integer_object| {
+                env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
+
+        //Extract params_path str
+        let proving_key_path = env
+            .get_string(proving_key_path)
+            .expect("Should be able to read jstring as Rust String");
+        let check_proving_key = check_proving_key == JNI_TRUE;
+        let zk = zk == JNI_TRUE;
+        let compressed_pk = compressed_pk == JNI_TRUE;
+        let compress_proof = compress_proof == JNI_TRUE;
+
+        match create_native_sc2sc_proof(
+            next_sc_tx_commitments_root.clone(),
+            curr_sc_tx_commitments_root.clone(),
+            msg_hash.clone(),
+            next_withdrawal_certificate,
+            curr_withdrawal_certificate,
+            next_cert_commitment_path.clone(),
+            curr_cert_commitment_path.clone(),
+            msg_path.clone(),
+            supported_degree,
+            Path::new(proving_key_path.to_str().unwrap()),
+            check_proving_key,
+            zk,
+            compressed_pk,
+            compress_proof,
+        ) {
+            Ok(proof) => {
+                //Return proof serialized
+                env
+                    .byte_array_from_slice(proof.as_slice())
+                    .expect("Should be able to convert Rust slice into jbytearray")
+            }
+            Err(e) => {
+                log!(format!("Error creating Sc2Sc proof {:?}", e));
+                JObject::null().into_inner()
+            }
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_sc2scnative_Sc2Sc_nativeVerifyProof(
+        env: JNIEnv,
+        _class: JClass,
+        next_sc_tx_commitments_root: JObject,
+        curr_sc_tx_commitments_root: JObject,
+        msg_hash: JObject,
+
+        proof_bytes: jbyteArray,
+        vk_path: JString,
+        check_proof: jboolean,
+        compressed_proof: jboolean,
+        check_vk: jboolean,
+        compressed_vk: jboolean,
+    ) -> jboolean {
+
+        let next_sc_tx_commitments_root: &FieldElement =
+            next_sc_tx_commitments_root.as_native_ref_unchecked(env);
+        let curr_sc_tx_commitments_root: &FieldElement =
+            curr_sc_tx_commitments_root.as_native_ref_unchecked(env);
+        let msg_hash: &FieldElement = msg_hash.as_native_ref_unchecked(env);
+
+        let proof_bytes = env
+            .convert_byte_array(proof_bytes)
+            .expect("Should be able to convert to Rust byte array");
+
+        let vk_path = env
+            .get_string(vk_path)
+            .expect("Should be able to read jstring as Rust String");
+        let check_proof = check_proof == JNI_TRUE;
+        let compressed_proof = compressed_proof == JNI_TRUE;
+        let check_vk = check_vk == JNI_TRUE;
+        let compressed_vk = compressed_vk == JNI_TRUE;
+
+        //Verify proof
+        match verify_sc2sc_proof(
+            next_sc_tx_commitments_root.clone(),
+            curr_sc_tx_commitments_root.clone(),
+            msg_hash.clone(),
+            proof_bytes,
+            check_proof,
+            compressed_proof,
+            Path::new(vk_path.to_str().unwrap()),
+            check_vk,
+            compressed_vk,
+        ) {
+            Ok(result) => {
+                if result {
+                    JNI_TRUE
+                } else {
+                    JNI_FALSE
+                }
+            }
+            Err(e) => {
+                log!(format!("Unable to verify Sc2Sc proof: {:?}", e));
+                JNI_FALSE
+            }
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttreenative_ScCommitmentCertPath_nativeApply(
+        env: JNIEnv,
+        path: JObject,
+        sc_id: JObject,
+        hash: JObject,
+    ) -> jobject {
+        let sc_id = sc_id.as_native_ref_unchecked(env);
+        let hash = hash.as_native_ref_unchecked(env);
+        let path: &ScCommitmentCertPath = path.as_native_ref_unchecked(env);
+
+        let empty = optional_empty(env);
+
+        if !path.is_valid() {
+            return empty;
+        }
+
+        match path.compute_root(sc_id, hash) {
+            Ok(root) => {
+                let inner =
+                    return_jobject(&env, root, "com/horizen/librustsidechains/FieldElement");
+                let cls_optional = env.find_class("java/util/Optional").unwrap();
+                let res = env
+                    .call_static_method(
+                        cls_optional,
+                        "of",
+                        "(Ljava/lang/Object;)Ljava/util/Optional;",
+                        &[JValue::Object(inner)],
+                    )
+                    .unwrap();
+                *res.l().unwrap()
+            }
+            Err(_) => empty,
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttreenative_ScCommitmentCertPath_nativeVerify(
+        env: JNIEnv,
+        path: JObject,
+        root: JObject,
+        sc_id: JObject,
+        hash: JObject,
+    ) -> jboolean {
+        let root = root.as_native_ref_unchecked(env);
+        let sc_id = sc_id.as_native_ref_unchecked(env);
+        let hash = hash.as_native_ref_unchecked(env);
+        let path: &ScCommitmentCertPath = path.as_native_ref_unchecked(env);
+
+        if !path.is_valid() {
+            return JNI_FALSE;
+        }
+
+        if path.check_membership(root, sc_id, hash) {
+            JNI_TRUE
+        } else {
+            JNI_FALSE
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttreenative_ScCommitmentCertPath_nativeSerialize(
+        env: JNIEnv,
+        path: JObject,
+    ) -> jbyteArray {
+        serialize_from_jobject::<ScCommitmentCertPath>(
+            &env,
+            path,
+            <ScCommitmentCertPath as JNINativeWrapper>::INNER_FIELD,
+            None,
+        )
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttreenative_ScCommitmentCertPath_nativeDeserialize(
+        env: JNIEnv,
+        _class: JClass,
+        path_bytes: jbyteArray,
+        checked: jboolean,
+    ) -> jobject {
+        deserialize_to_jobject::<ScCommitmentCertPath>(
+            &env,
+            path_bytes,
+            Some(checked),
+            None,
+            "com/horizen/commitmenttreenative/ScCommitmentCertPath",
+        )
+    }
+);
+
+fn optional_empty(env: JNIEnv) -> jobject {
+    let cls_optional = env.find_class("java/util/Optional").unwrap();
+
+    let empty_res = env
+        .call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+        .expect("Should be able to create new value for Optional.empty()");
+    *empty_res.l().unwrap()
+}
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttreenative_CommitmentTree_nativeGetScCommitmentCertPath(
+        env: JNIEnv,
+        commitment_tree: JObject,
+        sc_id: jbyteArray,
+        cert_hash: jbyteArray,
+    ) -> jobject {
+        let sc_id = FieldElement::deserialize(
+            parse_jbyte_array_to_vec(&env, &sc_id, FIELD_SIZE).as_slice(),
+        )
+        .expect("Can't parse the input sc_id_bytes into FieldElement");
+        let cert_hash = FieldElement::deserialize(
+            parse_jbyte_array_to_vec(&env, &cert_hash, FIELD_SIZE).as_slice(),
+        )
+        .expect("Can't parse the input cert_hash_bytes into FieldElement");
+
+        let commitment_tree: &mut CommitmentTree = commitment_tree.as_native_ref_mut_unchecked(env);
+
+        let empty = optional_empty(env);
+
+        let cert_leaf_index = match commitment_tree
+            .get_cert_leaves(&sc_id)
+            .and_then(|certs| certs.iter().position(|h| h == &cert_hash))
+        {
+            Some(index) => index,
+            None => return empty,
+        };
+
+        let cls_optional = env.find_class("java/util/Optional").unwrap();
+
+        match ScCommitmentCertPath::from_commitment_cert_index(
+            commitment_tree,
+            sc_id,
+            cert_leaf_index,
+        ) {
+            Ok(path) => {
+                let jep = path.wrap_unchecked(env);
+
+                let res = env
+                    .call_static_method(
+                        cls_optional,
+                        "of",
+                        "(Ljava/lang/Object;)Ljava/util/Optional;",
+                        &[JValue::Object(jep)],
+                    )
+                    .unwrap();
+                *res.l().unwrap()
+            }
+            Err(_) => {
+                // Ignore it and return a generic None
+                empty
+            }
         }
     }
 );

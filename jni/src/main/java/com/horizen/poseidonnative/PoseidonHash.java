@@ -132,7 +132,7 @@ public class PoseidonHash implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         freePoseidonHash();
     }
 }

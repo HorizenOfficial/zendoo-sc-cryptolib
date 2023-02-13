@@ -1,9 +1,7 @@
-use std::convert::TryInto;
-
 use algebra::Field;
 use cctp_primitives::{
     commitment_tree::CommitmentTree,
-    type_mapping::{CoboundaryMarlin, FieldElement},
+    type_mapping::{CoboundaryMarlin, FieldElement}, proving_system::verifier::UserInputs,
 };
 
 use primitives::FieldBasedMerkleTreePath;
@@ -31,16 +29,7 @@ impl ScCommitmentCertPath {
         let cert_index = cmt
             .get_cert_leaves(&sc_id)
             .and_then(|certs| certs.iter().position(|h| h == &cert_hash))?;
-        Self::new(
-            cmt.get_fwt_commitment(&sc_id)?,
-            cmt.get_bwtr_commitment(&sc_id)?,
-            cmt.get_scc(&sc_id)?,
-            cmt.get_cert_merkle_path(&sc_id, cert_index)
-                .map(|p| p.try_into().expect("Should be a binary tree"))?,
-            cmt.get_sc_commitment_merkle_path(&sc_id)
-                .map(|p| p.try_into().expect("Should be a binary tree"))?,
-        )
-        .into()
+        Self::from_commitment_cert_index(cmt, sc_id, cert_index).ok()
     }
 }
 
@@ -52,12 +41,7 @@ fn assert_circuit(circuit: Sc2Sc, zk_rng: Option<&mut dyn RngCore>) {
     assert_eq!(None, debug_circuit(circuit.clone()).unwrap());
     let proof =
         CoboundaryMarlin::prove(&pk, &ck_g1, circuit.clone(), zk_rng.is_some(), zk_rng).unwrap();
-    let public_inputs = [
-        circuit.next_sc_tx_commitments_root,
-        circuit.curr_sc_tx_commitments_root,
-        circuit.msg_hash,
-    ];
-    assert!(CoboundaryMarlin::verify(&vk, &ck_g1, &public_inputs, &proof).unwrap());
+    assert!(CoboundaryMarlin::verify(&vk, &ck_g1, circuit.public_input().get_circuit_inputs().unwrap().as_slice(), &proof).unwrap());
 }
 
 #[fixture]
@@ -226,6 +210,74 @@ mod should_not_possible_to_create_a_circuit_if {
 #[case::should_fail_with_less_than_minimum(MIN_CUSTOM_FIELDS - 1)]
 fn setup_a_circuit_with_some_custom_fields(#[case] n_custom_fields: usize) {
     Sc2Sc::get_instance_for_setup(n_custom_fields as u32);
+}
+
+mod sc_commitment_cert_path {
+    use super::*;
+
+    #[rstest]
+    fn should_validate_a_path(mut rng: impl Rng) {
+        let sc_id: FieldElement = rng.gen();
+        let mut cmt = CommitmentScBuilder::default()
+            .with_n_withdrawal_certificates(1)
+            .generate_sc_data(None, &mut rng, sc_id);
+        
+        let (cert, path, root) = cmt.get_withdrawal_certificate_info(0);
+
+        assert!(path.check_membership(&root, &sc_id, &cert.hash().unwrap()))
+    }
+
+    #[rstest]
+    fn should_compute_root(mut rng: impl Rng) {
+        let sc_id: FieldElement = rng.gen();
+        let mut cmt = CommitmentScBuilder::default()
+            .with_n_withdrawal_certificates(1)
+            .generate_sc_data(None, &mut rng, sc_id);
+        
+        let (cert, path, root) = cmt.get_withdrawal_certificate_info(0);
+
+        assert_eq!(root, path.compute_root(&sc_id, &cert.hash().unwrap()).unwrap())
+    }
+
+    mod reject_invalid {
+        use super::*;
+
+        #[rstest]
+        fn root(mut rng: impl Rng) {
+            let sc_id: FieldElement = rng.gen();
+            let mut cmt = CommitmentScBuilder::default()
+                .with_n_withdrawal_certificates(1)
+                .generate_sc_data(None, &mut rng, sc_id);
+            
+            let (cert, path, _root) = cmt.get_withdrawal_certificate_info(0);
+    
+            assert!(!path.check_membership(&rng.gen(), &sc_id, &cert.hash().unwrap()))
+        }
+    
+        #[rstest]
+        fn sc_id(mut rng: impl Rng) {
+            let sc_id: FieldElement = rng.gen();
+            let mut cmt = CommitmentScBuilder::default()
+                .with_n_withdrawal_certificates(1)
+                .generate_sc_data(None, &mut rng, sc_id);
+            
+            let (cert, path, root) = cmt.get_withdrawal_certificate_info(0);
+    
+            assert!(!path.check_membership(&root, &rng.gen(), &cert.hash().unwrap()))
+        }
+
+        #[rstest]
+        fn cert_hash(mut rng: impl Rng) {
+            let sc_id: FieldElement = rng.gen();
+            let mut cmt = CommitmentScBuilder::default()
+                .with_n_withdrawal_certificates(1)
+                .generate_sc_data(None, &mut rng, sc_id);
+            
+            let (_cert, path, root) = cmt.get_withdrawal_certificate_info(0);
+    
+            assert!(!path.check_membership(&root, &sc_id, &rng.gen()))
+        }
+    }
 }
 
 mod should_fail {

@@ -25,7 +25,7 @@ public class VRFProveResult implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         this.vrfProof.close();
         this.vrfOutput.close();
     }

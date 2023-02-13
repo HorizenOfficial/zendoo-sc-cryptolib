@@ -72,7 +72,7 @@ public class CswProofTest {
     }
 
     @Test
-    public void testCreateVerifyScUtxoRandomProof() throws Exception {
+    public void testCreateVerifyScUtxoRandomProof() {
 
         // Compute scUtxo nullifier
         FieldElement nullifier = scUtxoOutput.getNullifier();
@@ -158,7 +158,7 @@ public class CswProofTest {
     }
 
     @Test
-    public void testCreateVerifyFwtRandomProof() throws Exception {
+    public void testCreateVerifyFwtRandomProof() {
         // Generate random receiver
         Random r = new Random(seed);
         byte[] receiver = new byte[Constants.MC_PK_HASH_SIZE()];
@@ -288,7 +288,7 @@ public class CswProofTest {
     }
 
     @AfterClass
-    public static void free() throws Exception {
+    public static void free() {
         wCert.close();
         // Delete proving keys and verification keys
         new File(snarkPkPath).delete();
