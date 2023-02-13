@@ -13,7 +13,7 @@ import org.junit.Test;
 import com.horizen.librustsidechains.FieldElement;
 
 public class ScCommitmentCertPathTest {
-    private ScCommitmentCertPath getCertPath(CommitmentTree commTree, FieldElement scId, FieldElement certLeaf) {
+    private ScCommitmentCertPath addCertAndReturnPath(CommitmentTree commTree, FieldElement scId, FieldElement certLeaf) {
         byte[] scIdBytes = scId.serializeFieldElement();
         byte[] certBytes = certLeaf.serializeFieldElement();
         commTree.addCertLeaf(scIdBytes, certBytes);
@@ -27,7 +27,7 @@ public class ScCommitmentCertPathTest {
                 CommitmentTree ct = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();
                 FieldElement certLeaf = FieldElement.createRandom();
-                ScCommitmentCertPath path = getCertPath(ct, scId, certLeaf);
+                ScCommitmentCertPath path = addCertAndReturnPath(ct, scId, certLeaf);
                 FieldElement root = ct.getCommitment().get();) {
             assertTrue(path.verify(root, scId, certLeaf));
         }
@@ -39,7 +39,7 @@ public class ScCommitmentCertPathTest {
                 CommitmentTree ct = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();
                 FieldElement certLeaf = FieldElement.createRandom();
-                ScCommitmentCertPath path = getCertPath(ct, scId, certLeaf);
+                ScCommitmentCertPath path = addCertAndReturnPath(ct, scId, certLeaf);
                 FieldElement fakeRoot = FieldElement.createRandom();) {
             assertFalse(path.verify(fakeRoot, scId, certLeaf));
         }
@@ -51,7 +51,7 @@ public class ScCommitmentCertPathTest {
                 CommitmentTree ct = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();
                 FieldElement certLeaf = FieldElement.createRandom();
-                ScCommitmentCertPath path = getCertPath(ct, scId, certLeaf);
+                ScCommitmentCertPath path = addCertAndReturnPath(ct, scId, certLeaf);
                 FieldElement root = ct.getCommitment().get();
                 FieldElement fakeScId = FieldElement.createRandom();) {
             assertFalse(path.verify(root, fakeScId, certLeaf));
@@ -64,7 +64,7 @@ public class ScCommitmentCertPathTest {
                 CommitmentTree ct = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();
                 FieldElement certLeaf = FieldElement.createRandom();
-                ScCommitmentCertPath path = getCertPath(ct, scId, certLeaf);
+                ScCommitmentCertPath path = addCertAndReturnPath(ct, scId, certLeaf);
                 FieldElement root = ct.getCommitment().get();
                 FieldElement fakeCertHash = FieldElement.createRandom();) {
             assertFalse(path.verify(root, fakeCertHash, certLeaf));
@@ -77,7 +77,7 @@ public class ScCommitmentCertPathTest {
                 CommitmentTree ct = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();
                 FieldElement certLeaf = FieldElement.createRandom();
-                ScCommitmentCertPath path = getCertPath(ct, scId, certLeaf);
+                ScCommitmentCertPath path = addCertAndReturnPath(ct, scId, certLeaf);
                 FieldElement root = ct.getCommitment().get();) {
             assertEquals(root, path.apply(scId, certLeaf).get());
         }
@@ -89,7 +89,7 @@ public class ScCommitmentCertPathTest {
                 CommitmentTree ct = CommitmentTree.init();
                 FieldElement scId = FieldElement.createRandom();
                 FieldElement certLeaf = FieldElement.createRandom();
-                ScCommitmentCertPath path = getCertPath(ct, scId, certLeaf);
+                ScCommitmentCertPath path = addCertAndReturnPath(ct, scId, certLeaf);
                 FieldElement root = ct.getCommitment().get();) {
             /// Sanity Check
             assertTrue(path.verify(root, scId, certLeaf));
