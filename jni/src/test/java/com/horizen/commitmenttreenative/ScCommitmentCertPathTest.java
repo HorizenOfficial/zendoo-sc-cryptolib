@@ -193,15 +193,15 @@ public class ScCommitmentCertPathTest {
             try (
                     FieldElement expectedScTxCommitmentRoot = commTreeReal.getCommitment().get();
                     MerklePath correctScPath = commTreeReal.getScCommitmentMerklePath(scId1Bytes).get();
-                    CommitmentTree commTreeFake = CommitmentTree.init();) {
+                    CommitmentTree commTreePartial = CommitmentTree.init();) {
                 for (byte[] h : certs1HashBytes) {
-                    commTreeFake.addCertLeaf(scId1Bytes, h);
+                    commTreePartial.addCertLeaf(scId1Bytes, h);
                 }
 
                 try (
-                        ScCommitmentCertPath pathCert1 = commTreeFake
+                        ScCommitmentCertPath pathCert1 = commTreePartial
                                 .getScCommitmentCertPath(scId1Bytes, certs1HashBytes.get(0)).get();
-                        ScCommitmentCertPath pathCert2 = commTreeFake
+                        ScCommitmentCertPath pathCert2 = commTreePartial
                                 .getScCommitmentCertPath(scId1Bytes, certs1HashBytes.get(1)).get();) {
                     assertFalse(pathCert1.verify(expectedScTxCommitmentRoot, scId1, certLeaf11));
                     assertFalse(pathCert2.verify(expectedScTxCommitmentRoot, scId1, certLeaf12));
