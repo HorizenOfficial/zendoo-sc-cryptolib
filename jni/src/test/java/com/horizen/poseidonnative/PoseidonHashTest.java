@@ -27,7 +27,7 @@ public class PoseidonHashTest {
     }
 
     @Test
-    public void testReset() throws Exception {
+    public void testReset() {
 
         Random r = new Random(seed);
         FieldElement expectedHash = FieldElement.deserialize(TestUtils.fromHexString(expectedHashForReset));
@@ -51,7 +51,7 @@ public class PoseidonHashTest {
     }
 
     @Test
-    public void testComputeHashConstantLength() throws Exception {
+    public void testComputeHashConstantLength() {
 
         // Deserialize expected hash
         byte[] hashBytes = {
@@ -91,7 +91,7 @@ public class PoseidonHashTest {
     }
 
     @Test
-    public void testComputeHashVariableLength() throws Exception {
+    public void testComputeHashVariableLength() {
 
         // Deserialize expected hash
         byte[] hashBytes = {

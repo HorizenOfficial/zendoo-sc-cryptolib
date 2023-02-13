@@ -59,7 +59,7 @@ public class CswSysData implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         if (this.constant.isPresent())
             this.constant.get().close();
 

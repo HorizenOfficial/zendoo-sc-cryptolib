@@ -5,8 +5,6 @@ import static org.junit.Assert.assertEquals;
 import java.util.Random;
 
 import com.horizen.TestUtils;
-import com.horizen.librustsidechains.FieldElement;
-
 import org.junit.Test;
 
 public class WithdrawalCertificateTest {
@@ -21,27 +19,19 @@ public class WithdrawalCertificateTest {
     static int customFieldsCout = 10;
 
     @Test
-    public void testWCertFieldHash() throws Exception {
+    public void testWCertFieldHash() {
         assertEquals(expectedWCertNoBtNoCFFieldHashHex, generateWCertAndGetFieldHashHex(0, 0));
         assertEquals(expectedWCertWithBtWithCFFieldHashHex, generateWCertAndGetFieldHashHex(backwardTransferCout, customFieldsCout));
         assertEquals(expectedWCertNoBtWithCFFieldHashHex, generateWCertAndGetFieldHashHex(0, customFieldsCout));
         assertEquals(expectedWCertWithBtNoCFFieldHashHex, generateWCertAndGetFieldHashHex(backwardTransferCout, 0));
     }
 
-    private String generateWCertAndGetFieldHashHex(int numBt, int numCustomFields) throws Exception {
+    private String generateWCertAndGetFieldHashHex(int numBt, int numCustomFields) {
         
         // Generate random cert
         Random r = new Random(seed);
-        WithdrawalCertificate cert = WithdrawalCertificate.getRandom(r, numBt, numCustomFields);
-
-        // Get FieldHash
-        FieldElement certHash = cert.getHash();
-        byte[] certHashBytes = certHash.serializeFieldElement();
-
-        // Free memory Rust side
-        cert.close();
-        certHash.close();
-
-        return TestUtils.toHexString(certHashBytes);
+        try (WithdrawalCertificate cert = WithdrawalCertificate.getRandom(r, numBt, numCustomFields)) {
+            return TestUtils.toHexString(cert.getHashBytes());
+        }
     }
 }

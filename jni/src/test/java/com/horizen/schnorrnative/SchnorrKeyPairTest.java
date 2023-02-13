@@ -8,7 +8,7 @@ import static org.junit.Assert.*;
 public class SchnorrKeyPairTest {
 
     @Test
-    public void testGenerate() throws Exception {
+    public void testGenerate() {
 
         try(SchnorrKeyPair keyPair = SchnorrKeyPair.generate())
         {
@@ -18,7 +18,7 @@ public class SchnorrKeyPairTest {
     }
 
     @Test
-    public void testDeriveFromSeed() throws Exception {
+    public void testDeriveFromSeed() {
         byte[] seed = { 1, 2, 3, 4, 5, 6, 7, 8 };
         byte[] expectedPubKeyBytes = {83, -1, 54, 52, 44, -74, -36, 113, 87, -126, 80, -84, -45, -116, 88, -69, 73, 118, -54, 100, 112, 80, 22, 64, 87, -93, 79, 2, -86, -48, 107, 31, 0};
         byte[] expectedSecretKeyBytes = {41, 70, -14, -11, 47, 124, 108, -114, -83, -97, 44, -44, 54, 63, -98, 6, 45, 45, 40, 5, 85, -37, 98, 59, -100, 77, -90, -61, -123, -50, -16, 13};
@@ -39,7 +39,7 @@ public class SchnorrKeyPairTest {
     }
 
     @Test
-    public void testSignVerify() throws Exception {
+    public void testSignVerify() {
 
         byte[] skBytes = {
             -75, 35, 36, 5, -30, -110, 63, 101, -39, 39, 46, 84, 51, -93, -9, 15, 54, -66, -122, -27, -47, 79, 63, -127,
@@ -73,7 +73,7 @@ public class SchnorrKeyPairTest {
     }
 
     @Test
-    public void testRandomSignVerify() throws Exception {
+    public void testRandomSignVerify() {
 
         int samples = 100;
 

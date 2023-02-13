@@ -67,7 +67,7 @@ public class VRFProof implements AutoCloseable
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() {
     freeProof();
   }
 }
