@@ -23,7 +23,9 @@ pub(crate) fn enforce_root_from_leaves<CS: ConstraintSystemAbstract<FieldElement
     leaves: &[FieldElementGadget],
     height: usize,
 ) -> Result<FieldElementGadget, SynthesisError> {
-    if leaves.len() != 2_usize.pow(height as u32) {
+    if leaves.len() != 2_usize.checked_pow(height as u32).ok_or(
+        SynthesisError::Other(format!("Height of the Merkle Tree should be at most {}, found {}", 0_usize.count_zeros(), height))
+    )? {
         return Err(SynthesisError::Other(
             "Leaves number must be a power of 2".to_owned(),
         ));
@@ -95,7 +97,7 @@ impl ValidatorKeysUpdatesGadget {
         sig_keys_g: &[SchnorrPkGadget],
         master_keys_g: &[SchnorrPkGadget],
     ) -> Result<(FieldElementGadget, Vec<FieldElementGadget>), SynthesisError> {
-        let height = ((max_pks.next_power_of_two() * 2) as f64).log2() as usize;
+        let height = (max_pks.next_power_of_two() * 2).trailing_zeros() as usize;
         let null_leaf_g: FieldElementGadget = ConstantGadget::from_value(
             cs.ns(|| "hardcoded NULL_LEAF"),
             &GingerMHTParams::ZERO_NODE_CST.unwrap().nodes[0],
@@ -130,7 +132,9 @@ impl ValidatorKeysUpdatesGadget {
         }
 
         // pad the vector up to the length 2^height, to use in the enforce_root_from_leaves function
-        validator_mktree_leaves_g.resize(2_usize.pow(height as u32), null_leaf_g);
+        validator_mktree_leaves_g.resize(2_usize.checked_pow(height as u32).ok_or(
+            SynthesisError::Other(format!("Height of the Merkle Tree should be at most {}, found {}", 0_usize.count_zeros(), height))
+        )?, null_leaf_g);
 
         // Starting from all the leaves in the Merkle Tree, reconstructs and returns
         // the Merkle Root. NOTE: This works iff Merkle Tree has been created by passing
