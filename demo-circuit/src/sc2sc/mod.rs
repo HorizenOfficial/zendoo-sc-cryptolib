@@ -348,6 +348,21 @@ impl ScCommitmentCertPath {
         )
         .into())
     }
+
+    pub fn update_sc_commitment_path(
+        &mut self,
+        sc_commitment_path: GingerMHTBinaryPath,
+    ) -> Result<(), Error> {
+        let length = sc_commitment_path.get_length();
+        if length != CMT_MT_HEIGHT {
+            Err(format!(
+                "Invalid path length {} != {} [height of the tree]",
+                length, CMT_MT_HEIGHT
+            ))?
+        }
+        self.sc_commitment_path = sc_commitment_path;
+        Ok(())
+    }
 }
 
 impl SemanticallyValid for ScCommitmentCertPath {

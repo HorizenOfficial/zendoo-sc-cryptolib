@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import com.horizen.librustsidechains.FieldElement;
 import com.horizen.librustsidechains.Library;
+import com.horizen.merkletreenative.MerklePath;
 
 /*
  * This class represent a path from the certificate to the root of side chain
@@ -86,5 +87,17 @@ public class ScCommitmentCertPath implements AutoCloseable {
         if (scCommitmentCertPathPointer == 0) {
             throw new IllegalStateException("Field element was freed.");
         }
+    }
+
+    private native boolean nativeUpdateScCommitmentPath(MerklePath correctScPath) throws IllegalArgumentException;
+
+    /**
+     * Update the path from the sidechain tx root to the commitment root
+     * 
+     * @param path The new merkele path from the sdichain root to the commitment root
+     * @throws IllegalArgumentException if the given merkle path is not valid (wrong lenght)
+     */
+    public void updateScCommitmentPath(MerklePath path) throws IllegalArgumentException{
+        nativeUpdateScCommitmentPath(path);
     }
 }
