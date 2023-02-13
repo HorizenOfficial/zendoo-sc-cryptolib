@@ -39,7 +39,7 @@ public class CommitmentTree implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         freeCommitmentTree();
     }
 
@@ -239,5 +239,22 @@ public class CommitmentTree implements AutoCloseable {
 
     public Optional<MerklePath> getCertMerklePath(byte[] scId, int leafIndex) {
         return nativeGetCertMerklePath(scId, leafIndex);
+    }
+
+    private native Optional<ScCommitmentCertPath> nativeGetScCommitmentCertPath(byte[] scId, byte[] certLeafHash);
+
+    /**
+     * Return the path from the certificate hash to the root of sidechain tx commitments root. That
+     * is not a simple merkle path but provides all the info that we need to generate the root from 
+     * the certificate.
+     * 
+     * @param scId              - The sidechain id
+     * @param certLeafHash      - The certificate hash
+     * @return                  - A ScCommitmentCertPath to build the sidechain tx commitments root
+     *                              from the ceritificate hash leaf (if the certificate hash is a
+     *                              leaf of the certificates tree).
+     */
+    public Optional<ScCommitmentCertPath> getScCommitmentCertPath(byte[] scId, byte[] certLeafHash) {
+        return nativeGetScCommitmentCertPath(scId, certLeafHash);
     }
 }

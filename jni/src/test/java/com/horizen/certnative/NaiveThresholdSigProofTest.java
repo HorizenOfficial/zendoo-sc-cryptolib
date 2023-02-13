@@ -68,16 +68,16 @@ public class NaiveThresholdSigProofTest {
     }
 
     @Test
-    public void testCreateVerifyRandomProofWithoutCustomFields() throws Exception {
+    public void testCreateVerifyRandomProofWithoutCustomFields() {
         testCreateVerifyRandomProof(0, snarkPkPathNoCustomFields, snarkVkPathNoCustomFields);
     }
 
     @Test
-    public void testCreateVerifyRandomProofWithCustomFields() throws Exception {
+    public void testCreateVerifyRandomProofWithCustomFields() {
         testCreateVerifyRandomProof(customFieldsNum, snarkPkPathCustomFields, snarkVkPathCustomFields);
     }
 
-    private void testCreateVerifyRandomProof(int numCustomFields, String snarkPkPath, String snarkVkPath) throws Exception {
+    private void testCreateVerifyRandomProof(int numCustomFields, String snarkPkPath, String snarkVkPath) {
         Random r = new Random();
 
         scId = FieldElement.createRandom();

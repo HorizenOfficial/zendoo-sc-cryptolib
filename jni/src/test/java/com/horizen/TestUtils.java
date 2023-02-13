@@ -1,7 +1,6 @@
 package com.horizen;
 
 import com.google.common.io.BaseEncoding;
-import org.junit.Test;
 
 import static org.junit.Assert.*;
 
@@ -10,7 +9,8 @@ public class TestUtils {
     public static final int CERT_SEGMENT_SIZE = 1 << 15;
     public static final int CSW_SEGMENT_SIZE = 1 << 18;
 
-    private TestUtils() {}
+    private TestUtils() {
+    }
 
     public static byte[] fromHexString(String hex) {
         return BaseEncoding.base16().lowerCase().decode(hex.toLowerCase());

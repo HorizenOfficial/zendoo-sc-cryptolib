@@ -55,7 +55,7 @@ public class VRFKeyPair implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         this.publicKey.close();
         this.secretKey.close();
     }

@@ -135,7 +135,7 @@ public class InMemorySparseMerkleTree implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         freeInMemorySparseMerkleTree();
     }
 }

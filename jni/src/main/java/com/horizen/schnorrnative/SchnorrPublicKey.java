@@ -83,7 +83,7 @@ public class SchnorrPublicKey implements AutoCloseable
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() {
     freePublicKey();
   }
 }
