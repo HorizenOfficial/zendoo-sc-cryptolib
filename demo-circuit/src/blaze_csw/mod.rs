@@ -187,7 +187,7 @@ pub fn convert_te_pk_to_sw_pk(
 
     // Extract the public key bytes as Y coordinate
     let x_coordinate = sw_pk.x;
-    let mut pk_bytes = serialize_to_buffer(&x_coordinate, None).unwrap();
+    let mut pk_bytes = serialize_to_buffer(&x_coordinate, None)?;
 
     // Use the last (null) bit of the public key to store the sign of the X coordinate
     // Before this operation, the last bit of the public key (Y coordinate) is always 0 due to the field modulus

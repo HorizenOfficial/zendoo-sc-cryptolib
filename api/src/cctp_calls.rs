@@ -187,7 +187,9 @@ fn get_naive_threshold_sig_circuit_prover_data(
 ) -> Result<(NaiveThresholdSignature, u64), Error> {
     //Get max pks
     let max_pks = pks.len();
-    assert_eq!(sigs.len(), max_pks);
+    if max_pks != sigs.len() {
+        Err("number of public keys different from number of signatures")?
+    }
 
     // Compute msg to sign
     let (mr_bt, msg) = compute_msg_to_sign(
@@ -840,7 +842,7 @@ pub fn vrf_prove(
     )?;
 
     //Convert gamma from proof to field elements
-    let gamma_coords = proof.gamma.to_field_elements().unwrap();
+    let gamma_coords = proof.gamma.to_field_elements()?;
 
     //Compute VRF output
     let output = {

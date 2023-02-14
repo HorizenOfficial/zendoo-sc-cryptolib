@@ -154,7 +154,7 @@ impl ValidatorKeysUpdates {
     pub(crate) fn get_key_hash(
         pk: &FieldBasedSchnorrPk<G2Projective>,
     ) -> Result<FieldElement, Error> {
-        let spk_fe = pk.0.to_field_elements().unwrap();
+        let spk_fe = pk.0.to_field_elements()?;
         let mut h = FieldHash::init_constant_length(spk_fe.len(), None);
         spk_fe.into_iter().for_each(|fe| {
             h.update(fe);
