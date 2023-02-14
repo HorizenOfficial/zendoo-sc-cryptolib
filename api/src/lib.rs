@@ -50,7 +50,7 @@ use demo_circuit::{
     type_mapping::*,
 };
 
-use jni_wrapper::{AsNativeRefMut, AsNativeRef, JNINativeWrapper};
+use jni_wrapper::{AsNativeRef, AsNativeRefMut, JNINativeWrapper};
 use primitives::{
     bytes_to_bits, signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk, FieldBasedHash,
     FieldBasedMerkleTree, FieldBasedMerkleTreePath, FieldBasedSparseMerkleTree, FieldHasher,
@@ -5939,8 +5939,7 @@ ffi_export!(
         ) {
             Ok(proof) => {
                 //Return proof serialized
-                env
-                    .byte_array_from_slice(proof.as_slice())
+                env.byte_array_from_slice(proof.as_slice())
                     .expect("Should be able to convert Rust slice into jbytearray")
             }
             Err(e) => {
@@ -5966,7 +5965,6 @@ ffi_export!(
         check_vk: jboolean,
         compressed_vk: jboolean,
     ) -> jboolean {
-
         let next_sc_tx_commitments_root: &FieldElement =
             next_sc_tx_commitments_root.as_native_ref_unchecked(env);
         let curr_sc_tx_commitments_root: &FieldElement =
@@ -6070,6 +6068,32 @@ ffi_export!(
             JNI_TRUE
         } else {
             JNI_FALSE
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_commitmenttreenative_ScCommitmentCertPath_nativeUpdateScCommitmentPath(
+        env: JNIEnv,
+        path: JObject,
+        sc_commitment_path: JObject,
+    ) -> jboolean {
+        let path: &mut ScCommitmentCertPath = path.as_native_ref_mut_unchecked(env);
+        let sc_commitment_path: &GingerMHTPath =
+            sc_commitment_path.as_native_ref_unchecked(env);
+
+        match sc_commitment_path
+            .clone()
+            .try_into()
+            .and_then(|p| path.update_sc_commitment_path(p).into())
+        {
+            Ok(_) => JNI_TRUE,
+            Err(e) => throw!(
+                &env,
+                "java/lang/IllegalArgumentException",
+                format!("Cannot update path: {:?}", e).as_str(),
+                JNI_FALSE
+            ),
         }
     }
 );
