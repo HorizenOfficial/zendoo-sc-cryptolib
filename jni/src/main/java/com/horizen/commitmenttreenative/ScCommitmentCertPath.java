@@ -94,8 +94,8 @@ public class ScCommitmentCertPath implements AutoCloseable {
     /**
      * Update the path from the sidechain tx root to the commitment root
      * 
-     * @param path The new merkele path from the sdichain root to the commitment root
-     * @throws IllegalArgumentException if the given merkle path is not valid (wrong lenght)
+     * @param path The new merkle path from the sidechain root to the commitment root
+     * @throws IllegalArgumentException if the given merkle path is not valid (wrong length)
      */
     public void updateScCommitmentPath(MerklePath path) throws IllegalArgumentException{
         nativeUpdateScCommitmentPath(path);
