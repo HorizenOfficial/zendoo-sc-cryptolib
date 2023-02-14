@@ -6028,9 +6028,9 @@ ffi_export!(
         path: JObject,
         sc_commitment_path: JObject,
     ) -> jboolean {
-        let path: &mut ScCommitmentCertPath = dbg!(path).as_native_ref_mut_unchecked(env);
+        let path: &mut ScCommitmentCertPath = path.as_native_ref_mut_unchecked(env);
         let sc_commitment_path: &GingerMHTPath =
-            dbg!(sc_commitment_path).as_native_ref_unchecked(env);
+            sc_commitment_path.as_native_ref_unchecked(env);
 
         match sc_commitment_path
             .clone()
