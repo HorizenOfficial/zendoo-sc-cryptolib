@@ -1,7 +1,8 @@
 use algebra::Field;
 use cctp_primitives::{
     commitment_tree::CommitmentTree,
-    type_mapping::{CoboundaryMarlin, FieldElement}, proving_system::verifier::UserInputs,
+    proving_system::verifier::UserInputs,
+    type_mapping::{CoboundaryMarlin, FieldElement},
 };
 
 use primitives::FieldBasedMerkleTreePath;
@@ -41,7 +42,17 @@ fn assert_circuit(circuit: Sc2Sc, zk_rng: Option<&mut dyn RngCore>) {
     assert_eq!(None, debug_circuit(circuit.clone()).unwrap());
     let proof =
         CoboundaryMarlin::prove(&pk, &ck_g1, circuit.clone(), zk_rng.is_some(), zk_rng).unwrap();
-    assert!(CoboundaryMarlin::verify(&vk, &ck_g1, circuit.public_input().get_circuit_inputs().unwrap().as_slice(), &proof).unwrap());
+    assert!(CoboundaryMarlin::verify(
+        &vk,
+        &ck_g1,
+        circuit
+            .public_input()
+            .get_circuit_inputs()
+            .unwrap()
+            .as_slice(),
+        &proof
+    )
+    .unwrap());
 }
 
 #[fixture]
@@ -221,7 +232,7 @@ mod sc_commitment_cert_path {
         let mut cmt = CommitmentScBuilder::default()
             .with_n_withdrawal_certificates(1)
             .generate_sc_data(None, &mut rng, sc_id);
-        
+
         let (cert, path, root) = cmt.get_withdrawal_certificate_info(0);
 
         assert!(path.check_membership(&root, &sc_id, &cert.hash().unwrap()))
@@ -233,13 +244,39 @@ mod sc_commitment_cert_path {
         let mut cmt = CommitmentScBuilder::default()
             .with_n_withdrawal_certificates(1)
             .generate_sc_data(None, &mut rng, sc_id);
-        
+
         let (cert, path, root) = cmt.get_withdrawal_certificate_info(0);
 
-        assert_eq!(root, path.compute_root(&sc_id, &cert.hash().unwrap()).unwrap())
+        assert_eq!(
+            root,
+            path.compute_root(&sc_id, &cert.hash().unwrap()).unwrap()
+        )
+    }
+
+    #[rstest]
+    fn should_update_sc_commitment_path(mut rng: impl Rng) {
+        let sc_id: FieldElement = rng.gen();
+        let mut cmt = CommitmentScBuilder::default()
+            .with_n_withdrawal_certificates(1)
+            .generate_sc_data(None, &mut rng, sc_id);
+
+        let (cert, mut path, root) = cmt.get_withdrawal_certificate_info(0);
+        let valid_mt = path.sc_commitment_path.clone();
+
+        let zero_mt = ScCommitmentCertPath::default().sc_commitment_path;
+
+        path.update_sc_commitment_path(zero_mt).unwrap();
+
+        assert!(!path.check_membership(&root, &sc_id, &cert.hash().unwrap()));
+
+        path.update_sc_commitment_path(valid_mt).unwrap();
+
+        assert!(path.check_membership(&root, &sc_id, &cert.hash().unwrap()));
     }
 
     mod reject_invalid {
+        use cctp_primitives::commitment_tree::CMT_MT_HEIGHT;
+
         use super::*;
 
         #[rstest]
@@ -248,21 +285,21 @@ mod sc_commitment_cert_path {
             let mut cmt = CommitmentScBuilder::default()
                 .with_n_withdrawal_certificates(1)
                 .generate_sc_data(None, &mut rng, sc_id);
-            
+
             let (cert, path, _root) = cmt.get_withdrawal_certificate_info(0);
-    
+
             assert!(!path.check_membership(&rng.gen(), &sc_id, &cert.hash().unwrap()))
         }
-    
+
         #[rstest]
         fn sc_id(mut rng: impl Rng) {
             let sc_id: FieldElement = rng.gen();
             let mut cmt = CommitmentScBuilder::default()
                 .with_n_withdrawal_certificates(1)
                 .generate_sc_data(None, &mut rng, sc_id);
-            
+
             let (cert, path, root) = cmt.get_withdrawal_certificate_info(0);
-    
+
             assert!(!path.check_membership(&root, &rng.gen(), &cert.hash().unwrap()))
         }
 
@@ -272,10 +309,28 @@ mod sc_commitment_cert_path {
             let mut cmt = CommitmentScBuilder::default()
                 .with_n_withdrawal_certificates(1)
                 .generate_sc_data(None, &mut rng, sc_id);
-            
+
             let (_cert, path, root) = cmt.get_withdrawal_certificate_info(0);
-    
+
             assert!(!path.check_membership(&root, &sc_id, &rng.gen()))
+        }
+
+        #[rstest]
+        fn invalid_path_for_update(mut rng: impl Rng) {
+            let sc_id: FieldElement = rng.gen();
+            let mut cmt = CommitmentScBuilder::default()
+                .with_n_withdrawal_certificates(1)
+                .generate_sc_data(None, &mut rng, sc_id);
+
+            let (_cert, mut path, _root) = cmt.get_withdrawal_certificate_info(0);
+
+            let wrong_path = GingerMHTBinaryPath::new(vec![Default::default(); CMT_MT_HEIGHT + 1]);
+
+            let err = path.update_sc_commitment_path(wrong_path).unwrap_err();
+
+            assert!(format!("{:?}", err)
+                .to_lowercase()
+                .contains("invalid path length"))
         }
     }
 }
