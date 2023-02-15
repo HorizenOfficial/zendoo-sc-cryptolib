@@ -6,6 +6,8 @@ import com.horizen.librustsidechains.Library;
 public class SchnorrKeyPair implements AutoCloseable {
     private SchnorrSecretKey secretKey;
     private SchnorrPublicKey publicKey;
+    private static final int MIN_SEED_LENGTH = 32;
+    private static final int MAX_SEED_LENGTH = 64;
 
     static {
         Library.load();
@@ -23,7 +25,10 @@ public class SchnorrKeyPair implements AutoCloseable {
 
     private static native SchnorrKeyPair nativeDeriveFromSeed(byte[] seed);
 
-    public static SchnorrKeyPair generate(byte[] seed) {
+    public static SchnorrKeyPair generate(byte[] seed) throws Exception {
+        if (seed.length < MIN_SEED_LENGTH || seed.length > MAX_SEED_LENGTH) {
+            throw new Exception("invalid seed length '" + seed.length + "'. Must be between " + MIN_SEED_LENGTH + " and " + MAX_SEED_LENGTH);
+        }
         return nativeDeriveFromSeed(seed);
     }
 

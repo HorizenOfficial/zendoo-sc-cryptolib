@@ -2,6 +2,7 @@ package com.horizen.schnorrnative;
 
 import com.horizen.librustsidechains.FieldElement;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 
 import static org.junit.Assert.*;
 
@@ -19,9 +20,16 @@ public class SchnorrKeyPairTest {
 
     @Test
     public void testDeriveFromSeed() throws Exception {
-        byte[] seed = { 1, 2, 3, 4, 5, 6, 7, 8 };
-        byte[] expectedPubKeyBytes = {83, -1, 54, 52, 44, -74, -36, 113, 87, -126, 80, -84, -45, -116, 88, -69, 73, 118, -54, 100, 112, 80, 22, 64, 87, -93, 79, 2, -86, -48, 107, 31, 0};
-        byte[] expectedSecretKeyBytes = {41, 70, -14, -11, 47, 124, 108, -114, -83, -97, 44, -44, 54, 63, -98, 6, 45, 45, 40, 5, 85, -37, 98, 59, -100, 77, -90, -61, -123, -50, -16, 13};
+        byte[] badSeed = { 1, 2, 3, 4, 5, 6, 7, 8 };
+        assertThrows(Exception.class, new ThrowingRunnable() {
+            @Override
+            public void run() throws Throwable {
+                SchnorrKeyPair keyPair = SchnorrKeyPair.generate(badSeed);
+            }
+        });
+        byte[] seed = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 };
+        byte[] expectedPubKeyBytes = {42, -59, -79, -80, 59, -32, 64, -61, -94, 32, -7, 34, 69, 44, 48, -37, 73, 59, -114, 85, 90, 23, -103, 7, 78, -127, -75, -77, -25, -32, 65, 34, -128};
+        byte[] expectedSecretKeyBytes = {72, 73, -55, -19, 127, 107, 27, -125, 45, 38, 48, 84, -13, -13, -82, 21, 1, 84, -47, 56, -63, 3, -50, 109, -126, -27, 12, 29, 38, 14, -124, 48};
         try(SchnorrKeyPair keyPair = SchnorrKeyPair.generate(seed))
         {
             assertNotNull("Key pair derive from seed was unsuccessful", keyPair);
@@ -29,13 +37,6 @@ public class SchnorrKeyPairTest {
             assertArrayEquals("Derive from seed didn't produce the expected public key", expectedPubKeyBytes, keyPair.getPublicKey().serializePublicKey());
             assertArrayEquals("Derive from seed didn't produce the expected secret key", expectedSecretKeyBytes, keyPair.getSecretKey().serializeSecretKey());
         }
-        byte[] emptySeed = {};
-        try(SchnorrKeyPair keyPair = SchnorrKeyPair.generate(seed))
-        {
-            assertNotNull("Key pair derive from empty seed was unsuccessful", keyPair);
-            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
-        }
-
     }
 
     @Test

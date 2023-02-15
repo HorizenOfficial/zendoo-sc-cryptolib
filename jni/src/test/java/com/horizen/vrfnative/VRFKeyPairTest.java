@@ -2,6 +2,7 @@ package com.horizen.vrfnative;
 
 import com.horizen.librustsidechains.FieldElement;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 
 import static org.junit.Assert.*;
 
@@ -20,21 +21,22 @@ public class VRFKeyPairTest {
 
     @Test
     public void testDeriveFromSeed() throws Exception {
-        byte[] seed = { 1, 2, 3, 4, 5, 6, 7, 8 };
-        byte[] expectedPubKeyBytes = {-41, 6, 40, 40, 18, 36, 100, -72, -107, 103, 60, -47, 40, -5, -119, 103, 89, 31, 82, 66, -98, 103, -128, 57, -116, -108, 81, -33, -8, -101, -95, 14, 0};
-        byte[] expectedSecretKeyBytes = {-104, -120, -125, 121, 24, -25, -109, -49, -98, 17, -91, 15, 27, 14, 16, -54, 123, 57, 79, -88, 0, -82, -17, 72, -74, -109, 77, 66, 7, 113, 104, 62};
+        byte[] badSeed = { 1, 2, 3, 4, 5, 6, 7, 8 };
+        assertThrows(Exception.class, new ThrowingRunnable() {
+            @Override
+            public void run() throws Throwable {
+                VRFKeyPair keyPair = VRFKeyPair.generate(badSeed);
+            }
+        });
+        byte[] seed = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 };
+        byte[] expectedPubKeyBytes = {103, -22, -43, -8, 45, 0, -94, 54, -16, 123, -71, -14, -93, -112, -97, 86, -84, -81, -71, 49, 122, 85, 73, -67, -120, 50, -85, -14, 87, -41, -81, 36, 0};
+        byte[] expectedSecretKeyBytes = {-19, -55, -8, 101, -99, -95, -107, 19, -124, -115, -13, -23, 113, -4, -58, -30, -95, 86, -14, 41, 7, -9, 104, -26, 83, -93, 118, -14, 21, 85, 49, 46};
         try(VRFKeyPair keyPair = VRFKeyPair.generate(seed))
         {
             assertNotNull("Key pair derive from seed was unsuccessful", keyPair);
             assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
             assertArrayEquals("Derive from seed didn't produce the expected public key", expectedPubKeyBytes, keyPair.getPublicKey().serializePublicKey());
             assertArrayEquals("Derive from seed didn't produce the expected secret key", expectedSecretKeyBytes, keyPair.getSecretKey().serializeSecretKey());
-        }
-        byte[] emptySeed = {};
-        try(VRFKeyPair keyPair = VRFKeyPair.generate(seed))
-        {
-            assertNotNull("Key pair derive from empty seed was unsuccessful", keyPair);
-            assertTrue("Public key verification failed.", keyPair.getPublicKey().verifyKey());
         }
     }
 

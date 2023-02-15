@@ -7,6 +7,8 @@ import com.horizen.librustsidechains.Library;
 public class VRFKeyPair implements AutoCloseable {
     private VRFSecretKey secretKey;
     private VRFPublicKey publicKey;
+    private static final int MIN_SEED_LENGTH = 32;
+    private static final int MAX_SEED_LENGTH = 64;
 
     static {
         Library.load();
@@ -30,7 +32,10 @@ public class VRFKeyPair implements AutoCloseable {
 
     private static native VRFKeyPair nativeDeriveFromSeed(byte[] seed);
 
-    public static VRFKeyPair generate(byte[] seed) {
+    public static VRFKeyPair generate(byte[] seed) throws Exception {
+        if (seed.length < MIN_SEED_LENGTH || seed.length > MAX_SEED_LENGTH) {
+            throw new Exception("invalid seed length '" + seed.length + "'. Must be between " + MIN_SEED_LENGTH + " and " + MAX_SEED_LENGTH);
+        }
         return nativeDeriveFromSeed(seed);
     }
 
