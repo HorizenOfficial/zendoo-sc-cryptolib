@@ -402,7 +402,7 @@ impl AllocGadget<ValidatorKeysUpdates, FieldElement> for ValidatorKeysUpdatesGad
             updated_signing_keys_mk_signatures_g,
             updated_master_keys_sk_signatures_g,
             updated_master_keys_mk_signatures_g,
-            max_pks: max_pks.unwrap(),
+            max_pks: max_pks?,
         };
 
         Ok(new_instance)
