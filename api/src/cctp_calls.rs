@@ -87,9 +87,9 @@ pub fn schnorr_verify_signature(
     SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), *msg, signature)
 }
 
+/// Derive key from seed. It's caller responsibility to pass a seed of proper length.
 pub fn schnorr_derive_key_from_seed(seed: &[u8]) -> (SchnorrPk, SchnorrSk) {
     // zero just default to random,
-    // however, is there a minimum length that should be required?
     if seed.is_empty() {
         return schnorr_generate_key();
     }
@@ -870,9 +870,9 @@ pub fn vrf_proof_to_hash(
     )
 }
 
+/// Derive key from seed. It's caller responsibility to pass a seed of proper length.
 pub fn vrf_derive_key_from_seed(seed: &[u8]) -> (VRFPk, VRFSk) {
     // zero just default to random,
-    // however, is there a minimum length that should be required?
     if seed.is_empty() {
         return vrf_generate_key();
     }
