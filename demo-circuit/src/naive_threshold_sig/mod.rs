@@ -208,7 +208,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignature {
             cs.ns(|| "hash public keys"),
             pks_g
                 .iter()
-                .map(|pk| pk.pk.x.clone())
+                .map(|pk| pk.pk.get_x_coord().clone())
                 .collect::<Vec<_>>()
                 .as_slice(),
         )?;
