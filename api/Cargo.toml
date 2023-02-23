@@ -16,11 +16,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.5.0-alpha1"}
-primitives = {features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.5.0-alpha1"}
+algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "audit_fixes_2023"}
+primitives = {features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "audit_fixes_2023"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", tag = "0.2.0-alpha2" }
-r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.5.0-alpha1"}
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "fix_vrf_parameters" }
+r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "audit_fixes_2023"}
 #ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
 
