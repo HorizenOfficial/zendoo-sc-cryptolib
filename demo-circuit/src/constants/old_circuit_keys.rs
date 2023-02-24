@@ -28,16 +28,16 @@ const CSW_NO_CONST_VK_DIGEST: &str =
     "bc6c5f7327a3668513351b35191112e9053d2df9643b0708da32230338dd5451";
 
 const THRESHOLD_V1_PK_DIGEST: &str =
-    "0dada534e613f53ce18b66f15d23007e686a3ecb446309c56a7c821e8fbc9f5c";
+    "bcc672e39e2cb4fbeaac3b0f5e859f35264a41e37276f06f81169e53d1933e7f";
 const THRESHOLD_V1_VK_DIGEST: &str =
-    "78a2691d767d6ef198d2344abde016093c7fba44c6d188dae05d38045ceefb1e";
+    "aece7e4216fa5590ceb206ef580d3a8aec040306fdb134d2f63128d7bd40f622";
 
 // Base: zendoo-sc-cryptolib v0.6.0
 const THRESHOLD_V2_PK_DIGEST: &str =
-    "412898b44287c1e6cf98d4cdbbc5cbebe5714a2cae840228645da44b60df2315";
+    "6d36fdf04efa4b148291bbe8fb3b80eb3a32602f6e97b3f7b805751647e210ca";
 //"8e5987aba3c5a7ec44bc8b666ba2c720b4cbc857336dbbb052a7fe84b78119e2";
 const THRESHOLD_V2_VK_DIGEST: &str =
-    "32a1cbdd9c9a4f6b6d0695cf23562dbc72d6f190e16f6dfb6dadf82e3b9a4c31";
+    "073a78e7f8ffc53a38dbf21cd08e80656a71c86073db262933fb2c7cd976fa7b";
 //    "43478bf7f66e2e64f5d55e00ba8352a627bfafb9eebdb475501d4837d43734a9";
 
 // Common parameters to be used for regression
