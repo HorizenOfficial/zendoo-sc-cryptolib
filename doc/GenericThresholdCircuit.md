@@ -34,7 +34,7 @@ Our gadget $Threshold(m,h)$ is as follows.
 - Private input / witnesses:
   - the threshold $t\in F$, 
   - the public keys $pk_1,\ldots, pk_{N}$ (including possible null keys) in the same order as done for the computation of $h$,
-  - Schnorr signatures $\sigma_1,\ldots,\sigma_{N}$, including arbitrarily chosen null signatures $\sigma_{NULL}$ (e.g., $\sigma_{NULL}=(0,0)$) to fill up to full length,
+  - Schnorr signatures $\sigma_1,\ldots,\sigma_{N}$, including arbitrarily chosen null signatures $\sigma_{NULL}$ (e.g., $\sigma_{NULL}=(1,1)$) to fill up to full length,
   - Boolean variables $b_0,\ldots,b_{d-1}$ for the threshold comparison.
 
 It's circuit is based on three components, as depicted below: 
