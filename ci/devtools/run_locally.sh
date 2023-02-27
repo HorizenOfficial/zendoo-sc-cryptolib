@@ -4,6 +4,7 @@
 [ -n "${RUSTFLAGS:-}" ] ||
 [ -n "${CARGOARGS:-}" ] ||
 [ -n "${RUST_CROSS_TARGETS:-}" ] ||
+[ -n "${DISABLE_JAVADOC_LINT:-}" ] ||
 [ -n "${CARGO_AUDIT_EXIT_ON_ERROR:-}" ] ||
 [ -n "${RUSTUP_TOOLCHAIN:-}" ] &&
 exec -c "$0"
