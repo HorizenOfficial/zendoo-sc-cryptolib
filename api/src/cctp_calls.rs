@@ -806,9 +806,9 @@ pub fn verify_csw_proof(
 lazy_static! {
     pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<G2Projective> = {
         let params = VRFParams::new();
-        BoweHopwoodPedersenParameters::<G2Projective> {
-            generators: params.group_hash_generators,
-        }
+        GroupHash::setup_from_generators(
+            params.group_hash_generators,
+        ).unwrap()
     };
 }
 
