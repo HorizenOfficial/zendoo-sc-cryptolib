@@ -103,7 +103,7 @@ impl ValidatorKeysUpdatesGadget {
             &GingerMHTParams::ZERO_NODE_CST.unwrap().nodes[0],
         );
 
-        let mut validator_mktree_leaves_g = Vec::with_capacity(max_pks);
+        let mut validator_mktree_leaves_g = Vec::with_capacity(max_pks*2);
 
         for (i, (signing_key_g, master_key_g)) in sig_keys_g.iter().zip(master_keys_g).enumerate() {
             // Enforce signing key hash
