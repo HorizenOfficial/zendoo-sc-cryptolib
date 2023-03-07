@@ -1184,10 +1184,9 @@ impl ScPublicKeyGadget {
             )?;
         }
 
-        Ok(ECPointSimulationGadget::new(
+        Ok(ECPointSimulationGadget::from_coords(
             sw_pk_x_coordinate_g,
             sw_pk_y_coordinate_g,
-            Boolean::Constant(false),
         ))
     }
 

@@ -1083,7 +1083,7 @@ mod test {
 
         // Change the first bit
         let (mut public_key, secret_key) = get_test_key_pair();
-        public_key[0] ^= 1;
+        *public_key.last_mut().unwrap() ^= 128;
 
         let (sys_data, last_wcert, utxo_data, ft_data) = generate_test_csw_prover_data(
             CswType::UTXO,
