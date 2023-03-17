@@ -1647,7 +1647,7 @@ ffi_export!(
         };
 
         //Verify vrf proof and get vrf output
-        let vrf_out = match vrf_proof_to_hash(message, public_key, proof) {
+        let vrf_out = match vrf_verify(message, public_key, proof) {
             Ok(result) => result,
             Err(e) => {
                 log!(format!("Unable to get VRF output from VRF proof: {:?}", e));

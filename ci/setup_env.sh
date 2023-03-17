@@ -59,7 +59,7 @@ if [ -n "${TRAVIS_TAG}" ] && [ "${PUBLISH_BUILD}" = true ]; then
       # Prod vs dev release
       if ( git branch -r --contains "${TRAVIS_TAG}" | grep -xqE ". origin\/${PROD_RELEASE_BRANCH}$" ); then
         # Checking if package version matches PROD release version
-        if ! [[ "${pom_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        if ! [[ "${pom_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
           echo "Aborting, pom version is in the wrong format."
           exit 1
         fi
@@ -80,7 +80,7 @@ if [ -n "${TRAVIS_TAG}" ] && [ "${PUBLISH_BUILD}" = true ]; then
         export CONTAINER_PUBLISH="true"
       else
         # Checking if package version matches DEV release version
-        if ! [[ "${pom_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-SNAPSHOT){1}$ ]]; then
+        if ! [[ "${pom_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?(-SNAPSHOT){1}$ ]]; then
           echo "Aborting, package version is in the wrong format."
           exit 1
         fi
@@ -117,10 +117,8 @@ if [ "${CONTAINER_PUBLISH}" = "false" ]; then
 fi
 
 # unset credentials after use
-export GITHUB_TOKEN=""
 export MAVEN_KEY_ARCHIVE_URL=""
 export MAVEN_KEY_ARCHIVE_PASSWORD=""
-unset GITHUB_TOKEN
 unset MAVEN_KEY_ARCHIVE_URL
 unset MAVEN_KEY_ARCHIVE_PASSWORD
 

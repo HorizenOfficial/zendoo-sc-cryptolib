@@ -19,7 +19,7 @@ edition = "2018"
 algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "audit_fixes_2023"}
 primitives = {features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "audit_fixes_2023"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "fix_vrf_parameters" }
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "audit_fixes_2023" }
 r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "audit_fixes_2023"}
 #ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}

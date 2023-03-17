@@ -20,7 +20,7 @@ r1cs-crypto = {features = ["tweedle", "signature", "merkle_tree"], git = "https:
 r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "audit_fixes_2023"}
 r1cs-std = {features = ["tweedle", "nonnative"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "audit_fixes_2023"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "fix_vrf_parameters" }
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "audit_fixes_2023" }
 
 derivative = "=2.2.0"
 lazy_static = "=1.4.0"
