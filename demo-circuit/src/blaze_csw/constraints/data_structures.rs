@@ -151,7 +151,8 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswUtxoOutp
     ) -> Result<FieldElementGadget, SynthesisError> {
         // Initialize hash_input with personalization manually as we don't have, for now, hash gadget accepting personalization
         // (https://github.com/HorizenOfficial/ginger-lib/issues/78)
-        let personalization = personalization.unwrap();
+        let personalization = personalization.ok_or(
+            SynthesisError::Other("non-empty personalization required".to_string()))?;
         debug_assert!(personalization.len() == 1);
 
         // Add padding 1
@@ -530,9 +531,8 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
             .enumerate()
             .map(|(index, chunk)| {
                 FieldElementGadget::from_bits(cs.ns(|| format!("FT from bits {}", index)), chunk)
-                    .unwrap()
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, SynthesisError>>()?;
 
         Ok(elements)
     }
@@ -1184,10 +1184,9 @@ impl ScPublicKeyGadget {
             )?;
         }
 
-        Ok(ECPointSimulationGadget::new(
+        Ok(ECPointSimulationGadget::from_coords(
             sw_pk_x_coordinate_g,
             sw_pk_y_coordinate_g,
-            Boolean::Constant(false),
         ))
     }
 

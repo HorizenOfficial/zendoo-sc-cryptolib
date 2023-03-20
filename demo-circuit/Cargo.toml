@@ -1,6 +1,6 @@
 [package]
 name = "demo-circuit"
-version = "0.6.0-SNAPSHOT"
+version = "0.6.0"
 authors = [
     "DanieleDiBenedetto <daniele@horizenlabs.io>",
     "Oleksandr Iozhytsia <oleksandr@zensystem.io>",
@@ -14,13 +14,13 @@ edition = "2018"
 include = ["Cargo.toml", "src"]
 
 [dependencies]
-algebra = {features = ["tweedle", "ed25519"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-r1cs-crypto = {features = ["tweedle", "signature", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-r1cs-std = {features = ["tweedle", "nonnative"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+algebra = {features = ["tweedle", "ed25519"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.5.0"}
+primitives = {features = ["tweedle", "signature", "vrf"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.5.0"}
+r1cs-crypto = {features = ["tweedle", "signature", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.5.0"}
+r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.5.0"}
+r1cs-std = {features = ["tweedle", "nonnative"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.5.0"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "dev" }
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", tag = "0.2.0" }
 
 derivative = "=2.2.0"
 lazy_static = "=1.4.0"
@@ -32,7 +32,7 @@ blake2 = { version = "=0.8.1", default-features = false }
 digest = "=0.8.1"
 blake2s_simd = "=0.5.11"
 bit-vec = "=0.6.3"
-sha2 = "=0.9.5"
+sha2 = "=0.8.2"
 hex = "=0.4.3"
 serial_test = "=0.5.1"
 strum = "=0.24.1"

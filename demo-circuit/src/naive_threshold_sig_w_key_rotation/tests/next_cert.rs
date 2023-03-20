@@ -16,13 +16,13 @@ fn no_key_rotation_works() {
         _,
         _,
         genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
         withdrawal_certificate,
         wcert_signatures,
         validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, ITER);
+    ) = setup_certificate_data(MAX_PKS, ITER, false);
 
-    let mut prev_withdrawal_certificate = create_withdrawal_certificate();
-    prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
+    let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
     prev_withdrawal_certificate.quality = ITER as u64;
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
@@ -39,7 +39,7 @@ fn no_key_rotation_works() {
     debug_naive_threshold_circuit(&circuit, false, None);
 
     let proof =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None).unwrap();
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit.clone(), false, None).unwrap();
 
     let public_inputs = [
         circuit.genesis_constant,
@@ -47,7 +47,7 @@ fn no_key_rotation_works() {
         get_cert_data_hash(&prev_withdrawal_certificate),
     ];
 
-    assert!(CoboundaryMarlin::verify(&params.1.clone(), &ck_g1, &public_inputs, &proof).unwrap());
+    assert!(CoboundaryMarlin::verify(&params.1, &ck_g1, &public_inputs, &proof).unwrap());
 }
 
 #[serial]
@@ -63,10 +63,11 @@ fn signing_key_rotation_works() {
         signing_keys_sks,
         master_keys_sks,
         genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
         mut withdrawal_certificate,
         _wcert_signatures,
         mut validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, ITER);
+    ) = setup_certificate_data(MAX_PKS, ITER, false);
 
     rotate_key(
         &signing_keys_sks[0],
@@ -77,17 +78,13 @@ fn signing_key_rotation_works() {
         &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_signing_keys[0],
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
     );
 
-    let mut prev_withdrawal_certificate = create_withdrawal_certificate();
-    prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
+    let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
     prev_withdrawal_certificate.quality = ITER as u64;
 
-    withdrawal_certificate.custom_fields[0] = ValidatorKeysUpdates::get_validators_key_root(
-        MAX_PKS,
-        &validator_key_updates.updated_signing_keys,
-        &validator_key_updates.updated_master_keys,
-    )
+    withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root()
     .unwrap();
 
     let msg_to_sign = cert_to_msg(&withdrawal_certificate);
@@ -112,7 +109,7 @@ fn signing_key_rotation_works() {
     debug_naive_threshold_circuit(&circuit, false, None);
 
     let proof =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None).unwrap();
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit.clone(), false, None).unwrap();
 
     withdrawal_certificate.quality = MAX_PKS as u64;
 
@@ -122,7 +119,7 @@ fn signing_key_rotation_works() {
         get_cert_data_hash(&prev_withdrawal_certificate),
     ];
 
-    assert!(CoboundaryMarlin::verify(&params.1.clone(), &ck_g1, &public_inputs, &proof).unwrap());
+    assert!(CoboundaryMarlin::verify(&params.1, &ck_g1, &public_inputs, &proof).unwrap());
 }
 
 #[serial]
@@ -138,10 +135,11 @@ fn master_key_rotation_works() {
         signing_keys_sks,
         master_keys_sks,
         genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
         mut withdrawal_certificate,
         _wcert_signatures,
         mut validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, ITER);
+    ) = setup_certificate_data(MAX_PKS, ITER, false);
 
     rotate_key(
         &signing_keys_sks[0],
@@ -152,22 +150,15 @@ fn master_key_rotation_works() {
         &mut validator_key_updates.updated_master_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_master_keys[0],
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
     );
 
     withdrawal_certificate.custom_fields[0] = validator_key_updates
         .get_upd_validators_keys_root()
         .unwrap();
 
-    let mut prev_withdrawal_certificate = create_withdrawal_certificate();
-    prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
+    let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
     prev_withdrawal_certificate.quality = ITER as u64;
-
-    withdrawal_certificate.custom_fields[0] = ValidatorKeysUpdates::get_validators_key_root(
-        MAX_PKS,
-        &validator_key_updates.updated_signing_keys,
-        &validator_key_updates.updated_master_keys,
-    )
-    .unwrap();
 
     let msg_to_sign = cert_to_msg(&withdrawal_certificate);
     let wcert_signatures = create_signatures(
@@ -191,7 +182,7 @@ fn master_key_rotation_works() {
     debug_naive_threshold_circuit(&circuit, false, None);
 
     let proof =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None).unwrap();
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit.clone(), false, None).unwrap();
 
     withdrawal_certificate.quality = MAX_PKS as u64;
 
@@ -201,7 +192,7 @@ fn master_key_rotation_works() {
         get_cert_data_hash(&prev_withdrawal_certificate),
     ];
 
-    assert!(CoboundaryMarlin::verify(&params.1.clone(), &ck_g1, &public_inputs, &proof).unwrap());
+    assert!(CoboundaryMarlin::verify(&params.1, &ck_g1, &public_inputs, &proof).unwrap());
 }
 
 #[serial]
@@ -217,18 +208,20 @@ fn multiple_certs_with_rotations() {
         mut signing_keys_sks,
         mut master_keys_sks,
         genesis_validator_keys_tree_root,
+        mut prev_withdrawal_certificate,
         mut withdrawal_certificate,
         mut wcert_signatures,
         mut validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, THRESHOLD);
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, true);
 
     let mut updated_signing_keys_sks = signing_keys_sks.clone();
     let mut updated_master_keys_sks = master_keys_sks.clone();
-    let mut prev_withdrawal_certificate = None;
     let threshold = THRESHOLD;
 
     let mut scb_validators_keys_root = validator_key_updates.get_upd_validators_keys_root().unwrap();
     withdrawal_certificate.custom_fields[0] = scb_validators_keys_root;
+
+
 
     let genesis_constant = FieldHash::init_constant_length(2, None)
         .update(genesis_validator_keys_tree_root)
@@ -271,7 +264,6 @@ fn multiple_certs_with_rotations() {
         validator_key_updates.signing_keys = validator_key_updates.updated_signing_keys.clone();
         validator_key_updates.master_keys = validator_key_updates.updated_master_keys.clone();
 
-        prev_withdrawal_certificate = Some(withdrawal_certificate.clone());
         validator_key_updates
             .updated_signing_keys_sk_signatures
             .iter_mut()
@@ -290,6 +282,7 @@ fn multiple_certs_with_rotations() {
             .for_each(|s| *s = NULL_CONST.null_sig);
 
         let sig_key_changes = rng.gen::<usize>() % MAX_PKS + 1;
+        prev_withdrawal_certificate = Some(withdrawal_certificate.clone());
         withdrawal_certificate = create_withdrawal_certificate();
 
         println!("sig_key_changes = {}", sig_key_changes);
@@ -304,6 +297,7 @@ fn multiple_certs_with_rotations() {
                 &mut validator_key_updates.updated_signing_keys_mk_signatures[i],
                 Some(&mut updated_signing_keys_sks[i]),
                 &mut validator_key_updates.updated_signing_keys[i],
+                |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
             );
 
             rotate_key(
@@ -315,6 +309,7 @@ fn multiple_certs_with_rotations() {
                 &mut validator_key_updates.updated_master_keys_mk_signatures[i],
                 Some(&mut updated_master_keys_sks[i]),
                 &mut validator_key_updates.updated_master_keys[i],
+                |pk| ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
             );
         }
 
@@ -344,13 +339,13 @@ fn all_keys_rotated() {
         signing_keys_sks,
         master_keys_sks,
         genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
         mut withdrawal_certificate,
         _wcert_signatures,
         mut validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, MAX_PKS);
+    ) = setup_certificate_data(MAX_PKS, MAX_PKS, false);
 
-    let mut prev_withdrawal_certificate = create_withdrawal_certificate();
-    prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
+    let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
     prev_withdrawal_certificate.quality = MAX_PKS as u64;
 
     let mut updated_signing_sks = signing_keys_sks.clone();
@@ -365,6 +360,7 @@ fn all_keys_rotated() {
             &mut validator_key_updates.updated_signing_keys_mk_signatures[i],
             Some(&mut updated_signing_sks[i]),
             &mut validator_key_updates.updated_signing_keys[i],
+            |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
         );
         rotate_key(
             &signing_keys_sks[i],
@@ -375,6 +371,7 @@ fn all_keys_rotated() {
             &mut validator_key_updates.updated_master_keys_mk_signatures[i],
             Some(&mut updated_master_sks[i]),
             &mut validator_key_updates.updated_master_keys[i],
+            |pk| ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
         );
     }
 
@@ -391,7 +388,7 @@ fn all_keys_rotated() {
     );
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
+        validator_key_updates,
         wcert_signatures,
         withdrawal_certificate.clone(),
         Some(prev_withdrawal_certificate.clone()),
@@ -404,7 +401,7 @@ fn all_keys_rotated() {
     debug_naive_threshold_circuit(&circuit, false, None);
 
     let proof =
-        CoboundaryMarlin::prove(&params.0.clone(), &ck_g1, circuit.clone(), false, None).unwrap();
+        CoboundaryMarlin::prove(&params.0, &ck_g1, circuit.clone(), false, None).unwrap();
 
     let public_inputs = [
         circuit.genesis_constant,
@@ -412,7 +409,7 @@ fn all_keys_rotated() {
         get_cert_data_hash(&prev_withdrawal_certificate),
     ];
 
-    assert!(CoboundaryMarlin::verify(&params.1.clone(), &ck_g1, &public_inputs, &proof).unwrap());
+    assert!(CoboundaryMarlin::verify(&params.1, &ck_g1, &public_inputs, &proof).unwrap());
 }
 
 #[serial]
@@ -424,13 +421,13 @@ fn try_to_use_outdated_keys() {
         signing_keys_sks,
         master_keys_sks,
         genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
         mut withdrawal_certificate,
         _wcert_signatures,
         mut validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, THRESHOLD);
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, false);
 
-    let mut prev_withdrawal_certificate = create_withdrawal_certificate();
-    prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
+    let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
     prev_withdrawal_certificate.quality = THRESHOLD as u64;
 
     rotate_key(
@@ -442,6 +439,7 @@ fn try_to_use_outdated_keys() {
         &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
         None,
         &mut validator_key_updates.updated_signing_keys[0],
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
     );
 
     withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root().unwrap();
@@ -475,7 +473,20 @@ fn try_to_use_outdated_keys() {
     prev_withdrawal_certificate = withdrawal_certificate.clone();
 
     withdrawal_certificate = create_withdrawal_certificate();
-    withdrawal_certificate.custom_fields[0] = prev_withdrawal_certificate.custom_fields[0].clone();
+    // we need to recompute the signatures since epoch_id of the current certificate is different
+    // from previous one
+    rotate_key(
+        &signing_keys_sks[0],
+        &validator_key_updates.signing_keys[0],
+        &master_keys_sks[0],
+        &validator_key_updates.master_keys[0],
+        &mut validator_key_updates.updated_signing_keys_sk_signatures[0],
+        &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
+        None,
+        &mut validator_key_updates.updated_signing_keys[0],
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, withdrawal_certificate.ledger_id).unwrap(),
+    );
+    withdrawal_certificate.custom_fields[0] = validator_key_updates.get_upd_validators_keys_root().unwrap();
     let msg_to_sign = cert_to_msg(&withdrawal_certificate);
     let wcert_signatures = create_signatures(
         MAX_PKS,
@@ -512,10 +523,10 @@ fn try_to_use_outdated_keys() {
     );
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
+        validator_key_updates,
         wcert_signatures,
-        withdrawal_certificate.clone(),
-        Some(prev_withdrawal_certificate.clone()),
+        withdrawal_certificate,
+        Some(prev_withdrawal_certificate),
         THRESHOLD as u64,
         genesis_validator_keys_tree_root,
     );
@@ -532,31 +543,23 @@ fn bad_cert_hashes() {
 
     let mut rng = thread_rng();
     let (
-        signing_keys_sks,
+        _signing_keys_sks,
         _master_keys_sks,
         genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
         withdrawal_certificate,
-        _wcert_signatures,
+        wcert_signatures,
         validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, THRESHOLD);
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, false);
 
-    let mut prev_withdrawal_certificate = create_withdrawal_certificate();
-    prev_withdrawal_certificate.custom_fields[0] = genesis_validator_keys_tree_root;
+    let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
     prev_withdrawal_certificate.quality = THRESHOLD as u64;
 
-    let msg_to_sign = cert_to_msg(&withdrawal_certificate);
-    let wcert_signatures = create_signatures(
-        MAX_PKS,
-        &signing_keys_sks,
-        &validator_key_updates.signing_keys,
-        msg_to_sign,
-    );
-
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
+        validator_key_updates,
         wcert_signatures,
-        withdrawal_certificate.clone(),
-        Some(prev_withdrawal_certificate.clone()),
+        withdrawal_certificate,
+        Some(prev_withdrawal_certificate),
         THRESHOLD as u64,
         genesis_validator_keys_tree_root,
     );
@@ -585,10 +588,11 @@ fn test_wrong_first_certificate_flag() {
         _,
         _,
         genesis_validator_keys_tree_root,
+        _,
         withdrawal_certificate,
         wcert_signatures,
         validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, THRESHOLD);
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, true);
 
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
@@ -638,16 +642,17 @@ fn test_wrong_threshold() {
         _,
         _,
         genesis_validator_keys_tree_root,
+        _,
         withdrawal_certificate,
         wcert_signatures,
         validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, THRESHOLD);
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, true);
 
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
-        wcert_signatures.clone(),
-        withdrawal_certificate.clone(),
+        validator_key_updates,
+        wcert_signatures,
+        withdrawal_certificate,
         None,
         THRESHOLD as u64,
         genesis_validator_keys_tree_root,
@@ -675,16 +680,17 @@ fn test_wrong_quality() {
         _,
         _,
         genesis_validator_keys_tree_root,
+        _,
         withdrawal_certificate,
         wcert_signatures,
         validator_key_updates,
-    ) = setup_certificate_data(MAX_PKS, MAX_PKS-1);
+    ) = setup_certificate_data(MAX_PKS, MAX_PKS-1, true);
 
 
     let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
-        validator_key_updates.clone(),
-        wcert_signatures.clone(),
-        withdrawal_certificate.clone(),
+        validator_key_updates,
+        wcert_signatures,
+        withdrawal_certificate,
         None,
         THRESHOLD as u64,
         genesis_validator_keys_tree_root,
@@ -703,9 +709,110 @@ fn test_wrong_quality() {
     // decrease also by 1 the number of valid signatures
     circuit.wcert_signatures[0] = SchnorrSig::new(FieldElement::rand(&mut rng), FieldElement::rand(&mut rng));
     // Update b to ensure that b = valid_signatures - threshold
+    assert!(circuit.valid_signatures > 0); // check to avoid underflow, as the test would be meaningless with 0 valid signatures
     let b_bits = (FieldElement::from(circuit.valid_signatures as u64 - 1) - circuit.threshold).write_bits();
     let to_skip = FieldElement::size_in_bits() - circuit.b.len();
     circuit.b = b_bits[to_skip..].to_vec();
 
     debug_naive_threshold_circuit(&circuit, true, Some("require(sc_wcert_hash == H(wcert)/conditional_equals"));
+}
+
+#[serial]
+#[test]
+fn test_wrong_ledger_id_in_key_update() {
+    const THRESHOLD: usize = 3;
+
+    let mut rng = thread_rng();
+    let (
+        signing_keys_sks,
+        master_keys_sks,
+        genesis_validator_keys_tree_root,
+        prev_withdrawal_certificate,
+        mut withdrawal_certificate,
+        _wcert_signatures,
+        mut validator_key_updates,
+    ) = setup_certificate_data(MAX_PKS, THRESHOLD, false);
+
+    let mut prev_withdrawal_certificate = prev_withdrawal_certificate.unwrap();
+    prev_withdrawal_certificate.quality = THRESHOLD as u64;
+
+    let invalid_ledger_id = FieldElement::rand(&mut rng);
+    // rotate signing key with invalid ledger id
+    rotate_key(
+        &signing_keys_sks[0],
+        &validator_key_updates.signing_keys[0],
+        &master_keys_sks[0],
+        &validator_key_updates.master_keys[0],
+        &mut validator_key_updates.updated_signing_keys_sk_signatures[0],
+        &mut validator_key_updates.updated_signing_keys_mk_signatures[0],
+        None,
+        &mut validator_key_updates.updated_signing_keys[0],
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(pk, withdrawal_certificate.epoch_id, invalid_ledger_id).unwrap(),
+    );
+
+    withdrawal_certificate.custom_fields[0] = validator_key_updates
+        .get_upd_validators_keys_root()
+        .unwrap();
+
+    let msg_to_sign = cert_to_msg(&withdrawal_certificate);
+    let wcert_signatures = create_signatures(
+        MAX_PKS,
+        &signing_keys_sks[..THRESHOLD],
+        &validator_key_updates.signing_keys[..THRESHOLD],
+        msg_to_sign,
+    );
+
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates.clone(),
+        wcert_signatures,
+        withdrawal_certificate.clone(),
+        Some(prev_withdrawal_certificate.clone()),
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+
+    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated signing key should be signed old signing key 0/conditional verify signature/conditional_equals"));
+
+    // try to rotate also master key with invalid ledger id
+    validator_key_updates.updated_signing_keys[0] = validator_key_updates.signing_keys[0];
+    rotate_key(
+        &signing_keys_sks[0],
+        &validator_key_updates.signing_keys[0],
+        &master_keys_sks[0],
+        &validator_key_updates.master_keys[0],
+        &mut validator_key_updates.updated_master_keys_sk_signatures[0],
+        &mut validator_key_updates.updated_master_keys_mk_signatures[0],
+        None,
+        &mut validator_key_updates.updated_master_keys[0],
+        |pk| ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(pk, withdrawal_certificate.epoch_id, invalid_ledger_id).unwrap(),
+    );
+
+    withdrawal_certificate.custom_fields[0] = validator_key_updates
+        .get_upd_validators_keys_root()
+        .unwrap();
+
+    let msg_to_sign = cert_to_msg(&withdrawal_certificate);
+    let wcert_signatures = create_signatures(
+        MAX_PKS,
+        &signing_keys_sks[..THRESHOLD],
+        &validator_key_updates.signing_keys[..THRESHOLD],
+        msg_to_sign,
+    );
+
+    let circuit_res = NaiveThresholdSignatureWKeyRotation::new(
+        validator_key_updates,
+        wcert_signatures,
+        withdrawal_certificate,
+        Some(prev_withdrawal_certificate),
+        THRESHOLD as u64,
+        genesis_validator_keys_tree_root,
+    );
+
+    assert!(circuit_res.is_ok());
+    let circuit = circuit_res.unwrap();
+
+    debug_naive_threshold_circuit(&circuit, true, Some("check key changes/check updated master key should be signed old signing key 0/conditional verify signature/conditional_equals"));
 }

@@ -39,7 +39,7 @@ pub type SchnorrSig = FieldBasedSchnorrSignature<FieldElement, G2Projective>;
 pub type SchnorrPk = G2;
 pub type SchnorrSk = ScalarFieldElement;
 
-pub type GroupHash = BoweHopwoodPedersenCRH<G2Projective, VRFWindow>;
+pub type GroupHash = BoweHopwoodPedersenCRH<G2Projective, VRFWindow, FIELD_SIZE>;
 
 pub type VRFScheme = FieldBasedEcVrf<FieldElement, G2Projective, FieldHash, GroupHash>;
 pub type VRFProof = FieldBasedEcVrfProof<FieldElement, G2Projective>;

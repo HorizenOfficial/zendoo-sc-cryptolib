@@ -1,4 +1,4 @@
-use algebra::{AffineCurve, ProjectiveCurve, ToConstraintField, UniformRand};
+use algebra::{AffineCurve, ProjectiveCurve, UniformRand};
 use blake2::digest::{FixedOutput, Input};
 use demo_circuit::{
     blaze_csw::{
@@ -87,9 +87,9 @@ pub fn schnorr_verify_signature(
     SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), *msg, signature)
 }
 
+/// Derive key from seed. It's caller responsibility to pass a seed of proper length.
 pub fn schnorr_derive_key_from_seed(seed: &[u8]) -> (SchnorrPk, SchnorrSk) {
     // zero just default to random,
-    // however, is there a minimum length that should be required?
     if seed.is_empty() {
         return schnorr_generate_key();
     }
@@ -187,7 +187,9 @@ fn get_naive_threshold_sig_circuit_prover_data(
 ) -> Result<(NaiveThresholdSignature, u64), Error> {
     //Get max pks
     let max_pks = pks.len();
-    assert_eq!(sigs.len(), max_pks);
+    if max_pks != sigs.len() {
+        Err("number of public keys different from number of signatures")?
+    }
 
     // Compute msg to sign
     let (mr_bt, msg) = compute_msg_to_sign(
@@ -217,7 +219,7 @@ fn get_naive_threshold_sig_circuit_prover_data(
     }
 
     //Compute b as v-t and convert it to field element
-    let b = FieldElement::from(valid_signatures - threshold);
+    let b = FieldElement::from(valid_signatures) - FieldElement::from(threshold);
 
     //Convert affine pks to projective
     let pks = pks
@@ -804,9 +806,9 @@ pub fn verify_csw_proof(
 lazy_static! {
     pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<G2Projective> = {
         let params = VRFParams::new();
-        BoweHopwoodPedersenParameters::<G2Projective> {
-            generators: params.group_hash_generators,
-        }
+        GroupHash::setup_from_generators(
+            params.group_hash_generators,
+        ).unwrap()
     };
 }
 
@@ -838,29 +840,18 @@ pub fn vrf_prove(
         sk,
         *msg,
     )?;
-
-    //Convert gamma from proof to field elements
-    let gamma_coords = proof.gamma.to_field_elements().unwrap();
-
     //Compute VRF output
-    let output = {
-        let mut h = FieldHash::init_constant_length(3, None);
-        h.update(*msg);
-        gamma_coords.into_iter().for_each(|c| {
-            h.update(c);
-        });
-        h.finalize()
-    }?;
+    let output = VRFScheme::proof_to_hash(*msg, &proof)?;
 
     Ok((proof, output))
 }
 
-pub fn vrf_proof_to_hash(
+pub fn vrf_verify(
     msg: &FieldElement,
     pk: &VRFPk,
     proof: &VRFProof,
 ) -> Result<FieldElement, Error> {
-    VRFScheme::proof_to_hash(
+    VRFScheme::verify(
         &VRF_GH_PARAMS,
         &FieldBasedEcVrfPk(pk.into_projective()),
         *msg,
@@ -868,9 +859,9 @@ pub fn vrf_proof_to_hash(
     )
 }
 
+/// Derive key from seed. It's caller responsibility to pass a seed of proper length.
 pub fn vrf_derive_key_from_seed(seed: &[u8]) -> (VRFPk, VRFSk) {
     // zero just default to random,
-    // however, is there a minimum length that should be required?
     if seed.is_empty() {
         return vrf_generate_key();
     }
@@ -1037,12 +1028,12 @@ mod test {
             deserialize_from_buffer(&vrf_out_serialized, None, None).unwrap();
         assert_eq!(vrf_out, vrf_out_deserialized);
 
-        let vrf_out_dup = vrf_proof_to_hash(&msg, &pk, &vrf_proof).unwrap(); //Verify vrf proof and get vrf out for msg
+        let vrf_out_dup = vrf_verify(&msg, &pk, &vrf_proof).unwrap(); //Verify vrf proof and get vrf out for msg
         assert_eq!(vrf_out, vrf_out_dup);
 
         //Negative case
         let wrong_msg = FieldElement::rand(&mut rng);
-        assert!(vrf_proof_to_hash(&wrong_msg, &pk, &vrf_proof).is_err());
+        assert!(vrf_verify(&wrong_msg, &pk, &vrf_proof).is_err());
     }
 
     #[serial]

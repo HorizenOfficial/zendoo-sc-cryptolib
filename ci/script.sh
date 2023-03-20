@@ -11,6 +11,7 @@ IMAGE_NAME="${IMAGE_NAME:-sc-ci-base}"
 IMAGE_TAG="${IMAGE_TAG:-bionic_rust-1.51.0_jdk-11_latest}"
 image="${DOCKER_ORG}/${IMAGE_NAME}:${IMAGE_TAG}"
 export CARGO_AUDIT_EXIT_ON_ERROR="${CARGO_AUDIT_EXIT_ON_ERROR:-true}"
+export DISABLE_JAVADOC_LINT="${DISABLE_JAVADOC_LINT:-false}"
 export CONTAINER_PUBLISH="${CONTAINER_PUBLISH:-false}"
 
 if [ "${1}" = "tests" ]; then
@@ -42,6 +43,7 @@ elif [ "${1}" = "release" ]; then
     docker run --rm -t -v "$workdir":/build -w /build \
       --entrypoint /build/ci/docker/entrypoint.sh \
       -v "${HOME}"/key.asc:/key.asc \
+      -e DISABLE_JAVADOC_LINT \
       -e CONTAINER_PUBLISH \
       -e TRAVIS_TAG \
       -e LOCAL_USER_ID="$(id -u)" \

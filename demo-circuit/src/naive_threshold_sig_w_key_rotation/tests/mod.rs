@@ -3,7 +3,6 @@ mod next_cert;
 mod utils;
 mod verify;
 
-use algebra::ToConstraintField;
 use cctp_primitives::{
     proving_system::init::{get_g1_committer_key, load_g1_committer_key},
     utils::commitment_tree::hash_vec,
