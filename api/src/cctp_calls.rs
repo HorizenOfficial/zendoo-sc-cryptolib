@@ -1,7 +1,13 @@
-use algebra::{AffineCurve, ProjectiveCurve, ToConstraintField, UniformRand};
+use algebra::{AffineCurve, ProjectiveCurve, UniformRand};
+use blake2::digest::{FixedOutput, Input};
 use demo_circuit::{
-    constants::VRFParams, constraints::CeasedSidechainWithdrawalCircuit, naive_threshold_sig::*,
-    type_mapping::*, CswFtProverData, CswSysData, CswUtxoProverData, WithdrawalCertificateData,
+    blaze_csw::{
+        constraints::CeasedSidechainWithdrawalCircuit, 
+        data_structures::{CswFtProverData, CswSysData, CswUtxoProverData}
+    },
+    constants::VRFParams,
+    create_msg_to_sign, naive_threshold_sig::*, naive_threshold_sig_w_key_rotation::{*, data_structures::ValidatorKeysUpdates},
+    type_mapping::*, common::{NULL_CONST, WithdrawalCertificateData}, 
 };
 use lazy_static::*;
 use primitives::{
@@ -10,8 +16,10 @@ use primitives::{
     vrf::{ecvrf::FieldBasedEcVrfPk, FieldBasedVrf},
 };
 use r1cs_core::debug_circuit;
-use rand::{rngs::OsRng, SeedableRng};
+use rand::{rngs::OsRng, CryptoRng, RngCore, SeedableRng};
+use rand_chacha::ChaChaRng;
 use rand_xorshift::XorShiftRng;
+use std::convert::TryFrom;
 
 use cctp_primitives::{
     proving_system::{
@@ -24,11 +32,13 @@ use cctp_primitives::{
         ProvingSystem, ZendooProof, ZendooProverKey, ZendooVerifierKey,
     },
     utils::{
-        commitment_tree::DataAccumulator, data_structures::BackwardTransfer, get_bt_merkle_root,
+        commitment_tree::hash_vec, data_structures::BackwardTransfer, get_bt_merkle_root,
         serialization::*,
     },
 };
 
+use cctp_primitives::proving_system::verifier::ceased_sidechain_withdrawal::PHANTOM_CERT_DATA_HASH;
+use cctp_primitives::utils::get_cert_data_hash_from_bt_root_and_custom_fields_hash;
 use std::path::Path;
 
 //*******************************Generic functions**********************************************
@@ -44,8 +54,7 @@ pub fn get_random_field_element(seed: u64) -> FieldElement {
 
 pub fn schnorr_generate_key() -> (SchnorrPk, SchnorrSk) {
     let mut rng = OsRng;
-    let (pk, sk) = SchnorrSigScheme::keygen(&mut rng);
-    (pk.0.into_affine(), sk)
+    schnorr_generate_key_from_rng(&mut rng)
 }
 
 pub fn schnorr_get_public_key(sk: &SchnorrSk) -> SchnorrPk {
@@ -76,6 +85,32 @@ pub fn schnorr_verify_signature(
     signature: &SchnorrSig,
 ) -> Result<bool, Error> {
     SchnorrSigScheme::verify(&FieldBasedSchnorrPk(pk.into_projective()), *msg, signature)
+}
+
+/// Derive key from seed. It's caller responsibility to pass a seed of proper length.
+pub fn schnorr_derive_key_from_seed(seed: &[u8]) -> (SchnorrPk, SchnorrSk) {
+    // zero just default to random,
+    if seed.is_empty() {
+        return schnorr_generate_key();
+    }
+
+    // Domain separation tag
+    const DST: &[u8] = &[0xFFu8; 32];
+
+    // Hash first to ensure size an eliminate any bias
+    // that may exist in `seed`
+    let mut hasher = blake2::Blake2b::default();
+    hasher.input(DST);
+    hasher.input(seed);
+    let digest = hasher.fixed_result();
+    let rng_seed = <[u8; 32]>::try_from(&digest[..32]).unwrap();
+    let mut rng = ChaChaRng::from_seed(rng_seed);
+    schnorr_generate_key_from_rng(&mut rng)
+}
+
+fn schnorr_generate_key_from_rng<R: RngCore + CryptoRng>(rng: &mut R) -> (SchnorrPk, SchnorrSk) {
+    let (pk, sk) = SchnorrSigScheme::keygen(rng);
+    (pk.0.into_affine(), sk)
 }
 
 //*****************************Naive threshold sig circuit related functions************************
@@ -116,8 +151,6 @@ pub fn compute_msg_to_sign(
     bt_list: Vec<BackwardTransfer>,
     custom_fields: Option<Vec<FieldElement>>,
 ) -> Result<(FieldElement, FieldElement), Error> {
-    let epoch_number = FieldElement::from(epoch_number);
-
     //Compute bt_list merkle_root
     let bt_list_opt = if !bt_list.is_empty() {
         Some(bt_list.as_slice())
@@ -127,54 +160,15 @@ pub fn compute_msg_to_sign(
     let mr_bt = get_bt_merkle_root(bt_list_opt)
         .map_err(|e| format!("Backward transfer Merkle Root computation failed: {:?}", e))?;
 
-    let fees_field_element = {
-        let fes = DataAccumulator::init()
-            .update(btr_fee)
-            .map_err(|e| format!("Unable to update DataAccumulator with btr_fee: {:?}", e))?
-            .update(ft_min_amount)
-            .map_err(|e| {
-                format!(
-                    "Unable to update DataAccumulator with ft_min_amount: {:?}",
-                    e
-                )
-            })?
-            .get_field_elements()
-            .map_err(|e| format!("Unable to finalize DataAccumulator {:?}", e))?;
-        assert_eq!(fes.len(), 1);
-        fes[0]
-    };
-
-    // Compute custom_fields_hash if they are present
-    let custom_fields_hash = if let Some(custom_fields) = custom_fields {
-        let mut h = FieldHash::init_constant_length(custom_fields.len(), None);
-        custom_fields.into_iter().for_each(|custom_field| {
-            h.update(custom_field);
-        });
-        Some(
-            h.finalize()
-                .map_err(|e| format!("Unable to compute custom_fields_hash: {:?}", e))?,
-        )
-    } else {
-        None
-    };
-
-    //Compute message to be verified
-    let mut h =
-        FieldHash::init_constant_length(5 + if custom_fields_hash.is_some() { 1 } else { 0 }, None);
-
-    h.update(*sc_id)
-        .update(epoch_number)
-        .update(mr_bt)
-        .update(*end_cumulative_sc_tx_comm_tree_root)
-        .update(fees_field_element);
-
-    if let Some(custom_fields_hash) = custom_fields_hash {
-        h.update(custom_fields_hash);
-    }
-
-    let msg = h
-        .finalize()
-        .map_err(|e| format!("Unable to compute final hash: {:?}", e))?;
+    let msg = create_msg_to_sign(
+        sc_id,
+        epoch_number,
+        end_cumulative_sc_tx_comm_tree_root,
+        btr_fee,
+        ft_min_amount,
+        &mr_bt,
+        custom_fields,
+    )?;
 
     Ok((mr_bt, msg))
 }
@@ -190,10 +184,12 @@ fn get_naive_threshold_sig_circuit_prover_data(
     bt_list: Vec<BackwardTransfer>,
     threshold: u64,
     custom_fields: Option<Vec<FieldElement>>,
-) -> Result<(NaiveTresholdSignature, u64), Error> {
+) -> Result<(NaiveThresholdSignature, u64), Error> {
     //Get max pks
     let max_pks = pks.len();
-    assert_eq!(sigs.len(), max_pks);
+    if max_pks != sigs.len() {
+        Err("number of public keys different from number of signatures")?
+    }
 
     // Compute msg to sign
     let (mr_bt, msg) = compute_msg_to_sign(
@@ -223,7 +219,7 @@ fn get_naive_threshold_sig_circuit_prover_data(
     }
 
     //Compute b as v-t and convert it to field element
-    let b = FieldElement::from(valid_signatures - threshold);
+    let b = FieldElement::from(valid_signatures) - FieldElement::from(threshold);
 
     //Convert affine pks to projective
     let pks = pks
@@ -234,7 +230,7 @@ fn get_naive_threshold_sig_circuit_prover_data(
     //Convert needed variables into field elements
     let threshold = FieldElement::from(threshold);
 
-    let c = NaiveTresholdSignature::new(
+    let c = NaiveThresholdSignature::new(
         pks,
         sigs,
         threshold,
@@ -286,6 +282,35 @@ pub fn debug_naive_threshold_sig_circuit(
 
     let failing_constraint = debug_circuit(c)
         .map_err(|e| format!("Unable to debug received instance of CSW circuit: {:?}", e))?;
+
+    Ok(failing_constraint)
+}
+
+pub fn debug_naive_threshold_sig_w_key_rotation_circuit(
+    validator_keys_updates: ValidatorKeysUpdates,
+    sigs: Vec<Option<SchnorrSig>>,
+    withdrawal_certificate: WithdrawalCertificateData,
+    prev_withdrawal_certificate: Option<WithdrawalCertificateData>,
+    threshold: u64,
+    genesis_key_root_hash: &FieldElement,
+) -> Result<Option<String>, Error> {
+    let c = NaiveThresholdSignatureWKeyRotation::new(
+        validator_keys_updates,
+        sigs,
+        withdrawal_certificate,
+        prev_withdrawal_certificate,
+        threshold,
+        *genesis_key_root_hash,
+    )
+    .map_err(|e| {
+        format!(
+            "Unable to create concrete instance of NaiveThresholdSignatureWKeyRotation circuit: {:?}",
+            e
+        )
+    })?;
+
+    let failing_constraint = debug_circuit(c)
+        .map_err(|e| format!("Unable to debug received instance of NaiveThresholdSignatureWKeyRotation circuit: {:?}", e))?;
 
     Ok(failing_constraint)
 }
@@ -369,6 +394,78 @@ pub fn create_naive_threshold_sig_proof(
     Ok((proof, valid_signatures))
 }
 
+pub fn create_naive_threshold_sig_w_key_rotation_proof(
+    validator_keys_updates: ValidatorKeysUpdates,
+    sigs: Vec<Option<SchnorrSig>>,
+    withdrawal_certificate: WithdrawalCertificateData,
+    prev_withdrawal_certificate: Option<WithdrawalCertificateData>,
+    threshold: u64,
+    genesis_key_root_hash: &FieldElement,
+    supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
+    proving_key_path: &Path,
+    enforce_membership: bool,
+    zk: bool,
+    compressed_pk: bool,
+    compress_proof: bool,
+) -> Result<(Vec<u8>, u64), Error> {
+    let c = NaiveThresholdSignatureWKeyRotation::new(
+        validator_keys_updates,
+        sigs,
+        withdrawal_certificate,
+        prev_withdrawal_certificate,
+        threshold,
+        *genesis_key_root_hash,
+    )
+    .map_err(|e| {
+        format!(
+            "Unable to create concrete instance of NaiveThresholdSignatureWKeyRotation circuit: {:?}",
+            e
+        )
+    })?;
+
+    let pk: ZendooProverKey = read_from_file(
+        proving_key_path,
+        Some(enforce_membership),
+        Some(compressed_pk),
+    )
+    .map_err(|e| {
+        format!(
+            "Unable to read proving key from file {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+            proving_key_path, e, enforce_membership, compressed_pk
+        )
+    })?;
+
+    let g1_ck = get_g1_committer_key(supported_degree).map_err(|e| {
+        format!(
+            "Unable to get DLOG key of degree {:?}: {:?}",
+            supported_degree, e
+        )
+    })?;
+
+    let valid_signatures = c.get_valid_signatures();
+    let proof = match pk {
+        ZendooProverKey::Darlin(_) => unimplemented!(),
+        ZendooProverKey::CoboundaryMarlin(pk) => {
+            // Call prover
+            let rng = &mut OsRng;
+            let proof =
+                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })
+                    .map_err(|e| format!("Error during proof creation: {:?}", e))?;
+            serialize_to_buffer(
+                &ZendooProof::CoboundaryMarlin(MarlinProof(proof)),
+                Some(compress_proof),
+            )
+            .map_err(|e| {
+                format!(
+                    "Proof serialization (compressed: {}) failed: {:?}",
+                    compress_proof, e
+                )
+            })?
+        }
+    };
+    Ok((proof, valid_signatures as u64))
+}
+
 pub fn verify_naive_threshold_sig_proof(
     constant: &FieldElement,
     sc_id: &FieldElement,
@@ -406,6 +503,7 @@ pub fn verify_naive_threshold_sig_proof(
         end_cumulative_sc_tx_commitment_tree_root,
         btr_fee,
         ft_min_amount,
+        sc_prev_wcert_hash: None,
     };
 
     // Check that the proving system type of the vk and proof are the same, before
@@ -441,6 +539,96 @@ pub fn verify_naive_threshold_sig_proof(
                     e, check_proof, compressed_proof
                 )
             })?;
+
+    // Verify proof
+    let rng = &mut OsRng;
+    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))
+        .map_err(|e| format!("Proof verification error: {:?}", e))?;
+
+    Ok(is_verified)
+}
+
+pub fn verify_naive_threshold_sig_w_key_rotation_proof(
+    withdrawal_certificate: WithdrawalCertificateData,
+    prev_withdrawal_certificate: Option<WithdrawalCertificateData>,
+    bt_list: Vec<BackwardTransfer>,
+    constant: &FieldElement,
+    proof: Vec<u8>,
+    check_proof: bool,
+    compressed_proof: bool,
+    vk_path: &Path,
+    check_vk: bool,
+    compressed_vk: bool,
+) -> Result<bool, Error> {
+    let prev_cert_data_hash = if let Some(cert) = prev_withdrawal_certificate {
+        let custom_fields_hash = if !cert.custom_fields.is_empty() {
+            Some(hash_vec(cert.custom_fields)?)
+        } else {
+            None
+        };
+        get_cert_data_hash_from_bt_root_and_custom_fields_hash(
+            &cert.ledger_id,
+            cert.epoch_id,
+            cert.quality,
+            cert.bt_root,
+            custom_fields_hash,
+            &cert.mcb_sc_txs_com,
+            cert.btr_min_fee,
+            cert.ft_min_amount,
+        )?
+    } else {
+        PHANTOM_CERT_DATA_HASH
+    };
+
+    // Check that the proving system type of the vk and proof are the same, before
+    // deserializing them all
+    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None).map_err(|e| {
+        format!(
+            "Unable to read proving system type from vk at {:?}: {:?}",
+            vk_path, e
+        )
+    })?;
+
+    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)
+        .map_err(|e| format!("Unable to read proving system type from proof: {:?}", e))?;
+
+    if vk_ps_type != proof_ps_type {
+        return Err(ProvingSystemError::ProvingSystemMismatch.into());
+    }
+
+    // Deserialize proof and vk
+    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))
+        .map_err(|e| {
+            format!(
+                "Unable to read vk at {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+                vk_path, e, check_vk, compressed_vk
+            )
+        })?;
+
+    let proof: ZendooProof =
+        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))
+            .map_err(|e| {
+                format!(
+                    "Unable to read proof: {:?}. Semantic checks: {}, Compressed: {}",
+                    e, check_proof, compressed_proof
+                )
+            })?;
+
+    let custom_fields: Option<Vec<&FieldElement>> =
+        Some(withdrawal_certificate.custom_fields.iter().collect());
+
+    let ins = CertificateProofUserInputs {
+        constant: Some(constant),
+        sc_id: &withdrawal_certificate.ledger_id,
+        epoch_number: withdrawal_certificate.epoch_id,
+        quality: withdrawal_certificate.quality,
+        bt_list: Some(&bt_list),
+        custom_fields,
+        end_cumulative_sc_tx_commitment_tree_root: &withdrawal_certificate.mcb_sc_txs_com,
+        btr_fee: withdrawal_certificate.btr_min_fee,
+        ft_min_amount: withdrawal_certificate.ft_min_amount,
+        sc_prev_wcert_hash: Some(&prev_cert_data_hash),
+    };
 
     // Verify proof
     let rng = &mut OsRng;
@@ -618,16 +806,15 @@ pub fn verify_csw_proof(
 lazy_static! {
     pub static ref VRF_GH_PARAMS: BoweHopwoodPedersenParameters<G2Projective> = {
         let params = VRFParams::new();
-        BoweHopwoodPedersenParameters::<G2Projective> {
-            generators: params.group_hash_generators,
-        }
+        GroupHash::setup_from_generators(
+            params.group_hash_generators,
+        ).unwrap()
     };
 }
 
 pub fn vrf_generate_key() -> (VRFPk, VRFSk) {
     let mut rng = OsRng;
-    let (pk, sk) = VRFScheme::keygen(&mut rng);
-    (pk.0.into_affine(), sk)
+    vrf_generate_key_from_rng(&mut rng)
 }
 
 pub fn vrf_get_public_key(sk: &VRFSk) -> VRFPk {
@@ -653,34 +840,49 @@ pub fn vrf_prove(
         sk,
         *msg,
     )?;
-
-    //Convert gamma from proof to field elements
-    let gamma_coords = proof.gamma.to_field_elements().unwrap();
-
     //Compute VRF output
-    let output = {
-        let mut h = FieldHash::init_constant_length(3, None);
-        h.update(*msg);
-        gamma_coords.into_iter().for_each(|c| {
-            h.update(c);
-        });
-        h.finalize()
-    }?;
+    let output = VRFScheme::proof_to_hash(*msg, &proof)?;
 
     Ok((proof, output))
 }
 
-pub fn vrf_proof_to_hash(
+pub fn vrf_verify(
     msg: &FieldElement,
     pk: &VRFPk,
     proof: &VRFProof,
 ) -> Result<FieldElement, Error> {
-    VRFScheme::proof_to_hash(
+    VRFScheme::verify(
         &VRF_GH_PARAMS,
         &FieldBasedEcVrfPk(pk.into_projective()),
         *msg,
         proof,
     )
+}
+
+/// Derive key from seed. It's caller responsibility to pass a seed of proper length.
+pub fn vrf_derive_key_from_seed(seed: &[u8]) -> (VRFPk, VRFSk) {
+    // zero just default to random,
+    if seed.is_empty() {
+        return vrf_generate_key();
+    }
+
+    // Domain separation tag
+    const DST: &[u8] = &[0xFEu8; 32];
+
+    // Hash first to ensure size an eliminate any bias
+    // that may exist in `seed`
+    let mut hasher = blake2::Blake2b::default();
+    hasher.input(DST);
+    hasher.input(seed);
+    let digest = hasher.fixed_result();
+    let rng_seed = <[u8; 32]>::try_from(&digest[..32]).unwrap();
+    let mut rng = ChaChaRng::from_seed(rng_seed);
+    vrf_generate_key_from_rng(&mut rng)
+}
+
+fn vrf_generate_key_from_rng<R: RngCore + CryptoRng>(rng: &mut R) -> (VRFPk, VRFSk) {
+    let (pk, sk) = VRFScheme::keygen(rng);
+    (pk.0.into_affine(), sk)
 }
 
 // Test functions
@@ -753,6 +955,35 @@ mod test {
 
     #[serial]
     #[test]
+    fn sample_calls_schnorr_derive_from_seed() {
+        let (pk, sk) = schnorr_derive_key_from_seed(&[1u8; 32]); //Keygen
+        assert_eq!(schnorr_get_public_key(&sk), pk); //Get pk
+        assert!(schnorr_verify_public_key(&pk)); //Verify pk
+
+        let buffer = serialize_to_buffer(&pk, Some(true)).unwrap();
+        assert_eq!(
+            vec![
+                94, 177, 202, 201, 84, 192, 33, 180, 36, 187, 196, 225, 147, 79, 190, 169, 94, 160,
+                22, 160, 98, 217, 221, 51, 44, 229, 124, 204, 2, 227, 154, 5, 0
+            ],
+            buffer
+        );
+        let buffer = serialize_to_buffer(&sk, Some(true)).unwrap();
+        assert_eq!(
+            vec![
+                176, 141, 47, 233, 14, 73, 90, 250, 133, 0, 245, 33, 57, 188, 1, 150, 172, 209,
+                144, 240, 138, 181, 98, 64, 52, 77, 171, 39, 8, 30, 154, 45
+            ],
+            buffer
+        );
+
+        let (pk, sk) = schnorr_derive_key_from_seed(&[]); //Keygen
+        assert_eq!(schnorr_get_public_key(&sk), pk); //Get pk
+        assert!(schnorr_verify_public_key(&pk)); //Verify pk
+    }
+
+    #[serial]
+    #[test]
     fn sample_calls_vrf_prove_verify() {
         let mut rng = OsRng;
         let msg = FieldElement::rand(&mut rng);
@@ -797,12 +1028,52 @@ mod test {
             deserialize_from_buffer(&vrf_out_serialized, None, None).unwrap();
         assert_eq!(vrf_out, vrf_out_deserialized);
 
-        let vrf_out_dup = vrf_proof_to_hash(&msg, &pk, &vrf_proof).unwrap(); //Verify vrf proof and get vrf out for msg
+        let vrf_out_dup = vrf_verify(&msg, &pk, &vrf_proof).unwrap(); //Verify vrf proof and get vrf out for msg
         assert_eq!(vrf_out, vrf_out_dup);
 
         //Negative case
         let wrong_msg = FieldElement::rand(&mut rng);
-        assert!(vrf_proof_to_hash(&wrong_msg, &pk, &vrf_proof).is_err());
+        assert!(vrf_verify(&wrong_msg, &pk, &vrf_proof).is_err());
+    }
+
+    #[serial]
+    #[test]
+    fn sample_calls_vrf_derive_from_seed() {
+        let (pk, sk) = vrf_derive_key_from_seed(&[1u8; 32]); //Keygen
+        assert_eq!(vrf_get_public_key(&sk), pk); //Get pk
+        assert!(vrf_verify_public_key(&pk)); //Verify pk
+
+        let buffer = serialize_to_buffer(&pk, Some(true)).unwrap();
+        assert_eq!(
+            vec![
+                128, 191, 74, 210, 117, 186, 140, 139, 78, 124, 85, 185, 120, 198, 208, 89, 243,
+                56, 108, 213, 212, 1, 108, 240, 55, 216, 253, 186, 130, 88, 235, 25, 128
+            ],
+            buffer
+        );
+        let buffer = serialize_to_buffer(&sk, Some(true)).unwrap();
+        assert_eq!(
+            vec![
+                205, 235, 16, 65, 216, 239, 34, 146, 88, 211, 151, 125, 255, 226, 16, 87, 91, 125,
+                179, 203, 231, 249, 219, 236, 121, 48, 63, 117, 137, 14, 167, 37
+            ],
+            buffer
+        );
+
+        let (pk, sk) = vrf_derive_key_from_seed(&[]); //Keygen
+        assert_eq!(vrf_get_public_key(&sk), pk); //Get pk
+        assert!(vrf_verify_public_key(&pk)); //Verify pk
+    }
+
+    #[serial]
+    #[test]
+    fn sample_calls_schnorr_vrf_derive_different_keys_from_same_seed() {
+        const SEED: [u8; 32] = [7u8; 32];
+        let (spk, ssk) = schnorr_derive_key_from_seed(&SEED); //Keygen
+        let (vpk, vsk) = vrf_derive_key_from_seed(&SEED); //Keygen
+
+        assert_ne!(vpk, spk);
+        assert_ne!(vsk, ssk);
     }
 
     #[serial]

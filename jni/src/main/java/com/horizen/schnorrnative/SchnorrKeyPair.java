@@ -21,6 +21,18 @@ public class SchnorrKeyPair implements AutoCloseable {
         this.publicKey = secretKey.getPublicKey();
     }
 
+    private static native SchnorrKeyPair nativeDeriveFromSeed(byte[] seed);
+
+    /**
+     * Generate a fresh Schnorr key-pair from a seed.
+     * @param seed - The seed used to generate the key-pair. WARNING: It's caller responsibility
+     *               to pass a seed of appropriate length. No checks are performed Rust-side.
+     * @return the new Schnorr key-pair
+    */
+    public static SchnorrKeyPair generate(byte[] seed) {
+        return nativeDeriveFromSeed(seed);
+    }
+
     private static native SchnorrKeyPair nativeGenerate();
 
     public static SchnorrKeyPair generate() {

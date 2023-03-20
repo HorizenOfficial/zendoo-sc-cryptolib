@@ -1,6 +1,9 @@
 package com.horizen;
 
 import com.google.common.io.BaseEncoding;
+import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 public class TestUtils {
     public static final int DLOG_KEYS_SIZE = 1 << 18;
@@ -17,4 +20,14 @@ public class TestUtils {
     public static String toHexString(byte[] bytes) {
         return BaseEncoding.base16().lowerCase().encode(bytes);
     }
+
+    public static void assertArrayEquals(String message, byte[] expected, byte[] actual) {
+        boolean result = expected.length == actual.length;
+
+        for (int i = 0; i < expected.length && result; i++) {
+            result &= expected[i] == actual[i];
+        }
+        assertTrue(message, result);
+    }
+
 }

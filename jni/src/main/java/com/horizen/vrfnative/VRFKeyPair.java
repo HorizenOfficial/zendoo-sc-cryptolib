@@ -28,6 +28,18 @@ public class VRFKeyPair implements AutoCloseable {
         return nativeGenerate();
     }
 
+    private static native VRFKeyPair nativeDeriveFromSeed(byte[] seed);
+
+    /**
+     * Generate a fresh VRF key-pair from a seed.
+     * @param seed - The seed used to generate the key-pair. WARNING: It's caller responsibility
+     *               to pass a seed of appropriate length. No checks are performed Rust-side.
+     * @return the new VRF key-pair
+    */
+    public static VRFKeyPair generate(byte[] seed) {
+        return nativeDeriveFromSeed(seed);
+    }
+
     private native VRFProveResult nativeProve(FieldElement message);
 
     public VRFProveResult prove(FieldElement message) {

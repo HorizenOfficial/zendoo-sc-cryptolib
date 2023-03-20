@@ -1,6 +1,6 @@
 [package]
 name = "api"
-version = "0.5.0"
+version = "0.6.0"
 authors = [
     "DanieleDiBenedetto <daniele@horizenlabs.io>",
     "Oleksandr Iozhytsia <oleksandr@zensystem.io>",
@@ -8,18 +8,19 @@ authors = [
     "Maksym Vereshchak <phoinic@gmail.com>",
     "Luigi Varriale <luigi@horizenlabs.io>",
     "cronicc <cronic@horizenlabs.io>",
-    "Paolo Tagliaferri <paolotagliaferri@horizenlabs.io>"
+    "Paolo Tagliaferri <paolotagliaferri@horizenlabs.io>",
+    "Michael Lodder <mlodder@horizenlabs.io>"
 ]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
-primitives = {features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+algebra = {features = ["tweedle"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.5.0"}
+primitives = {features = ["tweedle", "merkle_tree"], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.5.0"}
 
-cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", branch = "dev" }
-r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", branch = "development"}
+cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", tag = "0.2.0" }
+r1cs-core = {git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.5.0"}
 #ouroboros = {path = "../ouroboros"}
 demo-circuit = {path = "../demo-circuit"}
 
@@ -29,6 +30,7 @@ lazy_static = "=1.4.0"
 radix_trie = "=0.2.1"
 rand = { version = "=0.8.4" }
 rand_xorshift = { version = "=0.3.0" }
+rand_chacha = { version = "=0.3.1" }
 blake2 = { version = "=0.8.1", default-features = false }
 
 [dev-dependencies]

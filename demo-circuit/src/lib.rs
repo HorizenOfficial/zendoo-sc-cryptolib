@@ -46,9 +46,12 @@
     clippy::new_without_default
 )]
 
+pub mod blaze_csw;
+pub mod common;
 pub mod naive_threshold_sig;
+pub mod naive_threshold_sig_w_key_rotation;
+
 pub mod utils;
-pub use self::naive_threshold_sig::*;
 
 pub mod constants;
 pub use self::constants::*;
@@ -56,10 +59,8 @@ pub use self::constants::*;
 pub mod type_mapping;
 pub use self::type_mapping::*;
 
-pub mod blaze_csw;
-pub use self::blaze_csw::*;
-
 use algebra::SerializationError;
+use cctp_primitives::utils::commitment_tree::{hash_vec, DataAccumulator};
 use cctp_primitives::{
     proving_system::{
         compute_proof_vk_size, error::ProvingSystemError, init::get_g1_committer_key,
@@ -157,4 +158,39 @@ pub fn generate_circuit_keypair<C: ConstraintSynthesizer<FieldElement>>(
     }
 
     Ok(())
+}
+
+pub fn create_msg_to_sign(
+    sc_id: &FieldElement,
+    epoch_number: u32,
+    end_cumulative_sc_tx_comm_tree_root: &FieldElement,
+    btr_fee: u64,
+    ft_min_amount: u64,
+    mr_bt: &FieldElement,
+    custom_fields: Option<Vec<FieldElement>>,
+) -> Result<FieldElement, Error> {
+    let epoch_number = FieldElement::from(epoch_number);
+
+    let fees_field_element = {
+        let fes = DataAccumulator::init()
+            .update(btr_fee)?
+            .update(ft_min_amount)?
+            .get_field_elements()?;
+        assert_eq!(fes.len(), 1);
+        fes[0]
+    };
+    //Compute message to be verified
+    let mut fields = vec![
+        *sc_id,
+        epoch_number,
+        *mr_bt,
+        *end_cumulative_sc_tx_comm_tree_root,
+        fees_field_element,
+    ];
+    // Compute custom_fields_hash if they are present
+    if let Some(custom_fields) = custom_fields {
+        fields.push(hash_vec(custom_fields)?);
+    }
+
+    hash_vec(fields)
 }

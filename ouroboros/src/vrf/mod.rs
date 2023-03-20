@@ -18,7 +18,7 @@ use primitives::vrf::ecvrf::FieldBasedEcVrfPk;
 #[derive(Clone)]
 struct TestWindow {}
 impl PedersenWindow for TestWindow {
-    const WINDOW_SIZE: usize = 128;
+    const WINDOW_SIZE: usize = 63;
     const NUM_WINDOWS: usize = 2;
 }
 

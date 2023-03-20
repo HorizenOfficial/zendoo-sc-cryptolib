@@ -12,7 +12,7 @@
 
 extern crate jni;
 
-use algebra::{serialize::*, SemanticallyValid, ToBits};
+use algebra::{serialize::*, AffineCurve, SemanticallyValid, ToBits, ToConstraintField};
 use cctp_primitives::{
     bit_vector::merkle_tree::{
         merkle_root_from_compressed_bytes, merkle_root_from_compressed_bytes_without_checks,
@@ -31,22 +31,30 @@ use cctp_primitives::{
     },
 };
 use demo_circuit::{
+    naive_threshold_sig::NaiveThresholdSignature,
+    naive_threshold_sig_w_key_rotation::{
+        NaiveThresholdSignatureWKeyRotation,
+        data_structures::ValidatorKeysUpdates,
+    },
+    blaze_csw::{
+        constraints::CeasedSidechainWithdrawalCircuit,
+        data_structures::{
+            CswFtOutputData, CswFtProverData, CswSysData, CswUtxoInputData, CswUtxoOutputData,
+            CswUtxoProverData
+        }, deserialize_fe_unchecked,
+    },
+    common::{data_structures::WithdrawalCertificateData, NULL_CONST},
     constants::{personalizations::BoxType, *},
-    constraints::CeasedSidechainWithdrawalCircuit,
-    deserialize_fe_unchecked, generate_circuit_keypair,
+    generate_circuit_keypair,
     read_field_element_from_buffer_with_padding,
     type_mapping::*,
-    CswFtOutputData, CswFtProverData, CswSysData, CswUtxoInputData, CswUtxoOutputData,
-    CswUtxoProverData, NaiveTresholdSignature, WithdrawalCertificateData,
 };
 
-use primitives::{
-    bytes_to_bits, FieldBasedMerkleTree, FieldBasedMerkleTreePath, FieldBasedSparseMerkleTree,
-    FieldHasher,
-};
+use primitives::{bytes_to_bits, signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk, FieldBasedHash, FieldBasedMerkleTree, FieldBasedMerkleTreePath, FieldBasedSparseMerkleTree, FieldHasher};
 use std::{
     any::type_name,
     collections::{HashMap, HashSet},
+    iter::Iterator,
     path::Path,
 };
 
@@ -63,7 +71,7 @@ use utils::*;
 
 use cctp_primitives::utils::compute_sc_id;
 use jni::objects::{JClass, JMap, JObject, JString, JValue};
-use jni::sys::{jboolean, jbyte, jbyteArray, jint, jlong, jobject, jobjectArray};
+use jni::sys::{jboolean, jbyte, jbyteArray, jint, jlong, jobject, jobjectArray, jsize};
 use jni::sys::{JNI_FALSE, JNI_TRUE};
 use jni::{sys::jlongArray, JNIEnv};
 use std::convert::TryInto;
@@ -511,25 +519,38 @@ ffi_export!(
         _class: JClass,
     ) -> jobject {
         let (pk, sk) = schnorr_generate_key();
+        convert_schnorrnative_schnorr_key_pair(_env, pk, sk)
+    }
+);
 
-        let secret_key_object =
-            return_jobject(&_env, sk, "com/horizen/schnorrnative/SchnorrSecretKey");
-        let public_key_object =
-            return_jobject(&_env, pk, "com/horizen/schnorrnative/SchnorrPublicKey");
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeDeriveFromSeed(
+        _env: JNIEnv,
+        _class: JClass,
+        _seed: jbyteArray,
+    ) -> jobject {
+        let ikm = _env.convert_byte_array(_seed).expect("Cannot read bytes");
+        let (pk, sk) = schnorr_derive_key_from_seed(ikm.as_slice());
+        convert_schnorrnative_schnorr_key_pair(_env, pk, sk)
+    }
+);
 
-        let class = _env
-            .find_class("com/horizen/schnorrnative/SchnorrKeyPair")
-            .expect("Should be able to find SchnorrKeyPair class");
+fn convert_schnorrnative_schnorr_key_pair(_env: JNIEnv, pk: SchnorrPk, sk: SchnorrSk) -> jobject {
+    let secret_key_object = return_jobject(&_env, sk, "com/horizen/schnorrnative/SchnorrSecretKey");
+    let public_key_object = return_jobject(&_env, pk, "com/horizen/schnorrnative/SchnorrPublicKey");
 
-        let result = _env.new_object(
+    let class = _env
+        .find_class("com/horizen/schnorrnative/SchnorrKeyPair")
+        .expect("Should be able to find SchnorrKeyPair class");
+
+    let result = _env.new_object(
         class,
         "(Lcom/horizen/schnorrnative/SchnorrSecretKey;Lcom/horizen/schnorrnative/SchnorrPublicKey;)V",
         &[JValue::Object(secret_key_object), JValue::Object(public_key_object)]
     ).expect("Should be able to create new (SchnorrSecretKey, SchnorrPublicKey) object");
 
-        *result
-    }
-);
+    *result
+}
 
 ffi_export!(
     fn Java_com_horizen_schnorrnative_SchnorrKeyPair_nativeSignMessage(
@@ -598,6 +619,23 @@ ffi_export!(
             "com/horizen/schnorrnative/SchnorrSignature",
         )
         .into_inner()
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_SchnorrPublicKey_nativeGetHash(
+        _env: JNIEnv,
+        _public_key: JObject,
+    ) -> jobject {
+        let pk = convert_public_key(&_env, _public_key);
+        let pubkey = FieldBasedSchnorrPk(pk.into_projective());
+        let pk_fe = pubkey.0.to_field_elements().unwrap();
+        let mut h = FieldHash::init_constant_length(pk_fe.len(), None);
+        pk_fe.into_iter().for_each(|fe| {
+            h.update(fe);
+        });
+        let hash = h.finalize().unwrap();
+        return_field_element(&_env, hash)
     }
 );
 
@@ -1418,28 +1456,43 @@ ffi_export!(
         _class: JClass,
     ) -> jobject {
         let (pk, sk) = vrf_generate_key();
-
-        let secret_key_object = return_jobject(&_env, sk, "com/horizen/vrfnative/VRFSecretKey");
-        let public_key_object = return_jobject(&_env, pk, "com/horizen/vrfnative/VRFPublicKey");
-
-        let class = _env
-            .find_class("com/horizen/vrfnative/VRFKeyPair")
-            .expect("Should be able to find VRFKeyPair class");
-
-        let result = _env
-            .new_object(
-                class,
-                "(Lcom/horizen/vrfnative/VRFSecretKey;Lcom/horizen/vrfnative/VRFPublicKey;)V",
-                &[
-                    JValue::Object(secret_key_object),
-                    JValue::Object(public_key_object),
-                ],
-            )
-            .expect("Should be able to create new (VRFSecretKey, VRFPublicKey) object");
-
-        *result
+        convert_vrfnative_vrf_key_pair(_env, pk, sk)
     }
 );
+
+ffi_export!(
+    fn Java_com_horizen_vrfnative_VRFKeyPair_nativeDeriveFromSeed(
+        _env: JNIEnv,
+        _class: JClass,
+        _seed: jbyteArray,
+    ) -> jobject {
+        let ikm = _env.convert_byte_array(_seed).expect("Cannot read bytes");
+        let (pk, sk) = vrf_derive_key_from_seed(ikm.as_slice());
+        convert_vrfnative_vrf_key_pair(_env, pk, sk)
+    }
+);
+
+fn convert_vrfnative_vrf_key_pair(_env: JNIEnv, pk: VRFPk, sk: VRFSk) -> jobject {
+    let secret_key_object = return_jobject(&_env, sk, "com/horizen/vrfnative/VRFSecretKey");
+    let public_key_object = return_jobject(&_env, pk, "com/horizen/vrfnative/VRFPublicKey");
+
+    let class = _env
+        .find_class("com/horizen/vrfnative/VRFKeyPair")
+        .expect("Should be able to find VRFKeyPair class");
+
+    let result = _env
+        .new_object(
+            class,
+            "(Lcom/horizen/vrfnative/VRFSecretKey;Lcom/horizen/vrfnative/VRFPublicKey;)V",
+            &[
+                JValue::Object(secret_key_object),
+                JValue::Object(public_key_object),
+            ],
+        )
+        .expect("Should be able to create new (VRFSecretKey, VRFPublicKey) object");
+
+    *result
+}
 
 ffi_export!(
     fn Java_com_horizen_vrfnative_VRFKeyPair_nativeProve(
@@ -1594,7 +1647,7 @@ ffi_export!(
         };
 
         //Verify vrf proof and get vrf output
-        let vrf_out = match vrf_proof_to_hash(message, public_key, proof) {
+        let vrf_out = match vrf_verify(message, public_key, proof) {
             Ok(result) => result,
             Err(e) => {
                 log!(format!("Unable to get VRF output from VRF proof: {:?}", e));
@@ -1925,7 +1978,7 @@ ffi_export!(
         let max_pks = _max_pks as usize;
 
         let circ =
-            NaiveTresholdSignature::get_instance_for_setup(max_pks, _num_custom_fields as usize);
+            NaiveThresholdSignature::get_instance_for_setup(max_pks, _num_custom_fields as usize);
 
         // Read zk value
         let zk = _zk == JNI_TRUE;
@@ -1947,6 +2000,156 @@ ffi_export!(
                 log!(format!("(Pk, Vk) generation failed: {:?}", e));
                 JNI_FALSE
             }
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_certnative_NaiveThresholdSignatureWKeyRotation_nativeGetConstant(
+        _env: JNIEnv,
+        _class: JClass,
+        _keys_root_hash: JObject,
+        _threshold: jlong,
+    ) -> jobject {
+        let keys_root_hash = convert_field_element(&_env, _keys_root_hash);
+        let threshold_field = FieldElement::from(_threshold as u64);
+
+        match FieldHash::init_constant_length(2, None)
+            .update(*keys_root_hash)
+            .update(threshold_field)
+            .finalize()
+        {
+            Err(e) => {
+                throw!(
+                    &_env,
+                    "java/lang/Exception",
+                    format!("unable to compute constant: {:?}", e).as_str(),
+                    JObject::null().into_inner()
+                );
+            }
+            Ok(hash) => return_field_element(&_env, hash),
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_certnative_NaiveThresholdSignatureWKeyRotation_nativeSetup(
+        _env: JNIEnv,
+        _class: JClass,
+        _proving_system: JObject,
+        _max_pks: jlong,
+        _num_custom_fields: jint,
+        _segment_size: JObject,
+        _proving_key_path: JString,
+        _verification_key_path: JString,
+        _zk: jboolean,
+        _max_proof_plus_vk_size: jint,
+        _compress_pk: jboolean,
+        _compress_vk: jboolean,
+    ) -> jboolean {
+        // Get proving system type
+        let proving_system = get_proving_system_type(&_env, _proving_system);
+
+        // Get supported degree
+        let supported_degree =
+            cast_joption_to_rust_option(&_env, _segment_size).map(|integer_object| {
+                _env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
+
+        // Read paths
+        let proving_key_path = _env
+            .get_string(_proving_key_path)
+            .expect("Should be able to read jstring as Rust String");
+
+        let verification_key_path = _env
+            .get_string(_verification_key_path)
+            .expect("Should be able to read jstring as Rust String");
+
+        let max_pks = _max_pks as usize;
+
+        let circ = NaiveThresholdSignatureWKeyRotation::get_instance_for_setup(
+            max_pks,
+            _num_custom_fields as u32,
+        );
+
+        // Read zk value
+        let zk = _zk == JNI_TRUE;
+
+        // Generate snark keypair
+        match generate_circuit_keypair(
+            circ,
+            proving_system,
+            supported_degree,
+            Path::new(proving_key_path.to_str().unwrap()),
+            Path::new(verification_key_path.to_str().unwrap()),
+            _max_proof_plus_vk_size as usize,
+            zk,
+            Some(_compress_pk == JNI_TRUE),
+            Some(_compress_vk == JNI_TRUE),
+        ) {
+            Ok(_) => JNI_TRUE,
+            Err(e) => {
+                throw!(
+                    &_env,
+                    "java/lang/Exception",
+                    format!("(Pk, Vk) generation failed: {:?}", e).as_str(),
+                    JNI_FALSE
+                );
+            }
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_certnative_NaiveThresholdSignatureWKeyRotation_nativeGetMsgToSignForSigningKeyUpdate(
+        _env: JNIEnv,
+        _class: JClass,
+        _new_key: JObject,
+        _epoch_number: jint,
+        _sc_id: JObject,
+    ) -> jobject {
+        let ledger_id = *convert_field_element(&_env, _sc_id);
+        let new_key = FieldBasedSchnorrPk(convert_public_key(&_env, _new_key).into_projective());
+        let epoch_number = _epoch_number as u32;
+        match ValidatorKeysUpdates::get_msg_to_sign_for_signing_key_update(&new_key, epoch_number, ledger_id) {
+            Err(e) => {
+                throw!(
+                &_env,
+                "java/lang/Exception",
+                &e.to_string(),
+                JObject::null().into_inner()
+            )
+            },
+            Ok(elem) => return_field_element(&_env, elem)
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_certnative_NaiveThresholdSignatureWKeyRotation_nativeGetMsgToSignForMasterKeyUpdate(
+        _env: JNIEnv,
+        _class: JClass,
+        _new_key: JObject,
+        _epoch_number: jint,
+        _sc_id: JObject,
+    ) -> jobject {
+        let ledger_id = *convert_field_element(&_env, _sc_id);
+        let new_key = FieldBasedSchnorrPk(convert_public_key(&_env, _new_key).into_projective());
+        let epoch_number = _epoch_number as u32;
+        match ValidatorKeysUpdates::get_msg_to_sign_for_master_key_update(&new_key, epoch_number, ledger_id) {
+            Err(e) => {
+                throw!(
+                &_env,
+                "java/lang/Exception",
+                &e.to_string(),
+                JObject::null().into_inner()
+            )
+            },
+            Ok(elem) => return_field_element(&_env, elem)
         }
     }
 );
@@ -2026,145 +2229,24 @@ fn parse_naive_threshold_sig_circuit_data<'a>(
     Option<Vec<FieldElement>>,
 ) {
     // Extract backward transfers
-    let mut bt_list = vec![];
-
-    let bt_list_size = _env
-        .get_array_length(_bt_list)
-        .expect("Should be able to get bt_list size");
-
-    if bt_list_size > 0 {
-        for i in 0..bt_list_size {
-            let o = _env
-                .get_object_array_element(_bt_list, i)
-                .unwrap_or_else(|_| panic!("Should be able to get elem {} of bt_list array", i));
-
-            let p = _env
-                .call_method(o, "getPublicKeyHash", "()[B", &[])
-                .expect("Should be able to call getPublicKeyHash method")
-                .l()
-                .unwrap()
-                .cast();
-
-            let pk: [u8; 20] = _env
-                .convert_byte_array(p)
-                .expect("Should be able to convert to Rust byte array")
-                .try_into()
-                .expect("Should be able to write into fixed buffer of size 20");
-
-            let a = _env
-                .call_method(o, "getAmount", "()J", &[])
-                .expect("Should be able to call getAmount method")
-                .j()
-                .unwrap() as u64;
-
-            bt_list.push((a, pk));
-        }
-    }
-
-    let bt_list = bt_list
-        .into_iter()
-        .map(|bt_raw| BackwardTransfer {
-            pk_dest: bt_raw.1,
-            amount: bt_raw.0,
-        })
-        .collect::<Vec<_>>();
+    let bt_list = extract_backward_transfers(_env, _bt_list);
 
     //Extract Schnorr signatures and the corresponding Schnorr pks
-    let mut sigs = vec![];
-    let mut pks = vec![];
+    let sigs: Vec<_> = JObjectArrayIter::new(_env, _schnorr_sigs_list)
+        .map(|s| convert_option_signature(_env, s))
+        .collect();
+    let pks: Vec<_> = JObjectArrayIter::new(_env, _schnorr_pks_list)
+        .map(|p| *convert_public_key(_env, p))
+        .collect();
 
-    let sigs_list_size = _env
-        .get_array_length(_schnorr_sigs_list)
-        .expect("Should be able to get schnorr_sigs_list size");
+    assert_eq!(sigs.len(), pks.len());
 
-    let pks_list_size = _env
-        .get_array_length(_schnorr_pks_list)
-        .expect("Should be able to get schnorr_pks_list size");
-
-    assert_eq!(sigs_list_size, pks_list_size);
-
-    for i in 0..sigs_list_size {
-        //Get i-th sig
-        let sig_object = _env
-            .get_object_array_element(_schnorr_sigs_list, i)
-            .unwrap_or_else(|_| panic!("Should be able to get elem {} of schnorr_sigs_list", i));
-
-        let pk_object = _env
-            .get_object_array_element(_schnorr_pks_list, i)
-            .unwrap_or_else(|_| panic!("Should be able to get elem {} of schnorr_pks_list", i));
-
-        let signature = {
-            let sig = _env
-                .get_field(sig_object, "signaturePointer", "J")
-                .expect("Should be able to get field signaturePointer");
-
-            read_nullable_raw_pointer(sig.j().unwrap() as *const SchnorrSig).copied()
-        };
-
-        let public_key = {
-            let pk = _env
-                .get_field(pk_object, "publicKeyPointer", "J")
-                .expect("Should be able to get field publicKeyPointer");
-
-            read_raw_pointer(&_env, pk.j().unwrap() as *const SchnorrPk)
-        };
-
-        sigs.push(signature);
-        pks.push(*public_key);
-    }
-
-    let sc_id = {
-        let f = _env
-            .get_field(_sc_id, "fieldElementPointer", "J")
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-    };
-
-    let end_cumulative_sc_tx_comm_tree_root = {
-        let f = _env
-            .get_field(
-                _end_cumulative_sc_tx_comm_tree_root,
-                "fieldElementPointer",
-                "J",
-            )
-            .expect("Should be able to get field fieldElementPointer");
-
-        read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-    };
+    let sc_id = convert_field_element(_env, _sc_id);
+    let end_cumulative_sc_tx_comm_tree_root =
+        convert_field_element(_env, _end_cumulative_sc_tx_comm_tree_root);
 
     // Read custom fields if they are present
-    let mut custom_fields_list = None;
-
-    let custom_fields_list_size = _env
-        .get_array_length(_custom_fields_list)
-        .expect("Should be able to get custom_fields_list size");
-
-    if custom_fields_list_size > 0 {
-        let mut custom_fields = Vec::with_capacity(custom_fields_list_size as usize);
-
-        for i in 0..custom_fields_list_size {
-            let field_obj = _env
-                .get_object_array_element(_custom_fields_list, i)
-                .unwrap_or_else(|_| {
-                    panic!(
-                        "Should be able to read elem {} of the personalization array",
-                        i
-                    )
-                });
-
-            let field = {
-                let f = _env
-                    .get_field(field_obj, "fieldElementPointer", "J")
-                    .expect("Should be able to get field fieldElementPointer");
-
-                read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-            };
-
-            custom_fields.push(*field);
-        }
-        custom_fields_list = Some(custom_fields);
-    }
+    let custom_fields_list = extract_custom_fields(_env, _custom_fields_list);
     (
         pks,
         sigs,
@@ -2240,6 +2322,209 @@ ffi_export!(
             Err(e) => {
                 log!(format!("Error debugging circuit: {:?}", e));
                 JObject::null().into_inner()
+            }
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_schnorrnative_ValidatorKeysUpdatesList_nativeKeysRootHash(
+        _env: JNIEnv,
+        _class: JClass,
+        _schnorr_signing_keys_list: jobjectArray,
+        _schnorr_master_keys_list: jobjectArray,
+        _max_pks: jlong,
+    ) -> jobject {
+        let signing_keys: Vec<_> = JObjectArrayIter::new(&_env, _schnorr_signing_keys_list)
+            .map(|s| {
+                let pk = *convert_public_key(&_env, s);
+                FieldBasedSchnorrPk(pk.into_projective())
+            })
+            .collect();
+        let master_keys: Vec<_> = JObjectArrayIter::new(&_env, _schnorr_master_keys_list)
+            .map(|m| {
+                let pk = *convert_public_key(&_env, m);
+                FieldBasedSchnorrPk(pk.into_projective())
+            })
+            .collect();
+        if signing_keys.len() != master_keys.len() {
+            throw!(
+                &_env,
+                "java/lang/Exception",
+                "signing_keys.len != master_keys.len",
+                JObject::null().into_inner()
+            );
+        }
+
+        let max_pks = _max_pks as usize;
+
+        let v = ValidatorKeysUpdates::new(
+            signing_keys.clone(),
+            master_keys.clone(),
+            signing_keys,
+            master_keys,
+            vec![Some(NULL_CONST.null_sig); max_pks],
+            vec![Some(NULL_CONST.null_sig); max_pks],
+            vec![Some(NULL_CONST.null_sig); max_pks],
+            vec![Some(NULL_CONST.null_sig); max_pks],
+            max_pks,
+        );
+        match v.get_curr_validators_keys_root() {
+            Err(e) => throw!(
+                &_env,
+                "java/lang/Exception",
+                format!("Cannot compute current validators key root: {:?}", e).as_str(),
+                JObject::null().into_inner()
+            ),
+            Ok(keys_root) => return_field_element(&_env, keys_root),
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_certnative_NaiveThresholdSignatureWKeyRotation_nativeDebugCircuit(
+        _env: JNIEnv,
+        _class: JClass,
+        _keys_signatures_list: JObject,
+        _withdrawal_certificate: JObject,
+        _prev_withdrawal_certificate: JObject,
+        _cert_signatures: jobjectArray,
+        _max_pks: jlong,
+        _threshold: jlong,
+        _genesis_key_root_hash: JObject,
+    ) -> jobject {
+        let _schnorr_signing_keys_list = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "signingKeys",
+            "com/horizen/schnorrnative/SchnorrPublicKey",
+        );
+        let _schnorr_master_keys_list = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "masterKeys",
+            "com/horizen/schnorrnative/SchnorrPublicKey",
+        );
+        let _schnorr_updated_signing_keys_list = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "updatedSigningKeys",
+            "com/horizen/schnorrnative/SchnorrPublicKey",
+        );
+        let _schnorr_updated_master_keys_list = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "updatedMasterKeys",
+            "com/horizen/schnorrnative/SchnorrPublicKey",
+        );
+
+        let _updated_signing_keys_sk_signatures = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "updatedSigningKeysSkSignatures",
+            "com/horizen/schnorrnative/SchnorrSignature",
+        );
+        let _updated_signing_keys_mk_signatures = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "updatedSigningKeysMkSignatures",
+            "com/horizen/schnorrnative/SchnorrSignature",
+        );
+        let _updated_master_keys_sk_signatures = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "updatedMasterKeysSkSignatures",
+            "com/horizen/schnorrnative/SchnorrSignature",
+        );
+        let _updated_master_keys_mk_signatures = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "updatedMasterKeysMkSignatures",
+            "com/horizen/schnorrnative/SchnorrSignature",
+        );
+
+        let withdrawal_certificate = parse_wcert(_env, _withdrawal_certificate);
+        let prev_withdrawal_certificate =
+            cast_joption_to_rust_option(&_env, _prev_withdrawal_certificate)
+                .map(|cert_object| parse_wcert(_env, cert_object));
+        let genesis_key_root_hash = convert_field_element(&_env, _genesis_key_root_hash);
+
+        let signing_keys = extract_public_key(&_env, _schnorr_signing_keys_list);
+        let master_keys = extract_public_key(&_env, _schnorr_master_keys_list);
+        let updated_signing_keys = extract_public_key(&_env, _schnorr_updated_signing_keys_list);
+        let updated_master_keys = extract_public_key(&_env, _schnorr_updated_master_keys_list);
+
+        let updated_signing_keys_sk_signatures: Vec<_> =
+            JObjectArrayIter::new(&_env, _updated_signing_keys_sk_signatures)
+                .map(|s| convert_option_signature(&_env, s))
+                .collect();
+        let updated_signing_keys_mk_signatures: Vec<_> =
+            JObjectArrayIter::new(&_env, _updated_signing_keys_mk_signatures)
+                .map(|s| convert_option_signature(&_env, s))
+                .collect();
+        let updated_master_keys_sk_signatures: Vec<_> =
+            JObjectArrayIter::new(&_env, _updated_master_keys_sk_signatures)
+                .map(|s| convert_option_signature(&_env, s))
+                .collect();
+        let updated_master_keys_mk_signatures: Vec<_> =
+            JObjectArrayIter::new(&_env, _updated_master_keys_mk_signatures)
+                .map(|s| convert_option_signature(&_env, s))
+                .collect();
+        let sigs: Vec<_> = JObjectArrayIter::new(&_env, _cert_signatures)
+            .map(|s| convert_option_signature(&_env, s))
+            .collect();
+
+        let validator_keys_updates = ValidatorKeysUpdates::new(
+            signing_keys,
+            master_keys,
+            updated_signing_keys,
+            updated_master_keys,
+            updated_signing_keys_sk_signatures,
+            updated_signing_keys_mk_signatures,
+            updated_master_keys_sk_signatures,
+            updated_master_keys_mk_signatures,
+            _max_pks as usize,
+        );
+
+        //create proof
+        match debug_naive_threshold_sig_w_key_rotation_circuit(
+            validator_keys_updates,
+            sigs,
+            withdrawal_certificate,
+            prev_withdrawal_certificate,
+            _threshold as u64,
+            genesis_key_root_hash,
+        ) {
+            Ok(failing_constraint) => {
+                let cls_optional = _env.find_class("java/util/Optional").unwrap();
+
+                if let Some(failing_constraint) = failing_constraint {
+                    let j_str = *_env
+                        .new_string(failing_constraint)
+                        .expect("Should be able to build Java String from Rust String");
+
+                    _env.call_static_method(
+                        cls_optional,
+                        "of",
+                        "(Ljava/lang/Object;)Ljava/util/Optional;",
+                        &[JValue::Object(j_str)],
+                    )
+                    .expect("Should be able to create new Optional from String")
+                } else {
+                    _env.call_static_method(cls_optional, "empty", "()Ljava/util/Optional;", &[])
+                        .expect("Should be able to create new value for Optional.empty()")
+                }
+                .l()
+                .unwrap()
+                .into_inner()
+            }
+            Err(e) => {
+                throw!(
+                    &_env,
+                    "java/lang/Exception",
+                    format!("Error debugging circuit: {:?}", e).as_str(),
+                    JObject::null().into_inner()
+                );
             }
         }
     }
@@ -2351,6 +2636,182 @@ ffi_export!(
 );
 
 ffi_export!(
+    fn Java_com_horizen_certnative_NaiveThresholdSignatureWKeyRotation_nativeCreateProof(
+        _env: JNIEnv,
+        _class: JClass,
+        _keys_signatures_list: JObject,
+        _withdrawal_certificate: JObject,
+        _prev_withdrawal_certificate: JObject,
+        _cert_signatures: jobjectArray,
+        _max_pks: jlong,
+        _threshold: jlong,
+        _genesis_key_root_hash: JObject,
+        _supported_degree: JObject,
+        _proving_key_path: JString,
+        _enforce_membership: jboolean,
+        _zk: jboolean,
+        _compressed_pk: jboolean,
+        _compress_proof: jboolean,
+    ) -> jobject {
+        let _schnorr_signing_keys_list = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "signingKeys",
+            "com/horizen/schnorrnative/SchnorrPublicKey",
+        );
+        let _schnorr_master_keys_list = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "masterKeys",
+            "com/horizen/schnorrnative/SchnorrPublicKey",
+        );
+        let _schnorr_updated_signing_keys_list = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "updatedSigningKeys",
+            "com/horizen/schnorrnative/SchnorrPublicKey",
+        );
+        let _schnorr_updated_master_keys_list = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "updatedMasterKeys",
+            "com/horizen/schnorrnative/SchnorrPublicKey",
+        );
+
+        let _updated_signing_keys_sk_signatures = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "updatedSigningKeysSkSignatures",
+            "com/horizen/schnorrnative/SchnorrSignature",
+        );
+        let _updated_signing_keys_mk_signatures = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "updatedSigningKeysMkSignatures",
+            "com/horizen/schnorrnative/SchnorrSignature",
+        );
+        let _updated_master_keys_sk_signatures = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "updatedMasterKeysSkSignatures",
+            "com/horizen/schnorrnative/SchnorrSignature",
+        );
+        let _updated_master_keys_mk_signatures = parse_jobject_array_from_jobject(
+            &_env,
+            _keys_signatures_list,
+            "updatedMasterKeysMkSignatures",
+            "com/horizen/schnorrnative/SchnorrSignature",
+        );
+
+        let withdrawal_certificate = parse_wcert(_env, _withdrawal_certificate);
+        let prev_withdrawal_certificate =
+            cast_joption_to_rust_option(&_env, _prev_withdrawal_certificate)
+                .map(|cert_object| parse_wcert(_env, cert_object));
+        let genesis_key_root_hash = convert_field_element(&_env, _genesis_key_root_hash);
+
+        let signing_keys = extract_public_key(&_env, _schnorr_signing_keys_list);
+        let master_keys = extract_public_key(&_env, _schnorr_master_keys_list);
+        let updated_signing_keys = extract_public_key(&_env, _schnorr_updated_signing_keys_list);
+        let updated_master_keys = extract_public_key(&_env, _schnorr_updated_master_keys_list);
+
+        let updated_signing_keys_sk_signatures: Vec<_> =
+            JObjectArrayIter::new(&_env, _updated_signing_keys_sk_signatures)
+                .map(|s| convert_option_signature(&_env, s))
+                .collect();
+        let updated_signing_keys_mk_signatures: Vec<_> =
+            JObjectArrayIter::new(&_env, _updated_signing_keys_mk_signatures)
+                .map(|s| convert_option_signature(&_env, s))
+                .collect();
+        let updated_master_keys_sk_signatures: Vec<_> =
+            JObjectArrayIter::new(&_env, _updated_master_keys_sk_signatures)
+                .map(|s| convert_option_signature(&_env, s))
+                .collect();
+        let updated_master_keys_mk_signatures: Vec<_> =
+            JObjectArrayIter::new(&_env, _updated_master_keys_mk_signatures)
+                .map(|s| convert_option_signature(&_env, s))
+                .collect();
+        let sigs: Vec<_> = JObjectArrayIter::new(&_env, _cert_signatures)
+            .map(|s| convert_option_signature(&_env, s))
+            .collect();
+
+        // Get supported degree
+        let supported_degree =
+            cast_joption_to_rust_option(&_env, _supported_degree).map(|integer_object| {
+                _env.call_method(integer_object, "intValue", "()I", &[])
+                    .expect("Should be able to call intValue() on Optional<Integer>")
+                    .i()
+                    .unwrap() as usize
+                    - 1
+            });
+
+        //Extract params_path str
+        let proving_key_path = _env
+            .get_string(_proving_key_path)
+            .expect("Should be able to read jstring as Rust String");
+
+        let validator_keys_updates = ValidatorKeysUpdates::new(
+            signing_keys,
+            master_keys,
+            updated_signing_keys,
+            updated_master_keys,
+            updated_signing_keys_sk_signatures,
+            updated_signing_keys_mk_signatures,
+            updated_master_keys_sk_signatures,
+            updated_master_keys_mk_signatures,
+            _max_pks as usize,
+        );
+
+        //create proof
+        match create_naive_threshold_sig_w_key_rotation_proof(
+            validator_keys_updates,
+            sigs,
+            withdrawal_certificate,
+            prev_withdrawal_certificate,
+            _threshold as u64,
+            genesis_key_root_hash,
+            supported_degree,
+            Path::new(proving_key_path.to_str().unwrap()),
+            _enforce_membership == JNI_TRUE,
+            _zk == JNI_TRUE,
+            _compressed_pk == JNI_TRUE,
+            _compress_proof == JNI_TRUE,
+        ) {
+            Ok((proof, quality)) => {
+                //Return proof serialized
+                let proof_serialized = _env
+                    .byte_array_from_slice(proof.as_slice())
+                    .expect("Should be able to convert Rust slice into jbytearray");
+
+                //Create new CreateProofResult object
+                let proof_result_class = _env
+                    .find_class("com/horizen/certnative/CreateProofResult")
+                    .expect("Should be able to find CreateProofResult class");
+
+                let result = _env
+                    .new_object(
+                        proof_result_class,
+                        "([BJ)V",
+                        &[
+                            JValue::Object(JObject::from(proof_serialized)),
+                            JValue::Long(quality as i64),
+                        ],
+                    )
+                    .expect("Should be able to create new CreateProofResult:(byte[], long) object");
+                *result
+            }
+            Err(e) => {
+                throw!(
+                    &_env,
+                    "java/lang/Exception",
+                    format!("Cannot create proof: {:?}", e).as_str(),
+                    JObject::null().into_inner()
+                );
+            }
+        }
+    }
+);
+
+ffi_export!(
     fn Java_com_horizen_provingsystemnative_ProvingSystem_nativeGetProofProvingSystemType(
         _env: JNIEnv,
         _class: JClass,
@@ -2398,110 +2859,13 @@ ffi_export!(
         _check_vk: jboolean,
         _compressed_vk: jboolean,
     ) -> jboolean {
-        //Extract backward transfers
-        let mut bt_list = vec![];
-
-        let bt_list_size = _env
-            .get_array_length(_bt_list)
-            .expect("Should be able to get bt_list size");
-
-        if bt_list_size > 0 {
-            for i in 0..bt_list_size {
-                let o = _env
-                    .get_object_array_element(_bt_list, i)
-                    .unwrap_or_else(|_| {
-                        panic!("Should be able to get elem {} of bt_list array", i)
-                    });
-
-                let p = _env
-                    .call_method(o, "getPublicKeyHash", "()[B", &[])
-                    .expect("Should be able to call getPublicKeyHash method")
-                    .l()
-                    .unwrap()
-                    .cast();
-
-                let pk: [u8; 20] = _env
-                    .convert_byte_array(p)
-                    .expect("Should be able to convert to Rust byte array")
-                    .try_into()
-                    .expect("Should be able to write into fixed buffer of size 20");
-
-                let a = _env
-                    .call_method(o, "getAmount", "()J", &[])
-                    .expect("Should be able to call getAmount method")
-                    .j()
-                    .unwrap() as u64;
-
-                bt_list.push((a, pk));
-            }
-        }
-
-        let bt_list = bt_list
-            .into_iter()
-            .map(|bt_raw| BackwardTransfer {
-                pk_dest: bt_raw.1,
-                amount: bt_raw.0,
-            })
-            .collect::<Vec<_>>();
-
-        let sc_id = {
-            let f = _env
-                .get_field(_sc_id, "fieldElementPointer", "J")
-                .expect("Should be able to get field fieldElementPointer");
-
-            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-        };
-
-        let end_cumulative_sc_tx_comm_tree_root = {
-            let f = _env
-                .get_field(
-                    _end_cumulative_sc_tx_comm_tree_root,
-                    "fieldElementPointer",
-                    "J",
-                )
-                .expect("Should be able to get field fieldElementPointer");
-
-            read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-        };
-
-        //Extract constant
-        let constant = {
-            let c = _env
-                .get_field(_constant, "fieldElementPointer", "J")
-                .expect("Should be able to get field fieldElementPointer");
-
-            read_raw_pointer(&_env, c.j().unwrap() as *const FieldElement)
-        };
-
-        // Read custom fields if they are present
-        let mut custom_fields_list = vec![];
-
-        let custom_fields_list_size = _env
-            .get_array_length(_custom_fields_list)
-            .expect("Should be able to get custom_fields_list size");
-
-        if custom_fields_list_size > 0 {
-            for i in 0..custom_fields_list_size {
-                let field_obj = _env
-                    .get_object_array_element(_custom_fields_list, i)
-                    .unwrap_or_else(|_| {
-                        panic!(
-                            "Should be able to read elem {} of the personalization array",
-                            i
-                        )
-                    });
-
-                let field = {
-                    let f = _env
-                        .get_field(field_obj, "fieldElementPointer", "J")
-                        .expect("Should be able to get field fieldElementPointer");
-
-                    read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-                };
-
-                custom_fields_list.push(*field);
-            }
-        }
+        let bt_list = extract_backward_transfers(&_env, _bt_list);
+        let sc_id = convert_field_element(&_env, _sc_id);
+        let end_cumulative_sc_tx_comm_tree_root =
+            convert_field_element(&_env, _end_cumulative_sc_tx_comm_tree_root);
+        let constant = convert_field_element(&_env, _constant);
+        let custom_fields_list =
+            extract_custom_fields(&_env, _custom_fields_list).unwrap_or_default();
 
         //Extract proof
         let proof_bytes = _env
@@ -2544,6 +2908,89 @@ ffi_export!(
                     e
                 ));
                 JNI_FALSE
+            } // CRYPTO_ERROR or IO_ERROR
+        }
+    }
+);
+
+ffi_export!(
+    fn Java_com_horizen_certnative_NaiveThresholdSignatureWKeyRotation_nativeVerifyProof(
+        _env: JNIEnv,
+        // this is the class that owns our
+        // static method. Not going to be
+        // used, but still needs to have
+        // an argument slot
+        _class: JClass,
+        _cert: JObject,
+        _prev_cert: JObject,
+        _constant: JObject,
+        _sc_proof_bytes: jbyteArray,
+        _check_proof: jboolean,
+        _compressed_proof: jboolean,
+        _verification_key_path: JString,
+        _check_vk: jboolean,
+        _compressed_vk: jboolean,
+    ) -> jboolean {
+        let (
+            sc_id,
+            epoch_number,
+            bt_list,
+            quality,
+            mcb_sc_txs_com,
+            ft_min_amount,
+            btr_min_fee,
+            custom_fields,
+        ) = parse_wcert_fields(_env, _cert);
+        let withdrawal_certificate = WithdrawalCertificateData::new(
+            sc_id,
+            epoch_number,
+            bt_list.clone(),
+            quality,
+            mcb_sc_txs_com,
+            ft_min_amount,
+            btr_min_fee,
+            custom_fields,
+        );
+        let prev_withdrawal_certificate =
+            cast_joption_to_rust_option(&_env, _prev_cert).map(|_cert| parse_wcert(_env, _cert));
+        let constant = convert_field_element(&_env, _constant);
+        //Extract proof
+        let proof_bytes = _env
+            .convert_byte_array(_sc_proof_bytes)
+            .expect("Should be able to convert to Rust byte array");
+
+        //Extract vk path
+        let vk_path = _env
+            .get_string(_verification_key_path)
+            .expect("Should be able to read jstring as Rust String");
+
+        //Verify proof
+        match verify_naive_threshold_sig_w_key_rotation_proof(
+            withdrawal_certificate,
+            prev_withdrawal_certificate,
+            bt_list,
+            constant,
+            proof_bytes,
+            _check_proof == JNI_TRUE,
+            _compressed_proof == JNI_TRUE,
+            Path::new(vk_path.to_str().unwrap()),
+            _check_vk == JNI_TRUE,
+            _compressed_vk == JNI_TRUE,
+        ) {
+            Ok(result) => {
+                if result {
+                    JNI_TRUE
+                } else {
+                    JNI_FALSE
+                }
+            }
+            Err(e) => {
+                throw!(
+                    &_env,
+                    "java/lang/Exception",
+                    format!("Cannot verify proof: {:?}", e).as_str(),
+                    JNI_FALSE
+                );
             } // CRYPTO_ERROR or IO_ERROR
         }
     }
@@ -4693,6 +5140,41 @@ ffi_export!(
 );
 
 fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateData {
+    let (
+        sc_id,
+        epoch_number,
+        bt_list,
+        quality,
+        mcb_sc_txs_com,
+        ft_min_amount,
+        btr_min_fee,
+        custom_fields,
+    ) = parse_wcert_fields(_env, _cert);
+    WithdrawalCertificateData::new(
+        sc_id,
+        epoch_number,
+        bt_list,
+        quality,
+        mcb_sc_txs_com,
+        ft_min_amount,
+        btr_min_fee,
+        custom_fields,
+    )
+}
+
+fn parse_wcert_fields(
+    _env: JNIEnv,
+    _cert: JObject,
+) -> (
+    FieldElement,
+    u32,
+    Vec<BackwardTransfer>,
+    u64,
+    FieldElement,
+    u64,
+    u64,
+    Vec<FieldElement>,
+) {
     // Parse sc_id
     let sc_id = *parse_field_element_from_jobject(&_env, _cert, "scId");
 
@@ -4706,43 +5188,7 @@ fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateData {
         "btList",
         "com/horizen/certnative/BackwardTransfer",
     );
-    let mut bt_list = vec![];
-
-    let bt_list_size = _env
-        .get_array_length(bt_list_obj)
-        .expect("Should be able to get bt_list size");
-
-    if bt_list_size > 0 {
-        for i in 0..bt_list_size {
-            let o = _env
-                .get_object_array_element(bt_list_obj, i)
-                .unwrap_or_else(|_| panic!("Should be able to get elem {} of bt_list array", i));
-
-            let p = _env
-                .call_method(o, "getPublicKeyHash", "()[B", &[])
-                .expect("Should be able to call getPublicKeyHash method")
-                .l()
-                .unwrap()
-                .cast();
-
-            let pk: [u8; MC_PK_SIZE] = _env
-                .convert_byte_array(p)
-                .expect("Should be able to convert to Rust byte array")
-                .try_into()
-                .expect("Should be able to write into fixed buffer of size 20");
-
-            let a = _env
-                .call_method(o, "getAmount", "()J", &[])
-                .expect("Should be able to call getAmount method")
-                .j()
-                .unwrap() as u64;
-
-            bt_list.push(BackwardTransfer {
-                pk_dest: pk,
-                amount: a,
-            });
-        }
-    }
+    let bt_list = extract_backward_transfers(&_env, bt_list_obj);
 
     // Extract custom fields
     let custom_fields_list_obj = parse_jobject_array_from_jobject(
@@ -4752,31 +5198,7 @@ fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateData {
         "com/horizen/librustsidechains/FieldElement",
     );
 
-    let mut custom_fields = vec![];
-
-    let custom_fields_size = _env
-        .get_array_length(custom_fields_list_obj)
-        .expect("Should be able to get custom_fields size");
-
-    if custom_fields_size > 0 {
-        for i in 0..custom_fields_size {
-            let o = _env
-                .get_object_array_element(custom_fields_list_obj, i)
-                .unwrap_or_else(|_| {
-                    panic!("Should be able to get elem {} of custom_fields array", i)
-                });
-
-            let field = {
-                let f = _env
-                    .get_field(o, "fieldElementPointer", "J")
-                    .expect("Should be able to get field fieldElementPointer");
-
-                read_raw_pointer(&_env, f.j().unwrap() as *const FieldElement)
-            };
-
-            custom_fields.push(*field);
-        }
-    }
+    let custom_fields = extract_custom_fields(&_env, custom_fields_list_obj).unwrap_or_default();
 
     // Parse quality
     let quality = parse_long_from_jobject(&_env, _cert, "quality");
@@ -4790,7 +5212,7 @@ fn parse_wcert(_env: JNIEnv, _cert: JObject) -> WithdrawalCertificateData {
     // Parse ft_min_amount
     let ft_min_amount = parse_long_from_jobject(&_env, _cert, "ftMinAmount");
 
-    WithdrawalCertificateData::new(
+    (
         sc_id,
         epoch_number,
         bt_list,

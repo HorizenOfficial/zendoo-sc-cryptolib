@@ -58,6 +58,14 @@ public class SchnorrPublicKey implements AutoCloseable
 
   private native boolean nativeVerifySignature(SchnorrSignature signature, FieldElement message); // jni call to Rust impl
 
+  private native FieldElement nativeGetHash();
+
+  public FieldElement getHash() {
+    if (publicKeyPointer == 0)
+      throw new IllegalStateException("Public key was freed.");
+    return nativeGetHash();
+  }
+
   private native boolean nativeVerifyKey(); // jni call to Rust impl
 
   public boolean verifySignature(SchnorrSignature signature, FieldElement message) {

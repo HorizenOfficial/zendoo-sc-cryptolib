@@ -1,4 +1,4 @@
-use algebra::{biginteger::BigInteger256 as BigInteger, field_new, Field, ProjectiveCurve};
+use algebra::{biginteger::BigInteger256 as BigInteger, field_new, Field};
 
 use primitives::{
     crh::pedersen::PedersenWindow, signature::schnorr::field_based_schnorr::FieldBasedSchnorrPk,
@@ -7,6 +7,9 @@ use primitives::{
 use crate::type_mapping::*;
 
 pub mod personalizations;
+
+#[cfg(test)]
+pub mod old_circuit_keys;
 
 pub struct NaiveThresholdSigParams {
     pub null_sig: SchnorrSig,
@@ -58,7 +61,7 @@ impl NaiveThresholdSigParams {
 #[derive(Clone)]
 pub struct VRFWindow {}
 impl PedersenWindow for VRFWindow {
-    const WINDOW_SIZE: usize = 128;
+    const WINDOW_SIZE: usize = 63;
     const NUM_WINDOWS: usize = 2;
 }
 
@@ -128,29 +131,11 @@ impl VRFParams {
             ),
         );
 
-        let group_hash_generators = Self::compute_group_hash_table([gen_1, gen_2].to_vec());
+        let group_hash_generators = GroupHash::create_generators_from_base_points([gen_1, gen_2].to_vec());
 
         Self {
             group_hash_generators,
         }
-    }
-
-    pub(crate) fn compute_group_hash_table(
-        generators: Vec<G2Projective>,
-    ) -> Vec<Vec<G2Projective>> {
-        let mut gen_table = Vec::new();
-        for generator in generators.iter().take(VRFWindow::NUM_WINDOWS) {
-            let mut generators_for_segment = Vec::new();
-            let mut base = *generator;
-            for _ in 0..VRFWindow::WINDOW_SIZE {
-                generators_for_segment.push(base);
-                for _ in 0..4 {
-                    base.double_in_place();
-                }
-            }
-            gen_table.push(generators_for_segment);
-        }
-        gen_table
     }
 }
 
@@ -252,6 +237,10 @@ mod test {
         g
     }
 
+    // This method is safe to use only to generate fixed curve elements in a deterministic
+    // fashion. It should not be employed as a method to hash a sequence of bytes to a
+    // curve element, as it does not fulfill all the necessary statistical requirements of a
+    // standard-compliant hash function to curve elements
     fn hash_to_curve<F: PrimeField, G: AffineCurve + FromCompressedBits>(
         tag: &[u8],
         personalization: &[u8],
@@ -296,7 +285,7 @@ mod test {
             .into_projective();
 
         //Check GH generators
-        let gh_generators = VRFParams::compute_group_hash_table([htc_g1_out, htc_g2_out].to_vec());
+        let gh_generators = GroupHash::create_generators_from_base_points([htc_g1_out, htc_g2_out].to_vec());
         println!("{:#?}", htc_g1_out);
         println!("{:#?}", htc_g2_out);
         assert_eq!(gh_generators, VRFParams::new().group_hash_generators);

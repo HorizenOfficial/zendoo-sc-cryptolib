@@ -18,201 +18,12 @@ use r1cs_std::{
 };
 
 use crate::{
-    constants::personalizations::BoxType, CswFtOutputData, CswFtProverData, CswProverData,
-    CswSysData, CswUtxoInputData, CswUtxoOutputData, CswUtxoProverData, ECPointSimulationGadget,
-    FieldElementGadget, FieldHashGadget, GingerMHTBinaryGadget, SimulatedCurveParameters,
-    SimulatedFieldElement, SimulatedSWGroup, WithdrawalCertificateData, MC_RETURN_ADDRESS_BYTES,
-    SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH, SC_TX_HASH_LENGTH, SIMULATED_FIELD_BYTE_SIZE,
-    SIMULATED_SCALAR_FIELD_MODULUS_BITS,
+    blaze_csw::data_structures::*, common::constraints::WithdrawalCertificateDataGadget,
+    constants::personalizations::BoxType, ECPointSimulationGadget, FieldElementGadget,
+    FieldHashGadget, GingerMHTBinaryGadget, SimulatedCurveParameters, SimulatedFieldElement,
+    SimulatedSWGroup, MC_RETURN_ADDRESS_BYTES, SC_CUSTOM_HASH_LENGTH, SC_PUBLIC_KEY_LENGTH,
+    SC_TX_HASH_LENGTH, SIMULATED_FIELD_BYTE_SIZE, SIMULATED_SCALAR_FIELD_MODULUS_BITS,
 };
-
-#[derive(Clone)]
-/// The gadget for a withdrawal certificate of a sidechain
-pub struct WithdrawalCertificateDataGadget {
-    pub ledger_id_g: FieldElementGadget,
-    pub epoch_id_g: UInt32,
-    /// Merkle root hash of all BTs from the certificate
-    pub bt_list_root_g: FieldElementGadget,
-    pub quality_g: UInt64,
-    /// Reference to the state of the mainchain-to-sidechain transaction history.
-    /// Declares to which extent the sidechain processed forward transactions.
-    pub mcb_sc_txs_com_g: FieldElementGadget,
-    pub ft_min_amount_g: UInt64,
-    pub btr_min_fee_g: UInt64,
-    /// Carries the reference to the sidechain state. (Currently the reference is
-    /// split over two field elements)
-    pub custom_fields_g: Vec<FieldElementGadget>,
-}
-
-impl AllocGadget<WithdrawalCertificateData, FieldElement> for WithdrawalCertificateDataGadget {
-    fn alloc<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
-        mut cs: CS,
-        f: F,
-    ) -> Result<Self, SynthesisError>
-    where
-        F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<WithdrawalCertificateData>,
-    {
-        let (
-            ledger_id,
-            epoch_id,
-            bt_root,
-            quality,
-            mcb_sc_txs_com,
-            ft_min_amount,
-            btr_min_fee,
-            custom_fields,
-        ) = match f() {
-            Ok(certificate_data) => {
-                let certificate_data = certificate_data.borrow().clone();
-                (
-                    Ok(certificate_data.ledger_id),
-                    Ok(certificate_data.epoch_id),
-                    Ok(certificate_data.bt_root),
-                    Ok(certificate_data.quality),
-                    Ok(certificate_data.mcb_sc_txs_com),
-                    Ok(certificate_data.ft_min_amount),
-                    Ok(certificate_data.btr_min_fee),
-                    Ok(certificate_data.custom_fields),
-                )
-            }
-            _ => (
-                Err(SynthesisError::AssignmentMissing),
-                Err(SynthesisError::AssignmentMissing),
-                Err(SynthesisError::AssignmentMissing),
-                Err(SynthesisError::AssignmentMissing),
-                Err(SynthesisError::AssignmentMissing),
-                Err(SynthesisError::AssignmentMissing),
-                Err(SynthesisError::AssignmentMissing),
-                Err(SynthesisError::AssignmentMissing),
-            ),
-        };
-
-        let ledger_id_g = FieldElementGadget::alloc(cs.ns(|| "alloc ledger id"), || ledger_id)?;
-
-        let epoch_id_g = UInt32::alloc(cs.ns(|| "alloc epoch id"), epoch_id.ok())?;
-
-        //Compute bt_list merkle_root
-
-        let bt_list_root_g = FieldElementGadget::alloc(cs.ns(|| "alloc bt list hash"), || bt_root)?;
-
-        let quality_g = UInt64::alloc(cs.ns(|| "alloc quality"), quality.ok())?;
-
-        let mcb_sc_txs_com_g =
-            FieldElementGadget::alloc(cs.ns(|| "alloc mcb sc txs com"), || mcb_sc_txs_com)?;
-
-        let ft_min_amount_g = UInt64::alloc(cs.ns(|| "alloc ft min fee"), ft_min_amount.ok())?;
-
-        let btr_min_fee_g = UInt64::alloc(cs.ns(|| "alloc btr min fee"), btr_min_fee.ok())?;
-
-        let custom_fields_value = custom_fields?;
-        let mut custom_fields_g = Vec::with_capacity(custom_fields_value.len());
-
-        for (i, custom_field) in custom_fields_value.iter().enumerate() {
-            let custom_field_g =
-                FieldElementGadget::alloc(cs.ns(|| format!("alloc custom field {}", i)), || {
-                    Ok(*custom_field)
-                })?;
-
-            custom_fields_g.push(custom_field_g);
-        }
-
-        let new_instance = Self {
-            ledger_id_g,
-            epoch_id_g,
-            bt_list_root_g,
-            quality_g,
-            mcb_sc_txs_com_g,
-            ft_min_amount_g,
-            btr_min_fee_g,
-            custom_fields_g,
-        };
-
-        Ok(new_instance)
-    }
-
-    fn alloc_input<F, T, CS: ConstraintSystemAbstract<FieldElement>>(
-        _cs: CS,
-        _f: F,
-    ) -> Result<Self, SynthesisError>
-    where
-        F: FnOnce() -> Result<T, SynthesisError>,
-        T: Borrow<WithdrawalCertificateData>,
-    {
-        unimplemented!()
-    }
-}
-
-impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget>
-    for WithdrawalCertificateDataGadget
-{
-    fn enforce_hash<CS: ConstraintSystemAbstract<FieldElement>>(
-        &self,
-        mut cs: CS,
-        _personalization: Option<&[FieldElementGadget]>,
-    ) -> Result<FieldElementGadget, SynthesisError> {
-        let last_wcert_epoch_id_fe_g = {
-            let bits = self.epoch_id_g.clone().into_bits_be();
-            FieldElementGadget::from_bits(cs.ns(|| "last_wcert_epoch_id_fe_g"), bits.as_slice())
-        }?;
-
-        let last_wcert_quality_fe_g = {
-            let mut bits = self.quality_g.to_bits_le();
-            bits.reverse();
-
-            FieldElementGadget::from_bits(cs.ns(|| "last_wcert_quality_fe_g"), bits.as_slice())
-        }?;
-
-        let mut last_wcert_btr_fee_bits_g = self.btr_min_fee_g.to_bits_le();
-        last_wcert_btr_fee_bits_g.reverse();
-
-        let mut last_wcert_ft_fee_bits_g = self.ft_min_amount_g.to_bits_le();
-        last_wcert_ft_fee_bits_g.reverse();
-
-        let mut last_wcert_fee_bits_g = last_wcert_btr_fee_bits_g;
-        last_wcert_fee_bits_g.append(&mut last_wcert_ft_fee_bits_g);
-
-        let last_wcert_fee_fe_g =
-            FieldElementGadget::from_bits(cs.ns(|| "last_wcert_fee_fe_g"), &last_wcert_fee_bits_g)?;
-
-        let temp_last_wcert_hash_g = FieldHashGadget::enforce_hash_constant_length(
-            cs.ns(|| "H(last_wcert without custom fields)"),
-            &[
-                self.ledger_id_g.clone(),
-                last_wcert_epoch_id_fe_g,
-                self.bt_list_root_g.clone(),
-                last_wcert_quality_fe_g,
-                self.mcb_sc_txs_com_g.clone(),
-                last_wcert_fee_fe_g,
-            ],
-        )?;
-
-        // Alloc custom_fields and enforce their hash, if they are present
-        let last_wcert_custom_fields_hash_g = if !self.custom_fields_g.is_empty() {
-            let custom_fields_hash_g = FieldHashGadget::enforce_hash_constant_length(
-                cs.ns(|| "H(custom_fields)"),
-                self.custom_fields_g.as_slice(),
-            )?;
-            Some(custom_fields_hash_g)
-        } else {
-            None
-        };
-
-        let preimage = if last_wcert_custom_fields_hash_g.is_some() {
-            vec![
-                last_wcert_custom_fields_hash_g.unwrap(),
-                temp_last_wcert_hash_g,
-            ]
-        } else {
-            vec![temp_last_wcert_hash_g]
-        };
-
-        FieldHashGadget::enforce_hash_constant_length(
-            cs.ns(|| "H([custom_fields], cert_data_hash)"),
-            preimage.as_slice(),
-        )
-    }
-}
 
 /// The gadget for an ordinary sidechain transaction output.
 pub struct CswUtxoOutputDataGadget {
@@ -340,7 +151,8 @@ impl FieldHasherGadget<FieldHash, FieldElement, FieldHashGadget> for CswUtxoOutp
     ) -> Result<FieldElementGadget, SynthesisError> {
         // Initialize hash_input with personalization manually as we don't have, for now, hash gadget accepting personalization
         // (https://github.com/HorizenOfficial/ginger-lib/issues/78)
-        let personalization = personalization.unwrap();
+        let personalization = personalization.ok_or(
+            SynthesisError::Other("non-empty personalization required".to_string()))?;
         debug_assert!(personalization.len() == 1);
 
         // Add padding 1
@@ -719,9 +531,8 @@ impl ToConstraintFieldGadget<FieldElement> for CswFtOutputDataGadget {
             .enumerate()
             .map(|(index, chunk)| {
                 FieldElementGadget::from_bits(cs.ns(|| format!("FT from bits {}", index)), chunk)
-                    .unwrap()
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, SynthesisError>>()?;
 
         Ok(elements)
     }
@@ -1373,10 +1184,9 @@ impl ScPublicKeyGadget {
             )?;
         }
 
-        Ok(ECPointSimulationGadget::new(
+        Ok(ECPointSimulationGadget::from_coords(
             sw_pk_x_coordinate_g,
             sw_pk_y_coordinate_g,
-            Boolean::Constant(false),
         ))
     }
 
@@ -1532,7 +1342,8 @@ impl ScPublicKeyGadget {
 
 #[cfg(test)]
 mod test {
-    use crate::deserialize_fe_unchecked;
+
+    use crate::blaze_csw::deserialize_fe_unchecked;
 
     use super::*;
     use algebra::ToBits;

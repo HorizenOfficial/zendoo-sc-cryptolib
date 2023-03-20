@@ -5,52 +5,24 @@ use primitives::{
     signature::schnorr::field_based_schnorr::{FieldBasedSchnorrPk, FieldBasedSchnorrSignature},
 };
 use r1cs_crypto::{
-    crh::{FieldBasedHashGadget, TweedleFrPoseidonHashGadget as PoseidonHashGadget},
-    signature::{
-        schnorr::field_based_schnorr::{
-            FieldBasedSchnorrPkGadget, FieldBasedSchnorrSigGadget,
-            FieldBasedSchnorrSigVerificationGadget,
-        },
-        FieldBasedSigGadget,
-    },
+    crh::FieldBasedHashGadget,
+    signature::FieldBasedSigGadget,
 };
 
 use r1cs_std::{
     alloc::AllocGadget,
     bits::{boolean::Boolean, uint64::UInt64, FromBitsGadget},
     eq::EqGadget,
-    fields::{fp::FpGadget, FieldGadget},
-    instantiated::tweedle::TweedleDumGadget as CurveGadget,
+    fields::FieldGadget,
 };
 
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystemAbstract, SynthesisError};
 
-use crate::{constants::NaiveThresholdSigParams, type_mapping::*};
+use crate::type_mapping::*;
 use cctp_primitives::utils::commitment_tree::DataAccumulator;
 
-use lazy_static::*;
-
-lazy_static! {
-    pub static ref NULL_CONST: NaiveThresholdSigParams = NaiveThresholdSigParams::new();
-}
-
-//Sig types
-pub(crate) type SchnorrSigGadget = FieldBasedSchnorrSigGadget<FieldElement, G2Projective>;
-pub(crate) type SchnorrVrfySigGadget = FieldBasedSchnorrSigVerificationGadget<
-    FieldElement,
-    G2Projective,
-    CurveGadget,
-    FieldHash,
-    PoseidonHashGadget,
->;
-pub(crate) type SchnorrPkGadget =
-    FieldBasedSchnorrPkGadget<FieldElement, G2Projective, CurveGadget>;
-
-//Field types
-pub(crate) type FrGadget = FpGadget<FieldElement>;
-
 #[derive(Clone)]
-pub struct NaiveTresholdSignature {
+pub struct NaiveThresholdSignature {
     //Witnesses
     pks: Vec<Option<FieldBasedSchnorrPk<G2Projective>>>, //pk_n = g^sk_n
     //sig_n = sign(sk_n, H(epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount))
@@ -73,13 +45,13 @@ pub struct NaiveTresholdSignature {
     max_pks: usize,
 }
 
-impl NaiveTresholdSignature {
+impl NaiveThresholdSignature {
     pub fn get_instance_for_setup(max_pks: usize, custom_fields_len: usize) -> Self {
-        //Istantiating supported number of pks and sigs
+        //Instantiating supported number of pks and sigs
         let log_max_pks = (max_pks.next_power_of_two() as u64).trailing_zeros() as usize;
 
         // Create parameters for our circuit
-        NaiveTresholdSignature {
+        NaiveThresholdSignature {
             pks: vec![None; max_pks],
             sigs: vec![None; max_pks],
             threshold: None,
@@ -204,7 +176,7 @@ impl NaiveTresholdSignature {
     }
 }
 
-impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
+impl ConstraintSynthesizer<FieldElement> for NaiveThresholdSignature {
     fn generate_constraints<CS: ConstraintSystemAbstract<FieldElement>>(
         self,
         cs: &mut CS,
@@ -232,21 +204,21 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
         }
 
         //Enforce pks_threshold_hash
-        let mut pks_threshold_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
+        let mut pks_threshold_hash_g = UnoptimizedFieldHashGadget::enforce_hash_constant_length(
             cs.ns(|| "hash public keys"),
             pks_g
                 .iter()
-                .map(|pk| pk.pk.x.clone())
+                .map(|pk| pk.pk.get_x_coord().clone())
                 .collect::<Vec<_>>()
                 .as_slice(),
         )?;
 
         //Allocate threshold as witness
-        let t_g = FrGadget::alloc(cs.ns(|| "alloc threshold"), || {
+        let t_g = FieldElementGadget::alloc(cs.ns(|| "alloc threshold"), || {
             self.threshold.ok_or(SynthesisError::AssignmentMissing)
         })?;
 
-        pks_threshold_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
+        pks_threshold_hash_g = UnoptimizedFieldHashGadget::enforce_hash_constant_length(
             cs.ns(|| "H(H(pks), threshold)"),
             &[pks_threshold_hash_g, t_g.clone()],
         )?;
@@ -256,19 +228,19 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
         //Reconstruct message as H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)
 
         // Alloc field elements
-        let sc_id_g = FrGadget::alloc(cs.ns(|| "alloc sc id"), || {
+        let sc_id_g = FieldElementGadget::alloc(cs.ns(|| "alloc sc id"), || {
             self.sc_id.ok_or(SynthesisError::AssignmentMissing)
         })?;
 
-        let epoch_number_g = FrGadget::alloc(cs.ns(|| "alloc epoch number"), || {
+        let epoch_number_g = FieldElementGadget::alloc(cs.ns(|| "alloc epoch number"), || {
             self.epoch_number.ok_or(SynthesisError::AssignmentMissing)
         })?;
 
-        let mr_bt_g = FrGadget::alloc(cs.ns(|| "alloc mr_bt"), || {
+        let mr_bt_g = FieldElementGadget::alloc(cs.ns(|| "alloc mr_bt"), || {
             self.mr_bt.ok_or(SynthesisError::AssignmentMissing)
         })?;
 
-        let end_cumulative_sc_tx_comm_tree_root_g = FrGadget::alloc(
+        let end_cumulative_sc_tx_comm_tree_root_g = FieldElementGadget::alloc(
             cs.ns(|| "alloc end_cumulative_sc_tx_comm_tree_root"),
             || {
                 self.end_cumulative_sc_tx_comm_tree_root
@@ -278,10 +250,11 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
 
         // Alloc custom_fields and enforce their hash, if they are present
         let custom_fields_hash_g = if let Some(custom_fields) = self.custom_fields.clone() {
-            let custom_fields_g = Vec::<FrGadget>::alloc(cs.ns(|| "alloc custom fields"), || {
-                Ok(custom_fields.as_slice())
-            })?;
-            let custom_fields_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
+            let custom_fields_g =
+                Vec::<FieldElementGadget>::alloc(cs.ns(|| "alloc custom fields"), || {
+                    Ok(custom_fields.as_slice())
+                })?;
+            let custom_fields_hash_g = UnoptimizedFieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| "H(custom_fields)"),
                 custom_fields_g.as_slice(),
             )?;
@@ -307,7 +280,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
             bits
         };
 
-        let fees_g = FrGadget::from_bits(
+        let fees_g = FieldElementGadget::from_bits(
             cs.ns(|| "pack(btr_fee, ft_min_amount)"),
             fees_bits.as_slice(),
         )?;
@@ -323,7 +296,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
             if custom_fields_hash_g.is_some() {
                 preimage.push(custom_fields_hash_g.clone().unwrap())
             }; // Add custom_fields_hash if present
-            PoseidonHashGadget::enforce_hash_constant_length(
+            UnoptimizedFieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| "H(sc_id, epoch_number, bt_root, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount, [H(custom_fields)])"),
                 preimage.as_slice(),
             )
@@ -343,7 +316,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
 
         //Check signatures verification verdict on message
         for (i, (pk_g, sig_g)) in pks_g.iter().zip(sigs_g.iter()).enumerate() {
-            let v = SchnorrVrfySigGadget::enforce_signature_verdict(
+            let v = UnoptimizedSchnorrVrfySigGadget::enforce_signature_verdict(
                 cs.ns(|| format!("check_sig_verdict_{}", i)),
                 pk_g,
                 sig_g,
@@ -353,7 +326,8 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
         }
 
         //Count valid signatures
-        let mut valid_signatures = FrGadget::zero(cs.ns(|| "alloc valid signatures count"))?;
+        let mut valid_signatures =
+            FieldElementGadget::zero(cs.ns(|| "alloc valid signatures count"))?;
         for (i, v) in verdicts.iter().enumerate() {
             valid_signatures = valid_signatures.conditionally_add_constant(
                 cs.ns(|| format!("add_verdict_{}", i)),
@@ -364,7 +338,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
 
         //Enforce cert_data_hash
         let cert_data_hash_g = {
-            let wcert_sysdata_hash_g = PoseidonHashGadget::enforce_hash_constant_length(
+            let wcert_sysdata_hash_g = UnoptimizedFieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| "H(sc_id, epoch_number, bt_root, valid_sigs, end_cumulative_sc_tx_comm_tree_root, btr_fee, ft_min_amount)"),
                 &[sc_id_g, epoch_number_g, mr_bt_g, valid_signatures.clone(), end_cumulative_sc_tx_comm_tree_root_g, fees_g],
             )?;
@@ -375,7 +349,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
                 vec![wcert_sysdata_hash_g]
             };
 
-            PoseidonHashGadget::enforce_hash_constant_length(
+            UnoptimizedFieldHashGadget::enforce_hash_constant_length(
                 cs.ns(|| "H([custom_fields], cert_data_hash)"),
                 preimage.as_slice(),
             )
@@ -383,7 +357,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
 
         //Check pks_threshold_hash (constant)
         let expected_pks_threshold_hash_g =
-            FrGadget::alloc_input(cs.ns(|| "alloc constant as input"), || {
+            FieldElementGadget::alloc_input(cs.ns(|| "alloc constant as input"), || {
                 self.pks_threshold_hash
                     .ok_or(SynthesisError::AssignmentMissing)
             })?;
@@ -395,7 +369,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
 
         // Check cert_data_hash
         let expected_cert_data_hash_g =
-            FrGadget::alloc_input(cs.ns(|| "alloc input cert_data_hash_g"), || {
+            FieldElementGadget::alloc_input(cs.ns(|| "alloc input cert_data_hash_g"), || {
                 self.cert_data_hash.ok_or(SynthesisError::AssignmentMissing)
             })?;
 
@@ -414,7 +388,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
         }
 
         //Pack the b's into a field element
-        let b_field = FrGadget::from_bits(
+        let b_field = FieldElementGadget::from_bits(
             cs.ns(|| "pack the b's into a field element"),
             bs_g.as_slice(),
         )?;
@@ -430,7 +404,7 @@ impl ConstraintSynthesizer<FieldElement> for NaiveTresholdSignature {
 
 #[cfg(test)]
 mod test {
-    use crate::{MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE};
+    use crate::{common::data_structures::NULL_CONST, MAX_SEGMENT_SIZE, SUPPORTED_SEGMENT_SIZE};
 
     use super::*;
     use cctp_primitives::{
@@ -458,7 +432,7 @@ mod test {
         threshold: usize,
         wrong_pks_threshold_hash: bool,
         wrong_cert_data_hash: bool,
-    ) -> NaiveTresholdSignature {
+    ) -> NaiveThresholdSignature {
         //Istantiate rng
         let mut rng = OsRng::default();
         let mut h =
@@ -550,7 +524,7 @@ mod test {
         let b_field = valid_field - t_field;
 
         //Return concrete circuit instance
-        let mut c = NaiveTresholdSignature::new(
+        let mut c = NaiveThresholdSignature::new(
             pks,
             sigs,
             t_field,
@@ -636,7 +610,7 @@ mod test {
         let ck = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
         assert_eq!(ck.comm_key.len(), SUPPORTED_SEGMENT_SIZE);
 
-        let circ = NaiveTresholdSignature::get_instance_for_setup(n, 1);
+        let circ = NaiveThresholdSignature::get_instance_for_setup(n, 1);
 
         let params = CoboundaryMarlin::index(&ck, circ).unwrap();
 
