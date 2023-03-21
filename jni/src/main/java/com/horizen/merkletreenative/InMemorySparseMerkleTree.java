@@ -37,7 +37,7 @@ public class InMemorySparseMerkleTree implements AutoCloseable {
      * Check if specified position is empty
      * @param position the index of the leaf to check
      * @return True if no leaf is allocated at that position, False otherwise
-     * @throws Exception If position > 2^height - 1
+     * @throws Exception If position &gt; 2^height - 1
      */
     public boolean isPositionEmpty(long position) throws Exception{
         if (merkleTreePointer == 0)
@@ -51,7 +51,7 @@ public class InMemorySparseMerkleTree implements AutoCloseable {
      * Add the specified leaves at the specified positions inside the tree.
      * No internal updates in the tree will be triggered by this operation.
      * @param leaves the leaves to be added to the tree and their corresponding index
-     * @throws Exception if one of the indices is > 2^height - 1
+     * @throws Exception if one of the indices is &gt; 2^height - 1
      */
     public void addLeaves(Map<Long, FieldElement> leaves) throws Exception{
         if (merkleTreePointer == 0)
@@ -68,7 +68,7 @@ public class InMemorySparseMerkleTree implements AutoCloseable {
      * Remove the specified leaves at the specified positions inside the tree.
      * No internal updates in the tree will be triggered by this operation.
      * @param positions a set of the indices of the leaves to be removed
-     * @throws Exception if one of the indices is > 2^height - 1 or if attempting
+     * @throws Exception if one of the indices is &gt; 2^height - 1 or if attempting
      * to remove a non-existing leaf.
      */
     public void removeLeaves(Set<Long> positions) throws Exception{
@@ -98,7 +98,7 @@ public class InMemorySparseMerkleTree implements AutoCloseable {
     /**
      * Return the root of the tree, only if the tree is in "finalized" state.
      * @return The current root of the tree
-     * @throws Exception, if the tree was not in "finalized" state
+     * @throws Exception if the tree was not in "finalized" state
      */
     public FieldElement root() throws Exception {
         if (merkleTreePointer == 0)

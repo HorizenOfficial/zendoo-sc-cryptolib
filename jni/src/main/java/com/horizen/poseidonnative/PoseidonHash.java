@@ -108,7 +108,7 @@ public class PoseidonHash implements AutoCloseable {
 
     /**
      * @deprecated
-     * Kept for backward compatibility if needed. Use init -> update -> finalize
+     * Kept for backward compatibility if needed. Use init -&gt; update -&gt; finalize
      * procedure instead.
      */
     @Deprecated

@@ -278,15 +278,15 @@ public class NaiveThresholdSignatureWKeyRotation {
      * @param maxPks - maximum number of public keys and signatures
      * @param threshold - minimum number of signatures that must be verified for the certificate to be accepted
      * @param genesisKeysRootHash - The root hash of the first block
-     * @param segmentSize - the segment size to be used to create the proof.
+     * @param supportedDegree - the segment size to be used to create the proof.
      *                      Must be equal to the one passed to the setup() method.
      *                      If not specified, it will default to the same size as the one passed to
      *                      ProvingSystem.generateDLogKeys() method.
      * @param provingKeyPath - file path from which reading the proving key
      * @param checkProvingKey - enable semantic checks on the proving key (WARNING: very expensive)
      * @param zk - if proof must be created using zk property or not
-     * @param compressed_pk - if the pk read from provingKeyPath is in compressed form or not
-     * @param compress_proof - whether to return the proof bytes in compressed form or not
+     * @param compressedPk - if the pk read from provingKeyPath is in compressed form or not
+     * @param compressProof - whether to return the proof bytes in compressed form or not
      * @return a CreateProofResult instance, i.e. the computed proof bytes and the quality of the certificate (i.e. in this case, number of valid signatures),
      *         OR null pointer if some errors occured during proof creation.
      */
@@ -332,7 +332,7 @@ public class NaiveThresholdSignatureWKeyRotation {
      * @param maxPks - maximum number of public keys and signatures
      * @param threshold - minimum number of signatures that must be verified for the certificate to be accepted
      * @param genesisKeysRootHash - The root hash of the first block
-     * @param segmentSize - the segment size to be used to create the proof.
+     * @param supportedDegree - the segment size to be used to create the proof.
      *                      Must be equal to the one passed to the setup() method.
      *                      If not specified, it will default to the same size as the one passed to
      *                      ProvingSystem.generateDLogKeys() method.
@@ -383,7 +383,7 @@ public class NaiveThresholdSignatureWKeyRotation {
      * @param maxPks - maximum number of public keys and signatures
      * @param threshold - minimum number of signatures that must be verified for the certificate to be accepted
      * @param genesisKeysRootHash - The root hash of the first block
-     * @param segmentSize - the segment size to be used to create the proof.
+     * @param supportedDegree - the segment size to be used to create the proof.
      *                      Must be equal to the one passed to the setup() method.
      *                      If not specified, it will default to the same size as the one passed to
      *                      ProvingSystem.generateDLogKeys() method.

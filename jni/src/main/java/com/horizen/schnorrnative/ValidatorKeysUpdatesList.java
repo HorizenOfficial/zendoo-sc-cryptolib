@@ -104,7 +104,6 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     /**
     * Computes the current validator keys merkle root.
     *
-    * @param maxPks - Maximum number of pks
     * @return the current validator keys merkle root.
     * @throws Exception - if it was not possible to compute the root
     */
@@ -125,7 +124,6 @@ public class ValidatorKeysUpdatesList implements AutoCloseable {
     /**
     * Computes the updated validator keys merkle root.
     *
-    * @param maxPks - Maximum number of pks
     * @return the updated validator keys merkle root
     * @throws Exception - if it was not possible to compute the root
     */
