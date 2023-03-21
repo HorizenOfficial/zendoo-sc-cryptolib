@@ -1,6 +1,6 @@
 [package]
 name = "api"
-version = "0.6.0"
+version = "0.7.0-SNAPSHOT"
 authors = [
     "DanieleDiBenedetto <daniele@horizenlabs.io>",
     "Oleksandr Iozhytsia <oleksandr@zensystem.io>",
