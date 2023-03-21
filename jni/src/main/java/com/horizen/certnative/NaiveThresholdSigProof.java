@@ -440,10 +440,6 @@ public class NaiveThresholdSigProof {
      * @param schnorrPublicKeyList - list of Schnorr public keys corresponding to schnorrSignaturesList
      * @param threshold - Minimum number of signatures that must be verified for the certificate to be accepted
      * @param customFields - additional optional parameters. Can be empty
-     * @param segmentSize - the segment size to be used to create the proof.
-     *                      Must be equal to the one passed to the setup() method.
-     *                      If not specified, it will default to the same size as the one passed to
-     *                      ProvingSystem.generateDLogKeys() method.
      * @param provingKeyPath - file path from which reading the proving key, expected to be in compressed form
      * @param zk - if proof must be created using zk property or not
      * @return a CreateProofResult instance, i.e. the computed proof bytes (in compressed form),
