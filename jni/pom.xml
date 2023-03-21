@@ -112,6 +112,7 @@
             </executions>
           </plugin>
           <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-javadoc-plugin</artifactId>
             <version>3.2.0</version>
             <executions>
@@ -122,10 +123,6 @@
                 </goals>
               </execution>
             </executions>
-            <configuration>
-              <sourcepath>${project.basedir}/src/main/java</sourcepath>
-              <excludePackageNames>com.horizen.*</excludePackageNames>
-            </configuration>
           </plugin>
         </plugins>
       </build>

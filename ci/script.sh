@@ -28,7 +28,7 @@ if [ "${1}" = "tests" ]; then
         -e CARGO_AUDIT_EXIT_ON_ERROR \
         -e CONTAINER_PUBLISH \
         -e LOCAL_USER_ID="$(id -u)" \
-        -e LOCAL_GRP_ID="$(id -g)"\
+        -e LOCAL_GRP_ID="$(id -g)" \
         --env-file <(env | grep -E '^(RUSTFLAGS=|CARGOARGS=|RUST_CROSS_TARGETS=|RUSTUP_TOOLCHAIN=).+$') \
         "${image}" ci/run_tests.sh
     else

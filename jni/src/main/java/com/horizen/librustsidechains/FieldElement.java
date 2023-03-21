@@ -62,7 +62,7 @@ public class FieldElement implements AutoCloseable {
      * Deserialize a FieldElement from "fieldElementBytes"
      * @param fieldElementBytes bytes of the FieldElement to be deserialized
      * @return The deserialized FieldElement
-     * @throws IllegalArgumentException If fieldElementBytes.len() > FIELD_ELEMENT_LENGTH or if the bytes represent an invalid FieldElement
+     * @throws IllegalArgumentException If fieldElementBytes.len() &gt; FIELD_ELEMENT_LENGTH or if the bytes represent an invalid FieldElement
      */
     public static FieldElement deserialize(byte[] fieldElementBytes) throws IllegalArgumentException {
         if (fieldElementBytes.length > Constants.FIELD_ELEMENT_LENGTH())
@@ -78,7 +78,7 @@ public class FieldElement implements AutoCloseable {
      * the original bytes [0..index) and the other ones from the original bytes [index..FIELD_ELEMENT_LENGTH)
      * @param index - a valid integer in the range (0, FIELD_ELEMENT_LENGTH)
      * @return a List made up of two FieldElements, read from the original one split at index
-     * @throws IndexOutOfBoundsException in case of illegal index (i.e. index <= 0 OR index >= FIELD_ELEMENT_LENGTH)
+     * @throws IndexOutOfBoundsException in case of illegal index (i.e. index &lt;= 0 OR index &gt;= FIELD_ELEMENT_LENGTH)
      */
     public List<FieldElement> splitAt(int index) throws IndexOutOfBoundsException {
         
