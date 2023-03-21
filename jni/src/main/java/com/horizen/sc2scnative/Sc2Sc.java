@@ -309,9 +309,9 @@ public class Sc2Sc {
          * check the proving key and assume that proving key and proof are compressed.
          * This varian take arrays of bytes instead of FieldElement.
          * 
-         * @param nextScTxCommitmentsRoot    - Next epoch sc tx root (public)
-         * @param currentScTxCommitmentsRoot - Current epoch sc tx root for (public)
-         * @param msgHash                    - Message hash (public)
+         * @param nextScTxCommitmentsRootB    - Next epoch sc tx root (public)
+         * @param currentScTxCommitmentsRootB - Current epoch sc tx root for (public)
+         * @param msgHashB                    - Message hash (public)
          * @param nextWithdrawalCertificate  - Next epoch Withdrowal Certificate
          *                                   (witness)
          * @param currWithdrawalCertificate  - Current epoch Withdrowal Certificate
