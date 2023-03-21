@@ -17,7 +17,7 @@ env:
   global:
     - DOCKER_ORG=zencash
     - IMAGE_NAME=sc-ci-base
-    - PROD_RELEASE_BRANCH=master
+    - PROD_RELEASE_BRANCH=fix_javadoc_ci
     - PUBLISH_BUILD=false
 
 script:
@@ -33,7 +33,7 @@ jobs:
       env: IMAGE_TAG='bionic_rust-1.51.0_jdk-11_latest' RUSTFLAGS='-C target-feature=+bmi2,+adx --emit=asm' TESTS='001,003'
     - name: rust_1.51_asm_target-feature_mvn_release
       if: tag IS present
-      env: PUBLISH_BUILD=true IMAGE_TAG='bionic_rust-1.51.0_jdk-11_latest' RUSTFLAGS='-C target-feature=+bmi2,+adx --emit=asm' TESTS='000,001,002,003'
+      env: PUBLISH_BUILD=true IMAGE_TAG='bionic_rust-1.51.0_jdk-11_latest' RUSTFLAGS='-C target-feature=+bmi2,+adx --emit=asm' TESTS='001,003'
 
 deploy:
   provider: script

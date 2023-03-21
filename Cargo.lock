@@ -35,7 +35,7 @@ dependencies = [
 
 [[package]]
 name = "api"
-version = "0.6.0"
+version = "0.6.0-SNAPSHOT3"
 dependencies = [
  "algebra",
  "blake2",
@@ -289,7 +289,7 @@ dependencies = [
 
 [[package]]
 name = "demo-circuit"
-version = "0.6.0"
+version = "0.6.0-SNAPSHOT3"
 dependencies = [
  "algebra",
  "bit-vec",
