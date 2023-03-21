@@ -168,9 +168,9 @@ public class Sc2Sc {
          * arrays
          * of bytes instead of FieldElement.
          * 
-         * @param nextScTxCommitmentsRoot    - Next epoch sc tx root
-         * @param currentScTxCommitmentsRoot - Current epoch sc tx root for
-         * @param msgHash                    - Message hash
+         * @param nextScTxCommitmentsRootB    - Next epoch sc tx root
+         * @param currentScTxCommitmentsRootB - Current epoch sc tx root for
+         * @param msgHashB                    - Message hash
          * @param proof                      - The serialized proof (see createProof
          *                                   methods)
          * @param vkPath                     - Verification Key file path
