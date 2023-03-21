@@ -17,7 +17,7 @@ env:
   global:
     - DOCKER_ORG=zencash
     - IMAGE_NAME=sc-ci-base
-    - PROD_RELEASE_BRANCH=fix_javadoc_ci
+    - PROD_RELEASE_BRANCH=master
     - PUBLISH_BUILD=false
 
 script:
