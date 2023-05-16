@@ -55,8 +55,8 @@ pub struct Sc2Sc {
 impl Sc2Sc {
     /// Create a new circuit data to build the circuit
     pub fn new(
-        next_sc_tx_commitments_root: FieldElement,
-        curr_sc_tx_commitments_root: FieldElement,
+        next_sc_tx_commitment_root: FieldElement,
+        curr_sc_tx_commitment_root: FieldElement,
         msg_hash: FieldElement,
         next_cert: WithdrawalCertificateData,
         curr_cert: WithdrawalCertificateData,
@@ -67,16 +67,15 @@ impl Sc2Sc {
         assert_eq!(
             next_cert.custom_fields.len(),
             curr_cert.custom_fields.len(),
-            "Certificates should contains the same custom fields"
+            "Certificates should contain the same custom fields"
         );
         assert!(next_cert.custom_fields.len() >= MIN_CUSTOM_FIELDS, "We need at least {} custom fields: see 
-            https://github.com/HorizenOfficial/ZenIPs/blob/57fe28cb13202550ed29512f913de2508877dc0b/zenip-42205.md#zenip-42205
-            for more details", MIN_CUSTOM_FIELDS);
+            zenip-42205 for more details", MIN_CUSTOM_FIELDS);
 
         Self {
             public_input: Sc2ScUserInput::new(
-                next_sc_tx_commitments_root,
-                curr_sc_tx_commitments_root,
+                next_sc_tx_commitment_root,
+                curr_sc_tx_commitment_root,
                 msg_hash,
             ),
             next_cert,
@@ -105,7 +104,7 @@ impl Sc2Sc {
         &self.public_input
     }
 
-    fn enforce_contiguos_epochs<CS>(
+    fn enforce_contiguous_epochs<CS>(
         &self,
         cs: &mut CS,
         curr_cert_g: &WithdrawalCertificateDataGadget,
@@ -138,13 +137,13 @@ impl ConstraintSynthesizer<FieldElement> for Sc2Sc {
         cs: &mut CS,
     ) -> Result<(), r1cs_core::SynthesisError> {
         // Expose public inputs
-        let next_sc_tx_commitments_root_g =
+        let next_sc_tx_commitment_root_g =
             FieldElementGadget::alloc_input(cs.ns(|| "Alloc next sc tx commitment root"), || {
-                Ok(self.public_input.next_sc_tx_commitments_root)
+                Ok(self.public_input.next_sc_tx_commitment_root)
             })?;
-        let curr_sc_tx_commitments_root_g = FieldElementGadget::alloc_input(
+        let curr_sc_tx_commitment_root_g = FieldElementGadget::alloc_input(
             cs.ns(|| "Alloc current sc tx commitment root"),
-            || Ok(self.public_input.curr_sc_tx_commitments_root),
+            || Ok(self.public_input.curr_sc_tx_commitment_root),
         )?;
         let msg_hash_g = FieldElementGadget::alloc_input(cs.ns(|| "Alloc msg_hash"), || {
             Ok(self.public_input.msg_hash)
@@ -168,34 +167,34 @@ impl ConstraintSynthesizer<FieldElement> for Sc2Sc {
 
         // Enforce next certificate top quality hash == current certificate hash
         next_cert_g.custom_fields_g[MAX_QUALITY_CERT_HASH_CUSTOM_FIELDS_POS].enforce_equal(
-            cs.ns(|| "require(next_cert.previous_top_quality_hash == H(curr_cert_hash)"),
+            cs.ns(|| "require(next_cert.previous_top_quality_hash == H(curr_cert)"),
             &curr_cert_hash_g,
         )?;
 
         // Enforce current certificate epoch id + 1 == next certificate epoch id
-        self.enforce_contiguos_epochs(cs, &curr_cert_g, &next_cert_g)?;
+        self.enforce_contiguous_epochs(cs, &curr_cert_g, &next_cert_g)?;
 
         // Enforce paths for current certificate, next certificate and message hash
         ScCommitmentCertPathGadget::alloc(
-            cs.ns(|| "Alloc current epoch sc_tx_commitment_root recostruction gadget"),
+            cs.ns(|| "Alloc current epoch sc_tx_commitment_root reconstruction gadget"),
             || Ok(&self.curr_cert_path),
         )?
         .check_membership(
             cs.ns(|| "Check current epoch sc_tx_commitment_root"),
-            &curr_sc_tx_commitments_root_g,
-            &curr_cert_hash_g,
+            &curr_sc_tx_commitment_root_g,
             &curr_cert_g.ledger_id_g,
+            &curr_cert_hash_g,
         )?;
 
         ScCommitmentCertPathGadget::alloc(
-            cs.ns(|| "Alloc next epoch sc_tx_commitment_root recostruction gadget"),
+            cs.ns(|| "Alloc next epoch sc_tx_commitment_root reconstruction gadget"),
             || Ok(&self.next_cert_path),
         )?
         .check_membership(
             cs.ns(|| "Check next epoch sc_tx_commitment_root"),
-            &next_sc_tx_commitments_root_g,
-            &next_cert_hash_g,
+            &next_sc_tx_commitment_root_g,
             &next_cert_g.ledger_id_g,
+            &next_cert_hash_g,
         )?;
 
         GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc messages tree path"), || {
@@ -217,22 +216,22 @@ impl ConstraintSynthesizer<FieldElement> for Sc2Sc {
 pub struct Sc2ScUserInput {
     // Public Inputs
     /// Side Chain Tx Commitment  Root of epoch N+1
-    next_sc_tx_commitments_root: FieldElement,
+    next_sc_tx_commitment_root: FieldElement,
     /// Side Chain Tx Commitment  Root of epoch N
-    curr_sc_tx_commitments_root: FieldElement,
+    curr_sc_tx_commitment_root: FieldElement,
     /// Hash of the message to be redeemed
     msg_hash: FieldElement,
 }
 
 impl Sc2ScUserInput {
     pub fn new(
-        next_sc_tx_commitments_root: FieldElement,
-        curr_sc_tx_commitments_root: FieldElement,
+        next_sc_tx_commitment_root: FieldElement,
+        curr_sc_tx_commitment_root: FieldElement,
         msg_hash: FieldElement,
     ) -> Self {
         Self {
-            next_sc_tx_commitments_root,
-            curr_sc_tx_commitments_root,
+            next_sc_tx_commitment_root,
+            curr_sc_tx_commitment_root,
             msg_hash,
         }
     }
@@ -243,8 +242,8 @@ impl UserInputs for Sc2ScUserInput {
         &self,
     ) -> Result<Vec<FieldElement>, cctp_primitives::proving_system::error::ProvingSystemError> {
         Ok(vec![
-            self.next_sc_tx_commitments_root,
-            self.curr_sc_tx_commitments_root,
+            self.next_sc_tx_commitment_root,
+            self.curr_sc_tx_commitment_root,
             self.msg_hash,
         ])
     }
@@ -253,9 +252,9 @@ impl UserInputs for Sc2ScUserInput {
 /// Represent the data that we need to rebuild the sc_tx_commitment root
 /// from the withdrawal certificate. We need
 /// - `cert_path` to recover the withdrawal certificate root from certificate hash
-/// - `fwt_root`, `bwt_root`, `ssc` (start sidechain) to build sc_commitment with
+/// - `fwt_root`, `bt_root`, `ssc_tx` (start sidechain) to build sc_commitment with
 /// withdrawal certificate root and passed sidechain id
-/// - sc_commitment_path to rebuild the sidechain tx commitment root
+/// - sc_comm_tree_path to rebuild the sidechain tx commitment root
 ///
 /// The method `enforce_sc_tx_commitment_root` take the certificate hash and
 /// sidechain id gadgets to enforce all the path.
@@ -263,20 +262,20 @@ impl UserInputs for Sc2ScUserInput {
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct ScCommitmentCertPath {
     fwt_root: FieldElement,
-    bwt_root: FieldElement,
-    ssc: FieldElement,
+    bt_root: FieldElement,
+    ssc_tx: FieldElement,
     cert_path: GingerMHTBinaryPath,
-    sc_commitment_path: GingerMHTBinaryPath,
+    sc_comm_tree_path: GingerMHTBinaryPath,
 }
 
 impl Default for ScCommitmentCertPath {
     fn default() -> Self {
         Self {
             fwt_root: FieldElement::zero(),
-            bwt_root: FieldElement::zero(),
-            ssc: FieldElement::zero(),
+            bt_root: FieldElement::zero(),
+            ssc_tx: FieldElement::zero(),
             cert_path: GingerMHTBinaryPath::new(vec![Default::default(); CERT_MT_HEIGHT]),
-            sc_commitment_path: GingerMHTBinaryPath::new(vec![Default::default(); CMT_MT_HEIGHT]),
+            sc_comm_tree_path: GingerMHTBinaryPath::new(vec![Default::default(); CMT_MT_HEIGHT]),
         }
     }
 }
@@ -285,17 +284,17 @@ impl ScCommitmentCertPath {
     /// Create a new path
     pub fn new(
         fwt_root: FieldElement,
-        bwt_root: FieldElement,
-        ssc: FieldElement,
+        bt_root: FieldElement,
+        ssc_tx: FieldElement,
         cert_path: GingerMHTBinaryPath,
-        sc_commitment_path: GingerMHTBinaryPath,
+        sc_comm_tree_path: GingerMHTBinaryPath,
     ) -> Self {
         Self {
             fwt_root,
-            bwt_root,
-            ssc,
+            bt_root,
+            ssc_tx,
             cert_path,
-            sc_commitment_path,
+            sc_comm_tree_path,
         }
     }
 
@@ -307,12 +306,12 @@ impl ScCommitmentCertPath {
         let cert_root = self.cert_path.compute_root(&cert_hash);
         let commitment = hash_vec(vec![
             self.fwt_root.clone(),
-            self.bwt_root.clone(),
+            self.bt_root.clone(),
             cert_root.clone(),
-            self.ssc,
+            self.ssc_tx,
             sc_id.clone(),
         ])?;
-        Ok(self.sc_commitment_path.compute_root(&commitment))
+        Ok(self.sc_comm_tree_path.compute_root(&commitment))
     }
 
     pub fn check_membership(
@@ -334,16 +333,16 @@ impl ScCommitmentCertPath {
     ) -> Result<Self, Error> {
         Ok(Self::new(
             cmt.get_fwt_commitment(&sc_id)
-                .ok_or(format!("Cannot retrive the forward transfer root"))?,
+                .ok_or(format!("Cannot retrieve the forward transfer root"))?,
             cmt.get_bwtr_commitment(&sc_id)
-                .ok_or(format!("Cannot retrive the backward transfer root"))?,
+                .ok_or(format!("Cannot retrieve the backward transfer root"))?,
             cmt.get_scc(&sc_id)
-                .ok_or(format!("Cannot retrive the sidechain creation"))?,
+                .ok_or(format!("Cannot retrieve the sidechain creation"))?,
             cmt.get_cert_merkle_path(&sc_id, cert_index)
-                .ok_or(format!("Cannot retrive the certificate merkle path"))?
+                .ok_or(format!("Cannot retrieve the certificate merkle path"))?
                 .try_into()?,
             cmt.get_sc_commitment_merkle_path(&sc_id)
-                .ok_or(format!("Cannot retrive the commitment merkle path"))?
+                .ok_or(format!("Cannot retrieve the commitment merkle path"))?
                 .try_into()?,
         )
         .into())
@@ -360,7 +359,7 @@ impl ScCommitmentCertPath {
                 length, CMT_MT_HEIGHT
             ))?
         }
-        self.sc_commitment_path = sc_commitment_path;
+        self.sc_comm_tree_path = sc_commitment_path;
         Ok(())
     }
 }
@@ -368,51 +367,51 @@ impl ScCommitmentCertPath {
 impl SemanticallyValid for ScCommitmentCertPath {
     fn is_valid(&self) -> bool {
         self.cert_path.get_length() == CERT_MT_HEIGHT
-            && self.sc_commitment_path.get_length() == CMT_MT_HEIGHT
+            && self.sc_comm_tree_path.get_length() == CMT_MT_HEIGHT
     }
 }
 
 struct ScCommitmentCertPathGadget {
     fwt_root: FieldElementGadget,
-    bwt_root: FieldElementGadget,
-    ssc: FieldElementGadget,
+    bt_root: FieldElementGadget,
+    ssc_tx: FieldElementGadget,
     cert_path: GingerMHTBinaryGadget,
-    sc_commitment_path: GingerMHTBinaryGadget,
+    sc_comm_tree_path: GingerMHTBinaryGadget,
 }
 
 impl ScCommitmentCertPathGadget {
-    /// Recostruct and verify the root of sc tx commitment tree. Need follow gadgets:
+    /// Reconstruct and verify the root of sc tx commitment tree. Need follow gadgets:
     /// -`sc_tx_commitment_root` the final sc tx commitment root
-    /// -`cert_hash` the certificate hash leaf gadget in the withdrawal certificates merkle tree
     /// -`sc_id` the sidechain id gadget that we can take from the withdrawal certificate gadget
+    /// -`cert_hash` the certificate hash leaf gadget in the withdrawal certificates merkle tree
     fn check_membership<CS: r1cs_core::ConstraintSystemAbstract<FieldElement>>(
         &self,
         mut cs: CS,
         sc_tx_commitment_root: &FpGadget<FieldElement>,
-        cert_hash: &FpGadget<FieldElement>,
         sc_id: &FpGadget<FieldElement>,
+        cert_hash: &FpGadget<FieldElement>,
     ) -> Result<(), r1cs_core::SynthesisError> {
         // Rebuild the certificate root from hash leaf and merkle path.
         let cert_root_g = self.cert_path.enforce_root_from_leaf(
             cs.ns(|| "reconstruct_merkle_root_hash(cert_hash, cert_path)"),
             &cert_hash,
         )?;
-        let sc_tx_commitment_g = FieldHashGadget::enforce_hash_constant_length(
+        let sc_root_g = FieldHashGadget::enforce_hash_constant_length(
             cs.ns(|| "Enforce H(fwt_mr, bwt_mr, cert_mr, scc, sc_id)"),
             &[
                 self.fwt_root.clone(),
-                self.bwt_root.clone(),
+                self.bt_root.clone(),
                 cert_root_g,
-                self.ssc.clone(),
+                self.ssc_tx.clone(),
                 sc_id.clone(),
             ],
         )?;
-        self.sc_commitment_path.check_membership(
+        self.sc_comm_tree_path.check_membership(
             cs.ns(|| {
-                "Verify merkle root of (sc_tx_commitment, sc_tx_commitments_path) == sc_tx_commitments_root"
+                "Verify merkle root of (sc_tx_commitment, sc_tx_commitment_path) == sc_tx_commitment_root"
             }),
             sc_tx_commitment_root,
-            &sc_tx_commitment_g,
+            &sc_root_g,
         )
     }
 }
@@ -432,16 +431,16 @@ impl AllocGadget<ScCommitmentCertPath, FieldElement> for ScCommitmentCertPathGad
             fwt_root: FieldElementGadget::alloc(cs.ns(|| "alloc fwt root gadget"), || {
                 Ok(path.fwt_root)
             })?,
-            bwt_root: FieldElementGadget::alloc(cs.ns(|| "alloc bwt root gadget"), || {
-                Ok(path.bwt_root)
+            bt_root: FieldElementGadget::alloc(cs.ns(|| "alloc bwt root gadget"), || {
+                Ok(path.bt_root)
             })?,
-            ssc: FieldElementGadget::alloc(cs.ns(|| "alloc start sc gadget"), || Ok(path.ssc))?,
+            ssc_tx: FieldElementGadget::alloc(cs.ns(|| "alloc start sc gadget"), || Ok(path.ssc_tx))?,
             cert_path: GingerMHTBinaryGadget::alloc(cs.ns(|| "alloc cert tree path"), || {
                 Ok(path.cert_path.clone())
             })?,
-            sc_commitment_path: GingerMHTBinaryGadget::alloc(
-                cs.ns(|| "alloc sc_tx_commitments tree path"),
-                || Ok(path.sc_commitment_path.clone()),
+            sc_comm_tree_path: GingerMHTBinaryGadget::alloc(
+                cs.ns(|| "alloc sc_tx_commitment tree path"),
+                || Ok(path.sc_comm_tree_path.clone()),
             )?,
         })
     }
@@ -460,19 +459,19 @@ impl AllocGadget<ScCommitmentCertPath, FieldElement> for ScCommitmentCertPathGad
             fwt_root: FieldElementGadget::alloc_input(cs.ns(|| "alloc fwt root gadget"), || {
                 Ok(path.fwt_root)
             })?,
-            bwt_root: FieldElementGadget::alloc_input(cs.ns(|| "alloc bwt root gadget"), || {
-                Ok(path.bwt_root)
+            bt_root: FieldElementGadget::alloc_input(cs.ns(|| "alloc bwt root gadget"), || {
+                Ok(path.bt_root)
             })?,
-            ssc: FieldElementGadget::alloc_input(cs.ns(|| "alloc start sc gadget"), || {
-                Ok(path.ssc)
+            ssc_tx: FieldElementGadget::alloc_input(cs.ns(|| "alloc start sc gadget"), || {
+                Ok(path.ssc_tx)
             })?,
             cert_path: GingerMHTBinaryGadget::alloc_input(
                 cs.ns(|| "alloc cert tree path"),
                 || Ok(path.cert_path.clone()),
             )?,
-            sc_commitment_path: GingerMHTBinaryGadget::alloc_input(
-                cs.ns(|| "alloc sc_tx_commitments tree path"),
-                || Ok(path.sc_commitment_path.clone()),
+            sc_comm_tree_path: GingerMHTBinaryGadget::alloc_input(
+                cs.ns(|| "alloc sc_tx_commitment tree path"),
+                || Ok(path.sc_comm_tree_path.clone()),
             )?,
         })
     }

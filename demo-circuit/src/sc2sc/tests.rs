@@ -261,9 +261,9 @@ mod sc_commitment_cert_path {
             .generate_sc_data(None, &mut rng, sc_id);
 
         let (cert, mut path, root) = cmt.get_withdrawal_certificate_info(0);
-        let valid_mt = path.sc_commitment_path.clone();
+        let valid_mt = path.sc_comm_tree_path.clone();
 
-        let zero_mt = ScCommitmentCertPath::default().sc_commitment_path;
+        let zero_mt = ScCommitmentCertPath::default().sc_comm_tree_path;
 
         path.update_sc_commitment_path(zero_mt).unwrap();
 
@@ -430,10 +430,10 @@ mod should_fail {
                 curr_cert_path.fwt_root += FieldElement::one();
             }
             BTRootHash => {
-                curr_cert_path.bwt_root += FieldElement::one();
+                curr_cert_path.bt_root += FieldElement::one();
             }
             SSC => {
-                curr_cert_path.ssc += FieldElement::one();
+                curr_cert_path.ssc_tx += FieldElement::one();
             }
             CertPath => {
                 let mut raw = curr_cert_path.cert_path.get_raw_path().clone();
@@ -441,9 +441,9 @@ mod should_fail {
                 curr_cert_path.cert_path = GingerMHTBinaryPath::new(raw);
             }
             ScCommitmentPath => {
-                let mut raw = curr_cert_path.sc_commitment_path.get_raw_path().clone();
+                let mut raw = curr_cert_path.sc_comm_tree_path.get_raw_path().clone();
                 raw[0].0 += FieldElement::one();
-                curr_cert_path.sc_commitment_path = GingerMHTBinaryPath::new(raw);
+                curr_cert_path.sc_comm_tree_path = GingerMHTBinaryPath::new(raw);
             }
         }
 
@@ -503,10 +503,10 @@ mod should_fail {
                 next_cert_path.fwt_root += FieldElement::one();
             }
             BTRootHash => {
-                next_cert_path.bwt_root += FieldElement::one();
+                next_cert_path.bt_root += FieldElement::one();
             }
             SSC => {
-                next_cert_path.ssc += FieldElement::one();
+                next_cert_path.ssc_tx += FieldElement::one();
             }
             CertPath => {
                 let mut raw = curr_cert_path.cert_path.get_raw_path().clone();
@@ -514,9 +514,9 @@ mod should_fail {
                 next_cert_path.cert_path = GingerMHTBinaryPath::new(raw);
             }
             ScCommitmentPath => {
-                let mut raw = curr_cert_path.sc_commitment_path.get_raw_path().clone();
+                let mut raw = curr_cert_path.sc_comm_tree_path.get_raw_path().clone();
                 raw[0].0 += FieldElement::one();
-                next_cert_path.sc_commitment_path = GingerMHTBinaryPath::new(raw);
+                next_cert_path.sc_comm_tree_path = GingerMHTBinaryPath::new(raw);
             }
         }
 
@@ -595,7 +595,7 @@ mod should_fail {
 
     #[rstest]
     #[serial]
-    #[should_panic(expected = "next_cert.previous_top_quality_hash == H(curr_cert_hash)")]
+    #[should_panic(expected = "next_cert.previous_top_quality_hash == H(curr_cert)")]
     fn if_some_in_curr_cert_change(
         mut rng: impl Rng,
         base_commitments: CommitmentPair,
