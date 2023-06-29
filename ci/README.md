@@ -47,12 +47,12 @@ Before starting the build process use `set_version.sh` script if needed by provi
 
 ---
 ## How to refer
-- Find all the existing versions of [0.7.0-SNAPSHOT package](https://oss.sonatype.org/content/repositories/snapshots/io/horizen/zendoo-sc-cryptolib/0.7.0-SNAPSHOT/)
+- Find all the existing versions of [0.7.0](https://oss.sonatype.org/content/repositories/snapshots/io/horizen/zendoo-sc-cryptolib/0.7.0/)
 - Use the full version of SNAPSHOT package as a dependency in the following format for your project.
 ```
 <dependency>
     <groupId>io.horizen</groupId>
     <artifactId>zendoo-sc-cryptolib</artifactId>
-    <version>0.6.1-20220623.010409-1</version>
+    <version>0.7.0</version>
 </dependency>
 ```
