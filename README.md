@@ -32,23 +32,23 @@ Support has been introduced to create *Final Darlin* proofs, as per last step of
 
 ## Build guide
 
-The library compiles on the `1.51.0 stable` toolchain of the Rust compiler.
-To install Rust, first install `rustup` by following the instructions [here](https://rustup.rs/), or via your platform's package manager.
-Once `rustup` is installed, install the appropriate Rust toolchain by invoking:
-```bash
-rustup install 1.51.0
-```
+The library compiles on the `stable` Rust toolchain.
+To install Rust, just install `rustup` by following the instructions [here](https://rustup.rs/), or via your platform's package manager.
 
 After that, use `cargo`, the standard Rust build tool, to build the library:
+
 ```bash
 git clone https://github.com/HorizenOfficial/zendoo-sc-cryptolib.git
 cd zendoo-sc-cryptolib
 cargo build --release
 ```
+
 This library comes with unit tests for each of the provided crates. Run the tests with:
+
 ```bash
 cargo test
 ``` 
+
 More detailed build guide, as well as instructions to build the .jar, can be found in our [build guide](BUILD.md).
 
 ## Extras

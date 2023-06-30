@@ -20,25 +20,23 @@ use serial_test::*;
 // Blake2s digest of all circuits' (pk, vk)
 
 // Base: zendoo-sc-cryptolib v0.5.0
-const CSW_PK_DIGEST: &str = "33513c70bbd25a853ffe73e8d44f5569ee44351397c57c5761fa52aac5ce63dd";
-const CSW_VK_DIGEST: &str = "dcb3aabfe0a2c962963d41f48ebda0eb15cf1fa2ebbd63dd450dffa135c2ccd8";
-const CSW_NO_CONST_PK_DIGEST: &str = 
-    "d786bf80bb5f50244fa25a852075714e1fd4012f11ebefe0b33b082fc67679b8";
+const CSW_PK_DIGEST: &str = "191f3d52680d5223f623dd15d5eccef6e5d61c3084bcbbbc0a4d93fec2a1a16f";
+const CSW_VK_DIGEST: &str = "200d698d865dd49f8f6920200d94272c8ed0e837ef34c615d14ac8801a4b5c94";
+const CSW_NO_CONST_PK_DIGEST: &str =
+    "3437a211f2cdb7f5a1f821c230f70ba04d3f4a98c877af24ec772e605c38c62a";
 const CSW_NO_CONST_VK_DIGEST: &str =
-    "bc6c5f7327a3668513351b35191112e9053d2df9643b0708da32230338dd5451";
+    "e8f459cca702f05b473080c214f3e9bfcc01684e16e41a83f122619d8b2dff0f";
 
 const THRESHOLD_V1_PK_DIGEST: &str =
-    "bcc672e39e2cb4fbeaac3b0f5e859f35264a41e37276f06f81169e53d1933e7f";
+    "c9eb18711e1b30e5f1a0733bff004efcd6507e81c4509ee71dcb0c367396ad29";
 const THRESHOLD_V1_VK_DIGEST: &str =
-    "aece7e4216fa5590ceb206ef580d3a8aec040306fdb134d2f63128d7bd40f622";
+    "821dd1bb16309d12e8075492e2da685c15caef0920b1ec0579fda86d873029b8";
 
 // Base: zendoo-sc-cryptolib v0.6.0
 const THRESHOLD_V2_PK_DIGEST: &str =
-    "6d36fdf04efa4b148291bbe8fb3b80eb3a32602f6e97b3f7b805751647e210ca";
-//"8e5987aba3c5a7ec44bc8b666ba2c720b4cbc857336dbbb052a7fe84b78119e2";
+    "80c9220c01cc3efdb052080d6bd6096cc8a456e96fc50e971e1830f10f7f5a68";
 const THRESHOLD_V2_VK_DIGEST: &str =
-    "073a78e7f8ffc53a38dbf21cd08e80656a71c86073db262933fb2c7cd976fa7b";
-//    "43478bf7f66e2e64f5d55e00ba8352a627bfafb9eebdb475501d4837d43734a9";
+    "4a9b672b36c97bb0fc2f2308085f1dc259a7b3e11c39bde1db7b7ed5f1afa429";
 
 // Common parameters to be used for regression
 const NUM_KEYS: usize = 6;

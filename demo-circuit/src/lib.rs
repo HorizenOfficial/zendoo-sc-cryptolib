@@ -24,7 +24,6 @@
     bare_trait_objects
 )]
 #![deny(
-    const_err,
     unused_must_use,
     unused_mut,
     unused_unsafe,
