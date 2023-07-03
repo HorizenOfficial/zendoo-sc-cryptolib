@@ -11,6 +11,7 @@ authors = [
     "Paolo Tagliaferri <paolotagliaferri@horizenlabs.io>",
     "Michael Lodder <mlodder@horizenlabs.io>",
     "Michele d'Amico <mdamico@horizenlabs.io>",
+    "Nicholas Mainardi <nicholas@horizenlbs.io>",
 ]
 edition = "2018"
 
@@ -30,17 +31,17 @@ r1cs-core = { git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "
 #ouroboros = {path = "../ouroboros"}
 demo-circuit = { path = "../demo-circuit" }
 
-jni = "=0.19.0"
-derivative = "=2.2.0"
-lazy_static = "=1.4.0"
-radix_trie = "=0.2.1"
-rand = { version = "=0.8.4" }
-rand_xorshift = { version = "=0.3.0" }
-rand_chacha = { version = "=0.3.1" }
-blake2 = { version = "=0.8.1", default-features = false }
+jni = "0.19.0"
+derivative = "2.2.0"
+lazy_static = "1.4.0"
+radix_trie = "0.2.1"
+rand = { version = "0.8.4" }
+rand_xorshift = { version = "0.3.0" }
+rand_chacha = { version = "0.3.1" }
+blake2 = { version = "0.8.1", default-features = false }
 
 [dev-dependencies]
-serial_test = "=0.5.1"
+serial_test = "0.5.1"
 
 [lib]
 name = "zendoo_sc"
