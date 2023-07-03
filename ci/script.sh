@@ -8,7 +8,7 @@ workdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
 # defaults if not provided via env
 DOCKER_ORG="${DOCKER_ORG:-zencash}"
 IMAGE_NAME="${IMAGE_NAME:-sc-ci-base}"
-IMAGE_TAG="${IMAGE_TAG:-bionic_rust-1.51.0_jdk-11_latest}"
+IMAGE_TAG="${IMAGE_TAG:-bionic_rust-stable_jdk-11_latest}"
 image="${DOCKER_ORG}/${IMAGE_NAME}:${IMAGE_TAG}"
 export CARGO_AUDIT_EXIT_ON_ERROR="${CARGO_AUDIT_EXIT_ON_ERROR:-true}"
 export DISABLE_JAVADOC_LINT="${DISABLE_JAVADOC_LINT:-false}"
