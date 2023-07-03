@@ -12,7 +12,7 @@ primitives = { features = [
     "tweedle",
     "vrf",
 ], git = "https://github.com/HorizenOfficial/ginger-lib.git", tag = "0.6.0" }
-rand = { version = "=0.8.4" }
+rand = { version = "0.8.4" }
 
 [features]
 default = ["asm"]

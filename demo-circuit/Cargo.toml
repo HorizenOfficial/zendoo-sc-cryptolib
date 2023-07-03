@@ -10,6 +10,7 @@ authors = [
     "cronicc <cronic@horizenlabs.io>",
     "Paolo Tagliaferri <paolotagliaferri@horizenlabs.io>",
     "Michele d'Amico <mdamico@horizenlabs.io>",
+    "Nicholas Mainardi <nicholas@horizenlbs.io>",
 ]
 edition = "2018"
 include = ["Cargo.toml", "src"]
@@ -37,21 +38,21 @@ r1cs-std = { features = [
 
 cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.git", tag = "0.2.1" }
 
-derivative = "=2.2.0"
-lazy_static = "=1.4.0"
-radix_trie = "=0.2.1"
-rand = { version = "=0.8.4" }
-blake2 = { version = "=0.8.1", default-features = false }
+derivative = "2.2.0"
+lazy_static = "1.4.0"
+radix_trie = "0.2.1"
+rand = { version = "0.8.4" }
+blake2 = { version = "0.8.1", default-features = false }
 
 [dev-dependencies]
-digest = "=0.8.1"
-blake2s_simd = "=0.5.11"
-bit-vec = "=0.6.3"
-sha2 = "=0.8.2"
-hex = "=0.4.3"
-serial_test = "=0.5.1"
-strum = "=0.24.1"
-strum_macros = "=0.24.3"
+digest = "0.8.1"
+blake2s_simd = "0.5.11"
+bit-vec = "0.6.3"
+sha2 = "0.8.2"
+hex = "0.4.3"
+serial_test = "0.5.1"
+strum = "0.24.1"
+strum_macros = "0.24.3"
 
 [features]
 default = ["asm"]
