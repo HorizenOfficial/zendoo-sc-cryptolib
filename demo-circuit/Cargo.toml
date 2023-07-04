@@ -53,6 +53,7 @@ hex = "0.4.3"
 serial_test = "0.5.1"
 strum = "0.24.1"
 strum_macros = "0.24.3"
+rstest = { version = "0.17.0", no-default-features = true }
 
 [features]
 default = ["asm"]
