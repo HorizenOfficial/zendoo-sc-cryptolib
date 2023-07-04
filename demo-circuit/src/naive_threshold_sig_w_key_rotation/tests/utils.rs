@@ -50,13 +50,6 @@ pub(crate) fn create_signatures(
     signatures
 }
 
-pub(crate) fn init_g1_committer_key() -> CommitterKeyG1 {
-    let _ = load_g1_committer_key(MAX_SEGMENT_SIZE - 1);
-    let ck_g1 = get_g1_committer_key(Some(SUPPORTED_SEGMENT_SIZE - 1)).unwrap();
-    assert_eq!(ck_g1.comm_key.len(), SUPPORTED_SEGMENT_SIZE);
-    ck_g1
-}
-
 pub(crate) fn get_cert_data_hash(
     withdrawal_certificate: &WithdrawalCertificateData,
 ) -> FieldElement {

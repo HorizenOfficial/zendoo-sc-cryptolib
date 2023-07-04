@@ -38,7 +38,7 @@ public class CswUtxoProverData implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         this.mstPathToOutput.close();
     }
 }

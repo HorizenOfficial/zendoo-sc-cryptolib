@@ -1,3 +1,5 @@
+use crate::test_utils::init_g1_committer_key;
+
 use super::super::*;
 use super::*;
 

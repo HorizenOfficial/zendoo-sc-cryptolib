@@ -7,7 +7,7 @@ use demo_circuit::{
     },
     constants::VRFParams,
     create_msg_to_sign, naive_threshold_sig::*, naive_threshold_sig_w_key_rotation::{*, data_structures::ValidatorKeysUpdates},
-    type_mapping::*, common::{NULL_CONST, WithdrawalCertificateData}, 
+    type_mapping::*, common::{NULL_CONST, WithdrawalCertificateData}, sc2sc::{Sc2Sc, ScCommitmentCertPath, Sc2ScUserInput}, 
 };
 use lazy_static::*;
 use primitives::{
@@ -15,11 +15,11 @@ use primitives::{
     signature::{schnorr::field_based_schnorr::FieldBasedSchnorrPk, FieldBasedSignatureScheme},
     vrf::{ecvrf::FieldBasedEcVrfPk, FieldBasedVrf},
 };
-use r1cs_core::debug_circuit;
+use r1cs_core::{debug_circuit, ConstraintSynthesizer};
 use rand::{rngs::OsRng, CryptoRng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rand_xorshift::XorShiftRng;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 use cctp_primitives::{
     proving_system::{
@@ -27,7 +27,7 @@ use cctp_primitives::{
         init::get_g1_committer_key,
         verifier::{
             ceased_sidechain_withdrawal::CSWProofUserInputs,
-            certificate::CertificateProofUserInputs, verify_zendoo_proof,
+            certificate::CertificateProofUserInputs, verify_zendoo_proof, UserInputs,
         },
         ProvingSystem, ZendooProof, ZendooProverKey, ZendooVerifierKey,
     },
@@ -328,7 +328,7 @@ pub fn create_naive_threshold_sig_proof(
     custom_fields: Option<Vec<FieldElement>>,
     supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
     proving_key_path: &Path,
-    enforce_membership: bool,
+    semantic_checks: bool,
     zk: bool,
     compressed_pk: bool,
     compress_proof: bool,
@@ -352,46 +352,14 @@ pub fn create_naive_threshold_sig_proof(
         )
     })?;
 
-    let pk: ZendooProverKey = read_from_file(
+    check_and_generate_proof_raw(c, 
+        supported_degree,
         proving_key_path,
-        Some(enforce_membership),
-        Some(compressed_pk),
-    )
-    .map_err(|e| {
-        format!(
-            "Unable to read proving key from file {:?}: {:?}. Semantic checks: {}, Compressed: {}",
-            proving_key_path, e, enforce_membership, compressed_pk
-        )
-    })?;
-
-    let g1_ck = get_g1_committer_key(supported_degree).map_err(|e| {
-        format!(
-            "Unable to get DLOG key of degree {:?}: {:?}",
-            supported_degree, e
-        )
-    })?;
-
-    let proof = match pk {
-        ZendooProverKey::Darlin(_) => unimplemented!(),
-        ZendooProverKey::CoboundaryMarlin(pk) => {
-            // Call prover
-            let rng = &mut OsRng;
-            let proof =
-                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })
-                    .map_err(|e| format!("Error during proof creation: {:?}", e))?;
-            serialize_to_buffer(
-                &ZendooProof::CoboundaryMarlin(MarlinProof(proof)),
-                Some(compress_proof),
-            )
-            .map_err(|e| {
-                format!(
-                    "Proof serialization (compressed: {}) failed: {:?}",
-                    compress_proof, e
-                )
-            })?
-        }
-    };
-    Ok((proof, valid_signatures))
+        semantic_checks,
+        zk,
+        compressed_pk,
+        compress_proof,
+    ).map(|proof| (proof, valid_signatures as u64))
 }
 
 pub fn create_naive_threshold_sig_w_key_rotation_proof(
@@ -403,7 +371,7 @@ pub fn create_naive_threshold_sig_w_key_rotation_proof(
     genesis_key_root_hash: &FieldElement,
     supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
     proving_key_path: &Path,
-    enforce_membership: bool,
+    semantic_checks: bool,
     zk: bool,
     compressed_pk: bool,
     compress_proof: bool,
@@ -422,16 +390,35 @@ pub fn create_naive_threshold_sig_w_key_rotation_proof(
             e
         )
     })?;
+    let valid_signatures = c.get_valid_signatures();
+    check_and_generate_proof_raw(c, 
+        supported_degree,
+        proving_key_path,
+        semantic_checks,
+        zk,
+        compressed_pk,
+        compress_proof,
+    ).map(|proof| (proof, valid_signatures as u64))
+}
 
+fn check_and_generate_proof_raw<C: ConstraintSynthesizer<FieldElement>>(
+    circuit: C,
+    supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
+    proving_key_path: &Path,
+    semantic_checks: bool,
+    zk: bool,
+    compressed_pk: bool,
+    compress_proof: bool,
+) -> Result<Vec<u8>, Error> {
     let pk: ZendooProverKey = read_from_file(
         proving_key_path,
-        Some(enforce_membership),
+        Some(semantic_checks),
         Some(compressed_pk),
     )
     .map_err(|e| {
         format!(
             "Unable to read proving key from file {:?}: {:?}. Semantic checks: {}, Compressed: {}",
-            proving_key_path, e, enforce_membership, compressed_pk
+            proving_key_path, e, semantic_checks, compressed_pk
         )
     })?;
 
@@ -442,14 +429,13 @@ pub fn create_naive_threshold_sig_w_key_rotation_proof(
         )
     })?;
 
-    let valid_signatures = c.get_valid_signatures();
-    let proof = match pk {
+    match pk {
         ZendooProverKey::Darlin(_) => unimplemented!(),
         ZendooProverKey::CoboundaryMarlin(pk) => {
             // Call prover
             let rng = &mut OsRng;
             let proof =
-                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })
+                CoboundaryMarlin::prove(&pk, &g1_ck, circuit, zk, if zk { Some(rng) } else { None })
                     .map_err(|e| format!("Error during proof creation: {:?}", e))?;
             serialize_to_buffer(
                 &ZendooProof::CoboundaryMarlin(MarlinProof(proof)),
@@ -459,11 +445,115 @@ pub fn create_naive_threshold_sig_w_key_rotation_proof(
                 format!(
                     "Proof serialization (compressed: {}) failed: {:?}",
                     compress_proof, e
-                )
-            })?
+                ).into()
+            })
         }
-    };
-    Ok((proof, valid_signatures as u64))
+    }
+}
+
+pub fn create_native_sc2sc_proof(
+    next_sc_tx_commitments_root: FieldElement,
+    curr_sc_tx_commitments_root: FieldElement,
+    msg_hash: FieldElement,
+    next_withdrawal_certificate: WithdrawalCertificateData,
+    curr_withdrawal_certificate: WithdrawalCertificateData,
+    next_cert_commitment_path: ScCommitmentCertPath,
+    curr_cert_commitment_path: ScCommitmentCertPath,
+    msg_path: GingerMHTPath,
+    supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
+    proving_key_path: &Path,
+    semantic_checks: bool,
+    zk: bool,
+    compressed_pk: bool,
+    compress_proof: bool,
+) -> Result<Vec<u8>, Error> {
+    let c = Sc2Sc::new(
+        next_sc_tx_commitments_root,
+        curr_sc_tx_commitments_root,
+        msg_hash,
+        next_withdrawal_certificate,
+        curr_withdrawal_certificate,
+        next_cert_commitment_path,
+        curr_cert_commitment_path,
+        msg_path.try_into()?
+    );
+
+    check_and_generate_proof_raw(c, 
+        supported_degree,
+        proving_key_path,
+        semantic_checks,
+        zk,
+        compressed_pk,
+        compress_proof,
+    )
+}
+
+fn verify_proof(ui: impl UserInputs, proof: Vec<u8>,
+    check_proof: bool,
+    compressed_proof: bool,
+    vk_path: &Path,
+    check_vk: bool,
+    compressed_vk: bool) -> Result<bool, Error> {
+
+    // Check that the proving system type of the vk and proof are the same, before
+    // deserializing them all
+    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None).map_err(|e| {
+        format!(
+            "Unable to read proving system type from vk at {:?}: {:?}",
+            vk_path, e
+        )
+    })?;
+
+    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)
+        .map_err(|e| format!("Unable to read proving system type from proof: {:?}", e))?;
+
+    if vk_ps_type != proof_ps_type {
+        return Err(ProvingSystemError::ProvingSystemMismatch.into());
+    }
+
+    // Deserialize proof and vk
+    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))
+        .map_err(|e| {
+            format!(
+                "Unable to read vk at {:?}: {:?}. Semantic checks: {}, Compressed: {}",
+                vk_path, e, check_vk, compressed_vk
+            )
+        })?;
+
+    let proof: ZendooProof =
+        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))
+            .map_err(|e| {
+                format!(
+                    "Unable to read proof: {:?}. Semantic checks: {}, Compressed: {}",
+                    e, check_proof, compressed_proof
+                )
+            })?;
+
+    // Verify proof
+    let rng = &mut OsRng;
+
+    verify_zendoo_proof(ui, &proof, &vk, Some(rng))
+        .map_err(|e| format!("Proof verification error: {:?}", e).into())
+}
+
+pub fn verify_sc2sc_proof(
+    next_sc_tx_commitments_root: FieldElement,
+    curr_sc_tx_commitments_root: FieldElement,
+    msg_hash: FieldElement,
+    proof: Vec<u8>,
+    check_proof: bool,
+    compressed_proof: bool,
+    vk_path: &Path,
+    check_vk: bool,
+    compressed_vk: bool,
+) -> Result<bool, Error> {
+    verify_proof(
+        Sc2ScUserInput::new(
+            next_sc_tx_commitments_root, 
+            curr_sc_tx_commitments_root, 
+            msg_hash),
+            proof,check_proof, compressed_proof, 
+            vk_path, check_vk, compressed_vk)
 }
 
 pub fn verify_naive_threshold_sig_proof(
@@ -506,46 +596,8 @@ pub fn verify_naive_threshold_sig_proof(
         sc_prev_wcert_hash: None,
     };
 
-    // Check that the proving system type of the vk and proof are the same, before
-    // deserializing them all
-    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None).map_err(|e| {
-        format!(
-            "Unable to read proving system type from vk at {:?}: {:?}",
-            vk_path, e
-        )
-    })?;
-
-    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)
-        .map_err(|e| format!("Unable to read proving system type from proof: {:?}", e))?;
-
-    if vk_ps_type != proof_ps_type {
-        return Err(ProvingSystemError::ProvingSystemMismatch.into());
-    }
-
-    // Deserialize proof and vk
-    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))
-        .map_err(|e| {
-            format!(
-                "Unable to read vk at {:?}: {:?}. Semantic checks: {}, Compressed: {}",
-                vk_path, e, check_vk, compressed_vk
-            )
-        })?;
-
-    let proof: ZendooProof =
-        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))
-            .map_err(|e| {
-                format!(
-                    "Unable to read proof: {:?}. Semantic checks: {}, Compressed: {}",
-                    e, check_proof, compressed_proof
-                )
-            })?;
-
-    // Verify proof
-    let rng = &mut OsRng;
-    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))
-        .map_err(|e| format!("Proof verification error: {:?}", e))?;
-
-    Ok(is_verified)
+    verify_proof(ins, proof,check_proof, compressed_proof, 
+            vk_path, check_vk, compressed_vk)
 }
 
 pub fn verify_naive_threshold_sig_w_key_rotation_proof(
@@ -580,40 +632,6 @@ pub fn verify_naive_threshold_sig_w_key_rotation_proof(
         PHANTOM_CERT_DATA_HASH
     };
 
-    // Check that the proving system type of the vk and proof are the same, before
-    // deserializing them all
-    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None).map_err(|e| {
-        format!(
-            "Unable to read proving system type from vk at {:?}: {:?}",
-            vk_path, e
-        )
-    })?;
-
-    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)
-        .map_err(|e| format!("Unable to read proving system type from proof: {:?}", e))?;
-
-    if vk_ps_type != proof_ps_type {
-        return Err(ProvingSystemError::ProvingSystemMismatch.into());
-    }
-
-    // Deserialize proof and vk
-    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))
-        .map_err(|e| {
-            format!(
-                "Unable to read vk at {:?}: {:?}. Semantic checks: {}, Compressed: {}",
-                vk_path, e, check_vk, compressed_vk
-            )
-        })?;
-
-    let proof: ZendooProof =
-        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))
-            .map_err(|e| {
-                format!(
-                    "Unable to read proof: {:?}. Semantic checks: {}, Compressed: {}",
-                    e, check_proof, compressed_proof
-                )
-            })?;
-
     let custom_fields: Option<Vec<&FieldElement>> =
         Some(withdrawal_certificate.custom_fields.iter().collect());
 
@@ -630,12 +648,8 @@ pub fn verify_naive_threshold_sig_w_key_rotation_proof(
         sc_prev_wcert_hash: Some(&prev_cert_data_hash),
     };
 
-    // Verify proof
-    let rng = &mut OsRng;
-    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))
-        .map_err(|e| format!("Proof verification error: {:?}", e))?;
-
-    Ok(is_verified)
+    verify_proof(ins, proof,check_proof, compressed_proof, 
+        vk_path, check_vk, compressed_vk)
 }
 
 // ******************************* CSW Proof ***************************
@@ -678,7 +692,7 @@ pub fn create_csw_proof(
     num_custom_fields: u32,
     supported_degree: Option<usize>, //TODO: We can probably read segment size from the ProverKey and save passing this additional parameter.
     proving_key_path: &Path,
-    enforce_membership: bool,
+    semantic_checks: bool,
     zk: bool,
     compressed_pk: bool,
     compress_proof: bool,
@@ -695,47 +709,14 @@ pub fn create_csw_proof(
     )
     .map_err(|e| format!("Unable to create concrete instance of CSW circuit: {:?}", e))?;
 
-    let pk: ZendooProverKey = read_from_file(
+    check_and_generate_proof_raw(c, 
+        supported_degree,
         proving_key_path,
-        Some(enforce_membership),
-        Some(compressed_pk),
+        semantic_checks,
+        zk,
+        compressed_pk,
+        compress_proof,
     )
-    .map_err(|e| {
-        format!(
-            "Unable to read proving key from file {:?}: {:?}. Semantic checks: {}, Compressed: {}",
-            proving_key_path, e, enforce_membership, compressed_pk
-        )
-    })?;
-
-    let g1_ck = get_g1_committer_key(supported_degree).map_err(|e| {
-        format!(
-            "Unable to get DLOG key of degree {:?}: {:?}",
-            supported_degree, e
-        )
-    })?;
-
-    let proof = match pk {
-        ZendooProverKey::Darlin(_) => unimplemented!(),
-        ZendooProverKey::CoboundaryMarlin(pk) => {
-            // Call prover
-            let rng = &mut OsRng;
-            let proof =
-                CoboundaryMarlin::prove(&pk, &g1_ck, c, zk, if zk { Some(rng) } else { None })
-                    .map_err(|e| format!("Error during proof creation: {:?}", e))?;
-            serialize_to_buffer(
-                &ZendooProof::CoboundaryMarlin(MarlinProof(proof)),
-                Some(compress_proof),
-            )
-            .map_err(|e| {
-                format!(
-                    "Proof serialization (compressed: {}) failed: {:?}",
-                    compress_proof, e
-                )
-            })?
-        }
-    };
-
-    Ok(proof)
 }
 
 pub fn verify_csw_proof(
@@ -759,46 +740,8 @@ pub fn verify_csw_proof(
         end_cumulative_sc_tx_commitment_tree_root: &sys_data.mcb_sc_txs_com_end,
     };
 
-    // Check that the proving system type of the vk and proof are the same, before
-    // deserializing them all
-    let vk_ps_type = read_from_file::<ProvingSystem>(vk_path, None, None).map_err(|e| {
-        format!(
-            "Unable to read proving system type from vk at {:?}: {:?}",
-            vk_path, e
-        )
-    })?;
-
-    let proof_ps_type = deserialize_from_buffer::<ProvingSystem>(&proof[..1], None, None)
-        .map_err(|e| format!("Unable to read proving system type from proof: {:?}", e))?;
-
-    if vk_ps_type != proof_ps_type {
-        return Err(ProvingSystemError::ProvingSystemMismatch.into());
-    }
-
-    // Deserialize proof and vk
-    let vk: ZendooVerifierKey = read_from_file(vk_path, Some(check_vk), Some(compressed_vk))
-        .map_err(|e| {
-            format!(
-                "Unable to read vk at {:?}: {:?}. Semantic checks: {}, Compressed: {}",
-                vk_path, e, check_vk, compressed_vk
-            )
-        })?;
-
-    let proof: ZendooProof =
-        deserialize_from_buffer(proof.as_slice(), Some(check_proof), Some(compressed_proof))
-            .map_err(|e| {
-                format!(
-                    "Unable to read proof: {:?}. Semantic checks: {}, Compressed: {}",
-                    e, check_proof, compressed_proof
-                )
-            })?;
-
-    // Verify proof
-    let rng = &mut OsRng;
-    let is_verified = verify_zendoo_proof(ins, &proof, &vk, Some(rng))
-        .map_err(|e| format!("Proof verification error: {:?}", e))?;
-
-    Ok(is_verified)
+    verify_proof(ins, proof,check_proof, compressed_proof, 
+        vk_path, check_vk, compressed_vk)
 }
 
 //VRF types and functions

@@ -8,7 +8,7 @@ import static org.junit.Assert.*;
 public class SchnorrPublicKeyTest {
 
     @Test
-    public void testGetHash() throws Exception {
+    public void testGetHash() {
         byte[] seed = { 1, 2, 3, 4, 5, 6, 7, 8 };
         byte[] expected = {-37, -55, 0, -12, 70, 91, 97, -85, 12, 76, -8, 66, -7, 90, -75, -15, -66, 91, -65, 111, 6, 104, 20, -20, -54, -61, 67, 78, 88, -54, 84, 30 };
 

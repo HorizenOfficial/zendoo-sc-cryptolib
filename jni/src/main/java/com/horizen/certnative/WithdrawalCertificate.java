@@ -23,7 +23,8 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
         Library.load();
     }
 
-    public WithdrawalCertificate(FieldElement scId, int epochNumber, List<BackwardTransfer> btList, FieldElement mcbScTxsCom,
+    public WithdrawalCertificate(FieldElement scId, int epochNumber, List<BackwardTransfer> btList,
+            FieldElement mcbScTxsCom,
             long ftMinAmount, long btrMinFee, List<FieldElement> customFields) {
         this.scId = scId;
         this.epochNumber = epochNumber;
@@ -35,7 +36,8 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
         this.customFields = customFields.toArray(new FieldElement[0]);
     }
 
-    public WithdrawalCertificate(FieldElement scId, int epochNumber, List<BackwardTransfer> btList, long quality, FieldElement mcbScTxsCom,
+    public WithdrawalCertificate(FieldElement scId, int epochNumber, List<BackwardTransfer> btList, long quality,
+            FieldElement mcbScTxsCom,
             long ftMinAmount, long btrMinFee, List<FieldElement> customFields) {
         this.scId = scId;
         this.epochNumber = epochNumber;
@@ -80,7 +82,14 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
     }
 
     public void setScId(FieldElement scId) {
+        if (this.scId != null) {
+            this.scId.close();
+        }
         this.scId = scId;
+    }
+
+    public void setScId(byte[] scId) {
+        setScId(FieldElement.deserialize(scId));
     }
 
     public void setEpochNumber(int epochNumber) {
@@ -96,7 +105,14 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
     }
 
     public void setMcbScTxsCom(FieldElement mcbScTxsCom) {
+        if (this.mcbScTxsCom != null) {
+            this.mcbScTxsCom.close();
+        }
         this.mcbScTxsCom = mcbScTxsCom;
+    }
+
+    public void setMcbScTxsCom(byte[] mcbScTxsCom) {
+        setMcbScTxsCom(FieldElement.deserialize(mcbScTxsCom));
     }
 
     public void setFtMinAmount(long ftMinAmount) {
@@ -108,7 +124,21 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
     }
 
     public void setCustomFields(FieldElement[] customFields) {
+        if (this.customFields != null) {
+            freeCustomFields();
+        }
         this.customFields = customFields;
+    }
+
+    public void setCustomField(int pos, FieldElement customField) {
+        if (customFields != null && pos > customFields.length) {
+            this.customFields[pos].close();
+        }
+        this.customFields[pos] = customField;
+    }
+
+    public void setCustomField(int pos, byte[] customFieldBytes) {
+        setCustomField(pos, FieldElement.deserialize(customFieldBytes));
     }
 
     private native FieldElement nativeGetHash();
@@ -118,11 +148,17 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
         return nativeGetHash();
     }
 
+    public byte[] getHashBytes() {
+        try (FieldElement h = getHash()) {
+            return h.serializeFieldElement();
+        }
+    }
+
     public static WithdrawalCertificate getRandom(Random r, int numBt, int numCustomFields) {
         // Generate random BTs
         List<BackwardTransfer> btList = new ArrayList<>();
-        if (numBt > 0) {            
-            for(int i = 0; i < numBt; i++) {
+        if (numBt > 0) {
+            for (int i = 0; i < numBt; i++) {
                 btList.add(BackwardTransfer.getRandom(r));
             }
         }
@@ -130,22 +166,26 @@ public class WithdrawalCertificate implements AutoCloseable, PoseidonHashable {
         // Generate random custom fields
         List<FieldElement> customFields = new ArrayList<>();
         if (numCustomFields > 0) {
-            for(int i = 0; i < numCustomFields; i++)   
+            for (int i = 0; i < numCustomFields; i++)
                 customFields.add(FieldElement.createRandom(r));
         }
 
         // Generate and return random wCert
         return new WithdrawalCertificate(
-            FieldElement.createRandom(r), r.nextInt(), btList, r.nextLong(),
-            FieldElement.createRandom(r), r.nextLong(), r.nextLong(), customFields
-        );
+                FieldElement.createRandom(r), r.nextInt(), btList, r.nextLong(),
+                FieldElement.createRandom(r), r.nextLong(), r.nextLong(), customFields);
     }
 
     @Override
-    public void close() throws Exception {
-        this.scId.close();
-        this.mcbScTxsCom.close();
-        for (FieldElement fe: customFields)
+    public void close() {
+        scId.close();
+        mcbScTxsCom.close();
+        freeCustomFields();
+    }
+
+    private void freeCustomFields() {
+        for (FieldElement fe : customFields) {
             fe.close();
+        }
     }
 }

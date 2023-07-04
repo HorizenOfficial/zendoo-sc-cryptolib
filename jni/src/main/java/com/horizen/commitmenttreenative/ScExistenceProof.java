@@ -42,7 +42,7 @@ public class ScExistenceProof implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         freeScExistenceProof();
     }
 }

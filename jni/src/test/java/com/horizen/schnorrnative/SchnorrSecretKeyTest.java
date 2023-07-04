@@ -10,7 +10,7 @@ public class SchnorrSecretKeyTest {
 
 
     @Test
-    public void testRandomKey() throws Exception {
+    public void testRandomKey() {
 
         int samples = 100;
         for(int i = 0; i < samples; i++) {

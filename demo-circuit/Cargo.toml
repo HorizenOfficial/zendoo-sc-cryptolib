@@ -1,6 +1,6 @@
 [package]
 name = "demo-circuit"
-version = "0.7.0"
+version = "0.8.0-SNAPSHOT"
 authors = [
     "DanieleDiBenedetto <daniele@horizenlabs.io>",
     "Oleksandr Iozhytsia <oleksandr@zensystem.io>",
@@ -53,6 +53,7 @@ hex = "0.4.3"
 serial_test = "0.5.1"
 strum = "0.24.1"
 strum_macros = "0.24.3"
+rstest = { version = "0.17.0", no-default-features = true }
 
 [features]
 default = ["asm"]
