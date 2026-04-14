@@ -35,7 +35,7 @@ jni = "0.19.0"
 derivative = "2.2.0"
 lazy_static = "1.4.0"
 radix_trie = "0.2.1"
-rand = { version = "0.8.4" }
+rand = { version = "0.9.3" }
 rand_xorshift = { version = "0.3.0" }
 rand_chacha = { version = "0.3.1" }
 blake2 = { version = "0.8.1", default-features = false }
