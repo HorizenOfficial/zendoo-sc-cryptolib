@@ -41,7 +41,7 @@ cctp_primitives = { git = "https://github.com/HorizenOfficial/zendoo-cctp-lib.gi
 derivative = "2.2.0"
 lazy_static = "1.4.0"
 radix_trie = "0.2.1"
-rand = { version = "0.8.4" }
+rand = { version = "0.8.6" }
 blake2 = { version = "0.8.1", default-features = false }
 
 [dev-dependencies]
